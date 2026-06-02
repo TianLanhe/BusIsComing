@@ -2,11 +2,13 @@ package com.example.busiscomming.ui.edit
 
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.busiscomming.R
 import com.example.busiscomming.data.model.RouteConfig
 import com.example.busiscomming.data.repository.RouteConfigRepository
+import com.example.busiscomming.ui.common.applyStatusBarPadding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -27,6 +29,7 @@ class RouteEditActivity : AppCompatActivity() {
         setContentView(R.layout.activity_route_edit)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
+        findViewById<View>(R.id.routeEditContent).applyStatusBarPadding()
         repository = RouteConfigRepository(this)
         routeId = intent.getLongExtra(EXTRA_ROUTE_ID, NO_ROUTE_ID)
 

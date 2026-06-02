@@ -19,6 +19,7 @@ import com.example.busiscomming.data.repository.BusRouteRepository
 import com.example.busiscomming.data.repository.BusRouteSorter
 import com.example.busiscomming.data.repository.MockBusRouteRepository
 import com.example.busiscomming.data.repository.RouteConfigRepository
+import com.example.busiscomming.ui.common.applyStatusBarPadding
 import com.example.busiscomming.ui.edit.RouteEditActivity
 import com.example.busiscomming.ui.manage.RouteManageActivity
 import com.google.android.material.button.MaterialButton
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
         title = "BusIsComming"
 
         routeConfigRepository = RouteConfigRepository(this)
+        findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
         bindViews()
         setupResultList()
         setupActions()

@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscomming.R
 import com.example.busiscomming.data.model.RouteConfig
 import com.example.busiscomming.data.repository.RouteConfigRepository
+import com.example.busiscomming.ui.common.applyStatusBarPadding
 import com.example.busiscomming.ui.edit.RouteEditActivity
 import com.google.android.material.button.MaterialButton
 
@@ -27,6 +28,7 @@ class RouteManageActivity : AppCompatActivity() {
         title = "路线管理"
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
+        findViewById<View>(R.id.routeManageRoot).applyStatusBarPadding()
         repository = RouteConfigRepository(this)
         routeList = findViewById(R.id.routeConfigList)
         emptyRoutesText = findViewById(R.id.emptyRoutesText)
