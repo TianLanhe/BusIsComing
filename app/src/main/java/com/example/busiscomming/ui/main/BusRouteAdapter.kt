@@ -33,12 +33,14 @@ class BusRouteAdapter : RecyclerView.Adapter<BusRouteAdapter.BusRouteViewHolder>
     class BusRouteViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val routeNameText: TextView = itemView.findViewById(R.id.busRouteNameText)
         private val priceText: TextView = itemView.findViewById(R.id.busPriceText)
-        private val waitTimeText: TextView = itemView.findViewById(R.id.busWaitTimeText)
+        private val durationText: TextView = itemView.findViewById(R.id.busDurationText)
+        private val arrivalText: TextView = itemView.findViewById(R.id.busArrivalText)
 
         fun bind(route: BusRouteOption) {
             routeNameText.text = route.routeName
-            priceText.text = String.format(Locale.US, "HK$%.1f", route.priceHkd)
-            waitTimeText.text = "约 ${route.waitMinutes} 分钟"
+            priceText.text = String.format(Locale.US, "%.1f", route.priceHkd)
+            durationText.text = route.durationMinutes.toString()
+            arrivalText.text = route.arrivalMinutes.toString()
         }
     }
 }

@@ -11,8 +11,12 @@ object BusRouteSorter {
         direction: SortDirection
     ): List<BusRouteOption> {
         val sorted = when (field) {
+            SortField.ROUTE -> routes.sortedWith(
+                compareBy<BusRouteOption> { it.transferCount }.thenBy { it.routeName }
+            )
             SortField.PRICE -> routes.sortedBy { it.priceHkd }
-            SortField.WAIT_TIME -> routes.sortedBy { it.waitMinutes }
+            SortField.DURATION -> routes.sortedBy { it.durationMinutes }
+            SortField.ARRIVAL -> routes.sortedBy { it.arrivalMinutes }
         }
         return if (direction == SortDirection.ASC) sorted else sorted.asReversed()
     }

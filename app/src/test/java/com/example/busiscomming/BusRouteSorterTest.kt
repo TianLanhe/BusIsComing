@@ -9,36 +9,89 @@ import org.junit.Test
 
 class BusRouteSorterTest {
     private val routes = listOf(
-        BusRouteOption("A", 8.0, 12),
-        BusRouteOption("B", 6.5, 5),
-        BusRouteOption("C", 10.0, 8)
+        BusRouteOption("82X \u2192 102", 20.4, 34, 34, 1),
+        BusRouteOption("8X", 8.1, 45, 45, 0),
+        BusRouteOption("8P \u2192 A11", 14.9, 39, 39, 1),
+        BusRouteOption("8P \u2192 10 \u2192 85", 18.1, 42, 42, 2)
     )
+
+    @Test
+    fun sortsByRouteTransfersAscending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.ROUTE, SortDirection.ASC)
+
+        assertEquals(
+            listOf("8X", "82X \u2192 102", "8P \u2192 A11", "8P \u2192 10 \u2192 85"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun sortsByRouteTransfersDescending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.ROUTE, SortDirection.DESC)
+
+        assertEquals(
+            listOf("8P \u2192 10 \u2192 85", "8P \u2192 A11", "82X \u2192 102", "8X"),
+            sorted.map { it.routeName }
+        )
+    }
 
     @Test
     fun sortsByPriceAscending() {
         val sorted = BusRouteSorter.sort(routes, SortField.PRICE, SortDirection.ASC)
 
-        assertEquals(listOf("B", "A", "C"), sorted.map { it.routeName })
+        assertEquals(
+            listOf("8X", "8P \u2192 A11", "8P \u2192 10 \u2192 85", "82X \u2192 102"),
+            sorted.map { it.routeName }
+        )
     }
 
     @Test
     fun sortsByPriceDescending() {
         val sorted = BusRouteSorter.sort(routes, SortField.PRICE, SortDirection.DESC)
 
-        assertEquals(listOf("C", "A", "B"), sorted.map { it.routeName })
+        assertEquals(
+            listOf("82X \u2192 102", "8P \u2192 10 \u2192 85", "8P \u2192 A11", "8X"),
+            sorted.map { it.routeName }
+        )
     }
 
     @Test
-    fun sortsByWaitTimeAscending() {
-        val sorted = BusRouteSorter.sort(routes, SortField.WAIT_TIME, SortDirection.ASC)
+    fun sortsByDurationAscending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.DURATION, SortDirection.ASC)
 
-        assertEquals(listOf("B", "C", "A"), sorted.map { it.routeName })
+        assertEquals(
+            listOf("82X \u2192 102", "8P \u2192 A11", "8P \u2192 10 \u2192 85", "8X"),
+            sorted.map { it.routeName }
+        )
     }
 
     @Test
-    fun sortsByWaitTimeDescending() {
-        val sorted = BusRouteSorter.sort(routes, SortField.WAIT_TIME, SortDirection.DESC)
+    fun sortsByDurationDescending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.DURATION, SortDirection.DESC)
 
-        assertEquals(listOf("A", "C", "B"), sorted.map { it.routeName })
+        assertEquals(
+            listOf("8X", "8P \u2192 10 \u2192 85", "8P \u2192 A11", "82X \u2192 102"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun sortsByArrivalAscending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.ARRIVAL, SortDirection.ASC)
+
+        assertEquals(
+            listOf("82X \u2192 102", "8P \u2192 A11", "8P \u2192 10 \u2192 85", "8X"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun sortsByArrivalDescending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.ARRIVAL, SortDirection.DESC)
+
+        assertEquals(
+            listOf("8X", "8P \u2192 10 \u2192 85", "8P \u2192 A11", "82X \u2192 102"),
+            sorted.map { it.routeName }
+        )
     }
 }

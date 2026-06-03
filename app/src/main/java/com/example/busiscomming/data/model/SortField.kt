@@ -1,6 +1,8 @@
 package com.example.busiscomming.data.model
 
 enum class SortField {
+    ROUTE,
     PRICE,
-    WAIT_TIME
+    DURATION,
+    ARRIVAL
 }

@@ -1,6 +1,8 @@
 package com.example.busiscomming.ui.main
 
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.os.Bundle
 import android.view.View
 import android.widget.ArrayAdapter
@@ -17,17 +19,21 @@ import com.example.busiscomming.data.model.SortDirection
 import com.example.busiscomming.data.model.SortField
 import com.example.busiscomming.data.repository.BusRouteRepository
 import com.example.busiscomming.data.repository.BusRouteSorter
-import com.example.busiscomming.data.repository.MockBusRouteRepository
+import com.example.busiscomming.data.repository.CitybusBusRouteRepository
 import com.example.busiscomming.data.repository.RouteConfigRepository
 import com.example.busiscomming.ui.common.applyStatusBarPadding
 import com.example.busiscomming.ui.edit.RouteEditActivity
 import com.example.busiscomming.ui.manage.RouteManageActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
     private lateinit var routeConfigRepository: RouteConfigRepository
-    private val busRouteRepository: BusRouteRepository = MockBusRouteRepository()
+    private val busRouteRepository: BusRouteRepository = CitybusBusRouteRepository()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     private lateinit var routeSelector: MaterialAutoCompleteTextView
     private lateinit var queryButton: MaterialButton
@@ -36,8 +42,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var resultSection: LinearLayout
     private lateinit var emptyResultText: TextView
     private lateinit var resultList: RecyclerView
+    private lateinit var routeHeader: TextView
     private lateinit var priceHeader: TextView
-    private lateinit var waitTimeHeader: TextView
+    private lateinit var durationHeader: TextView
+    private lateinit var arrivalHeader: TextView
     private lateinit var busRouteAdapter: BusRouteAdapter
 
     private var routeConfigs: List<RouteConfig> = emptyList()
@@ -45,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private var currentResults: List<BusRouteOption> = emptyList()
     private var sortField: SortField? = null
     private var sortDirection: SortDirection = SortDirection.ASC
+    private var querySequence: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +65,13 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         setupResultList()
         setupActions()
+    }
+
+    override fun onDestroy() {
+        querySequence += 1
+        mainHandler.removeCallbacksAndMessages(null)
+        queryExecutor.shutdownNow()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -71,8 +87,10 @@ class MainActivity : AppCompatActivity() {
         resultSection = findViewById(R.id.resultSection)
         emptyResultText = findViewById(R.id.emptyResultText)
         resultList = findViewById(R.id.busRouteList)
+        routeHeader = findViewById(R.id.routeHeader)
         priceHeader = findViewById(R.id.priceHeader)
-        waitTimeHeader = findViewById(R.id.waitTimeHeader)
+        durationHeader = findViewById(R.id.durationHeader)
+        arrivalHeader = findViewById(R.id.arrivalHeader)
     }
 
     private fun setupResultList() {
@@ -89,8 +107,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, RouteEditActivity::class.java))
         }
         queryButton.setOnClickListener { querySelectedRoute() }
+        routeHeader.setOnClickListener { sortBy(SortField.ROUTE) }
         priceHeader.setOnClickListener { sortBy(SortField.PRICE) }
-        waitTimeHeader.setOnClickListener { sortBy(SortField.WAIT_TIME) }
+        durationHeader.setOnClickListener { sortBy(SortField.DURATION) }
+        arrivalHeader.setOnClickListener { sortBy(SortField.ARRIVAL) }
     }
 
     private fun loadRouteConfigs() {
@@ -136,11 +156,31 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        currentResults = busRouteRepository.searchRoutes(route.origin, route.destination)
-        sortField = null
-        sortDirection = SortDirection.ASC
-        updateSortHeaders()
-        displayResults(currentResults)
+        val queryId = ++querySequence
+        showLoadingState()
+        queryExecutor.execute {
+            val result = runCatching { busRouteRepository.searchRoutes(route.origin, route.destination) }
+            mainHandler.post {
+                if (querySequence != queryId || isFinishing || isDestroyed) return@post
+
+                setQueryLoading(false)
+                result
+                    .onSuccess { routes ->
+                        currentResults = routes
+                        sortField = null
+                        sortDirection = SortDirection.ASC
+                        updateSortHeaders()
+                        displayResults(routes)
+                    }
+                    .onFailure {
+                        currentResults = emptyList()
+                        sortField = null
+                        sortDirection = SortDirection.ASC
+                        updateSortHeaders()
+                        displayFailure()
+                    }
+            }
+        }
     }
 
     private fun sortBy(field: SortField) {
@@ -161,6 +201,7 @@ class MainActivity : AppCompatActivity() {
         if (results.isEmpty()) {
             busRouteAdapter.submitList(emptyList())
             resultList.visibility = View.GONE
+            emptyResultText.text = "暂无可用巴士路线"
             emptyResultText.visibility = View.VISIBLE
         } else {
             emptyResultText.visibility = View.GONE
@@ -170,6 +211,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun clearResults() {
+        querySequence += 1
+        setQueryLoading(false)
         currentResults = emptyList()
         sortField = null
         sortDirection = SortDirection.ASC
@@ -179,9 +222,32 @@ class MainActivity : AppCompatActivity() {
         emptyResultText.visibility = View.GONE
     }
 
+    private fun showLoadingState() {
+        setQueryLoading(true)
+        currentResults = emptyList()
+        busRouteAdapter.submitList(emptyList())
+        resultList.visibility = View.GONE
+        emptyResultText.text = "查询中..."
+        emptyResultText.visibility = View.VISIBLE
+    }
+
+    private fun displayFailure() {
+        busRouteAdapter.submitList(emptyList())
+        resultList.visibility = View.GONE
+        emptyResultText.text = "路线查询失败，请稍后重试"
+        emptyResultText.visibility = View.VISIBLE
+    }
+
+    private fun setQueryLoading(isLoading: Boolean) {
+        queryButton.isEnabled = !isLoading
+        queryButton.text = if (isLoading) "查询中..." else "查询"
+    }
+
     private fun updateSortHeaders() {
-        priceHeader.text = headerText("价格", SortField.PRICE)
-        waitTimeHeader.text = headerText("预计等候时间", SortField.WAIT_TIME)
+        routeHeader.text = headerText("路线", SortField.ROUTE)
+        priceHeader.text = headerText("价格\n(HKD)", SortField.PRICE)
+        durationHeader.text = headerText("总耗时\n(分钟)", SortField.DURATION)
+        arrivalHeader.text = headerText("预计汽车到站时间\n(分钟)", SortField.ARRIVAL)
     }
 
     private fun headerText(label: String, field: SortField): String {

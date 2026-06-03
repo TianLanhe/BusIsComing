@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="52dp"
+    android:layout_height="64dp"
     android:background="@drawable/table_row_background"
     android:gravity="center_vertical"
     android:orientation="horizontal">
@@ -10,30 +10,41 @@
         android:id="@+id/busRouteNameText"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1.1"
+        android:layout_weight="1.25"
         android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
+        android:maxLines="2"
+        android:paddingHorizontal="6dp"
         android:textColor="@color/bus_text_primary"
-        android:textSize="16sp"
+        android:textSize="15sp"
         android:textStyle="bold" />
 
     <TextView
         android:id="@+id/busPriceText"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1"
+        android:layout_weight="0.75"
         android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
+        android:paddingHorizontal="6dp"
         android:textColor="@color/bus_text_primary"
-        android:textSize="15sp" />
+        android:textSize="14sp" />
 
     <TextView
-        android:id="@+id/busWaitTimeText"
+        android:id="@+id/busDurationText"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="1.4"
+        android:layout_weight="0.95"
         android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
+        android:paddingHorizontal="6dp"
         android:textColor="@color/bus_text_primary"
-        android:textSize="15sp" />
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/busArrivalText"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.45"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="6dp"
+        android:textColor="@color/bus_text_primary"
+        android:textSize="14sp" />
 </LinearLayout>
