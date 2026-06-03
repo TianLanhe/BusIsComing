@@ -28,16 +28,22 @@ object CitybusRouteParser {
     private fun parseFromAriaLabel(label: String): BusRouteOption? {
         if (label.isBlank()) return null
 
-        val segments = ROUTE_PRICE_PATTERN.findAll(label).map { match ->
+        val segments = ROUTE_PRICE_PATTERN.findAll(label).mapNotNull { match ->
+            val price = parsePrice(
+                numericPrice = match.groupValues[2],
+                freePrice = match.groupValues[3]
+            ) ?: return@mapNotNull null
             RouteSegment(
                 routeName = match.groupValues[1].trim(),
-                priceHkd = match.groupValues[2].toDoubleOrNull() ?: return@map null
+                priceHkd = price
             )
-        }.filterNotNull().toList()
+        }.toList()
 
         val duration = DURATION_PATTERN.find(label)?.groupValues?.get(1)?.toIntOrNull()
             ?: return null
-        return segments.toRouteOption(duration)
+        val walkingDistance = WALKING_DISTANCE_PATTERN.find(label)?.groupValues?.get(1)?.toIntOrNull()
+            ?: return null
+        return segments.toRouteOption(duration, walkingDistance)
     }
 
     private fun parseFromTableText(table: Element): BusRouteOption? {
@@ -47,30 +53,46 @@ object CitybusRouteParser {
             .filter { it.isNotBlank() }
 
         val prices = PRICE_TEXT_PATTERN.findAll(table.text()).mapNotNull { match ->
-            match.groupValues[1].toDoubleOrNull()
+            parsePrice(
+                numericPrice = match.groupValues[1],
+                freePrice = match.groupValues[2]
+            )
         }.toList()
 
         val duration = DURATION_TEXT_PATTERN.find(table.text())?.groupValues?.get(1)?.toIntOrNull()
+            ?: return null
+        val walkingDistance = WALKING_DISTANCE_PATTERN.find(table.text())?.groupValues?.get(1)?.toIntOrNull()
             ?: return null
 
         if (routeNames.isEmpty() || routeNames.size != prices.size) return null
         return routeNames.zip(prices)
             .map { (routeName, price) -> RouteSegment(routeName, price) }
-            .toRouteOption(duration)
+            .toRouteOption(duration, walkingDistance)
     }
 
-    private fun List<RouteSegment>.toRouteOption(durationMinutes: Int): BusRouteOption? {
+    private fun parsePrice(numericPrice: String, freePrice: String): Double? {
+        if (freePrice.isNotBlank()) return 0.0
+        return numericPrice.toDoubleOrNull()
+    }
+
+    private fun List<RouteSegment>.toRouteOption(
+        durationMinutes: Int,
+        walkingDistanceMeters: Int
+    ): BusRouteOption? {
         if (isEmpty()) return null
+        val routeSegments = map { it.routeName }
         val routeName = joinToString(ROUTE_JOINER) { it.routeName }
         val totalPrice = sumOf { BigDecimal.valueOf(it.priceHkd) }
             .setScale(1, RoundingMode.HALF_UP)
             .toDouble()
         return BusRouteOption(
             routeName = routeName,
+            routeSegments = routeSegments,
             priceHkd = totalPrice,
             durationMinutes = durationMinutes,
             arrivalMinutes = durationMinutes,
-            transferCount = (size - 1).coerceAtLeast(0)
+            transferCount = (size - 1).coerceAtLeast(0),
+            walkingDistanceMeters = walkingDistanceMeters
         )
     }
 
@@ -88,8 +110,10 @@ object CitybusRouteParser {
     private const val ROUTE_CELL_CLASS = "routenocell"
     private const val ROUTE_JOINER = " \u2192 "
     private const val DURATION_KEYWORD = "預計"
-    private val ROUTE_PRICE_PATTERN = Regex("""([^\s]+)\s+港元\s*([0-9]+(?:\.[0-9]+)?)""")
-    private val PRICE_TEXT_PATTERN = Regex("""\$\s*([0-9]+(?:\.[0-9]+)?)""")
+    private val ROUTE_PRICE_PATTERN =
+        Regex("""(?:^|\s+至\s+)([^\s]+)\s+(?:港元\s*([0-9]+(?:\.[0-9]+)?)|(免費)(?:\s*\*)?)""")
+    private val PRICE_TEXT_PATTERN = Regex("""(?:\$\s*([0-9]+(?:\.[0-9]+)?)|(免費)(?:\s*\*)?)""")
     private val DURATION_PATTERN = Regex("""預計\s*([0-9]+)\s*分鐘""")
     private val DURATION_TEXT_PATTERN = Regex("""預計\s*([0-9]+)\s*分鐘""")
+    private val WALKING_DISTANCE_PATTERN = Regex("""步行距離\s*\(約\)\s*([0-9]+)\s*米""")
 }

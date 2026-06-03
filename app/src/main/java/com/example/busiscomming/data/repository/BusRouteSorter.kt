@@ -17,6 +17,7 @@ object BusRouteSorter {
             SortField.PRICE -> routes.sortedBy { it.priceHkd }
             SortField.DURATION -> routes.sortedBy { it.durationMinutes }
             SortField.ARRIVAL -> routes.sortedBy { it.arrivalMinutes }
+            SortField.WALKING_DISTANCE -> routes.sortedBy { it.walkingDistanceMeters }
         }
         return if (direction == SortDirection.ASC) sorted else sorted.asReversed()
     }

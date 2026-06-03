@@ -17,6 +17,8 @@ class CitybusRouteParserTest {
         assertEquals(34, routes.first().durationMinutes)
         assertEquals(34, routes.first().arrivalMinutes)
         assertEquals(1, routes.first().transferCount)
+        assertEquals(listOf("82X", "102"), routes.first().routeSegments)
+        assertEquals(456, routes.first().walkingDistanceMeters)
     }
 
     @Test
@@ -28,6 +30,35 @@ class CitybusRouteParserTest {
         assertEquals(45, route.durationMinutes)
         assertEquals(45, route.arrivalMinutes)
         assertEquals(0, route.transferCount)
+        assertEquals(listOf("8X"), route.routeSegments)
+        assertEquals(438, route.walkingDistanceMeters)
+    }
+
+    @Test
+    fun parsesFreeSegmentAndWalkingDistanceFromCentralSample() {
+        val routes = CitybusRouteParser.parse(CENTRAL_SAMPLE_HTML)
+
+        assertEquals(4, routes.size)
+        val route = routes.first()
+        assertEquals("8X \u2192 1", route.routeName)
+        assertEquals(listOf("8X", "1"), route.routeSegments)
+        assertEquals(8.1, route.priceHkd, 0.001)
+        assertEquals(93, route.durationMinutes)
+        assertEquals(93, route.arrivalMinutes)
+        assertEquals(1, route.transferCount)
+        assertEquals(450, route.walkingDistanceMeters)
+    }
+
+    @Test
+    fun parsesSingleSegmentWalkingDistanceFromCentralSample() {
+        val routes = CitybusRouteParser.parse(CENTRAL_SAMPLE_HTML)
+        val route = routes.first { it.routeName == "788" }
+
+        assertEquals(8.7, route.priceHkd, 0.001)
+        assertEquals(35, route.durationMinutes)
+        assertEquals(35, route.arrivalMinutes)
+        assertEquals(0, route.transferCount)
+        assertEquals(350, route.walkingDistanceMeters)
     }
 
     @Test
@@ -35,7 +66,7 @@ class CitybusRouteParserTest {
         val routes = CitybusRouteParser.parse(
             """
             <div id="routelist2 ">
-                <table aria-label="8X 港元8.1預計45分鐘"></table>
+                <table aria-label="8X 港元8.1預計45分鐘 步行距離(約)438米"></table>
             </div>
             """.trimIndent()
         )
@@ -56,7 +87,8 @@ class CitybusRouteParserTest {
                         </td>
                         <td>預計<br>34 分鐘</td>
                     </tr>
-                    <tr><td>${'$'}7.5 ${'$'}12.9</td></tr>
+                    <tr><td>${'$'}7.5 免費 *</td></tr>
+                    <tr><td>步行距離(約) 456米</td></tr>
                 </table>
             </div>
             """.trimIndent()
@@ -64,8 +96,22 @@ class CitybusRouteParserTest {
 
         assertEquals(1, routes.size)
         assertEquals("82X \u2192 102", routes.first().routeName)
-        assertEquals(20.4, routes.first().priceHkd, 0.001)
+        assertEquals(7.5, routes.first().priceHkd, 0.001)
         assertEquals(34, routes.first().durationMinutes)
+        assertEquals(456, routes.first().walkingDistanceMeters)
+    }
+
+    @Test
+    fun skipsCandidateWhenWalkingDistanceIsMissing() {
+        val routes = CitybusRouteParser.parse(
+            """
+            <div id="routelist2">
+                <table aria-label="8X 港元8.1預計45分鐘"></table>
+            </div>
+            """.trimIndent()
+        )
+
+        assertEquals(emptyList<Any>(), routes)
     }
 
     @Test
@@ -106,6 +152,17 @@ class CitybusRouteParserTest {
                     <table aria-label="106 港元12.9預計47分鐘 步行距離(約)420米"></table>
                     <table aria-label="85 港元5.2預計56分鐘 步行距離(約)296米"></table>
                     <table aria-label="8H 港元7.0預計73分鐘 步行距離(約)444米"></table>
+                </div>
+            </div>
+        """.trimIndent()
+
+        private val CENTRAL_SAMPLE_HTML = """
+            <div id="p2p_routelist">
+                <div id="routelist2 " style="height:calc(100%-175px);">
+                    <table aria-label="8X 港元8.1 至 1 免費 *預計93分鐘 步行距離(約)450米"></table>
+                    <table aria-label="8X 港元8.1 至 10 免費 *預計74分鐘 步行距離(約)355米"></table>
+                    <table aria-label="788 港元8.7預計35分鐘 步行距離(約)350米"></table>
+                    <table aria-label="780 港元8.7預計54分鐘 步行距離(約)488米"></table>
                 </div>
             </div>
         """.trimIndent()

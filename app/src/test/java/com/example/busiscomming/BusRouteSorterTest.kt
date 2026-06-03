@@ -9,10 +9,10 @@ import org.junit.Test
 
 class BusRouteSorterTest {
     private val routes = listOf(
-        BusRouteOption("82X \u2192 102", 20.4, 34, 34, 1),
-        BusRouteOption("8X", 8.1, 45, 45, 0),
-        BusRouteOption("8P \u2192 A11", 14.9, 39, 39, 1),
-        BusRouteOption("8P \u2192 10 \u2192 85", 18.1, 42, 42, 2)
+        BusRouteOption("82X \u2192 102", listOf("82X", "102"), 20.4, 34, 34, 1, 456),
+        BusRouteOption("8X", listOf("8X"), 8.1, 45, 45, 0, 438),
+        BusRouteOption("8P \u2192 A11", listOf("8P", "A11"), 14.9, 39, 39, 1, 673),
+        BusRouteOption("8P \u2192 10 \u2192 85", listOf("8P", "10", "85"), 18.1, 42, 42, 2, 296)
     )
 
     @Test
@@ -91,6 +91,26 @@ class BusRouteSorterTest {
 
         assertEquals(
             listOf("8X", "8P \u2192 10 \u2192 85", "8P \u2192 A11", "82X \u2192 102"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun sortsByWalkingDistanceAscending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.WALKING_DISTANCE, SortDirection.ASC)
+
+        assertEquals(
+            listOf("8P \u2192 10 \u2192 85", "8X", "82X \u2192 102", "8P \u2192 A11"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun sortsByWalkingDistanceDescending() {
+        val sorted = BusRouteSorter.sort(routes, SortField.WALKING_DISTANCE, SortDirection.DESC)
+
+        assertEquals(
+            listOf("8P \u2192 A11", "82X \u2192 102", "8X", "8P \u2192 10 \u2192 85"),
             sorted.map { it.routeName }
         )
     }

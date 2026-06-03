@@ -4,5 +4,6 @@ enum class SortField {
     ROUTE,
     PRICE,
     DURATION,
-    ARRIVAL
+    ARRIVAL,
+    WALKING_DISTANCE
 }

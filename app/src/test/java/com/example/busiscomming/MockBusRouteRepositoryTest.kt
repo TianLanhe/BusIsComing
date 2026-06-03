@@ -20,6 +20,8 @@ class MockBusRouteRepositoryTest {
         assertEquals(listOf(4, 9, 13), routes.map { it.durationMinutes })
         assertEquals(listOf(4, 9, 13), routes.map { it.arrivalMinutes })
         assertEquals(listOf(0, 0, 0), routes.map { it.transferCount })
+        assertEquals(listOf(listOf("82"), listOf("8X"), listOf("780")), routes.map { it.routeSegments })
+        assertEquals(listOf(180, 260, 320), routes.map { it.walkingDistanceMeters })
     }
 
     @Test

@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var priceHeader: TextView
     private lateinit var durationHeader: TextView
     private lateinit var arrivalHeader: TextView
+    private lateinit var walkingDistanceHeader: TextView
     private lateinit var busRouteAdapter: BusRouteAdapter
 
     private var routeConfigs: List<RouteConfig> = emptyList()
@@ -91,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         priceHeader = findViewById(R.id.priceHeader)
         durationHeader = findViewById(R.id.durationHeader)
         arrivalHeader = findViewById(R.id.arrivalHeader)
+        walkingDistanceHeader = findViewById(R.id.walkingDistanceHeader)
     }
 
     private fun setupResultList() {
@@ -111,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         priceHeader.setOnClickListener { sortBy(SortField.PRICE) }
         durationHeader.setOnClickListener { sortBy(SortField.DURATION) }
         arrivalHeader.setOnClickListener { sortBy(SortField.ARRIVAL) }
+        walkingDistanceHeader.setOnClickListener { sortBy(SortField.WALKING_DISTANCE) }
     }
 
     private fun loadRouteConfigs() {
@@ -166,11 +169,11 @@ class MainActivity : AppCompatActivity() {
                 setQueryLoading(false)
                 result
                     .onSuccess { routes ->
-                        currentResults = routes
-                        sortField = null
+                        sortField = SortField.DURATION
                         sortDirection = SortDirection.ASC
+                        currentResults = BusRouteSorter.sort(routes, SortField.DURATION, sortDirection)
                         updateSortHeaders()
-                        displayResults(routes)
+                        displayResults(currentResults)
                     }
                     .onFailure {
                         currentResults = emptyList()
@@ -248,6 +251,7 @@ class MainActivity : AppCompatActivity() {
         priceHeader.text = headerText("价格\n(HKD)", SortField.PRICE)
         durationHeader.text = headerText("总耗时\n(分钟)", SortField.DURATION)
         arrivalHeader.text = headerText("预计汽车到站时间\n(分钟)", SortField.ARRIVAL)
+        walkingDistanceHeader.text = headerText("步行距离\n(米)", SortField.WALKING_DISTANCE)
     }
 
     private fun headerText(label: String, field: SortField): String {

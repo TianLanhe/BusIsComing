@@ -35,12 +35,14 @@ class BusRouteAdapter : RecyclerView.Adapter<BusRouteAdapter.BusRouteViewHolder>
         private val priceText: TextView = itemView.findViewById(R.id.busPriceText)
         private val durationText: TextView = itemView.findViewById(R.id.busDurationText)
         private val arrivalText: TextView = itemView.findViewById(R.id.busArrivalText)
+        private val walkingDistanceText: TextView = itemView.findViewById(R.id.busWalkingDistanceText)
 
         fun bind(route: BusRouteOption) {
             routeNameText.text = route.routeName
             priceText.text = String.format(Locale.US, "%.1f", route.priceHkd)
             durationText.text = route.durationMinutes.toString()
             arrivalText.text = route.arrivalMinutes.toString()
+            walkingDistanceText.text = route.walkingDistanceMeters.toString()
         }
     }
 }
