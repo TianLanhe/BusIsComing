@@ -13,8 +13,12 @@ class RouteConfigDbHelper(context: Context) :
             CREATE TABLE $TABLE_ROUTE_CONFIGS (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COLUMN_NAME TEXT NOT NULL,
-                $COLUMN_ORIGIN TEXT NOT NULL,
-                $COLUMN_DESTINATION TEXT NOT NULL,
+                $COLUMN_ORIGIN_NAME TEXT NOT NULL,
+                $COLUMN_ORIGIN_LATITUDE REAL NOT NULL,
+                $COLUMN_ORIGIN_LONGITUDE REAL NOT NULL,
+                $COLUMN_DESTINATION_NAME TEXT NOT NULL,
+                $COLUMN_DESTINATION_LATITUDE REAL NOT NULL,
+                $COLUMN_DESTINATION_LONGITUDE REAL NOT NULL,
                 $COLUMN_CREATED_AT INTEGER NOT NULL,
                 $COLUMN_UPDATED_AT INTEGER NOT NULL
             )
@@ -28,14 +32,18 @@ class RouteConfigDbHelper(context: Context) :
     }
 
     companion object {
-        private const val DATABASE_NAME = "bus_is_comming.db"
-        private const val DATABASE_VERSION = 1
+        const val DATABASE_NAME = "bus_is_comming.db"
+        const val DATABASE_VERSION = 2
 
         const val TABLE_ROUTE_CONFIGS = "route_configs"
         const val COLUMN_ID = "id"
         const val COLUMN_NAME = "name"
-        const val COLUMN_ORIGIN = "origin"
-        const val COLUMN_DESTINATION = "destination"
+        const val COLUMN_ORIGIN_NAME = "origin_name"
+        const val COLUMN_ORIGIN_LATITUDE = "origin_latitude"
+        const val COLUMN_ORIGIN_LONGITUDE = "origin_longitude"
+        const val COLUMN_DESTINATION_NAME = "destination_name"
+        const val COLUMN_DESTINATION_LATITUDE = "destination_latitude"
+        const val COLUMN_DESTINATION_LONGITUDE = "destination_longitude"
         const val COLUMN_CREATED_AT = "created_at"
         const val COLUMN_UPDATED_AT = "updated_at"
     }

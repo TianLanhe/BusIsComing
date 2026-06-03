@@ -5,12 +5,17 @@ import android.content.Context
 import android.database.Cursor
 import com.example.busiscomming.data.local.RouteConfigDbHelper
 import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_CREATED_AT
-import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_DESTINATION
+import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_DESTINATION_LATITUDE
+import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_DESTINATION_LONGITUDE
+import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_DESTINATION_NAME
 import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_ID
 import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_NAME
-import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN
+import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN_LATITUDE
+import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN_LONGITUDE
+import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN_NAME
 import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.COLUMN_UPDATED_AT
 import com.example.busiscomming.data.local.RouteConfigDbHelper.Companion.TABLE_ROUTE_CONFIGS
+import com.example.busiscomming.data.model.Place
 import com.example.busiscomming.data.model.RouteConfig
 
 class RouteConfigRepository(context: Context) {
@@ -48,12 +53,12 @@ class RouteConfigRepository(context: Context) {
         }
     }
 
-    fun insert(name: String, origin: String, destination: String): Long {
+    fun insert(name: String, origin: Place, destination: Place): Long {
         val now = System.currentTimeMillis()
         val values = ContentValues().apply {
             put(COLUMN_NAME, name)
-            put(COLUMN_ORIGIN, origin)
-            put(COLUMN_DESTINATION, destination)
+            putPlace(ORIGIN_PREFIX, origin)
+            putPlace(DESTINATION_PREFIX, destination)
             put(COLUMN_CREATED_AT, now)
             put(COLUMN_UPDATED_AT, now)
         }
@@ -63,8 +68,8 @@ class RouteConfigRepository(context: Context) {
     fun update(config: RouteConfig) {
         val values = ContentValues().apply {
             put(COLUMN_NAME, config.name)
-            put(COLUMN_ORIGIN, config.origin)
-            put(COLUMN_DESTINATION, config.destination)
+            putPlace(ORIGIN_PREFIX, config.origin)
+            putPlace(DESTINATION_PREFIX, config.destination)
             put(COLUMN_UPDATED_AT, System.currentTimeMillis())
         }
         dbHelper.writableDatabase.update(
@@ -83,21 +88,62 @@ class RouteConfigRepository(context: Context) {
         )
     }
 
+    fun close() {
+        dbHelper.close()
+    }
+
     private fun Cursor.toRouteConfig(): RouteConfig {
         return RouteConfig(
             id = getLong(getColumnIndexOrThrow(COLUMN_ID)),
             name = getString(getColumnIndexOrThrow(COLUMN_NAME)),
-            origin = getString(getColumnIndexOrThrow(COLUMN_ORIGIN)),
-            destination = getString(getColumnIndexOrThrow(COLUMN_DESTINATION))
+            origin = getPlace(ORIGIN_PREFIX),
+            destination = getPlace(DESTINATION_PREFIX)
         )
     }
 
+    private fun ContentValues.putPlace(prefix: String, place: Place) {
+        when (prefix) {
+            ORIGIN_PREFIX -> {
+                put(COLUMN_ORIGIN_NAME, place.name)
+                put(COLUMN_ORIGIN_LATITUDE, place.latitude)
+                put(COLUMN_ORIGIN_LONGITUDE, place.longitude)
+            }
+            DESTINATION_PREFIX -> {
+                put(COLUMN_DESTINATION_NAME, place.name)
+                put(COLUMN_DESTINATION_LATITUDE, place.latitude)
+                put(COLUMN_DESTINATION_LONGITUDE, place.longitude)
+            }
+        }
+    }
+
+    private fun Cursor.getPlace(prefix: String): Place {
+        return when (prefix) {
+            ORIGIN_PREFIX -> Place(
+                name = getString(getColumnIndexOrThrow(COLUMN_ORIGIN_NAME)),
+                latitude = getDouble(getColumnIndexOrThrow(COLUMN_ORIGIN_LATITUDE)),
+                longitude = getDouble(getColumnIndexOrThrow(COLUMN_ORIGIN_LONGITUDE))
+            )
+            else -> Place(
+                name = getString(getColumnIndexOrThrow(COLUMN_DESTINATION_NAME)),
+                latitude = getDouble(getColumnIndexOrThrow(COLUMN_DESTINATION_LATITUDE)),
+                longitude = getDouble(getColumnIndexOrThrow(COLUMN_DESTINATION_LONGITUDE))
+            )
+        }
+    }
+
     companion object {
+        private const val ORIGIN_PREFIX = "origin"
+        private const val DESTINATION_PREFIX = "destination"
+
         private val ROUTE_COLUMNS = arrayOf(
             COLUMN_ID,
             COLUMN_NAME,
-            COLUMN_ORIGIN,
-            COLUMN_DESTINATION
+            COLUMN_ORIGIN_NAME,
+            COLUMN_ORIGIN_LATITUDE,
+            COLUMN_ORIGIN_LONGITUDE,
+            COLUMN_DESTINATION_NAME,
+            COLUMN_DESTINATION_LATITUDE,
+            COLUMN_DESTINATION_LONGITUDE
         )
     }
 }

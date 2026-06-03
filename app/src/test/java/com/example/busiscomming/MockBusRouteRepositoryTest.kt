@@ -1,16 +1,18 @@
 package com.example.busiscomming
 
+import com.example.busiscomming.data.model.Place
 import com.example.busiscomming.data.repository.MockBusRouteRepository
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MockBusRouteRepositoryTest {
     private val repository = MockBusRouteRepository()
+    private val origin = Place("渔湾村渔进楼", 22.264, 114.248)
+    private val destination = Place("兴华二村丰兴楼", 22.262, 114.236)
 
     @Test
-    fun yuwanToXinghuaReturnsThreeRoutes() {
-        val routes = repository.searchRoutes("渔湾村渔进楼", "兴华二村丰兴楼")
+    fun anyRouteReturnsFixedMockRoutes() {
+        val routes = repository.searchRoutes(origin, destination)
 
         assertEquals(3, routes.size)
         assertEquals(listOf("82", "8X", "780"), routes.map { it.routeName })
@@ -19,19 +21,9 @@ class MockBusRouteRepositoryTest {
     }
 
     @Test
-    fun xinghuaToYuwanReturnsTwoRoutes() {
-        val routes = repository.searchRoutes("兴华二村丰兴楼", "渔湾村渔进楼")
+    fun reversedRouteAlsoReturnsFixedMockRoutes() {
+        val routes = repository.searchRoutes(destination, origin)
 
-        assertEquals(2, routes.size)
-        assertEquals(listOf("82", "8X"), routes.map { it.routeName })
-        assertEquals(listOf(6.0, 7.2), routes.map { it.priceHkd })
-        assertEquals(listOf(6, 11), routes.map { it.waitMinutes })
-    }
-
-    @Test
-    fun unmatchedRouteReturnsEmptyList() {
-        val routes = repository.searchRoutes("中环", "铜锣湾")
-
-        assertTrue(routes.isEmpty())
+        assertEquals(listOf("82", "8X", "780"), routes.map { it.routeName })
     }
 }

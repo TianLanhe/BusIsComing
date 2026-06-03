@@ -3,8 +3,10 @@ package com.example.busiscomming.data.model
 data class RouteConfig(
     val id: Long,
     val name: String,
-    val origin: String,
-    val destination: String
+    val origin: Place,
+    val destination: Place
 ) {
-    fun displayLabel(): String = "$name：$origin -> $destination"
+    fun pathLabel(): String = "${origin.name} -> ${destination.name}"
+
+    fun displayLabel(): String = "$name：${pathLabel()}"
 }

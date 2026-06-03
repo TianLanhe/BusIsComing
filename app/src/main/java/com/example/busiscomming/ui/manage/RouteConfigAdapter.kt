@@ -41,7 +41,7 @@ class RouteConfigAdapter(
 
         fun bind(route: RouteConfig) {
             routeNameText.text = route.name
-            routePathText.text = "${route.origin} -> ${route.destination}"
+            routePathText.text = route.pathLabel()
             editButton.setOnClickListener { onEdit(route) }
             deleteButton.setOnClickListener { onDelete(route) }
         }
