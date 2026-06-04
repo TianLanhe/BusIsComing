@@ -35,6 +35,7 @@ class RouteManageActivity : AppCompatActivity() {
 
         adapter = RouteConfigAdapter(
             onEdit = { route -> openEdit(route) },
+            onClone = { route -> openClone(route) },
             onDelete = { route -> confirmDelete(route) }
         )
         routeList.layoutManager = LinearLayoutManager(this)
@@ -68,6 +69,18 @@ class RouteManageActivity : AppCompatActivity() {
     private fun openEdit(route: RouteConfig) {
         val intent = Intent(this, RouteEditActivity::class.java)
             .putExtra(RouteEditActivity.EXTRA_ROUTE_ID, route.id)
+        startActivity(intent)
+    }
+
+    private fun openClone(route: RouteConfig) {
+        val intent = Intent(this, RouteEditActivity::class.java)
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_NAME, "${route.name}（副本）")
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_NAME, route.origin.name)
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LATITUDE, route.origin.latitude)
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LONGITUDE, route.origin.longitude)
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_NAME, route.destination.name)
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_LATITUDE, route.destination.latitude)
+            .putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_LONGITUDE, route.destination.longitude)
         startActivity(intent)
     }
 

@@ -88,6 +88,21 @@ class RouteConfigRepository(context: Context) {
         )
     }
 
+    fun hasDuplicate(
+        name: String,
+        origin: Place,
+        destination: Place,
+        excludedId: Long? = null
+    ): Boolean {
+        val normalizedName = name.trim()
+        return getAll().any { route ->
+            route.id != excludedId &&
+                route.name.trim() == normalizedName &&
+                route.origin == origin &&
+                route.destination == destination
+        }
+    }
+
     fun close() {
         dbHelper.close()
     }

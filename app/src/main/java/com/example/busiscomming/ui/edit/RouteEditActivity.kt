@@ -35,6 +35,8 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var nameInput: TextInputEditText
     private lateinit var originInput: MaterialAutoCompleteTextView
     private lateinit var destinationInput: MaterialAutoCompleteTextView
+    private lateinit var originSearchLoading: View
+    private lateinit var destinationSearchLoading: View
     private lateinit var originAdapter: PlaceCandidateAdapter
     private lateinit var destinationAdapter: PlaceCandidateAdapter
 
@@ -80,6 +82,14 @@ class RouteEditActivity : AppCompatActivity() {
         nameInput = findViewById(R.id.routeNameInput)
         originInput = findViewById(R.id.originInput)
         destinationInput = findViewById(R.id.destinationInput)
+        originSearchLoading = findViewById(R.id.originSearchLoading)
+        destinationSearchLoading = findViewById(R.id.destinationSearchLoading)
+        findViewById<MaterialButton>(R.id.backRouteButton).setOnClickListener {
+            finish()
+        }
+        findViewById<MaterialButton>(R.id.swapPlacesButton).setOnClickListener {
+            swapPlaces()
+        }
         findViewById<MaterialButton>(R.id.saveRouteButton).setOnClickListener {
             saveRoute()
         }
@@ -91,12 +101,19 @@ class RouteEditActivity : AppCompatActivity() {
         originInput.setAdapter(originAdapter)
         destinationInput.setAdapter(destinationAdapter)
 
-        setupPlaceInput(originInput, originInputLayout, originAdapter, originState)
+        setupPlaceInput(
+            originInput,
+            originInputLayout,
+            originAdapter,
+            originState,
+            originSearchLoading
+        )
         setupPlaceInput(
             destinationInput,
             destinationInputLayout,
             destinationAdapter,
-            destinationState
+            destinationState,
+            destinationSearchLoading
         )
     }
 
@@ -104,8 +121,10 @@ class RouteEditActivity : AppCompatActivity() {
         input: MaterialAutoCompleteTextView,
         inputLayout: TextInputLayout,
         adapter: PlaceCandidateAdapter,
-        state: PlaceFieldState
+        state: PlaceFieldState,
+        loadingView: View
     ) {
+        state.loadingView = loadingView
         input.threshold = MIN_SEARCH_LENGTH
         input.setOnItemClickListener { _, _, position, _ ->
             val place = adapter.getItem(position) ?: return@setOnItemClickListener
@@ -159,6 +178,7 @@ class RouteEditActivity : AppCompatActivity() {
     private fun setupMode() {
         if (routeId == NO_ROUTE_ID) {
             title = "新增路线"
+            applyPrefillIfPresent()
             return
         }
 
@@ -192,6 +212,13 @@ class RouteEditActivity : AppCompatActivity() {
         destinationInputLayout.error = validation.destinationError
         if (!validation.isValid || origin == null || destination == null) return
 
+        val excludedRouteId = routeId.takeIf { it != NO_ROUTE_ID }
+        if (repository.hasDuplicate(name, origin, destination, excludedRouteId)) {
+            nameInputLayout.error = "路线已存在，请修改名称或起终点"
+            Toast.makeText(this, "路线已存在", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         if (routeId == NO_ROUTE_ID) {
             repository.insert(name, origin, destination)
             Toast.makeText(this, "已新增路线", Toast.LENGTH_SHORT).show()
@@ -221,6 +248,68 @@ class RouteEditActivity : AppCompatActivity() {
         inputLayout.helperText = null
     }
 
+    private fun setRawPlaceText(
+        input: MaterialAutoCompleteTextView,
+        inputLayout: TextInputLayout,
+        state: PlaceFieldState,
+        adapter: PlaceCandidateAdapter,
+        text: String
+    ) {
+        cancelPendingSearch(state)
+        adapter.submitPlaces(emptyList())
+        state.selectedPlace = null
+        state.suppressTextChange = true
+        input.setText(text, false)
+        input.setSelection(input.text?.length ?: 0)
+        state.suppressTextChange = false
+        input.dismissDropDown()
+        inputLayout.error = null
+        inputLayout.helperText = null
+    }
+
+    private fun swapPlaces() {
+        val originalOriginText = originInput.text?.toString().orEmpty()
+        val originalDestinationText = destinationInput.text?.toString().orEmpty()
+        val originalOriginPlace = originState.selectedPlace
+        val originalDestinationPlace = destinationState.selectedPlace
+
+        if (originalDestinationPlace != null) {
+            setSelectedPlace(
+                originInput,
+                originInputLayout,
+                originState,
+                originalDestinationPlace,
+                originAdapter
+            )
+        } else {
+            setRawPlaceText(
+                originInput,
+                originInputLayout,
+                originState,
+                originAdapter,
+                originalDestinationText
+            )
+        }
+
+        if (originalOriginPlace != null) {
+            setSelectedPlace(
+                destinationInput,
+                destinationInputLayout,
+                destinationState,
+                originalOriginPlace,
+                destinationAdapter
+            )
+        } else {
+            setRawPlaceText(
+                destinationInput,
+                destinationInputLayout,
+                destinationState,
+                destinationAdapter,
+                originalOriginText
+            )
+        }
+    }
+
     private fun schedulePlaceSearch(
         keyword: String,
         input: MaterialAutoCompleteTextView,
@@ -228,14 +317,16 @@ class RouteEditActivity : AppCompatActivity() {
         adapter: PlaceCandidateAdapter,
         state: PlaceFieldState
     ) {
-        cancelPendingSearch(state)
+        cancelPendingSearch(state, hideLoading = false)
         state.searchSequence += 1
 
         if (keyword.length < MIN_SEARCH_LENGTH) {
             adapter.submitPlaces(emptyList())
+            setSearchLoading(state, false)
             return
         }
 
+        setSearchLoading(state, true)
         val searchId = state.searchSequence
         val searchRunnable = Runnable {
             runPlaceSearch(keyword, input, inputLayout, adapter, state, searchId)
@@ -257,6 +348,7 @@ class RouteEditActivity : AppCompatActivity() {
             mainHandler.post {
                 if (isFinishing || isDestroyed || state.searchSequence != searchId) return@post
 
+                setSearchLoading(state, false)
                 result
                     .onSuccess { places ->
                         updatePlaceCandidates(
@@ -294,10 +386,56 @@ class RouteEditActivity : AppCompatActivity() {
         }
     }
 
-    private fun cancelPendingSearch(state: PlaceFieldState) {
+    private fun cancelPendingSearch(state: PlaceFieldState, hideLoading: Boolean = true) {
         state.pendingSearch?.let { mainHandler.removeCallbacks(it) }
         state.pendingSearch = null
         state.searchSequence += 1
+        if (hideLoading) {
+            setSearchLoading(state, false)
+        }
+    }
+
+    private fun setSearchLoading(state: PlaceFieldState, isLoading: Boolean) {
+        state.loadingView?.visibility = if (isLoading) View.VISIBLE else View.GONE
+    }
+
+    private fun applyPrefillIfPresent() {
+        val prefillName = intent.getStringExtra(EXTRA_PREFILL_NAME) ?: return
+        val origin = readPrefillPlace(
+            nameKey = EXTRA_PREFILL_ORIGIN_NAME,
+            latitudeKey = EXTRA_PREFILL_ORIGIN_LATITUDE,
+            longitudeKey = EXTRA_PREFILL_ORIGIN_LONGITUDE
+        )
+        val destination = readPrefillPlace(
+            nameKey = EXTRA_PREFILL_DESTINATION_NAME,
+            latitudeKey = EXTRA_PREFILL_DESTINATION_LATITUDE,
+            longitudeKey = EXTRA_PREFILL_DESTINATION_LONGITUDE
+        )
+        if (origin == null || destination == null) return
+
+        nameInput.setText(prefillName)
+        setSelectedPlace(originInput, originInputLayout, originState, origin, originAdapter)
+        setSelectedPlace(
+            destinationInput,
+            destinationInputLayout,
+            destinationState,
+            destination,
+            destinationAdapter
+        )
+    }
+
+    private fun readPrefillPlace(
+        nameKey: String,
+        latitudeKey: String,
+        longitudeKey: String
+    ): Place? {
+        val name = intent.getStringExtra(nameKey) ?: return null
+        if (!intent.hasExtra(latitudeKey) || !intent.hasExtra(longitudeKey)) return null
+        return Place(
+            name = name,
+            latitude = intent.getDoubleExtra(latitudeKey, 0.0),
+            longitude = intent.getDoubleExtra(longitudeKey, 0.0)
+        )
     }
 
     private class PlaceCandidateAdapter(
@@ -333,10 +471,18 @@ class RouteEditActivity : AppCompatActivity() {
         var suppressTextChange: Boolean = false
         var searchSequence: Int = 0
         var pendingSearch: Runnable? = null
+        var loadingView: View? = null
     }
 
     companion object {
         const val EXTRA_ROUTE_ID = "extra_route_id"
+        const val EXTRA_PREFILL_NAME = "extra_prefill_name"
+        const val EXTRA_PREFILL_ORIGIN_NAME = "extra_prefill_origin_name"
+        const val EXTRA_PREFILL_ORIGIN_LATITUDE = "extra_prefill_origin_latitude"
+        const val EXTRA_PREFILL_ORIGIN_LONGITUDE = "extra_prefill_origin_longitude"
+        const val EXTRA_PREFILL_DESTINATION_NAME = "extra_prefill_destination_name"
+        const val EXTRA_PREFILL_DESTINATION_LATITUDE = "extra_prefill_destination_latitude"
+        const val EXTRA_PREFILL_DESTINATION_LONGITUDE = "extra_prefill_destination_longitude"
         const val NO_ROUTE_ID = -1L
         private const val MIN_SEARCH_LENGTH = 1
         private const val MAX_CANDIDATES = 100

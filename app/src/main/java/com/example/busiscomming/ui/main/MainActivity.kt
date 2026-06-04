@@ -4,12 +4,19 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
+import android.graphics.Typeface
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscomming.R
@@ -142,9 +149,10 @@ class MainActivity : AppCompatActivity() {
 
         selectedRoute = routeConfigs.firstOrNull { it.id == previousSelectedId } ?: routeConfigs.first()
         val selectedIndex = routeConfigs.indexOfFirst { it.id == selectedRoute?.id }
-        routeSelector.setText(labels.getOrElse(selectedIndex) { labels.first() }, false)
+        showSelectedRoute()
         routeSelector.setOnItemClickListener { _, _, position, _ ->
             selectedRoute = routeConfigs.getOrNull(position)
+            showSelectedRoute()
             clearResults()
         }
         if (previousRouteConfigs != routeConfigs) {
@@ -244,6 +252,37 @@ class MainActivity : AppCompatActivity() {
     private fun setQueryLoading(isLoading: Boolean) {
         queryButton.isEnabled = !isLoading
         queryButton.text = if (isLoading) "查询中..." else "查询"
+    }
+
+    private fun showSelectedRoute() {
+        val route = selectedRoute ?: return
+        val title = route.name
+        val subtitle = route.pathLabel()
+        val displayText = "$title\n$subtitle"
+        val styledText = SpannableString(displayText).apply {
+            setSpan(StyleSpan(Typeface.BOLD), 0, title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(RelativeSizeSpan(1.08f), 0, title.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(
+                ForegroundColorSpan(ContextCompat.getColor(this@MainActivity, R.color.bus_text_primary)),
+                0,
+                title.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            setSpan(
+                RelativeSizeSpan(0.82f),
+                title.length + 1,
+                displayText.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            setSpan(
+                ForegroundColorSpan(ContextCompat.getColor(this@MainActivity, R.color.bus_text_secondary)),
+                title.length + 1,
+                displayText.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        routeSelector.setText(styledText, false)
+        routeSelector.setSelection(routeSelector.text?.length ?: 0)
     }
 
     private fun updateSortHeaders() {

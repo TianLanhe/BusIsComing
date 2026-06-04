@@ -11,6 +11,7 @@ import com.google.android.material.button.MaterialButton
 
 class RouteConfigAdapter(
     private val onEdit: (RouteConfig) -> Unit,
+    private val onClone: (RouteConfig) -> Unit,
     private val onDelete: (RouteConfig) -> Unit
 ) : RecyclerView.Adapter<RouteConfigAdapter.RouteConfigViewHolder>() {
     private val routes = mutableListOf<RouteConfig>()
@@ -37,12 +38,14 @@ class RouteConfigAdapter(
         private val routeNameText: TextView = itemView.findViewById(R.id.routeNameText)
         private val routePathText: TextView = itemView.findViewById(R.id.routePathText)
         private val editButton: MaterialButton = itemView.findViewById(R.id.editRouteButton)
+        private val cloneButton: MaterialButton = itemView.findViewById(R.id.cloneRouteButton)
         private val deleteButton: MaterialButton = itemView.findViewById(R.id.deleteRouteButton)
 
         fun bind(route: RouteConfig) {
             routeNameText.text = route.name
             routePathText.text = route.pathLabel()
             editButton.setOnClickListener { onEdit(route) }
+            cloneButton.setOnClickListener { onClone(route) }
             deleteButton.setOnClickListener { onDelete(route) }
         }
     }

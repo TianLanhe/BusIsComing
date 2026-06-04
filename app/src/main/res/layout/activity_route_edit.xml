@@ -10,8 +10,17 @@
         android:id="@+id/routeEditContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="vertical"
         android:padding="20dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/backRouteButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="返回上一页" />
 
         <TextView
             android:layout_width="match_parent"
@@ -27,7 +36,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:hint="路线名称">
+            android:hint="输入路线名称，如：上学、回家、去公司">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/routeNameInput"
@@ -43,7 +52,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:hint="起点地点">
+            android:hint="输入起点关键词，并从匹配列表中选择">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/originInput"
@@ -54,13 +63,46 @@
                 android:maxLines="2" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <LinearLayout
+            android:id="@+id/originSearchLoading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ProgressBar
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:indeterminate="true" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="正在匹配地点..."
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/swapPlacesButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="14dp"
+            android:text="交换起点和终点" />
+
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/destinationInputLayout"
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
-            android:hint="终点地点">
+            android:hint="输入终点关键词，并从匹配列表中选择">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/destinationInput"
@@ -70,6 +112,30 @@
                 android:inputType="text"
                 android:maxLines="2" />
         </com.google.android.material.textfield.TextInputLayout>
+
+        <LinearLayout
+            android:id="@+id/destinationSearchLoading"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <ProgressBar
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:indeterminate="true" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="正在匹配地点..."
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveRouteButton"

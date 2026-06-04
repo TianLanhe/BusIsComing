@@ -13,4 +13,5 @@
     <color name="bus_text_secondary">#FF5D6B66</color>
     <color name="bus_divider">#FFD6DEDA</color>
     <color name="bus_danger">#FFB3261E</color>
+    <color name="bus_action_secondary">#FFF2A541</color>
 </resources>
