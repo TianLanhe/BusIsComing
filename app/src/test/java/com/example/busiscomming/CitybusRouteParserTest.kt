@@ -62,6 +62,63 @@ class CitybusRouteParserTest {
     }
 
     @Test
+    fun parsesWalkingModeSample() {
+        val routes = CitybusRouteParser.parse(WALKING_MODE_SAMPLE_HTML)
+
+        assertEquals(12, routes.size)
+        assertEquals(
+            setOf("8 \u2192 90", "8 \u2192 E11A", "8 \u2192 10", "788", "780"),
+            routes.map { it.routeName }
+                .filter { it in setOf("8 \u2192 90", "8 \u2192 E11A", "8 \u2192 10", "788", "780") }
+                .toSet()
+        )
+
+        val route = routes.first { it.routeName == "8 \u2192 90" }
+        assertEquals(12.9, route.priceHkd, 0.001)
+        assertEquals(71, route.durationMinutes)
+        assertEquals(71, route.arrivalMinutes)
+        assertEquals(1, route.transferCount)
+        assertEquals(listOf("8", "90"), route.routeSegments)
+        assertEquals(95, route.walkingDistanceMeters)
+    }
+
+    @Test
+    fun parsesFareModeSampleWithFreeTransfers() {
+        val routes = CitybusRouteParser.parse(FARE_MODE_SAMPLE_HTML)
+
+        assertEquals(4, routes.size)
+        assertEquals(setOf("8X \u2192 10", "8X \u2192 1", "780", "788"), routes.map { it.routeName }.toSet())
+
+        val routeTo10 = routes.first { it.routeName == "8X \u2192 10" }
+        assertEquals(8.1, routeTo10.priceHkd, 0.001)
+        assertEquals(74, routeTo10.durationMinutes)
+        assertEquals(355, routeTo10.walkingDistanceMeters)
+
+        val routeTo1 = routes.first { it.routeName == "8X \u2192 1" }
+        assertEquals(8.1, routeTo1.priceHkd, 0.001)
+        assertEquals(104, routeTo1.durationMinutes)
+        assertEquals(450, routeTo1.walkingDistanceMeters)
+    }
+
+    @Test
+    fun parsesTimeModeSampleWithFastestTransfers() {
+        val routes = CitybusRouteParser.parse(TIME_MODE_SAMPLE_HTML)
+
+        assertEquals(4, routes.size)
+        assertEquals(setOf("789 \u2192 619", "789 \u2192 15", "788", "780"), routes.map { it.routeName }.toSet())
+
+        val routeTo619 = routes.first { it.routeName == "789 \u2192 619" }
+        assertEquals(16.4, routeTo619.priceHkd, 0.001)
+        assertEquals(28, routeTo619.durationMinutes)
+        assertEquals(363, routeTo619.walkingDistanceMeters)
+
+        val routeTo15 = routes.first { it.routeName == "789 \u2192 15" }
+        assertEquals(13.6, routeTo15.priceHkd, 0.001)
+        assertEquals(29, routeTo15.durationMinutes)
+        assertEquals(330, routeTo15.walkingDistanceMeters)
+    }
+
+    @Test
     fun trimsRouteListIdWhitespace() {
         val routes = CitybusRouteParser.parse(
             """
@@ -166,5 +223,42 @@ class CitybusRouteParserTest {
                 </div>
             </div>
         """.trimIndent()
+
+        private val WALKING_MODE_SAMPLE_HTML = routeListHtml(
+            "8 港元8.1 至 90 港元4.8預計71分鐘 步行距離(約)95米",
+            "8 港元8.1 至 E11A 港元21.7預計72分鐘 步行距離(約)95米",
+            "8 港元8.1 至 E11B 港元21.7預計91分鐘 步行距離(約)95米",
+            "8 港元8.1 至 26 港元5.6預計82分鐘 步行距離(約)164米",
+            "8 港元8.1 至 10 港元4.8預計74分鐘 步行距離(約)167米",
+            "8 港元8.1 至 5B 港元4.8預計80分鐘 步行距離(約)167米",
+            "8 港元8.1 至 37A 港元6.6預計72分鐘 步行距離(約)169米",
+            "8 港元8.1 至 967X 港元27.3預計79分鐘 步行距離(約)203米",
+            "8 港元8.1 至 5X 港元6.1預計77分鐘 步行距離(約)210米",
+            "8 港元8.1 至 914 港元12.2預計84分鐘 步行距離(約)210米",
+            "788 港元8.7預計29分鐘 步行距離(約)350米",
+            "780 港元8.7預計41分鐘 步行距離(約)488米"
+        )
+
+        private val FARE_MODE_SAMPLE_HTML = routeListHtml(
+            "8X 港元8.1 至 10 免費 *預計74分鐘 步行距離(約)355米",
+            "8X 港元8.1 至 1 免費 *預計104分鐘 步行距離(約)450米",
+            "780 港元8.7預計41分鐘 步行距離(約)488米",
+            "788 港元8.7預計29分鐘 步行距離(約)350米"
+        )
+
+        private val TIME_MODE_SAMPLE_HTML = routeListHtml(
+            "789 港元8.7 至 619 港元7.7預計28分鐘 步行距離(約)363米",
+            "789 港元8.7 至 15 港元4.9預計29分鐘 步行距離(約)330米",
+            "788 港元8.7預計29分鐘 步行距離(約)350米",
+            "780 港元8.7預計41分鐘 步行距離(約)488米"
+        )
+
+        private fun routeListHtml(vararg labels: String): String {
+            return labels.joinToString(
+                separator = "\n",
+                prefix = "<div id=\"p2p_routelist\"><div id=\"routelist2 \">\n",
+                postfix = "\n</div></div>"
+            ) { label -> "<table aria-label=\"$label\"></table>" }
+        }
     }
 }

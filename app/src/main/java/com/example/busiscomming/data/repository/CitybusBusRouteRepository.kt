@@ -69,6 +69,7 @@ class CitybusBusRouteRepository(
                 "&elat=${destination.latitude}" +
                 "&elon=${destination.longitude}" +
                 "&t=${encodeQueryValue(queryTime)}" +
+                "&ws=$WALKING_SEARCH_RATIO" +
                 "&leg=2" +
                 "&m1=$searchMode" +
                 "&l=0"
@@ -123,6 +124,7 @@ class CitybusBusRouteRepository(
     companion object {
         private const val BASE_URL = "https://mobile.citybus.com.hk/nwp3/ppsearch_p3.php"
         private const val DEFAULT_SEARCH_MODE = "T"
+        private const val WALKING_SEARCH_RATIO = "1.3"
         private const val QUERY_TIME_PATTERN = "yyyy-MM-dd HH:mm"
         private const val HONG_KONG_TIME_ZONE = "Asia/Hong_Kong"
         private val SEARCH_MODES = listOf("T", "F", "W")
@@ -137,7 +139,7 @@ class CitybusBusRouteRepository(
     }
 }
 
-private const val TIMEOUT_MS = 10_000
+private const val TIMEOUT_MS = 20_000
 
 private fun fetchRouteHtml(url: URL, headers: Map<String, String>): String {
     val connection = url.openConnection() as HttpURLConnection
