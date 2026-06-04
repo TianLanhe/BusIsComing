@@ -81,14 +81,37 @@ class CitybusFirstLegEtaService(
         query: FirstLegEtaQuery,
         stopId: String
     ): Long? {
-        val matchingEtaMillis = parseJsonObjects(response).mapNotNull { fields ->
-            if (fields["route"] != query.route) return@mapNotNull null
-            if (fields["stop"] != stopId) return@mapNotNull null
-            if (fields["dir"] != query.bound) return@mapNotNull null
-            if (fields["seq"]?.toIntOrNull() != query.boardingSeq) return@mapNotNull null
-            fields["eta"]?.takeIf { it.isNotBlank() }?.toHongKongIsoMillis()
+        val records = parseEtaRecords(response)
+        val strictEtaMillis = records
+            .filter { it.matchesRouteStopAndDirection(query, stopId) }
+            .filter { it.seq == query.boardingSeq }
+            .map { it.etaMillis }
+
+        return strictEtaMillis.minOrNull() ?: records
+            .filter { it.matchesRouteStopAndDirection(query, stopId) }
+            .map { it.etaMillis }
+            .minOrNull()
+    }
+
+    private fun parseEtaRecords(response: String): List<EtaRecord> {
+        return parseJsonObjects(response).mapNotNull { fields ->
+            val etaMillis = fields["eta"]
+                ?.takeIf { it.isNotBlank() }
+                ?.toHongKongIsoMillis()
+                ?: return@mapNotNull null
+
+            EtaRecord(
+                route = fields["route"].orEmpty(),
+                stop = fields["stop"].orEmpty(),
+                direction = fields["dir"].orEmpty(),
+                seq = fields["seq"]?.toIntOrNull(),
+                etaMillis = etaMillis
+            )
         }
-        return matchingEtaMillis.minOrNull()
+    }
+
+    private fun EtaRecord.matchesRouteStopAndDirection(query: FirstLegEtaQuery, stopId: String): Boolean {
+        return route == query.route && stop == stopId && direction == query.bound
     }
 
     private fun String.toHongKongIsoMillis(): Long? {
@@ -108,6 +131,14 @@ class CitybusFirstLegEtaService(
     private data class CachedRouteStops(
         val stopsBySeq: Map<Int, String>,
         val cachedAtMillis: Long
+    )
+
+    private data class EtaRecord(
+        val route: String,
+        val stop: String,
+        val direction: String,
+        val seq: Int?,
+        val etaMillis: Long
     )
 
     companion object {

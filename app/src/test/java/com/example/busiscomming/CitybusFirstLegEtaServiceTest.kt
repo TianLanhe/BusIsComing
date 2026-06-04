@@ -58,7 +58,7 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
-    fun ignoresEtaRecordsThatDoNotMatchRouteStopDirectionAndSeq() {
+    fun prefersStrictEtaMatchBeforeSeqFallback() {
         val service = CitybusFirstLegEtaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
             routeStopFetcher = { routeStopResponse() },
@@ -76,6 +76,68 @@ class CitybusFirstLegEtaServiceTest {
         )
 
         assertEquals(WaitTimeState.Available(5), service.resolveWaitTime(query))
+    }
+
+    @Test
+    fun fallsBackToRouteStopAndDirectionWhenEtaSeqDiffers() {
+        val service = CitybusFirstLegEtaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            routeStopFetcher = {
+                """{"data":[{"co":"CTB","route":"118","dir":"O","seq":5,"stop":"001312"}]}"""
+            },
+            etaFetcher = {
+                """
+                {
+                  "data": [
+                    {"co":"CTB","route":"118","dir":"O","seq":3,"stop":"001312","eta":"2026-06-04T12:03:10+08:00"}
+                  ]
+                }
+                """.trimIndent()
+            }
+        )
+
+        assertEquals(WaitTimeState.Available(4), service.resolveWaitTime(route118Query()))
+    }
+
+    @Test
+    fun ignoresSeqFallbackRecordsWithDifferentRouteStopOrDirection() {
+        val service = CitybusFirstLegEtaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            routeStopFetcher = { routeStopResponse() },
+            etaFetcher = {
+                """
+                {
+                  "data": [
+                    {"co":"CTB","route":"8","dir":"O","seq":7,"stop":"001227","eta":"2026-06-04T12:01:00+08:00"},
+                    {"co":"CTB","route":"8X","dir":"I","seq":7,"stop":"001227","eta":"2026-06-04T12:02:00+08:00"},
+                    {"co":"CTB","route":"8X","dir":"O","seq":7,"stop":"001228","eta":"2026-06-04T12:03:00+08:00"}
+                  ]
+                }
+                """.trimIndent()
+            }
+        )
+
+        assertEquals(WaitTimeState.Unavailable, service.resolveWaitTime(query))
+    }
+
+    @Test
+    fun returnsUnavailableWhenNoStrictOrFallbackEtaIsParsable() {
+        val service = CitybusFirstLegEtaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            routeStopFetcher = { routeStopResponse() },
+            etaFetcher = {
+                """
+                {
+                  "data": [
+                    {"co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227","eta":""},
+                    {"co":"CTB","route":"8X","dir":"O","seq":7,"stop":"001227","eta":"not-a-date"}
+                  ]
+                }
+                """.trimIndent()
+            }
+        )
+
+        assertEquals(WaitTimeState.Unavailable, service.resolveWaitTime(query))
     }
 
     @Test
@@ -155,6 +217,18 @@ class CitybusFirstLegEtaServiceTest {
               ]
             }
         """.trimIndent()
+    }
+
+    private fun route118Query(): FirstLegEtaQuery {
+        return FirstLegEtaQuery(
+            company = "CTB",
+            routeVariant = "118-TOS-1",
+            route = "118",
+            boardingSeq = 5,
+            alightingSeq = 9,
+            bound = "O",
+            directionPath = "outbound"
+        )
     }
 
     private fun millis(value: String): Long {
