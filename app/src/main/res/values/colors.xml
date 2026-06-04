@@ -9,6 +9,11 @@
     <color name="white">#FFFFFFFF</color>
     <color name="bus_surface">#FFF8FAF9</color>
     <color name="bus_surface_variant">#FFE8EFEC</color>
+    <color name="bus_card_surface">#FFFFFFFF</color>
+    <color name="bus_state_surface">#FFFFFFFF</color>
+    <color name="bus_chip_surface">#FFFFFFFF</color>
+    <color name="bus_chip_selected">#FF145C54</color>
+    <color name="bus_wait_accent">#FF145C54</color>
     <color name="bus_text_primary">#FF17211F</color>
     <color name="bus_text_secondary">#FF5D6B66</color>
     <color name="bus_divider">#FFD6DEDA</color>

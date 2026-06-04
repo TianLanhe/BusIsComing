@@ -31,16 +31,49 @@
     </LinearLayout>
 
     <TextView
-        android:id="@+id/emptyRoutesText"
+        android:id="@+id/routeManageSubtitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:background="@drawable/empty_state_background"
-        android:gravity="center"
-        android:padding="24dp"
-        android:text="还没有保存路线"
+        android:layout_marginTop="10dp"
+        android:text="管理常用起点和终点，查询时直接选择。"
         android:textColor="@color/bus_text_secondary"
-        android:visibility="gone" />
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:id="@+id/emptyRoutesState"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:background="@drawable/status_card_background"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="还没有保存路线"
+            android:textColor="@color/bus_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="先新增一条常用路线，之后查询会更快。"
+            android:textColor="@color/bus_text_secondary"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/emptyManageAddRouteButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="新增路线" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/routeConfigList"

@@ -1,10 +1,16 @@
 package com.example.busiscomming
 
 import com.example.busiscomming.data.model.Place
+import com.example.busiscomming.data.model.WaitTimeState
+import com.example.busiscomming.data.repository.BusRouteQueryCallback
 import com.example.busiscomming.data.repository.CitybusBusRouteRepository
+import com.example.busiscomming.data.model.BusRouteOption
 import java.io.IOException
 import java.net.URL
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
@@ -77,17 +83,44 @@ class CitybusBusRouteRepositoryTest {
     }
 
     @Test
+    fun logsEquivalentCurlForEachModeRequest() {
+        val logs = Collections.synchronizedList(mutableListOf<String>())
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { _, _ ->
+                routeHtml("788 港元8.7預計29分鐘 步行距離(約)350米")
+            },
+            requestLogger = { logs.add(it) }
+        )
+
+        repository.searchRoutes(origin, destination)
+
+        assertEquals(3, logs.size)
+        assertEquals(setOf("T", "F", "W"), logs.map { it.queryParamFromCurl("m1") }.toSet())
+        logs.forEach { curl ->
+            assertTrue(curl.startsWith("curl 'https://mobile.citybus.com.hk/nwp3/ppsearch_p3.php?"))
+            assertTrue(curl.contains("&ws=1.3&"))
+            assertTrue(curl.contains(" -H 'Cookie: ETWEBID=6a1ecbeae8d60;"))
+            assertTrue(curl.contains(" -H 'User-Agent: Mozilla/5.0"))
+        }
+    }
+
+    @Test
     fun searchesAllModesWithSameQueryTimeAndAggregatesUniqueResults() {
         val requestedUrls = Collections.synchronizedList(mutableListOf<URL>())
-        val repository = CitybusBusRouteRepository(clock = { fixedQueryTimestamp }) { url, _ ->
-            requestedUrls += url
-            when (url.queryParam("m1")) {
-                "T" -> routeHtml(*TIME_MODE_LABELS)
-                "F" -> routeHtml(*FARE_MODE_LABELS)
-                "W" -> routeHtml(*WALKING_MODE_LABELS)
-                else -> error("Unexpected m1")
-            }
-        }
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                requestedUrls += url
+                when (url.queryParam("m1")) {
+                    "T" -> routeHtml(*TIME_MODE_LABELS)
+                    "F" -> routeHtml(*FARE_MODE_LABELS)
+                    "W" -> routeHtml(*WALKING_MODE_LABELS)
+                    else -> error("Unexpected m1")
+                }
+            },
+            requestLogger = {}
+        )
 
         val routes = repository.searchRoutes(origin, destination)
 
@@ -129,14 +162,18 @@ class CitybusBusRouteRepositoryTest {
 
     @Test
     fun keepsSameRouteSegmentsWhenDurationOrWalkingDistanceDiffers() {
-        val repository = CitybusBusRouteRepository(clock = { fixedQueryTimestamp }) { url, _ ->
-            when (url.queryParam("m1")) {
-                "T" -> routeHtml("8X 港元8.1 至 1 免費 *預計74分鐘 步行距離(約)355米")
-                "F" -> routeHtml("8X 港元8.1 至 1 免費 *預計104分鐘 步行距離(約)450米")
-                "W" -> routeHtml("8X 港元8.1 至 1 免費 *預計74分鐘 步行距離(約)355米")
-                else -> error("Unexpected m1")
-            }
-        }
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                when (url.queryParam("m1")) {
+                    "T" -> routeHtml("8X 港元8.1 至 1 免費 *預計74分鐘 步行距離(約)355米")
+                    "F" -> routeHtml("8X 港元8.1 至 1 免費 *預計104分鐘 步行距離(約)450米")
+                    "W" -> routeHtml("8X 港元8.1 至 1 免費 *預計74分鐘 步行距離(約)355米")
+                    else -> error("Unexpected m1")
+                }
+            },
+            requestLogger = {}
+        )
 
         val routes = repository.searchRoutes(origin, destination)
 
@@ -147,13 +184,17 @@ class CitybusBusRouteRepositoryTest {
 
     @Test
     fun returnsSuccessfulModeResultsWhenSomeModesFail() {
-        val repository = CitybusBusRouteRepository(clock = { fixedQueryTimestamp }) { url, _ ->
-            if (url.queryParam("m1") == "W") {
-                routeHtml("788 港元8.7預計29分鐘 步行距離(約)350米")
-            } else {
-                throw IOException("mode failed")
-            }
-        }
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "W") {
+                    routeHtml("788 港元8.7預計29分鐘 步行距離(約)350米")
+                } else {
+                    throw IOException("mode failed")
+                }
+            },
+            requestLogger = {}
+        )
 
         val routes = repository.searchRoutes(origin, destination)
 
@@ -162,14 +203,18 @@ class CitybusBusRouteRepositoryTest {
 
     @Test
     fun returnsOtherModeResultsWhenOneModeHasNoValidCandidates() {
-        val repository = CitybusBusRouteRepository(clock = { fixedQueryTimestamp }) { url, _ ->
-            when (url.queryParam("m1")) {
-                "T" -> routeHtml()
-                "F" -> routeHtml("8X 港元8.1 至 10 免費 *預計74分鐘 步行距離(約)355米")
-                "W" -> routeHtml("788 港元8.7預計29分鐘 步行距離(約)350米")
-                else -> error("Unexpected m1")
-            }
-        }
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                when (url.queryParam("m1")) {
+                    "T" -> routeHtml()
+                    "F" -> routeHtml("8X 港元8.1 至 10 免費 *預計74分鐘 步行距離(約)355米")
+                    "W" -> routeHtml("788 港元8.7預計29分鐘 步行距離(約)350米")
+                    else -> error("Unexpected m1")
+                }
+            },
+            requestLogger = {}
+        )
 
         val routes = repository.searchRoutes(origin, destination)
 
@@ -178,9 +223,11 @@ class CitybusBusRouteRepositoryTest {
 
     @Test
     fun returnsEmptyWhenAllModesHaveNoValidCandidates() {
-        val repository = CitybusBusRouteRepository(clock = { fixedQueryTimestamp }) { _, _ ->
-            routeHtml()
-        }
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { _, _ -> routeHtml() },
+            requestLogger = {}
+        )
 
         val routes = repository.searchRoutes(origin, destination)
 
@@ -189,13 +236,303 @@ class CitybusBusRouteRepositoryTest {
 
     @Test
     fun throwsWhenAllModesFail() {
-        val repository = CitybusBusRouteRepository(clock = { fixedQueryTimestamp }) { _, _ ->
-            throw IOException("mode failed")
-        }
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { _, _ -> throw IOException("mode failed") },
+            requestLogger = {}
+        )
 
         assertThrows(IOException::class.java) {
             repository.searchRoutes(origin, destination)
         }
+    }
+
+    @Test
+    fun progressiveQueryEmitsInitialRoutesImmediatelyAndUpdatesEtaInBackground() {
+        val callback = RecordingCallback(expectedUpdates = 6)
+        val waitTimeCalls = AtomicInteger(0)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "T") {
+                    routeHtmlWithInfo(
+                        routeWithInfo("1 港元1.0預計1分鐘 步行距離(約)101米", "1", 1),
+                        routeWithInfo("2 港元1.0預計2分鐘 步行距離(約)102米", "2", 2),
+                        routeWithInfo("3 港元1.0預計3分鐘 步行距離(約)103米", "3", 3),
+                        routeWithInfo("4 港元1.0預計4分鐘 步行距離(約)104米", "4", 4),
+                        routeWithInfo("5 港元1.0預計5分鐘 步行距離(約)105米", "5", 5),
+                        routeWithInfo("6 港元1.0預計6分鐘 步行距離(約)106米", "6", 6)
+                    )
+                } else {
+                    routeHtml()
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                waitTimeCalls.incrementAndGet()
+                WaitTimeState.Available(it.boardingSeq)
+            },
+            etaWorkerCount = 2
+        )
+
+        repository.searchRoutesProgressively(origin, destination, callback)
+
+        assertEquals(1, callback.initialRoutes.size)
+        val initialRoutes = callback.awaitInitialRoutes()
+        assertEquals(listOf(1, 2, 3, 4, 5, 6), initialRoutes.map { it.durationMinutes })
+        assertEquals(List(6) { WaitTimeState.Loading }, initialRoutes.map { it.waitTimeState })
+
+        val updates = callback.awaitUpdateCount(6)
+        assertEquals(6, waitTimeCalls.get())
+        assertEquals(
+            setOf(
+                WaitTimeState.Available(1),
+                WaitTimeState.Available(2),
+                WaitTimeState.Available(3),
+                WaitTimeState.Available(4),
+                WaitTimeState.Available(5),
+                WaitTimeState.Available(6)
+            ),
+            updates.map { it.second }.toSet()
+        )
+    }
+
+    @Test
+    fun progressiveQueryFansOutDuplicateFirstLegEta() {
+        val waitTimeCalls = AtomicInteger(0)
+        val callback = RecordingCallback(expectedUpdates = 2)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "F") {
+                    routeHtmlWithInfo(
+                        routeWithInfo(
+                            "8X 港元8.1 至 1 免費 *預計74分鐘 步行距離(約)450米",
+                            "8X",
+                            6,
+                            alightingSeq = 31
+                        ),
+                        routeWithInfo(
+                            "8X 港元8.1 至 10 免費 *預計73分鐘 步行距離(約)355米",
+                            "8X",
+                            6,
+                            alightingSeq = 23
+                        )
+                    )
+                } else {
+                    routeHtml()
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                waitTimeCalls.incrementAndGet()
+                WaitTimeState.Available(4)
+            }
+        )
+
+        repository.searchRoutesProgressively(origin, destination, callback)
+
+        assertEquals(
+            listOf(WaitTimeState.Loading, WaitTimeState.Loading),
+            callback.awaitInitialRoutes().map { it.waitTimeState }
+        )
+        val updates = callback.awaitUpdateCount(2)
+        assertEquals(1, waitTimeCalls.get())
+        assertEquals(
+            listOf(WaitTimeState.Available(4), WaitTimeState.Available(4)),
+            updates.map { it.second }
+        )
+    }
+
+    @Test
+    fun progressiveQueryDoesNotWaitForDelayedEtaBeforeInitialRoutes() {
+        val callback = RecordingCallback(expectedUpdates = 1)
+        val etaStarted = CountDownLatch(1)
+        val releaseEta = CountDownLatch(1)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "T") {
+                    routeHtmlWithInfo(routeWithInfo("1 港元1.0預計1分鐘 步行距離(約)101米", "1", 1))
+                } else {
+                    routeHtml()
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                etaStarted.countDown()
+                releaseEta.await(1, TimeUnit.SECONDS)
+                WaitTimeState.Available(1)
+            }
+        )
+
+        repository.searchRoutesProgressively(origin, destination, callback)
+
+        assertEquals(listOf(WaitTimeState.Loading), callback.awaitInitialRoutes(200).map { it.waitTimeState })
+        assertTrue("ETA resolver was not started", etaStarted.await(1, TimeUnit.SECONDS))
+        callback.assertNoUpdatesFor(100)
+
+        releaseEta.countDown()
+
+        assertEquals(listOf(WaitTimeState.Available(1)), callback.awaitUpdateCount(1).map { it.second })
+    }
+
+    @Test
+    fun progressiveQueryEmitsEtaUpdatesByCompletionOrder() {
+        val callback = RecordingCallback(expectedUpdates = 2)
+        val slowEtaStarted = CountDownLatch(1)
+        val releaseSlowEta = CountDownLatch(1)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "T") {
+                    routeHtmlWithInfo(
+                        routeWithInfo("1 港元1.0預計1分鐘 步行距離(約)101米", "1", 1),
+                        routeWithInfo("2 港元1.0預計2分鐘 步行距離(約)102米", "2", 2)
+                    )
+                } else {
+                    routeHtml()
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                if (it.boardingSeq == 1) {
+                    slowEtaStarted.countDown()
+                    releaseSlowEta.await(1, TimeUnit.SECONDS)
+                }
+                WaitTimeState.Available(it.boardingSeq)
+            },
+            etaWorkerCount = 2
+        )
+
+        repository.searchRoutesProgressively(origin, destination, callback)
+
+        assertEquals(
+            listOf(WaitTimeState.Loading, WaitTimeState.Loading),
+            callback.awaitInitialRoutes().map { it.waitTimeState }
+        )
+        assertTrue("Slow ETA resolver was not started", slowEtaStarted.await(1, TimeUnit.SECONDS))
+        assertEquals(
+            listOf(WaitTimeState.Available(2)),
+            callback.awaitUpdateCount(1).map { it.second }
+        )
+
+        releaseSlowEta.countDown()
+
+        assertEquals(
+            listOf(WaitTimeState.Available(2), WaitTimeState.Available(1)),
+            callback.awaitUpdateCount(2).map { it.second }
+        )
+    }
+
+    @Test
+    fun secondProgressiveQueryStartsWhilePreviousEtaIsBlocked() {
+        val firstCallback = RecordingCallback()
+        val secondCallback = RecordingCallback(expectedUpdates = 1)
+        val firstEtaStarted = CountDownLatch(1)
+        val releaseFirstEta = CountDownLatch(1)
+        val secondDestination = Place("終點2", 22.0, 114.0)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") != "T") {
+                    routeHtml()
+                } else if (url.queryParam("elat") == destination.latitude.toString()) {
+                    routeHtmlWithInfo(routeWithInfo("1 港元1.0預計1分鐘 步行距離(約)101米", "1", 1))
+                } else {
+                    routeHtmlWithInfo(routeWithInfo("2 港元1.0預計2分鐘 步行距離(約)102米", "2", 2))
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                if (it.boardingSeq == 1) {
+                    firstEtaStarted.countDown()
+                    releaseFirstEta.await(2, TimeUnit.SECONDS)
+                }
+                WaitTimeState.Available(it.boardingSeq)
+            },
+            etaWorkerCount = 1
+        )
+
+        repository.searchRoutesProgressively(origin, destination, firstCallback)
+
+        assertEquals(listOf(WaitTimeState.Loading), firstCallback.awaitInitialRoutes().map { it.waitTimeState })
+        assertTrue("First ETA resolver was not started", firstEtaStarted.await(1, TimeUnit.SECONDS))
+
+        repository.searchRoutesProgressively(origin, secondDestination, secondCallback)
+
+        assertEquals(listOf(WaitTimeState.Loading), secondCallback.awaitInitialRoutes(300).map { it.waitTimeState })
+        assertEquals(listOf(WaitTimeState.Available(2)), secondCallback.awaitUpdateCount(1).map { it.second })
+
+        releaseFirstEta.countDown()
+        firstCallback.assertNoUpdatesFor(100)
+    }
+
+    @Test
+    fun cancelProgressiveQueriesSuppressesOldEtaUpdates() {
+        val callback = RecordingCallback()
+        val etaStarted = CountDownLatch(1)
+        val releaseEta = CountDownLatch(1)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "T") {
+                    routeHtmlWithInfo(routeWithInfo("1 港元1.0預計1分鐘 步行距離(約)101米", "1", 1))
+                } else {
+                    routeHtml()
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                etaStarted.countDown()
+                releaseEta.await(2, TimeUnit.SECONDS)
+                WaitTimeState.Available(1)
+            }
+        )
+
+        repository.searchRoutesProgressively(origin, destination, callback)
+
+        assertEquals(listOf(WaitTimeState.Loading), callback.awaitInitialRoutes().map { it.waitTimeState })
+        assertTrue("ETA resolver was not started", etaStarted.await(1, TimeUnit.SECONDS))
+
+        repository.cancelProgressiveQueries()
+        releaseEta.countDown()
+
+        callback.assertNoUpdatesFor(100)
+    }
+
+    @Test
+    fun progressiveQueryIsolatesEtaFailuresToIndividualRoutes() {
+        val callback = RecordingCallback(expectedUpdates = 2)
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeFetcher = { url, _ ->
+                if (url.queryParam("m1") == "T") {
+                    routeHtmlWithInfo(
+                        routeWithInfo("1 港元1.0預計1分鐘 步行距離(約)101米", "1", 1),
+                        routeWithInfo("2 港元1.0預計2分鐘 步行距離(約)102米", "2", 2)
+                    )
+                } else {
+                    routeHtml()
+                }
+            },
+            requestLogger = {},
+            waitTimeResolver = {
+                if (it.boardingSeq == 1) throw IOException("ETA failed")
+                WaitTimeState.Available(2)
+            }
+        )
+
+        repository.searchRoutesProgressively(origin, destination, callback)
+
+        assertEquals(
+            listOf(WaitTimeState.Loading, WaitTimeState.Loading),
+            callback.awaitInitialRoutes().map { it.waitTimeState }
+        )
+        assertEquals(
+            listOf(WaitTimeState.Unavailable, WaitTimeState.Available(2)),
+            callback.awaitUpdateCount(2).map { it.second }
+        )
     }
 
     private fun routeHtml(vararg labels: String): String {
@@ -206,10 +543,98 @@ class CitybusBusRouteRepositoryTest {
         ) { label -> "<table aria-label=\"$label\"></table>" }
     }
 
+    private fun routeHtmlWithInfo(vararg rows: Pair<String, String>): String {
+        return rows.joinToString(
+            separator = "\n",
+            prefix = "<div id=\"routelist2\">\n",
+            postfix = "\n</div>"
+        ) { (label, info) -> "<table aria-label=\"$label\" onclick=\"showroutep2p('$info','0','12:00|*|30');\"></table>" }
+    }
+
+    private fun routeWithInfo(
+        label: String,
+        route: String,
+        boardingSeq: Int,
+        alightingSeq: Int = 10
+    ): Pair<String, String> {
+        return label to "1|*|CTB||$route-TEST-1||$boardingSeq||$alightingSeq||O|*|"
+    }
+
     private fun URL.queryParam(name: String): String {
         return query.split("&")
             .first { it.startsWith("$name=") }
             .substringAfter("=")
+    }
+
+    private fun String.queryParamFromCurl(name: String): String {
+        return substringAfter("&$name=")
+            .substringBefore("&")
+            .substringBefore("'")
+    }
+
+    private class RecordingCallback(private val expectedUpdates: Int = 0) : BusRouteQueryCallback {
+        val initialRoutes = Collections.synchronizedList(mutableListOf<List<BusRouteOption>>())
+        val updates = Collections.synchronizedList(mutableListOf<Pair<String, WaitTimeState>>())
+        val failures = Collections.synchronizedList(mutableListOf<Throwable>())
+        private val initialRoutesLatch = CountDownLatch(1)
+        private val updateLatch = CountDownLatch(expectedUpdates)
+        private val updatesLock = Object()
+
+        override fun onInitialRoutes(routes: List<BusRouteOption>) {
+            initialRoutes += routes
+            initialRoutesLatch.countDown()
+        }
+
+        override fun onRouteWaitTimeUpdated(routeId: String, waitTimeState: WaitTimeState) {
+            synchronized(updatesLock) {
+                updates += routeId to waitTimeState
+                updatesLock.notifyAll()
+            }
+            updateLatch.countDown()
+        }
+
+        override fun onFailure(error: Throwable) {
+            failures += error
+        }
+
+        fun awaitInitialRoutes(timeoutMillis: Long = 1_000): List<BusRouteOption> {
+            assertTrue(
+                "Initial routes callback was not invoked",
+                initialRoutesLatch.await(timeoutMillis, TimeUnit.MILLISECONDS)
+            )
+            synchronized(initialRoutes) {
+                return initialRoutes.first()
+            }
+        }
+
+        fun awaitUpdateCount(expectedCount: Int, timeoutMillis: Long = 1_000): List<Pair<String, WaitTimeState>> {
+            if (expectedCount == expectedUpdates && expectedUpdates > 0) {
+                assertTrue(
+                    "Expected at least $expectedCount ETA updates, got ${updates.size}",
+                    updateLatch.await(timeoutMillis, TimeUnit.MILLISECONDS)
+                )
+            }
+            val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
+            synchronized(updatesLock) {
+                while (updates.size < expectedCount) {
+                    val remainingMillis = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+                    if (remainingMillis <= 0) break
+                    updatesLock.wait(remainingMillis)
+                }
+                assertTrue(
+                    "Expected at least $expectedCount ETA updates, got ${updates.size}",
+                    updates.size >= expectedCount
+                )
+                return updates.toList()
+            }
+        }
+
+        fun assertNoUpdatesFor(timeoutMillis: Long) {
+            Thread.sleep(timeoutMillis)
+            synchronized(updatesLock) {
+                assertEquals(emptyList<Pair<String, WaitTimeState>>(), updates.toList())
+            }
+        }
     }
 
     companion object {

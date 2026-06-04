@@ -9,6 +9,7 @@ import android.text.TextWatcher
 import android.view.MenuItem
 import android.view.View
 import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.busiscomming.R
@@ -32,6 +33,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var nameInputLayout: TextInputLayout
     private lateinit var originInputLayout: TextInputLayout
     private lateinit var destinationInputLayout: TextInputLayout
+    private lateinit var screenTitleText: TextView
     private lateinit var nameInput: TextInputEditText
     private lateinit var originInput: MaterialAutoCompleteTextView
     private lateinit var destinationInput: MaterialAutoCompleteTextView
@@ -79,6 +81,7 @@ class RouteEditActivity : AppCompatActivity() {
         nameInputLayout = findViewById(R.id.routeNameInputLayout)
         originInputLayout = findViewById(R.id.originInputLayout)
         destinationInputLayout = findViewById(R.id.destinationInputLayout)
+        screenTitleText = findViewById(R.id.routeEditTitle)
         nameInput = findViewById(R.id.routeNameInput)
         originInput = findViewById(R.id.originInput)
         destinationInput = findViewById(R.id.destinationInput)
@@ -87,12 +90,20 @@ class RouteEditActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.backRouteButton).setOnClickListener {
             finish()
         }
-        findViewById<MaterialButton>(R.id.swapPlacesButton).setOnClickListener {
+        findViewById<View>(R.id.swapPlacesButton).setOnClickListener { view ->
+            animateSwap(view)
             swapPlaces()
         }
         findViewById<MaterialButton>(R.id.saveRouteButton).setOnClickListener {
             saveRoute()
         }
+    }
+
+    private fun animateSwap(view: View) {
+        view.animate()
+            .rotationBy(180f)
+            .setDuration(220L)
+            .start()
     }
 
     private fun setupPlaceInputs() {
@@ -177,12 +188,16 @@ class RouteEditActivity : AppCompatActivity() {
 
     private fun setupMode() {
         if (routeId == NO_ROUTE_ID) {
-            title = "新增路线"
+            val isClone = intent.hasExtra(EXTRA_PREFILL_NAME)
+            val pageTitle = if (isClone) "克隆路线" else "新增路线"
+            title = pageTitle
+            screenTitleText.text = pageTitle
             applyPrefillIfPresent()
             return
         }
 
         title = "编辑路线"
+        screenTitleText.text = "编辑路线"
         val route = repository.getById(routeId)
         if (route == null) {
             Toast.makeText(this, "路线配置不存在", Toast.LENGTH_SHORT).show()

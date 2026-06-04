@@ -1,7 +1,8 @@
 # route-management-actions Specification
 
 ## Purpose
-TBD - created by archiving change improve-route-ui-interactions. Update Purpose after archive.
+定义主界面路线管理入口、路线管理页卡片列表与克隆删除编辑操作、路线编辑页表单行为，以及这些页面的现代轻量视觉要求。
+
 ## Requirements
 ### Requirement: 管理路线入口具有明确按钮感
 系统 SHALL 使用区别于纯白背景的按钮样式展示主界面的“管理路线”入口。
@@ -9,6 +10,29 @@ TBD - created by archiving change improve-route-ui-interactions. Update Purpose 
 #### Scenario: 主界面展示管理路线按钮
 - **WHEN** 用户打开主界面
 - **THEN** “管理路线”入口使用可识别的按钮背景或强调色，并与“查询”主按钮视觉层级区分
+
+### Requirement: 路线管理页使用现代卡片列表
+系统 SHALL 让路线管理页采用与主查询页一致的现代卡片式列表展示路线配置。
+
+#### Scenario: 展示路线管理页标题和新增入口
+- **WHEN** 用户打开路线管理页
+- **THEN** 页面 SHALL 展示清晰的“路线管理”标题
+- **AND** 页面 SHALL 展示具有明确按钮层级的“新增路线”入口
+
+#### Scenario: 展示路线配置卡片
+- **WHEN** 路线管理页存在一条或多条路线配置
+- **THEN** 系统 SHALL 使用卡片展示每条路线的名称和起点到终点路径
+- **AND** 卡片样式 SHALL 与主查询页结果卡片保持一致的圆角、边距和信息层级
+
+#### Scenario: 展示卡片内次级操作
+- **WHEN** 用户查看某条路线配置卡片
+- **THEN** 卡片 SHALL 展示编辑、克隆和删除操作
+- **AND** 删除操作 SHALL 使用危险色或等效视觉区分
+
+#### Scenario: 路线管理空状态
+- **WHEN** 路线管理页没有保存路线
+- **THEN** 页面 SHALL 展示现代空状态区域
+- **AND** 空状态 SHALL 提供新增路线入口
 
 ### Requirement: 路线管理支持克隆路线
 系统 SHALL 允许用户从路线管理页克隆已有路线，并进入预填充的新增路线编辑页面。
@@ -55,6 +79,29 @@ TBD - created by archiving change improve-route-ui-interactions. Update Purpose 
 - **WHEN** 用户修改了路线编辑页内容但点击返回上一页按钮
 - **THEN** 系统不自动保存当前修改
 
+### Requirement: 路线编辑页使用现代轻量表单
+系统 SHALL 让新增、编辑和克隆路线页面采用与主查询页一致的现代轻量表单视觉。
+
+#### Scenario: 新增路线页面
+- **WHEN** 用户打开新增路线页面
+- **THEN** 页面 SHALL 展示明确标题、返回上一页按钮、路线名称输入框、起点输入框、终点输入框和保存按钮
+- **AND** 主要表单内容 SHALL 在可用空间内保持居中且可滚动
+
+#### Scenario: 编辑路线页面
+- **WHEN** 用户打开已有路线编辑页面
+- **THEN** 页面 SHALL 使用同一轻量表单结构展示已有路线信息
+- **AND** 页面 SHALL 清楚表达当前处于编辑路线语境
+
+#### Scenario: 克隆路线页面
+- **WHEN** 用户通过克隆进入路线编辑页面
+- **THEN** 页面 SHALL 使用同一轻量表单结构展示预填充路线信息
+- **AND** 页面 SHALL 清楚表达用户仍需保存后才会新增路线
+
+#### Scenario: 表单操作层级
+- **WHEN** 用户查看路线编辑页底部操作
+- **THEN** 保存 SHALL 作为主操作展示
+- **AND** 返回上一页 SHALL 作为次级操作展示且点击后不保存内容
+
 ### Requirement: 新增路线页面内容居中展示
 系统 SHALL 在新增路线页面将主要表单内容在可用空间内居中展示，同时保持小屏和键盘场景可滚动。
 
@@ -80,4 +127,3 @@ TBD - created by archiving change improve-route-ui-interactions. Update Purpose 
 #### Scenario: 展示终点提示
 - **WHEN** 用户打开路线编辑页
 - **THEN** 终点输入框提示用户输入终点关键词并从匹配列表中选择
-

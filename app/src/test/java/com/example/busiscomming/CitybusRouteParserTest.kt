@@ -2,8 +2,10 @@ package com.example.busiscomming
 
 import com.example.busiscomming.data.repository.CitybusRouteParseException
 import com.example.busiscomming.data.repository.CitybusRouteParser
+import com.example.busiscomming.data.model.WaitTimeState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CitybusRouteParserTest {
@@ -129,6 +131,76 @@ class CitybusRouteParserTest {
         )
 
         assertEquals(listOf("8X"), routes.map { it.routeName })
+    }
+
+    @Test
+    fun parsesSingleLegFirstEtaQueryFromShowroutep2p() {
+        val routes = CitybusRouteParser.parse(
+            routeTableHtml(
+                label = "8X 港元8.1預計33分鐘 步行距離(約) 438米",
+                info = "1|*|CTB||8X-THR-1||6||20||O|*|"
+            )
+        )
+
+        val firstLeg = routes.first().firstLegEtaQuery
+        assertEquals("CTB", firstLeg?.company)
+        assertEquals("8X-THR-1", firstLeg?.routeVariant)
+        assertEquals("8X", firstLeg?.route)
+        assertEquals(6, firstLeg?.boardingSeq)
+        assertEquals(20, firstLeg?.alightingSeq)
+        assertEquals("O", firstLeg?.bound)
+        assertEquals("outbound", firstLeg?.directionPath)
+        assertEquals(WaitTimeState.Loading, routes.first().waitTimeState)
+    }
+
+    @Test
+    fun parsesOnlyFirstLegFromMultiLegShowroutep2p() {
+        val routes = CitybusRouteParser.parse(
+            routeTableHtml(
+                label = "8X 港元8.1 至 1 免費 *預計93分鐘 步行距離(約) 450米",
+                info = "2|*|CTB||8X-THR-1||6||31||O|*|CTB||1-MAF-1||5||15||I|*|"
+            )
+        )
+
+        val firstLeg = routes.first().firstLegEtaQuery
+        assertEquals("8X", firstLeg?.route)
+        assertEquals(6, firstLeg?.boardingSeq)
+        assertEquals(31, firstLeg?.alightingSeq)
+        assertEquals("outbound", firstLeg?.directionPath)
+        assertEquals(listOf("8X", "1"), routes.first().routeSegments)
+    }
+
+    @Test
+    fun keepsRouteWhenShowroutep2pIsMissing() {
+        val routes = CitybusRouteParser.parse(
+            """
+            <div id="routelist2">
+                <table aria-label="8X 港元8.1預計45分鐘 步行距離(約)438米"></table>
+            </div>
+            """.trimIndent()
+        )
+
+        assertEquals(1, routes.size)
+        assertEquals("8X", routes.first().routeName)
+        assertEquals(null, routes.first().firstLegEtaQuery)
+        assertEquals(WaitTimeState.Unavailable, routes.first().waitTimeState)
+    }
+
+    @Test
+    fun parsesRealCandidateShowroutep2pAttribute() {
+        val routes = CitybusRouteParser.parse(
+            """
+            <div id="routelist2">
+                <table width="100%" aria-label="8X 港元8.1 至 1 免費 *預計93分鐘 步行距離(約) 450米" onclick="lastP2PResultListScrollY=document.getElementById('routelist2').scrollTop; showroutep2p('2|*|CTB||8X-THR-1||6||31||O|*|CTB||1-MAF-1||5||15||I|*|','0','21:54|*|93'); showrouteline('2|*|CTB||8X-THR-1||6||31||O|*|CTB||1-MAF-1||5||15||I|*|');"></table>
+            </div>
+            """.trimIndent()
+        )
+
+        assertEquals("8X \u2192 1", routes.first().routeName)
+        assertEquals(8.1, routes.first().priceHkd, 0.001)
+        assertEquals(93, routes.first().durationMinutes)
+        assertTrue(routes.first().waitTimeState is WaitTimeState.Loading)
+        assertEquals("8X-THR-1", routes.first().firstLegEtaQuery?.routeVariant)
     }
 
     @Test
@@ -259,6 +331,14 @@ class CitybusRouteParserTest {
                 prefix = "<div id=\"p2p_routelist\"><div id=\"routelist2 \">\n",
                 postfix = "\n</div></div>"
             ) { label -> "<table aria-label=\"$label\"></table>" }
+        }
+
+        private fun routeTableHtml(label: String, info: String): String {
+            return """
+                <div id="routelist2">
+                    <table aria-label="$label" onclick="showroutep2p('$info','0','12:00|*|30');"></table>
+                </div>
+            """.trimIndent()
         }
     }
 }

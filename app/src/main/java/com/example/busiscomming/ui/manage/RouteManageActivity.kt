@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
-import android.widget.TextView
+import android.widget.LinearLayout
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -20,7 +20,7 @@ class RouteManageActivity : AppCompatActivity() {
     private lateinit var repository: RouteConfigRepository
     private lateinit var adapter: RouteConfigAdapter
     private lateinit var routeList: RecyclerView
-    private lateinit var emptyRoutesText: TextView
+    private lateinit var emptyRoutesState: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,7 +31,7 @@ class RouteManageActivity : AppCompatActivity() {
         findViewById<View>(R.id.routeManageRoot).applyStatusBarPadding()
         repository = RouteConfigRepository(this)
         routeList = findViewById(R.id.routeConfigList)
-        emptyRoutesText = findViewById(R.id.emptyRoutesText)
+        emptyRoutesState = findViewById(R.id.emptyRoutesState)
 
         adapter = RouteConfigAdapter(
             onEdit = { route -> openEdit(route) },
@@ -41,9 +41,8 @@ class RouteManageActivity : AppCompatActivity() {
         routeList.layoutManager = LinearLayoutManager(this)
         routeList.adapter = adapter
 
-        findViewById<MaterialButton>(R.id.addRouteButton).setOnClickListener {
-            startActivity(Intent(this, RouteEditActivity::class.java))
-        }
+        findViewById<MaterialButton>(R.id.addRouteButton).setOnClickListener { openAdd() }
+        findViewById<MaterialButton>(R.id.emptyManageAddRouteButton).setOnClickListener { openAdd() }
     }
 
     override fun onResume() {
@@ -62,8 +61,12 @@ class RouteManageActivity : AppCompatActivity() {
     private fun loadRoutes() {
         val routes = repository.getAll()
         adapter.submitList(routes)
-        emptyRoutesText.visibility = if (routes.isEmpty()) View.VISIBLE else View.GONE
+        emptyRoutesState.visibility = if (routes.isEmpty()) View.VISIBLE else View.GONE
         routeList.visibility = if (routes.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    private fun openAdd() {
+        startActivity(Intent(this, RouteEditActivity::class.java))
     }
 
     private fun openEdit(route: RouteConfig) {

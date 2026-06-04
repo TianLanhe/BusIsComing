@@ -1,6 +1,8 @@
 package com.example.busiscomming.data.repository
 
 import com.example.busiscomming.data.model.BusRouteOption
+import com.example.busiscomming.data.model.FirstLegEtaQuery
+import com.example.busiscomming.data.model.WaitTimeState
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import java.math.BigDecimal
@@ -22,7 +24,16 @@ object CitybusRouteParser {
     }
 
     private fun parseCandidate(table: Element): BusRouteOption? {
-        return parseFromAriaLabel(table.attr("aria-label")) ?: parseFromTableText(table)
+        val routeOption = parseFromAriaLabel(table.attr("aria-label")) ?: parseFromTableText(table)
+        val firstLegEtaQuery = parseFirstLegEtaQuery(table)
+        return routeOption?.copy(
+            firstLegEtaQuery = firstLegEtaQuery,
+            waitTimeState = if (firstLegEtaQuery == null) {
+                WaitTimeState.Unavailable
+            } else {
+                WaitTimeState.Loading
+            }
+        )
     }
 
     private fun parseFromAriaLabel(label: String): BusRouteOption? {
@@ -75,6 +86,53 @@ object CitybusRouteParser {
         return numericPrice.toDoubleOrNull()
     }
 
+    private fun parseFirstLegEtaQuery(table: Element): FirstLegEtaQuery? {
+        val info = findShowRouteP2pInfo(table) ?: return null
+        val parts = info.split(P2P_LEG_SEPARATOR)
+        val legCount = parts.firstOrNull()?.toIntOrNull() ?: return null
+        if (legCount < 1 || parts.size <= 1) return null
+
+        val fields = parts[1].split(P2P_FIELD_SEPARATOR)
+        if (fields.size < 5) return null
+
+        val company = fields[0].trim()
+        val routeVariant = fields[1].trim()
+        val boardingSeq = fields[2].trim().toIntOrNull() ?: return null
+        val alightingSeq = fields[3].trim().toIntOrNull() ?: return null
+        val bound = fields[4].trim()
+        val directionPath = bound.toDirectionPath() ?: return null
+        if (company.isBlank() || routeVariant.isBlank()) return null
+
+        return FirstLegEtaQuery(
+            company = company,
+            routeVariant = routeVariant,
+            route = routeVariant.toPublicRoute(),
+            boardingSeq = boardingSeq,
+            alightingSeq = alightingSeq,
+            bound = bound,
+            directionPath = directionPath
+        )
+    }
+
+    private fun findShowRouteP2pInfo(table: Element): String? {
+        val attributes = table.attributes().asList()
+        for (attribute in attributes) {
+            val match = SHOW_ROUTE_P2P_PATTERN.find(attribute.value)
+            if (match != null) return match.groupValues[1]
+        }
+        return null
+    }
+
+    private fun String.toPublicRoute(): String = substringBefore("-")
+
+    private fun String.toDirectionPath(): String? {
+        return when (this) {
+            "O" -> "outbound"
+            "I" -> "inbound"
+            else -> null
+        }
+    }
+
     private fun List<RouteSegment>.toRouteOption(
         durationMinutes: Int,
         walkingDistanceMeters: Int
@@ -110,6 +168,9 @@ object CitybusRouteParser {
     private const val ROUTE_CELL_CLASS = "routenocell"
     private const val ROUTE_JOINER = " \u2192 "
     private const val DURATION_KEYWORD = "預計"
+    private const val P2P_LEG_SEPARATOR = "|*|"
+    private const val P2P_FIELD_SEPARATOR = "||"
+    private val SHOW_ROUTE_P2P_PATTERN = Regex("""showroutep2p\('([^']*)'""")
     private val ROUTE_PRICE_PATTERN =
         Regex("""(?:^|\s+至\s+)([^\s]+)\s+(?:港元\s*([0-9]+(?:\.[0-9]+)?)|(免費)(?:\s*\*)?)""")
     private val PRICE_TEXT_PATTERN = Regex("""(?:\$\s*([0-9]+(?:\.[0-9]+)?)|(免費)(?:\s*\*)?)""")

@@ -58,6 +58,7 @@ BusIsComming 是一个用于查询巴士到站信息的 Android App。
 - `docs/overview-design.md`：概要设计
 - `docs/specification.md`：规格说明
 - `docs/implementation-plan.md`：实现计划
+- `docs/ui-style-guide.md`：UI 风格、视觉层级和交互动效指南
 - `openspec/changes/`：OpenSpec 变更提案、设计、规格和任务
 
 ## OpenSpec 约定
@@ -126,6 +127,9 @@ adb devices
 - 删除路线配置需要二次确认。
 - 主界面无路线配置时需要展示空状态和新增入口。
 - 查询无结果时显示 `暂无可用巴士路线`。
+- 新增或改造页面时默认遵循 `docs/ui-style-guide.md`，采用安静实用的现代通勤工具风格。
+- 查询结果默认优先使用路线结果卡片；如果继续使用表格，需要在 OpenSpec 设计中说明原因。
+- 起点和终点交换默认使用图标按钮，不使用整行文字按钮。
 
 ## Git 提交约定
 

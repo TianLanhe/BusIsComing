@@ -3,6 +3,8 @@ package com.example.busiscomming
 import com.example.busiscomming.data.model.BusRouteOption
 import com.example.busiscomming.data.model.SortDirection
 import com.example.busiscomming.data.model.SortField
+import com.example.busiscomming.data.model.WaitTimeState
+import com.example.busiscomming.data.model.toDisplayText
 import com.example.busiscomming.data.repository.BusRouteSorter
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -96,6 +98,33 @@ class BusRouteSorterTest {
     }
 
     @Test
+    fun sortsByWaitTimeWithLoadingAndUnavailableLastAscending() {
+        val sorted = BusRouteSorter.sort(waitTimeRoutes, SortField.ARRIVAL, SortDirection.ASC)
+
+        assertEquals(
+            listOf("available 3", "available 8", "loading", "unavailable"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun sortsByWaitTimeWithLoadingAndUnavailableLastDescending() {
+        val sorted = BusRouteSorter.sort(waitTimeRoutes, SortField.ARRIVAL, SortDirection.DESC)
+
+        assertEquals(
+            listOf("available 8", "available 3", "loading", "unavailable"),
+            sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun formatsWaitTimeStatesForDisplay() {
+        assertEquals("3", WaitTimeState.Available(3).toDisplayText())
+        assertEquals("...", WaitTimeState.Loading.toDisplayText())
+        assertEquals("-", WaitTimeState.Unavailable.toDisplayText())
+    }
+
+    @Test
     fun sortsByWalkingDistanceAscending() {
         val sorted = BusRouteSorter.sort(routes, SortField.WALKING_DISTANCE, SortDirection.ASC)
 
@@ -114,4 +143,11 @@ class BusRouteSorterTest {
             sorted.map { it.routeName }
         )
     }
+
+    private val waitTimeRoutes = listOf(
+        BusRouteOption("loading", listOf("1"), 1.0, 10, 10, 0, 100, WaitTimeState.Loading),
+        BusRouteOption("available 8", listOf("2"), 1.0, 10, 10, 0, 100, WaitTimeState.Available(8)),
+        BusRouteOption("unavailable", listOf("3"), 1.0, 10, 10, 0, 100, WaitTimeState.Unavailable),
+        BusRouteOption("available 3", listOf("4"), 1.0, 10, 10, 0, 100, WaitTimeState.Available(3))
+    )
 }

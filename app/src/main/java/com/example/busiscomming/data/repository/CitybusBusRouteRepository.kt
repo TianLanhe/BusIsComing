@@ -1,7 +1,10 @@
 package com.example.busiscomming.data.repository
 
+import android.util.Log
 import com.example.busiscomming.data.model.BusRouteOption
+import com.example.busiscomming.data.model.FirstLegEtaQuery
 import com.example.busiscomming.data.model.Place
+import com.example.busiscomming.data.model.WaitTimeState
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -11,14 +14,24 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 class CitybusBusRouteRepository(
     private val parser: CitybusRouteParser = CitybusRouteParser,
     private val clock: () -> Long = { System.currentTimeMillis() },
-    private val routeFetcher: (URL, Map<String, String>) -> String = ::fetchRouteHtml
+    private val routeFetcher: (URL, Map<String, String>) -> String = ::fetchRouteHtml,
+    private val requestLogger: (String) -> Unit = ::logRouteCurl,
+    private val etaService: CitybusFirstLegEtaService = CitybusFirstLegEtaService(clock = clock),
+    private val waitTimeResolver: (FirstLegEtaQuery) -> WaitTimeState = etaService::resolveWaitTime,
+    private val etaWorkerCount: Int = DEFAULT_ETA_WORKER_COUNT
 ) : BusRouteRepository {
+    private val etaScopeLock = Any()
+    private var etaGeneration = 0
+    private var activeEtaExecutor: ExecutorService? = null
+
     override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> {
         val queryTime = formatQueryTime(clock())
         val headers = requestHeaders()
@@ -28,6 +41,7 @@ class CitybusBusRouteRepository(
                 SEARCH_MODES.map { mode ->
                     Callable {
                         val url = buildRouteUrl(origin, destination, queryTime, mode)
+                        requestLogger(buildCurlCommand(url, headers))
                         parser.parse(routeFetcher(url, headers))
                     }
                 }
@@ -54,6 +68,31 @@ class CitybusBusRouteRepository(
         } finally {
             executor.shutdownNow()
         }
+    }
+
+    override fun cancelProgressiveQueries() {
+        cancelActiveEtaQueries()
+    }
+
+    override fun searchRoutesProgressively(
+        origin: Place,
+        destination: Place,
+        callback: BusRouteQueryCallback
+    ) {
+        val routes = try {
+            searchRoutes(origin, destination)
+        } catch (exception: Throwable) {
+            callback.onFailure(exception)
+            return
+        }
+
+        if (routes.isEmpty()) {
+            callback.onInitialRoutes(emptyList())
+            return
+        }
+
+        callback.onInitialRoutes(routes)
+        startEtaCompletion(routes, callback)
     }
 
     fun buildRouteUrl(
@@ -97,13 +136,28 @@ class CitybusBusRouteRepository(
         "sec-ch-ua-platform" to "\"macOS\""
     )
 
+    fun buildCurlCommand(url: URL, headers: Map<String, String>): String {
+        return buildString {
+            append("curl ")
+            append(shellQuote(url.toString()))
+            headers.forEach { (name, value) ->
+                append(" \\\n  -H ")
+                append(shellQuote("$name: $value"))
+            }
+        }
+    }
+
     private fun encodeQueryValue(value: String): String {
         return URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
     }
 
+    private fun shellQuote(value: String): String {
+        return "'" + value.replace("'", "'\"'\"'") + "'"
+    }
+
     private fun aggregateResults(routes: List<BusRouteOption>): List<BusRouteOption> {
         return routes
-            .distinctBy {
+            .groupBy {
                 RouteDedupKey(
                     routeSegments = it.routeSegments,
                     priceHkd = it.priceHkd,
@@ -111,7 +165,105 @@ class CitybusBusRouteRepository(
                     walkingDistanceMeters = it.walkingDistanceMeters
                 )
             }
+            .map { (_, duplicateRoutes) ->
+                duplicateRoutes.firstOrNull { it.firstLegEtaQuery != null } ?: duplicateRoutes.first()
+            }
             .sortedBy { it.durationMinutes }
+    }
+
+    private fun startEtaCompletion(
+        routes: List<BusRouteOption>,
+        callback: BusRouteQueryCallback
+    ) {
+        val groups = etaRequestGroups(routes, routes.indices.toList())
+        if (groups.isEmpty()) return
+
+        val etaExecutor = Executors.newFixedThreadPool(etaWorkerCount.coerceAtLeast(1))
+        val generation = registerEtaExecutor(etaExecutor)
+        val remainingGroups = AtomicInteger(groups.size)
+
+        groups.forEach { group ->
+            etaExecutor.execute {
+                try {
+                    if (!isEtaGenerationActive(generation)) return@execute
+
+                    val result = resolveEtaRequestGroup(group)
+                    if (!isEtaGenerationActive(generation)) return@execute
+
+                    result.routeIds.forEach { routeId ->
+                        callback.onRouteWaitTimeUpdated(routeId, result.waitTimeState)
+                    }
+                } finally {
+                    if (remainingGroups.decrementAndGet() == 0) {
+                        finishEtaGeneration(generation)
+                    }
+                }
+            }
+        }
+        etaExecutor.shutdown()
+    }
+
+    private fun registerEtaExecutor(etaExecutor: ExecutorService): Int {
+        synchronized(etaScopeLock) {
+            cancelActiveEtaQueriesLocked()
+            etaGeneration += 1
+            activeEtaExecutor = etaExecutor
+            return etaGeneration
+        }
+    }
+
+    private fun cancelActiveEtaQueries() {
+        synchronized(etaScopeLock) {
+            etaGeneration += 1
+            cancelActiveEtaQueriesLocked()
+        }
+    }
+
+    private fun cancelActiveEtaQueriesLocked() {
+        activeEtaExecutor?.shutdownNow()
+        activeEtaExecutor = null
+    }
+
+    private fun isEtaGenerationActive(generation: Int): Boolean {
+        synchronized(etaScopeLock) {
+            return etaGeneration == generation && activeEtaExecutor != null
+        }
+    }
+
+    private fun finishEtaGeneration(generation: Int) {
+        synchronized(etaScopeLock) {
+            if (etaGeneration == generation) {
+                activeEtaExecutor = null
+            }
+        }
+    }
+
+    private fun etaRequestGroups(
+        routes: List<BusRouteOption>,
+        indexes: List<Int>
+    ): List<EtaRequestGroup> {
+        return indexes
+            .mapNotNull { index ->
+                val query = routes[index].firstLegEtaQuery ?: return@mapNotNull null
+                IndexedEtaRoute(routes[index].resultId, query)
+            }
+            .groupBy { it.query.requestKey() }
+            .values
+            .map { routesWithSameFirstLeg ->
+                EtaRequestGroup(
+                    query = routesWithSameFirstLeg.first().query,
+                    routeIds = routesWithSameFirstLeg.map { it.routeId }
+                )
+            }
+    }
+
+    private fun resolveEtaRequestGroup(group: EtaRequestGroup): EtaRequestResult {
+        val waitTimeState = runCatching { waitTimeResolver(group.query) }
+            .getOrDefault(WaitTimeState.Unavailable)
+        return EtaRequestResult(
+            routeIds = group.routeIds,
+            waitTimeState = waitTimeState
+        )
     }
 
     private data class RouteDedupKey(
@@ -121,12 +273,28 @@ class CitybusBusRouteRepository(
         val walkingDistanceMeters: Int
     )
 
+    private data class IndexedEtaRoute(
+        val routeId: String,
+        val query: FirstLegEtaQuery
+    )
+
+    private data class EtaRequestGroup(
+        val query: FirstLegEtaQuery,
+        val routeIds: List<String>
+    )
+
+    private data class EtaRequestResult(
+        val routeIds: List<String>,
+        val waitTimeState: WaitTimeState
+    )
+
     companion object {
         private const val BASE_URL = "https://mobile.citybus.com.hk/nwp3/ppsearch_p3.php"
         private const val DEFAULT_SEARCH_MODE = "T"
         private const val WALKING_SEARCH_RATIO = "1.3"
         private const val QUERY_TIME_PATTERN = "yyyy-MM-dd HH:mm"
         private const val HONG_KONG_TIME_ZONE = "Asia/Hong_Kong"
+        private const val DEFAULT_ETA_WORKER_COUNT = 4
         private val SEARCH_MODES = listOf("T", "F", "W")
         private const val CITYBUS_COOKIE =
             "ETWEBID=6a1ecbeae8d60; PPFARE=1; LANG=TC; PHPSESSID=ev7984lo8uibj4kc3njbroe1a1; " +
@@ -140,6 +308,11 @@ class CitybusBusRouteRepository(
 }
 
 private const val TIMEOUT_MS = 20_000
+private const val LOG_TAG = "CitybusRouteQuery"
+
+private fun logRouteCurl(curlCommand: String) {
+    Log.d(LOG_TAG, "Citybus route query curl:\n$curlCommand")
+}
 
 private fun fetchRouteHtml(url: URL, headers: Map<String, String>): String {
     val connection = url.openConnection() as HttpURLConnection
