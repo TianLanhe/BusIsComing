@@ -1,0 +1,69 @@
+# bus-route-result-table Specification
+
+## Purpose
+TBD - created by archiving change citybus-route-query. Update Purpose after archive.
+## Requirements
+### Requirement: 主界面展示四列巴士路线结果
+
+系统 SHALL 在主界面以四列表格展示巴士路线查询结果。
+
+#### Scenario: 展示表格表头
+- **WHEN** 主界面展示查询结果区域
+- **THEN** 表头 SHALL 依次显示 `路线`、`价格(HKD)`、`总耗时(分钟)`、`预计汽车到站时间(分钟)`
+
+#### Scenario: 展示单段路线
+- **WHEN** 查询结果包含单段巴士路线
+- **THEN** 路线列 SHALL 显示该巴士路线号，价格列显示 HKD 数字，总耗时列显示分钟数字，预计汽车到站时间列显示分钟数字
+
+#### Scenario: 展示多段中转路线
+- **WHEN** 查询结果包含多段巴士路线
+- **THEN** 路线列 SHALL 使用 `→` 连接每段巴士路线号，例如 `82X → 102`
+
+#### Scenario: 单元格不重复显示单位
+- **WHEN** 表头已经显示 `价格(HKD)`、`总耗时(分钟)` 和 `预计汽车到站时间(分钟)`
+- **THEN** 对应单元格 SHALL 只显示数值，不重复显示 `HKD`、`HK$` 或 `分钟`
+
+### Requirement: 查询结果支持四列排序
+
+系统 SHALL 支持用户点击可排序表头切换升序和降序。
+
+#### Scenario: 按路线中转次数升序排序
+- **WHEN** 用户第一次点击 `路线` 表头
+- **THEN** 系统 SHALL 按中转次数由低到高排序，单段路线排在多段中转路线之前
+
+#### Scenario: 按路线中转次数降序排序
+- **WHEN** 用户再次点击 `路线` 表头
+- **THEN** 系统 SHALL 按中转次数由高到低排序，多段中转路线排在单段路线之前
+
+#### Scenario: 按价格排序
+- **WHEN** 用户点击 `价格(HKD)` 表头
+- **THEN** 系统 SHALL 按总价格数值升序排序；再次点击同一表头时按总价格数值降序排序
+
+#### Scenario: 按总耗时排序
+- **WHEN** 用户点击 `总耗时(分钟)` 表头
+- **THEN** 系统 SHALL 按预计路线总耗时升序排序；再次点击同一表头时按预计路线总耗时降序排序
+
+#### Scenario: 按预计汽车到站时间排序
+- **WHEN** 用户点击 `预计汽车到站时间(分钟)` 表头
+- **THEN** 系统 SHALL 按预计汽车到站时间升序排序；再次点击同一表头时按预计汽车到站时间降序排序
+
+#### Scenario: 展示排序方向
+- **WHEN** 用户对任一可排序表头应用排序
+- **THEN** 当前排序表头 SHALL 显示 `↑` 或 `↓` 表示排序方向
+
+### Requirement: 主界面展示查询状态
+
+系统 SHALL 在主界面清晰展示查询中、查询失败和无结果状态。
+
+#### Scenario: 查询中防止重复提交
+- **WHEN** 用户点击查询后路线查询尚未完成
+- **THEN** 系统 SHALL 禁用查询按钮并展示查询中状态
+
+#### Scenario: 查询无结果
+- **WHEN** 路线查询成功但结果列表为空
+- **THEN** 系统 SHALL 显示 `暂无可用巴士路线`
+
+#### Scenario: 查询失败
+- **WHEN** 路线查询失败
+- **THEN** 系统 SHALL 显示 `路线查询失败，请稍后重试`
+
