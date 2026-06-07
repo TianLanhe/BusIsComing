@@ -10,6 +10,14 @@ class RouteDetailCache(
     private val entries = mutableMapOf<P2pRouteDetailCacheKey, CachedRouteDetail>()
 
     fun get(key: P2pRouteDetailCacheKey): List<RouteDetailLeg>? {
+        return getEntry(key)?.legs
+    }
+
+    fun getOriginWalkingDistanceMeters(key: P2pRouteDetailCacheKey): Int? {
+        return getEntry(key)?.originWalkingDistanceMeters
+    }
+
+    private fun getEntry(key: P2pRouteDetailCacheKey): CachedRouteDetail? {
         val now = clock()
         synchronized(entries) {
             val entry = entries[key] ?: return null
@@ -17,15 +25,20 @@ class RouteDetailCache(
                 entries.remove(key)
                 return null
             }
-            return entry.legs
+            return entry
         }
     }
 
     fun put(key: P2pRouteDetailCacheKey, legs: List<RouteDetailLeg>) {
+        put(key, legs, originWalkingDistanceMeters = null)
+    }
+
+    fun put(key: P2pRouteDetailCacheKey, legs: List<RouteDetailLeg>, originWalkingDistanceMeters: Int?) {
         if (legs.isEmpty()) return
         synchronized(entries) {
             entries[key] = CachedRouteDetail(
                 legs = legs,
+                originWalkingDistanceMeters = originWalkingDistanceMeters,
                 cachedAtMillis = clock()
             )
         }
@@ -33,6 +46,7 @@ class RouteDetailCache(
 
     private data class CachedRouteDetail(
         val legs: List<RouteDetailLeg>,
+        val originWalkingDistanceMeters: Int?,
         val cachedAtMillis: Long
     )
 

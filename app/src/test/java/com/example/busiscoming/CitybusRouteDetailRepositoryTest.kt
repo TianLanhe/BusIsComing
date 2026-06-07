@@ -68,6 +68,19 @@ class CitybusRouteDetailRepositoryTest {
     }
 
     @Test
+    fun parsesFirstWalkingDistanceBeforeRouteDetailRows() {
+        val distance = CitybusRouteDetailParser.parseOriginWalkingDistanceMeters(
+            """
+            <div>步行距離(約) 236米</div>
+            <table class="p2proutetitle"><tr><td>82X 往 小西灣</td></tr></table>
+            <div>步行距離(約) 88米</div>
+            """.trimIndent()
+        )
+
+        assertEquals(236, distance)
+    }
+
+    @Test
     fun hidesDirectionWhenItIsBlank() {
         assertEquals(null, RouteDetailDisplayFormatter.directionLabel(""))
         assertEquals(null, RouteDetailDisplayFormatter.directionLabel(null))

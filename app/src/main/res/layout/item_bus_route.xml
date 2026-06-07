@@ -35,16 +35,51 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/busArrivalText"
+            <LinearLayout
+                android:id="@+id/busWaitArea"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:layout_marginStart="12dp"
+                android:clickable="true"
+                android:focusable="true"
                 android:gravity="end"
-                android:maxLines="2"
-                android:textColor="@color/bus_wait_accent"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:minWidth="92dp"
+                android:orientation="vertical"
+                android:paddingHorizontal="4dp">
+
+                <TextView
+                    android:id="@+id/busArrivalText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="bottom|end"
+                    android:maxLines="1"
+                    android:textColor="@color/bus_wait_accent"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/busNextArrivalText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="top|end"
+                    android:maxLines="1"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/busMonitorButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="通知欄監控"
+                android:padding="14dp"
+                android:scaleType="center"
+                android:src="@drawable/ic_notification_bell"
+                app:tint="@color/bus_text_secondary" />
         </LinearLayout>
 
         <TextView

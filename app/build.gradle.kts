@@ -40,6 +40,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.material)
     implementation(libs.androidx.recyclerview)
+    implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.jsoup)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -1,6 +1,7 @@
 package com.example.busiscoming
 
 import com.example.busiscoming.data.model.BusRouteOption
+import com.example.busiscoming.data.model.EtaArrival
 import com.example.busiscoming.data.model.WaitTimeState
 import com.example.busiscoming.ui.main.RouteResultCardFormatter
 import org.junit.Assert.assertEquals
@@ -12,6 +13,19 @@ class RouteResultCardFormatterTest {
         assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(WaitTimeState.Available(4)))
         assertEquals("候車查詢中", RouteResultCardFormatter.waitStatus(WaitTimeState.Loading))
         assertEquals("暫無車輛", RouteResultCardFormatter.waitStatus(WaitTimeState.Unavailable))
+    }
+
+    @Test
+    fun formatsImmediateAndNextArrivalText() {
+        val state = WaitTimeState.Available(
+            listOf(
+                EtaArrival(sequence = 1, minutes = 0),
+                EtaArrival(sequence = 2, minutes = 6)
+            )
+        )
+
+        assertEquals("即將到站", RouteResultCardFormatter.waitStatus(state))
+        assertEquals("下一班 6 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(state))
     }
 
     @Test

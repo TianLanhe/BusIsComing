@@ -7,8 +7,6 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.core.content.ContextCompat
 import com.example.busiscoming.R
@@ -21,7 +19,6 @@ import com.example.busiscoming.ui.common.PlaceInputController
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
-import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import java.util.concurrent.ExecutorService
 
@@ -159,43 +156,15 @@ class TemporaryRouteBottomSheet(
 
     private fun promptSaveTemporaryRoute() {
         val places = validatePlaces() ?: return
-        val nameInput = TextInputEditText(context).apply {
-            setText("${places.first.name} -> ${places.second.name}")
-            setSelectAllOnFocus(true)
-            maxLines = 1
+        TemporaryRouteSaveDialog.show(
+            context = context,
+            routeConfigRepository = routeConfigRepository,
+            origin = places.first,
+            destination = places.second
+        ) { id ->
+            dialog?.dismiss()
+            onSaved(id)
         }
-        val nameLayout = TextInputLayout(context).apply {
-            hint = "常用路線名稱"
-            addView(nameInput)
-            setPadding(dp(4), 0, dp(4), 0)
-        }
-
-        AlertDialog.Builder(context)
-            .setTitle("保存為常用")
-            .setView(nameLayout)
-            .setNegativeButton("取消", null)
-            .setPositiveButton("保存", null)
-            .create()
-            .apply {
-                setOnShowListener {
-                    getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                        val name = nameInput.text?.toString()?.trim().orEmpty()
-                        val validation = RouteConfigValidator.validate(name, places.first, places.second)
-                        nameLayout.error = validation.nameError
-                        if (!validation.isValid) return@setOnClickListener
-                        if (routeConfigRepository.hasDuplicate(name, places.first, places.second)) {
-                            nameLayout.error = "路線已存在，請修改名稱或起終點"
-                            return@setOnClickListener
-                        }
-                        val id = routeConfigRepository.insert(name, places.first, places.second)
-                        Toast.makeText(context, "已保存為常用", Toast.LENGTH_SHORT).show()
-                        dismiss()
-                        dialog?.dismiss()
-                        onSaved(id)
-                    }
-                }
-                show()
-            }
     }
 
     private fun validatePlaces(): Pair<Place, Place>? {

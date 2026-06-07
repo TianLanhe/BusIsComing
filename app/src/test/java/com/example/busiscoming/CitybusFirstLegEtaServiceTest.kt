@@ -124,6 +124,34 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
+    fun resolvesUpToThreeArrivalsSortedByEtaSequence() {
+        val service = etaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            etaFetcher = {
+                """
+                {
+                  "generated_timestamp":"2026-06-04T12:00:01+08:00",
+                  "data": [
+                    {"co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227","eta":"2026-06-04T12:08:00+08:00","eta_seq":2,"dest_tc":"筲箕灣"},
+                    {"co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227","eta":"2026-06-04T12:04:00+08:00","eta_seq":1,"dest_tc":"筲箕灣","rmk_tc":"原定班次"},
+                    {"co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227","eta":"2026-06-04T12:11:00+08:00","eta_seq":3,"dest_tc":"筲箕灣"},
+                    {"co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227","eta":"2026-06-04T12:15:00+08:00","eta_seq":4,"dest_tc":"筲箕灣"}
+                  ]
+                }
+                """.trimIndent()
+            }
+        )
+
+        val waitTimeState = service.resolveWaitTime(query) as WaitTimeState.Available
+
+        assertEquals(listOf(1, 2, 3), waitTimeState.arrivals.map { it.sequence })
+        assertEquals(listOf(4, 8, 11), waitTimeState.arrivals.map { it.minutes })
+        assertEquals("12:04", waitTimeState.arrivals.first().arrivalTimeText)
+        assertEquals("筲箕灣", waitTimeState.arrivals.first().destination)
+        assertEquals("原定班次", waitTimeState.arrivals.first().remark)
+    }
+
+    @Test
     fun returnsUnavailableWhenNoStrictOrFallbackEtaIsParsable() {
         val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },

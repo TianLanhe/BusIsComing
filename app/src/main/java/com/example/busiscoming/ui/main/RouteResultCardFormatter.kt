@@ -15,10 +15,18 @@ object RouteResultCardFormatter {
 
     fun waitStatus(waitTimeState: WaitTimeState): String {
         return when (waitTimeState) {
-            is WaitTimeState.Available -> "等候 ${waitTimeState.minutes} 分鐘"
+            is WaitTimeState.Available -> {
+                if (waitTimeState.minutes <= 0) "即將到站" else "等候 ${waitTimeState.minutes} 分鐘"
+            }
             WaitTimeState.Loading -> "候車查詢中"
             WaitTimeState.Unavailable -> "暫無車輛"
         }
+    }
+
+    fun nextArrivalStatus(waitTimeState: WaitTimeState): String? {
+        val nextArrival = (waitTimeState as? WaitTimeState.Available)?.nextArrival ?: return null
+        val minutesText = if (nextArrival.minutes <= 0) "即將到站" else "${nextArrival.minutes} 分鐘"
+        return "下一班 $minutesText ›"
     }
 
     fun info(route: BusRouteOption): String {

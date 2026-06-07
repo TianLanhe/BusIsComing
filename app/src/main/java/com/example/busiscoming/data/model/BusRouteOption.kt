@@ -22,9 +22,39 @@ data class BusRouteOption(
 
 sealed class WaitTimeState {
     object Loading : WaitTimeState()
-    data class Available(val minutes: Int) : WaitTimeState()
+    class Available(val arrivals: List<EtaArrival>) : WaitTimeState() {
+        constructor(minutes: Int) : this(listOf(EtaArrival(sequence = 1, minutes = minutes)))
+
+        val minutes: Int
+            get() = arrivals.firstOrNull()?.minutes ?: 0
+
+        val nextArrival: EtaArrival?
+            get() = arrivals.getOrNull(1)
+
+        override fun equals(other: Any?): Boolean {
+            return other is Available && minutes == other.minutes
+        }
+
+        override fun hashCode(): Int {
+            return minutes
+        }
+
+        override fun toString(): String {
+            return "Available(minutes=$minutes, arrivals=$arrivals)"
+        }
+    }
     object Unavailable : WaitTimeState()
 }
+
+data class EtaArrival(
+    val sequence: Int,
+    val minutes: Int,
+    val etaMillis: Long? = null,
+    val arrivalTimeText: String = "",
+    val destination: String? = null,
+    val remark: String? = null,
+    val dataTimestampMillis: Long? = null
+)
 
 fun WaitTimeState.toDisplayText(): String {
     return when (this) {
@@ -175,7 +205,8 @@ data class RouteDetail(
     val priceHkd: Double,
     val durationMinutes: Int,
     val walkingDistanceMeters: Int,
-    val legs: List<RouteDetailLeg>
+    val legs: List<RouteDetailLeg>,
+    val originWalkingDistanceMeters: Int? = null
 )
 
 data class RouteDetailLeg(

@@ -27,8 +27,8 @@
             android:id="@+id/manageRoutesButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/black"
-            app:backgroundTint="@color/bus_action_secondary"
+            android:textColor="@color/white"
+            app:backgroundTint="@color/bus_chip_selected"
             app:cornerRadius="6dp"
             android:text="管理路線" />
     </LinearLayout>
@@ -82,7 +82,7 @@
         android:id="@+id/queryControls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="16dp"
         android:orientation="vertical">
 
         <LinearLayout
@@ -142,7 +142,7 @@
         android:id="@+id/resultSection"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="14dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -364,14 +364,20 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/busRouteList"
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/resultSwipeRefresh"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="10dp"
             android:layout_weight="1"
-            android:clipToPadding="false"
-            android:paddingBottom="8dp"
-            android:visibility="gone" />
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/busRouteList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingBottom="8dp" />
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
     </LinearLayout>
 </LinearLayout>

@@ -16,12 +16,20 @@ class CitybusRouteDetailRepository(
     override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
         val query = route.routeDetailQuery ?: throw IOException("Route detail metadata is missing")
         val cacheKey = query.cacheKey()
-        val legs = cache.get(cacheKey) ?: run {
+        val cachedLegs = cache.get(cacheKey)
+        val cachedOriginWalkingDistanceMeters = cache.getOriginWalkingDistanceMeters(cacheKey)
+        val detailResponse = if (cachedLegs == null) detailFetcher(buildDetailUrl(query), requestHeaders()) else null
+        val legs = cachedLegs ?: run {
+            val response = detailResponse ?: throw IOException("Route detail response is missing")
             val parsedLegs = parser.parse(
-                response = detailFetcher(buildDetailUrl(query), requestHeaders()),
+                response = response,
                 plan = query.plan
             )
-            cache.put(cacheKey, parsedLegs)
+            cache.put(
+                cacheKey,
+                parsedLegs,
+                originWalkingDistanceMeters = parser.parseOriginWalkingDistanceMeters(response)
+            )
             parsedLegs
         }
 
@@ -30,7 +38,9 @@ class CitybusRouteDetailRepository(
             priceHkd = route.priceHkd,
             durationMinutes = route.durationMinutes,
             walkingDistanceMeters = route.walkingDistanceMeters,
-            legs = legs
+            legs = legs,
+            originWalkingDistanceMeters = cachedOriginWalkingDistanceMeters
+                ?: detailResponse?.let { parser.parseOriginWalkingDistanceMeters(it) }
         )
     }
 

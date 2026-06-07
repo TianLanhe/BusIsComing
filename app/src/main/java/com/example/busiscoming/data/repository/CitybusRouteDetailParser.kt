@@ -47,6 +47,20 @@ object CitybusRouteDetailParser {
         }
     }
 
+    fun parseOriginWalkingDistanceMeters(response: String): Int? {
+        val firstRouteTitleIndex = response.indexOf(ROUTE_TITLE_CLASS, ignoreCase = true)
+        val searchScope = if (firstRouteTitleIndex > 0) {
+            response.substring(0, firstRouteTitleIndex)
+        } else {
+            response
+        }
+        return WALKING_DISTANCE_PATTERN.find(searchScope)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.replace(",", "")
+            ?.toIntOrNull()
+    }
+
     private fun parseStopRow(row: Element): ParsedStop? {
         val onclick = row.attr("onclick").ifBlank { row.attr("onkeypress") }
         val match = STOP_CLICK_PATTERN.find(onclick) ?: return null
@@ -122,6 +136,7 @@ object CitybusRouteDetailParser {
 
     private val STOP_CLICK_PATTERN = Regex("""stopclick1\(([^)]*)\)""")
     private val FUNCTION_ARG_PATTERN = Regex("""'([^']*)'""")
+    private val WALKING_DISTANCE_PATTERN = Regex("""步行距離\s*\(約\)\s*([0-9,]+)\s*米""")
     private const val STOP_ROW_CLASS = "p2plistcell"
     private const val ROUTE_TITLE_CLASS = "p2proutetitle"
 }
