@@ -13,13 +13,16 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscoming.R
 import com.example.busiscoming.data.model.BusRouteOption
+import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfig
+import com.example.busiscoming.data.model.RouteConfigValidator
 import com.example.busiscoming.data.model.RouteCardStopPreview
 import com.example.busiscoming.data.model.SortDirection
 import com.example.busiscoming.data.model.SortField
@@ -37,6 +40,8 @@ import com.example.busiscoming.ui.manage.RouteManageActivity
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -58,6 +63,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeShortcutCardsContainer: LinearLayout
     private lateinit var routePickerButton: MaterialButton
     private lateinit var resultSection: LinearLayout
+    private lateinit var temporaryQueryContextBar: MaterialCardView
+    private lateinit var temporaryQueryContextPathText: TextView
+    private lateinit var temporaryQuerySaveButton: MaterialButton
     private lateinit var sortControls: LinearLayout
     private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummaryText: TextView
@@ -78,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private var sortField: SortField? = null
     private var sortDirection: SortDirection = SortDirection.ASC
     private var querySequence: Int = 0
+    private var currentQueryContext: QueryContext? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,7 +100,7 @@ class MainActivity : AppCompatActivity() {
             routeConfigRepository = routeConfigRepository,
             mainHandler = mainHandler,
             searchExecutor = placeSearchExecutor,
-            onQuery = { origin, destination -> queryRoute(origin, destination, null) },
+            onQuery = ::queryTemporaryRoute,
             onSaved = { savedRouteId -> selectSavedRouteAfterCreate(savedRouteId) }
         )
         findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
@@ -123,6 +132,9 @@ class MainActivity : AppCompatActivity() {
         routeShortcutCardsContainer = findViewById(R.id.routeShortcutCardsContainer)
         routePickerButton = findViewById(R.id.routePickerButton)
         resultSection = findViewById(R.id.resultSection)
+        temporaryQueryContextBar = findViewById(R.id.temporaryQueryContextBar)
+        temporaryQueryContextPathText = findViewById(R.id.temporaryQueryContextPathText)
+        temporaryQuerySaveButton = findViewById(R.id.temporaryQuerySaveButton)
         sortControls = findViewById(R.id.sortControls)
         resultSummaryContainer = findViewById(R.id.resultSummaryContainer)
         resultSummaryText = findViewById(R.id.resultSummaryText)
@@ -156,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         }
         emptyTemporaryQueryButton.setOnClickListener { showTemporaryRouteSheet() }
         routePickerButton.setOnClickListener { showRoutePicker() }
+        temporaryQuerySaveButton.setOnClickListener { saveCurrentTemporaryQuery() }
         queryButton.setOnClickListener { querySelectedRoute() }
         sortButtons.forEach { (field, button) ->
             button.setOnClickListener {
@@ -173,6 +186,8 @@ class MainActivity : AppCompatActivity() {
         if (routeConfigs.isEmpty()) {
             invalidateActiveQuery()
             selectedRoute = null
+            currentQueryContext = null
+            hideTemporaryQueryContext()
             emptyRouteState.visibility = View.VISIBLE
             queryControls.visibility = View.GONE
             resultSection.visibility = View.GONE
@@ -198,10 +213,19 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "請先選擇路線或查詢臨時起點和終點", Toast.LENGTH_SHORT).show()
             return
         }
-        queryRoute(route.origin, route.destination, route)
+        queryRoute(route.origin, route.destination, route, QueryContext.Saved(route.id))
     }
 
-    private fun queryRoute(origin: com.example.busiscoming.data.model.Place, destination: com.example.busiscoming.data.model.Place, sourceRoute: RouteConfig?) {
+    private fun queryTemporaryRoute(origin: Place, destination: Place) {
+        queryRoute(origin, destination, null, QueryContext.Temporary(origin, destination))
+    }
+
+    private fun queryRoute(
+        origin: Place,
+        destination: Place,
+        sourceRoute: RouteConfig?,
+        queryContext: QueryContext
+    ) {
         sourceRoute?.let { route ->
             routeConfigRepository.recordUsage(route.id)
             routeConfigs = routeConfigRepository.getAll()
@@ -210,6 +234,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         val queryId = ++querySequence
+        currentQueryContext = queryContext
+        updateTemporaryQueryContext()
         busRouteRepository.cancelProgressiveQueries()
         showLoadingState()
         queryExecutor.execute {
@@ -354,8 +380,71 @@ class MainActivity : AppCompatActivity() {
         resultUpdatedAtText.text = ""
     }
 
+    private fun updateTemporaryQueryContext() {
+        val context = currentQueryContext
+        if (context !is QueryContext.Temporary) {
+            hideTemporaryQueryContext()
+            return
+        }
+        temporaryQueryContextPathText.text = "${context.origin.name} \u2192 ${context.destination.name}"
+        temporaryQueryContextBar.visibility = View.VISIBLE
+    }
+
+    private fun hideTemporaryQueryContext() {
+        temporaryQueryContextBar.visibility = View.GONE
+        temporaryQueryContextPathText.text = ""
+    }
+
+    private fun saveCurrentTemporaryQuery() {
+        val context = currentQueryContext as? QueryContext.Temporary ?: return
+        promptSaveTemporaryRoute(context.origin, context.destination)
+    }
+
+    private fun promptSaveTemporaryRoute(origin: Place, destination: Place) {
+        val nameInput = TextInputEditText(this).apply {
+            setText("${origin.name} -> ${destination.name}")
+            setSelectAllOnFocus(true)
+            maxLines = 1
+        }
+        val nameLayout = TextInputLayout(this).apply {
+            hint = "常用路線名稱"
+            addView(nameInput)
+            setPadding(dp(4), 0, dp(4), 0)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("保存為常用")
+            .setView(nameLayout)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("保存", null)
+            .create()
+            .apply {
+                setOnShowListener {
+                    getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                        val name = nameInput.text?.toString()?.trim().orEmpty()
+                        val validation = RouteConfigValidator.validate(name, origin, destination)
+                        nameLayout.error = validation.nameError
+                        if (!validation.isValid) return@setOnClickListener
+                        if (routeConfigRepository.hasDuplicate(name, origin, destination)) {
+                            nameLayout.error = "路線已存在，請修改名稱或起終點"
+                            return@setOnClickListener
+                        }
+                        val id = routeConfigRepository.insert(name, origin, destination)
+                        Toast.makeText(this@MainActivity, "已保存為常用", Toast.LENGTH_SHORT).show()
+                        dismiss()
+                        currentQueryContext = QueryContext.Saved(id)
+                        hideTemporaryQueryContext()
+                        selectSavedRouteAfterCreate(id, clearExistingResults = false)
+                    }
+                }
+                show()
+            }
+    }
+
     private fun clearResults() {
         invalidateActiveQuery()
+        currentQueryContext = null
+        hideTemporaryQueryContext()
         setQueryLoading(false)
         currentResults = emptyList()
         sortField = null
@@ -375,11 +464,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderRouteShortcuts() {
         routeShortcutCardsContainer.removeAllViews()
-        val visibleRoutes = if (routeConfigs.size <= 2) routeConfigs else routeConfigs.take(3)
+        val visibleRoutes = RouteShortcutSelector.visibleRoutes(routeConfigs, selectedRoute)
         visibleRoutes.forEachIndexed { index, route ->
             routeShortcutCardsContainer.addView(createRouteShortcutCard(route, index))
         }
-        routePickerButton.visibility = if (routeConfigs.size >= 3) View.VISIBLE else View.GONE
+        routePickerButton.visibility = if (routeConfigs.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
     private fun createRouteShortcutCard(route: RouteConfig, index: Int): MaterialCardView {
@@ -390,7 +479,12 @@ class MainActivity : AppCompatActivity() {
             }
             radius = dp(8).toFloat()
             cardElevation = 0f
-            setCardBackgroundColor(ContextCompat.getColor(context, R.color.bus_card_surface))
+            setCardBackgroundColor(
+                ContextCompat.getColor(
+                    context,
+                    if (isSelected) R.color.bus_surface_variant else R.color.bus_card_surface
+                )
+            )
             strokeWidth = dp(if (isSelected) 2 else 1)
             strokeColor = ContextCompat.getColor(
                 context,
@@ -428,7 +522,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectRoute(route: RouteConfig) {
         if (selectedRoute?.id == route.id) return
-        selectedRoute = route
+        selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
         renderRouteShortcuts()
         clearResults()
     }
@@ -501,14 +595,16 @@ class MainActivity : AppCompatActivity() {
         temporaryRouteBottomSheet.show()
     }
 
-    private fun selectSavedRouteAfterCreate(savedRouteId: Long) {
+    private fun selectSavedRouteAfterCreate(savedRouteId: Long, clearExistingResults: Boolean = true) {
         routeConfigs = routeConfigRepository.getAll()
         selectedRoute = routeConfigs.firstOrNull { it.id == savedRouteId } ?: selectedRoute
         emptyRouteState.visibility = if (routeConfigs.isEmpty()) View.VISIBLE else View.GONE
         queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         resultSection.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         renderRouteShortcuts()
-        clearResults()
+        if (clearExistingResults) {
+            clearResults()
+        }
     }
 
     private fun showLoadingState() {
@@ -632,9 +728,14 @@ class MainActivity : AppCompatActivity() {
     private data class RouteIdentitySnapshot(
         val id: Long,
         val name: String,
-        val origin: com.example.busiscoming.data.model.Place,
-        val destination: com.example.busiscoming.data.model.Place
+        val origin: Place,
+        val destination: Place
     )
+
+    private sealed class QueryContext {
+        data class Saved(val routeId: Long) : QueryContext()
+        data class Temporary(val origin: Place, val destination: Place) : QueryContext()
+    }
 
     companion object {
         private val RESULT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {

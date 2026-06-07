@@ -29,7 +29,8 @@ object CitybusRouteParser {
     private fun parseCandidate(table: Element, lang: String): BusRouteOption? {
         val routeOption = parseFromAriaLabel(table.attr("aria-label")) ?: parseFromTableText(table)
         val routeDetailQuery = parseRouteDetailQuery(table, lang)
-        val firstLegEtaQuery = routeDetailQuery?.plan?.legs?.firstOrNull()?.toFirstLegEtaQuery()
+        val firstLegEtaQuery = routeDetailQuery?.plan?.legs?.firstOrNull()
+            ?.toFirstLegEtaQuery(routeDetailQuery.rawInfo, routeDetailQuery.lang)
         return routeOption?.copy(
             firstLegEtaQuery = firstLegEtaQuery,
             routeDetailQuery = routeDetailQuery,

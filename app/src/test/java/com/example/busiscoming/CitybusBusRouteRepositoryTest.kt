@@ -4,8 +4,7 @@ import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.WaitTimeState
 import com.example.busiscoming.data.repository.BusRouteQueryCallback
 import com.example.busiscoming.data.repository.CitybusBusRouteRepository
-import com.example.busiscoming.data.repository.CitybusRouteStopResolver
-import com.example.busiscoming.data.repository.CitybusStopNameResolver
+import com.example.busiscoming.data.repository.CitybusP2pStopMapResolver
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.data.model.RouteCardStopPreview
 import java.io.IOException
@@ -580,10 +579,10 @@ class CitybusBusRouteRepositoryTest {
             requestLogger = {},
             waitTimeResolver = { WaitTimeState.Unavailable },
             stopPreviewResolver = previewResolver(
-                routeStopFetcher = {
+                stopMapFetcher = {
                     previewStarted.countDown()
                     releasePreview.await(1, TimeUnit.SECONDS)
-                    """{"data":[{"co":"CTB","route":"1","dir":"O","seq":1,"stop":"001"},{"co":"CTB","route":"1","dir":"O","seq":10,"stop":"010"}]}"""
+                    stopMapResponse()
                 }
             ),
             stopPreviewWorkerCount = 1
@@ -598,7 +597,7 @@ class CitybusBusRouteRepositoryTest {
         releasePreview.countDown()
 
         assertEquals(
-            listOf("上車 起點站  \u2192  下車 終點站"),
+            listOf("起點站  \u2192  終點站"),
             callback.awaitPreviewCount(1).map { it.second.displayText() }
         )
     }
@@ -620,10 +619,10 @@ class CitybusBusRouteRepositoryTest {
             requestLogger = {},
             waitTimeResolver = { WaitTimeState.Unavailable },
             stopPreviewResolver = previewResolver(
-                routeStopFetcher = {
+                stopMapFetcher = {
                     previewStarted.countDown()
                     releasePreview.await(1, TimeUnit.SECONDS)
-                    """{"data":[{"co":"CTB","route":"1","dir":"O","seq":1,"stop":"001"},{"co":"CTB","route":"1","dir":"O","seq":10,"stop":"010"}]}"""
+                    stopMapResponse()
                 }
             ),
             stopPreviewWorkerCount = 1
@@ -665,24 +664,22 @@ class CitybusBusRouteRepositoryTest {
     }
 
     private fun previewResolver(
-        routeStopFetcher: (URL) -> String
+        stopMapFetcher: (URL) -> String
     ): RouteCardStopPreviewResolver {
         return RouteCardStopPreviewResolver(
-            routeStopResolver = CitybusRouteStopResolver(routeStopFetcher = routeStopFetcher),
-            stopNameResolver = CitybusStopNameResolver(
-                stopFetcher = { url ->
-                    when {
-                        url.toString().endsWith("/001") -> {
-                            """{"data":{"stop":"001","name_tc":"起點站"}}"""
-                        }
-                        url.toString().endsWith("/010") -> {
-                            """{"data":{"stop":"010","name_tc":"終點站"}}"""
-                        }
-                        else -> """{"data":{}}"""
-                    }
-                }
+            stopMapResolver = CitybusP2pStopMapResolver(
+                stopMapFetcher = { url, _ -> stopMapFetcher(url) }
             )
         )
+    }
+
+    private fun stopMapResponse(): String {
+        return """
+            <iframe onload="
+                addstoponmap('001',114.10000000000,22.200000000000,'S','1','1 - 起點站, 測試道','1-TEST-1','O','N','114.10000000000','22.200000000000');
+                addstoponmap('010',114.20000000000,22.300000000000,'E','10','10 - 終點站, 測試道','1-TEST-1','O','N','114.20000000000','22.300000000000');
+            "></iframe>
+        """.trimIndent()
     }
 
     private fun URL.queryParam(name: String): String {

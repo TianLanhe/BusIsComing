@@ -24,10 +24,16 @@ class CitybusBusRouteRepository(
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val routeFetcher: (URL, Map<String, String>) -> String = ::fetchRouteHtml,
     private val requestLogger: (String) -> Unit = ::logRouteCurl,
-    private val etaService: CitybusFirstLegEtaService = CitybusFirstLegEtaService(clock = clock),
+    private val stopMapResolver: CitybusP2pStopMapResolver = CitybusP2pStopMapResolver(clock = clock),
+    private val etaService: CitybusFirstLegEtaService = CitybusFirstLegEtaService(
+        clock = clock,
+        stopMapResolver = stopMapResolver
+    ),
     private val waitTimeResolver: (FirstLegEtaQuery) -> WaitTimeState = etaService::resolveWaitTime,
     private val etaWorkerCount: Int = DEFAULT_ETA_WORKER_COUNT,
-    private val stopPreviewResolver: RouteCardStopPreviewResolver = RouteCardStopPreviewResolver(),
+    private val stopPreviewResolver: RouteCardStopPreviewResolver = RouteCardStopPreviewResolver(
+        stopMapResolver = stopMapResolver
+    ),
     private val stopPreviewWorkerCount: Int = DEFAULT_STOP_PREVIEW_WORKER_COUNT
 ) : BusRouteRepository {
     private val etaScopeLock = Any()
@@ -388,8 +394,8 @@ class CitybusBusRouteRepository(
         private const val WALKING_SEARCH_RATIO = "1.3"
         private const val QUERY_TIME_PATTERN = "yyyy-MM-dd HH:mm"
         private const val HONG_KONG_TIME_ZONE = "Asia/Hong_Kong"
-        private const val DEFAULT_ETA_WORKER_COUNT = 4
-        private const val DEFAULT_STOP_PREVIEW_WORKER_COUNT = 3
+        private const val DEFAULT_ETA_WORKER_COUNT = 3
+        private const val DEFAULT_STOP_PREVIEW_WORKER_COUNT = 2
         private val SEARCH_MODES = listOf("T", "F", "W")
         private const val CITYBUS_COOKIE =
             "ETWEBID=6a1ecbeae8d60; PPFARE=1; LANG=TC; PHPSESSID=ev7984lo8uibj4kc3njbroe1a1; " +

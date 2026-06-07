@@ -3,9 +3,12 @@ package com.example.busiscoming
 import com.example.busiscoming.data.model.FirstLegEtaQuery
 import com.example.busiscoming.data.model.WaitTimeState
 import com.example.busiscoming.data.repository.CitybusFirstLegEtaService
+import com.example.busiscoming.data.repository.CitybusP2pStopMapResolver
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CitybusFirstLegEtaServiceTest {
@@ -16,16 +19,22 @@ class CitybusFirstLegEtaServiceTest {
         boardingSeq = 6,
         alightingSeq = 31,
         bound = "O",
-        directionPath = "outbound"
+        directionPath = "outbound",
+        rawInfo = "1|*|CTB||8X-THR-1||6||31||O|*|",
+        lang = "0"
     )
 
     @Test
-    fun buildsRouteStopAndEtaUrls() {
-        val service = CitybusFirstLegEtaService()
+    fun buildsStopMapHistoricalRouteStopAndEtaUrls() {
+        val stopMapResolver = CitybusP2pStopMapResolver()
+        val service = etaService()
 
+        val stopMapUrl = stopMapResolver.buildStopMapUrl(query.rawInfo, query.lang).toString()
+        assertTrue(stopMapUrl.startsWith("https://mobile.citybus.com.hk/nwp3/showstops2.php?r="))
+        assertTrue(stopMapUrl.contains("8X-THR-1"))
         assertEquals(
             "https://rt.data.gov.hk/v2/transport/citybus/route-stop/CTB/8X/outbound",
-            service.buildRouteStopUrl("CTB", "8X", "outbound").toString()
+            service.buildHistoricalRouteStopUrl("CTB", "8X", "outbound").toString()
         )
         assertEquals(
             "https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/001227/8X",
@@ -34,10 +43,9 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
-    fun resolvesWaitMinutesFromMatchingEta() {
-        val service = CitybusFirstLegEtaService(
+    fun resolvesWaitMinutesFromP2pStopMapAndMatchingEta() {
+        val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
-            routeStopFetcher = { routeStopResponse() },
             etaFetcher = { etaResponse("2026-06-04T12:03:10+08:00") }
         )
 
@@ -48,9 +56,8 @@ class CitybusFirstLegEtaServiceTest {
 
     @Test
     fun returnsZeroWhenEtaIsNowOrPast() {
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
-            routeStopFetcher = { routeStopResponse() },
             etaFetcher = { etaResponse("2026-06-04T11:59:59+08:00") }
         )
 
@@ -59,9 +66,8 @@ class CitybusFirstLegEtaServiceTest {
 
     @Test
     fun prefersStrictEtaMatchBeforeSeqFallback() {
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
-            routeStopFetcher = { routeStopResponse() },
             etaFetcher = {
                 """
                 {
@@ -80,11 +86,9 @@ class CitybusFirstLegEtaServiceTest {
 
     @Test
     fun fallsBackToRouteStopAndDirectionWhenEtaSeqDiffers() {
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
-            routeStopFetcher = {
-                """{"data":[{"co":"CTB","route":"118","dir":"O","seq":5,"stop":"001312"}]}"""
-            },
+            stopMapProvider = { stopMapResponse(stopId = "001312", routeVariant = "118-TOS-1", seq = 5) },
             etaFetcher = {
                 """
                 {
@@ -101,9 +105,8 @@ class CitybusFirstLegEtaServiceTest {
 
     @Test
     fun ignoresSeqFallbackRecordsWithDifferentRouteStopOrDirection() {
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
-            routeStopFetcher = { routeStopResponse() },
             etaFetcher = {
                 """
                 {
@@ -122,9 +125,8 @@ class CitybusFirstLegEtaServiceTest {
 
     @Test
     fun returnsUnavailableWhenNoStrictOrFallbackEtaIsParsable() {
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
-            routeStopFetcher = { routeStopResponse() },
             etaFetcher = {
                 """
                 {
@@ -141,13 +143,12 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
-    fun returnsUnavailableWhenStopOrEtaIsMissing() {
-        val missingStopService = CitybusFirstLegEtaService(
-            routeStopFetcher = { """{"data":[{"co":"CTB","route":"8X","dir":"O","seq":7,"stop":"001999"}]}""" },
+    fun returnsUnavailableWhenStopMapOrEtaIsMissing() {
+        val missingStopService = etaService(
+            stopMapProvider = { stopMapResponse(stopId = "001999", seq = 7) },
             etaFetcher = { etaResponse("2026-06-04T12:03:10+08:00") }
         )
-        val missingEtaService = CitybusFirstLegEtaService(
-            routeStopFetcher = { routeStopResponse() },
+        val missingEtaService = etaService(
             etaFetcher = { """{"data":[]}""" }
         )
 
@@ -156,14 +157,14 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
-    fun cachesRouteStopResultsForOneDay() {
-        var routeStopCalls = 0
+    fun cachesP2pStopMapResultsForOneDay() {
+        var stopMapCalls = 0
         var now = 1_000L
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { now },
-            routeStopFetcher = {
-                routeStopCalls += 1
-                routeStopResponse()
+            stopMapProvider = {
+                stopMapCalls += 1
+                stopMapResponse()
             },
             etaFetcher = { etaResponse("2026-06-04T12:03:10+08:00") }
         )
@@ -172,18 +173,18 @@ class CitybusFirstLegEtaServiceTest {
         now += 1_000L
         service.resolveWaitTime(query)
 
-        assertEquals(1, routeStopCalls)
+        assertEquals(1, stopMapCalls)
     }
 
     @Test
-    fun refreshesRouteStopCacheAfterOneDay() {
-        var routeStopCalls = 0
+    fun refreshesP2pStopMapCacheAfterOneDay() {
+        var stopMapCalls = 0
         var now = 1_000L
-        val service = CitybusFirstLegEtaService(
+        val service = etaService(
             clock = { now },
-            routeStopFetcher = {
-                routeStopCalls += 1
-                routeStopResponse()
+            stopMapProvider = {
+                stopMapCalls += 1
+                stopMapResponse()
             },
             etaFetcher = { etaResponse("2026-06-04T12:03:10+08:00") }
         )
@@ -192,21 +193,44 @@ class CitybusFirstLegEtaServiceTest {
         now += 86_400_001L
         service.resolveWaitTime(query)
 
-        assertEquals(2, routeStopCalls)
+        assertEquals(2, stopMapCalls)
     }
 
     @Test
-    fun returnsUnavailableWhenFetcherFails() {
-        val service = CitybusFirstLegEtaService(
-            routeStopFetcher = { throw java.io.IOException("route-stop failed") },
+    fun returnsUnavailableWhenStopMapFetcherFailsWithoutCallingEta() {
+        val service = etaService(
+            stopMapProvider = { throw java.io.IOException("showstops2 failed") },
             etaFetcher = { error("not called") }
         )
 
         assertEquals(WaitTimeState.Unavailable, service.resolveWaitTime(query))
     }
 
-    private fun routeStopResponse(): String {
-        return """{"data":[{"co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227"}]}"""
+    private fun etaService(
+        clock: () -> Long = { 1_000L },
+        stopMapProvider: () -> String = { stopMapResponse() },
+        etaFetcher: (URL) -> String = { etaResponse("2026-06-04T12:03:10+08:00") }
+    ): CitybusFirstLegEtaService {
+        return CitybusFirstLegEtaService(
+            clock = clock,
+            etaFetcher = etaFetcher,
+            stopMapResolver = CitybusP2pStopMapResolver(
+                clock = clock,
+                stopMapFetcher = { _, _ -> stopMapProvider() }
+            )
+        )
+    }
+
+    private fun stopMapResponse(
+        stopId: String = "001227",
+        routeVariant: String = "8X-THR-1",
+        seq: Int = 6,
+        name: String = "樂軒臺, 柴灣道"
+    ): String {
+        return """
+            <iframe onload="addstoponmap('$stopId',114.24156861053,22.264883822091,'S','$seq','$seq - $name','$routeVariant','O','N',
+            '114.24156861053','22.264883822091');"></iframe>
+        """.trimIndent()
     }
 
     private fun etaResponse(eta: String): String {
@@ -227,7 +251,9 @@ class CitybusFirstLegEtaServiceTest {
             boardingSeq = 5,
             alightingSeq = 9,
             bound = "O",
-            directionPath = "outbound"
+            directionPath = "outbound",
+            rawInfo = "1|*|CTB||118-TOS-1||5||9||O|*|",
+            lang = "0"
         )
     }
 

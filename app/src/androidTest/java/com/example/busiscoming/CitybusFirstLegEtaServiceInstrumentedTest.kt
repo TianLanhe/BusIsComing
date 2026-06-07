@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.busiscoming.data.model.FirstLegEtaQuery
 import com.example.busiscoming.data.model.WaitTimeState
 import com.example.busiscoming.data.repository.CitybusFirstLegEtaService
+import com.example.busiscoming.data.repository.CitybusP2pStopMapResolver
 import java.text.SimpleDateFormat
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -16,9 +17,6 @@ class CitybusFirstLegEtaServiceInstrumentedTest {
     fun resolvesWaitTimeOnAndroidRegexRuntime() {
         val service = CitybusFirstLegEtaService(
             clock = { millis("2026-06-04T18:32:00+08:00") },
-            routeStopFetcher = {
-                """{"data":[{"co":"CTB","route":"788","dir":"O","seq":6,"stop":"001344"}]}"""
-            },
             etaFetcher = {
                 """
                 {
@@ -27,7 +25,14 @@ class CitybusFirstLegEtaServiceInstrumentedTest {
                   ]
                 }
                 """.trimIndent()
-            }
+            },
+            stopMapResolver = CitybusP2pStopMapResolver(
+                stopMapFetcher = { _, _ ->
+                    """
+                    <iframe onload="addstoponmap('001344',114.20000000000,22.300000000000,'S','6','6 - 測試站, 測試道','788-MAF-1','O','N','114.20000000000','22.300000000000');"></iframe>
+                    """.trimIndent()
+                }
+            )
         )
 
         val waitTimeState = service.resolveWaitTime(
@@ -38,7 +43,9 @@ class CitybusFirstLegEtaServiceInstrumentedTest {
                 boardingSeq = 6,
                 alightingSeq = 10,
                 bound = "O",
-                directionPath = "outbound"
+                directionPath = "outbound",
+                rawInfo = "1|*|CTB||788-MAF-1||6||10||O|*|",
+                lang = "0"
             )
         )
 

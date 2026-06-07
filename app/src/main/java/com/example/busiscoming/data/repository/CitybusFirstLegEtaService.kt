@@ -1,6 +1,7 @@
 package com.example.busiscoming.data.repository
 
 import com.example.busiscoming.data.model.FirstLegEtaQuery
+import com.example.busiscoming.data.model.P2pRouteLeg
 import com.example.busiscoming.data.model.WaitTimeState
 import java.net.URL
 import java.text.ParseException
@@ -9,14 +10,8 @@ import java.util.Locale
 
 class CitybusFirstLegEtaService(
     private val clock: () -> Long = { System.currentTimeMillis() },
-    routeStopFetcher: (URL) -> String = ::fetchCitybusPublicApi,
     private val etaFetcher: (URL) -> String = ::fetchCitybusPublicApi,
-    routeStopCacheTtlMillis: Long = ROUTE_STOP_CACHE_TTL_MILLIS,
-    private val routeStopResolver: CitybusRouteStopResolver = CitybusRouteStopResolver(
-        clock = clock,
-        routeStopFetcher = routeStopFetcher,
-        cacheTtlMillis = routeStopCacheTtlMillis
-    )
+    private val stopMapResolver: CitybusP2pStopMapResolver = CitybusP2pStopMapResolver(clock = clock)
 ) {
     fun resolveWaitTime(query: FirstLegEtaQuery): WaitTimeState {
         return runCatching {
@@ -33,10 +28,6 @@ class CitybusFirstLegEtaService(
         }
     }
 
-    fun buildRouteStopUrl(company: String, route: String, directionPath: String): URL {
-        return routeStopResolver.buildRouteStopUrl(company, route, directionPath)
-    }
-
     fun buildEtaUrl(company: String, stopId: String, route: String): URL {
         return URL("$BASE_URL/eta/$company/$stopId/$route")
     }
@@ -48,11 +39,32 @@ class CitybusFirstLegEtaService(
     }
 
     private fun findStopId(query: FirstLegEtaQuery): String? {
-        return routeStopResolver.findStopId(
-            company = query.company,
-            route = query.route,
-            directionPath = query.directionPath,
-            sequence = query.boardingSeq
+        if (query.rawInfo.isBlank()) return null
+        return stopMapResolver.findStopId(
+            leg = P2pRouteLeg(
+                company = query.company,
+                routeVariant = query.routeVariant,
+                route = query.route,
+                boardingSeq = query.boardingSeq,
+                alightingSeq = query.alightingSeq,
+                bound = query.bound,
+                directionPath = query.directionPath
+            ),
+            rawInfo = query.rawInfo,
+            lang = query.lang,
+            legIndex = 0
+        )
+    }
+
+    /**
+     * Historical helper retained for comparing the old public route-stop path during diagnostics.
+     * Runtime ETA stopId resolution uses CitybusP2P `showstops2.php` instead.
+     */
+    fun buildHistoricalRouteStopUrl(company: String, route: String, directionPath: String): URL {
+        return CitybusRouteStopResolver(clock = clock).buildRouteStopUrl(
+            company = company,
+            route = route,
+            directionPath = directionPath
         )
     }
 
@@ -112,7 +124,6 @@ class CitybusFirstLegEtaService(
 
     companion object {
         private const val BASE_URL = "https://rt.data.gov.hk/v2/transport/citybus"
-        private const val ROUTE_STOP_CACHE_TTL_MILLIS = 86_400_000L
         private const val MILLIS_PER_MINUTE = 60_000L
         private val ETA_DATE_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {

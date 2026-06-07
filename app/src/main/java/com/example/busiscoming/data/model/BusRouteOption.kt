@@ -41,11 +41,14 @@ data class FirstLegEtaQuery(
     val boardingSeq: Int,
     val alightingSeq: Int,
     val bound: String,
-    val directionPath: String
+    val directionPath: String,
+    val rawInfo: String = "",
+    val lang: String = "0"
 ) {
     fun requestKey(): FirstLegEtaRequestKey {
         return FirstLegEtaRequestKey(
             company = company,
+            routeVariant = routeVariant,
             route = route,
             boardingSeq = boardingSeq,
             bound = bound,
@@ -56,6 +59,7 @@ data class FirstLegEtaQuery(
 
 data class FirstLegEtaRequestKey(
     val company: String,
+    val routeVariant: String,
     val route: String,
     val boardingSeq: Int,
     val bound: String,
@@ -100,7 +104,7 @@ data class P2pRouteLeg(
     val bound: String,
     val directionPath: String?
 ) {
-    fun toFirstLegEtaQuery(): FirstLegEtaQuery? {
+    fun toFirstLegEtaQuery(rawInfo: String, lang: String): FirstLegEtaQuery? {
         val resolvedDirectionPath = directionPath ?: return null
         return FirstLegEtaQuery(
             company = company,
@@ -109,7 +113,9 @@ data class P2pRouteLeg(
             boardingSeq = boardingSeq,
             alightingSeq = alightingSeq,
             bound = bound,
-            directionPath = resolvedDirectionPath
+            directionPath = resolvedDirectionPath,
+            rawInfo = rawInfo,
+            lang = lang
         )
     }
 }
@@ -119,11 +125,47 @@ data class RouteCardStopPreview(
     val alightingStopName: String
 ) {
     fun displayText(): String {
-        return "上車 $boardingStopName  \u2192  下車 $alightingStopName"
+        return "$boardingStopName  \u2192  $alightingStopName"
     }
 }
 
 data class RouteCardStopPreviewCacheKey(
+    val rawInfo: String,
+    val lang: String
+)
+
+data class P2pStopMap(
+    val rawInfo: String,
+    val lang: String,
+    val stops: List<P2pStopMapStop>
+) {
+    fun findStop(legIndex: Int, routeVariant: String, sequence: Int): P2pStopMapStop? {
+        return stops.firstOrNull { stop ->
+            stop.legIndex == legIndex &&
+                stop.routeVariant == routeVariant &&
+                stop.sequence == sequence
+        } ?: stops.firstOrNull { stop ->
+            stop.routeVariant == routeVariant && stop.sequence == sequence
+        }
+    }
+}
+
+data class P2pStopMapStop(
+    val legIndex: Int,
+    val company: String,
+    val routeVariant: String,
+    val publicRoute: String,
+    val bound: String,
+    val sequence: Int,
+    val stopId: String,
+    val rawName: String,
+    val displayName: String,
+    val latitude: Double,
+    val longitude: Double,
+    val markerType: String
+)
+
+data class P2pStopMapCacheKey(
     val rawInfo: String,
     val lang: String
 )
