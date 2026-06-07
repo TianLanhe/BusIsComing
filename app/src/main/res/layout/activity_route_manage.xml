@@ -18,7 +18,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="路线管理"
+            android:text="路線管理"
             android:textColor="@color/bus_text_primary"
             android:textSize="24sp"
             android:textStyle="bold" />
@@ -27,7 +27,7 @@
             android:id="@+id/addRouteButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="新增路线" />
+            android:text="新增路線" />
     </LinearLayout>
 
     <TextView
@@ -35,7 +35,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:text="管理常用起点和终点，查询时直接选择。"
+        android:text="管理常用起點和終點，查詢時直接選擇。"
         android:textColor="@color/bus_text_secondary"
         android:textSize="14sp" />
 
@@ -53,7 +53,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="还没有保存路线"
+            android:text="還沒有儲存路線"
             android:textColor="@color/bus_text_primary"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -63,7 +63,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="先新增一条常用路线，之后查询会更快。"
+            android:text="先新增一條常用路線，之後查詢會更快。"
             android:textColor="@color/bus_text_secondary"
             android:textSize="14sp" />
 
@@ -72,7 +72,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="新增路线" />
+            android:text="新增路線" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

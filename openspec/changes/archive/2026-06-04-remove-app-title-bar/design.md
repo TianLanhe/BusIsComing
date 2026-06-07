@@ -1,6 +1,6 @@
 ## 上下文
 
-当前 App 主题继承自 `Theme.MaterialComponents.DayNight.DarkActionBar`，因此系统会在每个 Activity 顶部显示 ActionBar，并展示应用标题 `BusIsComming`。页面 XML 内部已经有自定义标题和操作按钮，例如主界面的“巴士查询”和“管理路线”，所以系统标题栏会造成重复标题，并在截图中遮挡页面顶部内容。
+当前 App 主题继承自 `Theme.MaterialComponents.DayNight.DarkActionBar`，因此系统会在每个 Activity 顶部显示 ActionBar，并展示应用标题 `BusIsComing`。页面 XML 内部已经有自定义标题和操作按钮，例如主界面的“巴士查询”和“管理路线”，所以系统标题栏会造成重复标题，并在截图中遮挡页面顶部内容。
 
 ## 目标 / 非目标
 
@@ -22,7 +22,7 @@
 
 ### 决策 1：将主题父类改为 NoActionBar
 
-把 `Theme.BusIsComming` 的 parent 从 `Theme.MaterialComponents.DayNight.DarkActionBar` 改为 `Theme.MaterialComponents.DayNight.NoActionBar`。
+把 `Theme.BusIsComing` 的 parent 从 `Theme.MaterialComponents.DayNight.DarkActionBar` 改为 `Theme.MaterialComponents.DayNight.NoActionBar`。
 
 理由：
 

@@ -14,6 +14,8 @@
     <color name="bus_chip_surface">#FFFFFFFF</color>
     <color name="bus_chip_selected">#FF145C54</color>
     <color name="bus_wait_accent">#FF145C54</color>
+    <color name="bus_wait_unavailable">#FF7A8581</color>
+    <color name="app_icon_background">#FFC8C2F5</color>
     <color name="bus_text_primary">#FF17211F</color>
     <color name="bus_text_secondary">#FF5D6B66</color>
     <color name="bus_divider">#FFD6DEDA</color>

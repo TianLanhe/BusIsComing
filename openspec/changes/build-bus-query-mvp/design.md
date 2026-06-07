@@ -1,6 +1,6 @@
 ## 上下文
 
-BusIsComming 当前是一个空的 Android Studio 项目，已有 Android Gradle Plugin、AppCompat、Core KTX 和 Material 依赖，但还没有实现 Activity 或完整应用流程。已有产品文档 `docs/overview-design.md` 和 `docs/specification.md` 将第一版 MVP 定义为一个本地运行的 Android App：用户可以管理命名的起点/终点路线配置，并查询 Mock 巴士路线结果。
+BusIsComing 当前是一个空的 Android Studio 项目，已有 Android Gradle Plugin、AppCompat、Core KTX 和 Material 依赖，但还没有实现 Activity 或完整应用流程。已有产品文档 `docs/overview-design.md` 和 `docs/specification.md` 将第一版 MVP 定义为一个本地运行的 Android App：用户可以管理命名的起点/终点路线配置，并查询 Mock 巴士路线结果。
 
 第一版必须使用 Kotlin + XML，实现本地持久化、主查询页面、路线管理页面，并为后续真实 HTTP API 替换 Mock 数据源保留清晰边界。真实巴士 API 本身不属于本次变更范围。
 

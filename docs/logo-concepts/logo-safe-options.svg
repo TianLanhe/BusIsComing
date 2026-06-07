@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560">
+  <defs>
+    <linearGradient id="bgA" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE1C7"/>
+      <stop offset="1" stop-color="#D9D4FF"/>
+    </linearGradient>
+    <linearGradient id="bgB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFF4C7"/>
+      <stop offset="1" stop-color="#C9F2EA"/>
+    </linearGradient>
+    <linearGradient id="bgC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#D4F4FF"/>
+      <stop offset="1" stop-color="#FFD7E4"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#4F425C" flood-opacity="0.18"/>
+    </filter>
+    <style>
+      .title { font: 700 26px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; fill: #30313D; }
+      .note { font: 500 17px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; fill: #727381; }
+      .label { font: 700 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; fill: #30313D; }
+      .caption { font: 500 18px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; fill: #626472; }
+      .safe { fill: none; stroke: rgba(255,255,255,0.9); stroke-width: 2; stroke-dasharray: 8 8; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="560" fill="#F7F8FB"/>
+  <text x="60" y="50" class="title">BusIsComing Logo 安全區方案</text>
+  <text x="60" y="78" class="note">主體縮進到中心區域，邊緣只保留純背景，避免 Android 啓動圖示圓角/圓形蒙版裁切。</text>
+
+  <!-- Option A -->
+  <g transform="translate(60 112)">
+    <rect x="0" y="0" width="320" height="320" rx="76" fill="url(#bgA)"/>
+    <circle cx="160" cy="160" r="112" class="safe" opacity="0.55"/>
+    <g filter="url(#softShadow)">
+      <rect x="83" y="82" width="154" height="190" rx="43" fill="#8173D2"/>
+      <rect x="98" y="101" width="124" height="60" rx="18" fill="#232B63"/>
+      <rect x="101" y="168" width="118" height="73" rx="20" fill="#BDB8FF"/>
+      <rect x="110" y="111" width="31" height="40" rx="15" fill="#FFFDF6"/>
+      <rect x="184" y="111" width="31" height="40" rx="15" fill="#FFFDF6"/>
+      <path d="M159 145 C147 134 132 140 132 154 C132 174 159 184 159 184 C159 184 186 174 186 154 C186 140 171 134 159 145Z" fill="#FF6993"/>
+      <circle cx="132" cy="204" r="9" fill="#2E366E"/>
+      <circle cx="188" cy="204" r="9" fill="#2E366E"/>
+      <path d="M145 224 C153 232 171 232 179 224" fill="none" stroke="#2E366E" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="108" cy="252" r="14" fill="#FFD66B"/>
+      <circle cx="214" cy="252" r="14" fill="#FFD66B"/>
+    </g>
+    <path d="M254 92 C268 88 282 97 286 111 C274 114 260 105 254 92Z" fill="#FF6B8E" opacity="0.9"/>
+    <text x="0" y="376" class="label">A 暖心巴士臉</text>
+    <text x="0" y="404" class="caption">最接近原方向，但刪掉角落元素，裁切風險最低。</text>
+  </g>
+
+  <!-- Option B -->
+  <g transform="translate(440 112)">
+    <rect x="0" y="0" width="320" height="320" rx="76" fill="url(#bgB)"/>
+    <circle cx="160" cy="160" r="112" class="safe" opacity="0.55"/>
+    <g filter="url(#softShadow)">
+      <path d="M94 154 L160 95 L226 154 V244 H94Z" fill="#FF8A6A"/>
+      <path d="M74 158 L160 78 L246 158" fill="none" stroke="#393F73" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="123" y="161" width="52" height="83" rx="18" fill="#FFF5E7"/>
+      <path d="M149 184 C141 176 130 181 130 192 C130 208 149 216 149 216 C149 216 168 208 168 192 C168 181 157 176 149 184Z" fill="#FF638D"/>
+      <rect x="87" y="185" width="174" height="75" rx="31" fill="#63C5C0"/>
+      <rect x="106" y="198" width="85" height="32" rx="12" fill="#263064"/>
+      <rect x="198" y="198" width="31" height="32" rx="12" fill="#263064"/>
+      <circle cx="123" cy="243" r="12" fill="#293262"/>
+      <circle cx="221" cy="243" r="12" fill="#293262"/>
+    </g>
+    <path d="M211 123 C226 112 242 114 253 127 C235 131 220 130 211 123Z" fill="#5BD38B" opacity="0.85"/>
+    <text x="0" y="376" class="label">B 家門口路線</text>
+    <text x="0" y="404" class="caption">家庭感最強，適合“給家人查常用路線”的定位。</text>
+  </g>
+
+  <!-- Option C -->
+  <g transform="translate(820 112)">
+    <rect x="0" y="0" width="320" height="320" rx="76" fill="url(#bgC)"/>
+    <circle cx="160" cy="160" r="112" class="safe" opacity="0.55"/>
+    <g opacity="0.55">
+      <rect x="92" y="108" width="28" height="72" rx="8" fill="#FFFFFF"/>
+      <rect x="122" y="91" width="36" height="89" rx="8" fill="#FFFFFF"/>
+      <rect x="162" y="118" width="28" height="62" rx="8" fill="#FFFFFF"/>
+      <circle cx="205" cy="129" r="17" fill="#FFFFFF"/>
+    </g>
+    <g filter="url(#softShadow)">
+      <rect x="80" y="113" width="180" height="142" rx="36" fill="#FFC74C"/>
+      <rect x="98" y="129" width="144" height="41" rx="15" fill="#2D356B"/>
+      <rect x="98" y="178" width="144" height="39" rx="15" fill="#FFF5D7"/>
+      <line x1="124" y1="129" x2="124" y2="217" stroke="#FFC74C" stroke-width="8"/>
+      <line x1="170" y1="129" x2="170" y2="217" stroke="#FFC74C" stroke-width="8"/>
+      <line x1="216" y1="129" x2="216" y2="217" stroke="#FFC74C" stroke-width="8"/>
+      <circle cx="121" cy="247" r="14" fill="#31386E"/>
+      <circle cx="219" cy="247" r="14" fill="#31386E"/>
+      <path d="M159 191 C151 183 139 188 139 199 C139 216 159 224 159 224 C159 224 179 216 179 199 C179 188 167 183 159 191Z" fill="#FF638D"/>
+      <path d="M189 233 C198 240 215 240 224 233" fill="none" stroke="#31386E" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <text x="0" y="376" class="label">C 香港小巴感</text>
+    <text x="0" y="404" class="caption">香港識別更明顯，保留少量城市符號但不貼邊。</text>
+  </g>
+</svg>

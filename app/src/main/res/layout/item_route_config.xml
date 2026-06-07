@@ -47,7 +47,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"
-                android:text="编辑" />
+                android:text="編輯" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cloneRouteButton"
@@ -55,7 +55,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"
-                android:text="克隆" />
+                android:text="複製" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/deleteRouteButton"
@@ -63,7 +63,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"
-                android:text="删除"
+                android:text="刪除"
                 android:textColor="@color/bus_danger" />
         </LinearLayout>
     </LinearLayout>

@@ -6,7 +6,7 @@
 
 #### Scenario: 主界面不显示系统标题栏
 - **WHEN** 用户打开主界面
-- **THEN** 页面顶部不显示系统 ActionBar 中的 `BusIsComming` 标题
+- **THEN** 页面顶部不显示系统 ActionBar 中的 `BusIsComing` 标题
 
 #### Scenario: 页面内容不被标题栏遮挡
 - **WHEN** 用户打开主界面、路线管理页或路线编辑页

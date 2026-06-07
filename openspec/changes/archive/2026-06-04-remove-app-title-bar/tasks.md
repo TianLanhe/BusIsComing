@@ -1,12 +1,12 @@
 ## 1. 主题调整
 
-- [x] 1.1 将 `values/themes.xml` 中 `Theme.BusIsComming` 的 parent 改为 `Theme.MaterialComponents.DayNight.NoActionBar`
-- [x] 1.2 将 `values-night/themes.xml` 中 `Theme.BusIsComming` 的 parent 改为 `Theme.MaterialComponents.DayNight.NoActionBar`
+- [x] 1.1 将 `values/themes.xml` 中 `Theme.BusIsComing` 的 parent 改为 `Theme.MaterialComponents.DayNight.NoActionBar`
+- [x] 1.2 将 `values-night/themes.xml` 中 `Theme.BusIsComing` 的 parent 改为 `Theme.MaterialComponents.DayNight.NoActionBar`
 - [x] 1.3 保留现有颜色、状态栏和 Material 组件配置
 
 ## 2. 页面导航检查
 
-- [x] 2.1 检查主界面顶部不再显示系统 `BusIsComming` 标题栏
+- [x] 2.1 检查主界面顶部不再显示系统 `BusIsComing` 标题栏
 - [x] 2.2 检查主界面内部“巴士查询”和“管理路线”完整可见
 - [x] 2.3 检查路线管理页和路线编辑页在无 ActionBar 后仍可通过系统返回键返回
 

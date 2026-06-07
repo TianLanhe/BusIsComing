@@ -16,7 +16,7 @@
 ## Capabilities
 
 ### New Capabilities
-- `app-ui-style-system`: 定义 BusIsComming 路线相关页面默认采用的现代通勤工具风格、结果卡片、状态反馈、触控和动效基线。
+- `app-ui-style-system`: 定义 BusIsComing 路线相关页面默认采用的现代通勤工具风格、结果卡片、状态反馈、触控和动效基线。
 
 ### Modified Capabilities
 - `route-query-results-layout`: 将主页面查询结果区域从自适应表格升级为卡片列表，并调整字号、密度、状态呈现和首屏可读目标。

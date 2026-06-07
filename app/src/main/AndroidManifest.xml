@@ -12,7 +12,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.BusIsComming">
+        android:theme="@style/Theme.BusIsComing">
         <activity
             android:name=".ui.edit.RouteEditActivity"
             android:exported="false" />

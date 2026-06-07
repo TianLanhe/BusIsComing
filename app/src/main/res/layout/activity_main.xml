@@ -18,7 +18,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="巴士查询"
+            android:text="巴士查詢"
             android:textColor="@color/bus_text_primary"
             android:textSize="24sp"
             android:textStyle="bold" />
@@ -30,7 +30,7 @@
             android:textColor="@color/black"
             app:backgroundTint="@color/bus_action_secondary"
             app:cornerRadius="6dp"
-            android:text="管理路线" />
+            android:text="管理路線" />
     </LinearLayout>
 
     <LinearLayout
@@ -48,7 +48,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="还没有保存路线"
+            android:text="還沒有儲存路線"
             android:textColor="@color/bus_text_primary"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -58,7 +58,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="添加常用起点和终点后即可查询"
+            android:text="新增常用起點和終點後即可查詢"
             android:textColor="@color/bus_text_secondary"
             android:textSize="14sp" />
 
@@ -67,7 +67,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="新增路线" />
+            android:text="新增路線" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/emptyTemporaryQueryButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="查詢臨時起點和終點" />
     </LinearLayout>
 
     <LinearLayout
@@ -77,29 +85,51 @@
         android:layout_marginTop="20dp"
         android:orientation="vertical">
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/routeSelectorInputLayout"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+        <TextView
+            android:id="@+id/frequentRoutesTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="选择路线">
+            android:text="常用路線"
+            android:textColor="@color/bus_text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
 
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                android:id="@+id/routeSelector"
-                android:layout_width="match_parent"
+        <LinearLayout
+            android:id="@+id/routeShortcutRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/routeShortcutCardsContainer"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:inputType="none"
-                android:lineSpacingExtra="2dp"
-                android:maxLines="2"
-                android:minLines="2" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:layout_weight="1"
+                android:orientation="horizontal" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/routePickerButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="展開常用路線"
+                android:minWidth="48dp"
+                android:padding="0dp"
+                android:text="›"
+                android:textSize="24sp"
+                android:visibility="gone"
+                app:cornerRadius="8dp" />
+        </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/queryButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="查询" />
+            android:text="查詢" />
     </LinearLayout>
 
     <LinearLayout
@@ -147,7 +177,7 @@
                         android:layout_height="40dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="路线"
+                        android:text="路線"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -159,7 +189,7 @@
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="价格"
+                        android:text="價格"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -171,7 +201,7 @@
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="总耗时"
+                        android:text="耗時"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -183,7 +213,7 @@
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="候车"
+                        android:text="候車"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -200,6 +230,33 @@
                         app:cornerRadius="20dp" />
                 </LinearLayout>
             </HorizontalScrollView>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/resultSummaryContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/resultSummaryText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/resultUpdatedAtText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <com.google.android.material.card.MaterialCardView
