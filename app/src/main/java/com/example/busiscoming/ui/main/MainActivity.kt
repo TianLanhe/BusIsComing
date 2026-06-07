@@ -302,7 +302,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (recordUsage) sourceRoute?.let { route ->
+        if (RouteResultsRefreshPolicy.shouldRecordUsage(isRefresh, recordUsage)) sourceRoute?.let { route ->
             routeConfigRepository.recordUsage(route.id)
             routeConfigs = routeConfigRepository.getAll()
             selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
@@ -367,12 +367,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showInitialRoutes(routes: List<BusRouteOption>) {
-        val nextSortField = if (preserveSortOnNextResults && sortField != null) {
-            sortField!!
-        } else {
-            SortField.DURATION
-        }
-        if (!preserveSortOnNextResults || sortField == null) {
+        val nextSortField = RouteResultsRefreshPolicy.resolveSortField(
+            preserveSort = preserveSortOnNextResults,
+            currentSortField = sortField
+        )
+        if (RouteResultsRefreshPolicy.shouldResetSortDirection(preserveSortOnNextResults, sortField)) {
             sortDirection = SortDirection.ASC
         }
         sortField = nextSortField
@@ -818,9 +817,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateSwipeRefreshState() {
         if (!::resultSwipeRefresh.isInitialized) return
-        resultSwipeRefresh.isEnabled = currentQueryContext != null &&
-            currentResults.isNotEmpty() &&
-            !isQueryInProgress
+        resultSwipeRefresh.isEnabled = RouteResultsRefreshPolicy.canRefresh(
+            hasQueryContext = currentQueryContext != null,
+            hasResults = currentResults.isNotEmpty(),
+            isQueryInProgress = isQueryInProgress
+        )
     }
 
     private fun updateSortControls() {

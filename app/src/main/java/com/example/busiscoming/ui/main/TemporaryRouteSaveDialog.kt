@@ -16,6 +16,10 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 
 object TemporaryRouteSaveDialog {
+    fun defaultName(origin: Place, destination: Place): String {
+        return "${origin.name} -> ${destination.name}"
+    }
+
     fun show(
         context: Context,
         routeConfigRepository: RouteConfigRepository,
@@ -24,7 +28,7 @@ object TemporaryRouteSaveDialog {
         onSaved: (Long) -> Unit
     ) {
         val nameInput = TextInputEditText(context).apply {
-            setText("${origin.name} -> ${destination.name}")
+            setText(defaultName(origin, destination))
             setSelectAllOnFocus(true)
             maxLines = 1
         }

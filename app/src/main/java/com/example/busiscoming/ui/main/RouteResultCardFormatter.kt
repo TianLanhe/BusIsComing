@@ -37,3 +37,13 @@ object RouteResultCardFormatter {
         return "共 ${routes.size} 條路線，${routes.count { it.transferCount == 0 }} 條直達"
     }
 }
+
+object RouteCardActionPolicy {
+    fun canOpenEtaArrivals(waitTimeState: WaitTimeState): Boolean {
+        return (waitTimeState as? WaitTimeState.Available)?.arrivals.orEmpty().size >= 2
+    }
+
+    fun canStartMonitor(route: BusRouteOption): Boolean {
+        return route.waitTimeState is WaitTimeState.Available && route.firstLegEtaQuery != null
+    }
+}

@@ -15,8 +15,10 @@ import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
 import com.example.busiscoming.R
 import com.example.busiscoming.data.model.BusMonitorSpeechFormatter
+import com.example.busiscoming.data.model.BusMonitorSpeechPolicy
 import com.example.busiscoming.data.model.BusMonitorStateEvaluator
 import com.example.busiscoming.data.model.BusMonitorStatus
+import com.example.busiscoming.data.model.BusMonitorStopPolicy
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.data.model.FirstLegEtaQuery
 import com.example.busiscoming.data.model.WaitTimeState
@@ -163,7 +165,7 @@ class BusMonitorService : Service() {
             )
         )
 
-        if (currentSession.voiceEnabled && lastStatus != status) {
+        if (currentSession.voiceEnabled && BusMonitorSpeechPolicy.shouldSpeak(lastStatus, status)) {
             val phrase = BusMonitorSpeechFormatter.phrase(firstArrival.minutes, status)
             speak(phrase)
         }
@@ -176,10 +178,11 @@ class BusMonitorService : Service() {
 
     private fun shouldAutoStop(waitTimeState: WaitTimeState.Available, currentSession: MonitorSession): Boolean {
         val now = System.currentTimeMillis()
-        val secondArrivalMillis = waitTimeState.nextArrival?.etaMillis
-        if (secondArrivalMillis != null) return now >= secondArrivalMillis
-        val firstEtaMillis = waitTimeState.arrivals.firstOrNull()?.etaMillis ?: return false
-        return now >= firstEtaMillis + FALLBACK_SECOND_ETA_DELAY_MILLIS
+        return BusMonitorStopPolicy.shouldAutoStop(
+            nowMillis = now,
+            firstEtaMillis = waitTimeState.arrivals.firstOrNull()?.etaMillis,
+            secondEtaMillis = waitTimeState.nextArrival?.etaMillis
+        )
     }
 
     private fun scheduleNextRefresh() {
@@ -311,7 +314,6 @@ class BusMonitorService : Service() {
         private const val CHANNEL_ALERT_ID = "bus_monitor_alert"
         private const val NOTIFICATION_ID = 8201
         private const val REFRESH_INTERVAL_MILLIS = 60_000L
-        private const val FALLBACK_SECOND_ETA_DELAY_MILLIS = 120_000L
         private const val MAX_CONSECUTIVE_FAILURES = 10
         private const val ACTION_START = "com.example.busiscoming.action.START_BUS_MONITOR"
         private const val ACTION_REFRESH = "com.example.busiscoming.action.REFRESH_BUS_MONITOR"

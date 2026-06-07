@@ -47,9 +47,9 @@
 - [x] 6.1 補充 ETA service 單元測試：解析 1/2/3 班、`eta_seq` 排序、ETA 時間兜底排序、備註和更新時間。
 - [x] 6.2 補充 fallback 單元測試：strict 缺失時取 route + stop + dir 的多班資料，且不使用 route/stop/dir 不一致記錄。
 - [x] 6.3 更新排序器和 formatter 單元測試，覆蓋 `即將到站`、`下一班`、暫無車輛和只按第 1 班排序。
-- [ ] 6.4 補充卡片 adapter 或 layout 測試，確認候車區可點擊條件、卡片其他區域點擊路線詳情不受影響。
-- [ ] 6.5 補充 ETA 班次面板測試或可驗證 helper 測試，覆蓋標題、副標題、班次、備註和更新時間。
+- [x] 6.4 補充卡片 adapter 或 layout 測試，確認候車區可點擊條件、卡片其他區域點擊路線詳情不受影響。
+- [x] 6.5 補充 ETA 班次面板測試或可驗證 helper 測試，覆蓋標題、副標題、班次、備註和更新時間。
 - [x] 6.6 運行 `./gradlew testDebugUnitTest`。
 - [x] 6.7 運行 `./gradlew build`。
-- [ ] 6.8 使用模擬器或真機驗證主頁查詢結果：卡片下一班摘要、候車區點擊面板、卡片其他區域打開路線詳情、無車狀態正常。
+- [x] 6.8 使用模擬器或真機驗證主頁查詢結果：卡片下一班摘要、候車區點擊面板、卡片其他區域打開路線詳情、無車狀態正常。
 - [x] 6.9 運行 `openspec validate show-multiple-citybus-eta-arrivals --strict`。

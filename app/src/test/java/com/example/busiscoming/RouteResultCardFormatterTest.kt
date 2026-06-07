@@ -2,9 +2,15 @@ package com.example.busiscoming
 
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.data.model.EtaArrival
+import com.example.busiscoming.data.model.FirstLegEtaQuery
 import com.example.busiscoming.data.model.WaitTimeState
+import com.example.busiscoming.ui.main.RouteCardActionPolicy
 import com.example.busiscoming.ui.main.RouteResultCardFormatter
+import com.example.busiscoming.ui.main.TemporaryRouteSaveDialog
+import com.example.busiscoming.data.model.Place
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouteResultCardFormatterTest {
@@ -44,6 +50,52 @@ class RouteResultCardFormatterTest {
     }
 
     @Test
+    fun exposesEtaSheetOnlyWhenMultipleArrivalsExist() {
+        assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.Available(4)))
+        assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.Loading))
+        assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.Unavailable))
+        assertTrue(
+            RouteCardActionPolicy.canOpenEtaArrivals(
+                WaitTimeState.Available(
+                    listOf(
+                        EtaArrival(sequence = 1, minutes = 4),
+                        EtaArrival(sequence = 2, minutes = 8)
+                    )
+                )
+            )
+        )
+    }
+
+    @Test
+    fun monitorBellIsEnabledOnlyForAvailableEtaQuery() {
+        assertFalse(RouteCardActionPolicy.canStartMonitor(route("8X", transferCount = 0)))
+        assertFalse(
+            RouteCardActionPolicy.canStartMonitor(
+                route("8X", transferCount = 0).copy(
+                    waitTimeState = WaitTimeState.Unavailable,
+                    firstLegEtaQuery = etaQuery()
+                )
+            )
+        )
+        assertTrue(
+            RouteCardActionPolicy.canStartMonitor(
+                route("8X", transferCount = 0).copy(firstLegEtaQuery = etaQuery())
+            )
+        )
+    }
+
+    @Test
+    fun temporaryRouteSaveDialogUsesStableDefaultName() {
+        assertEquals(
+            "起點 -> 終點",
+            TemporaryRouteSaveDialog.defaultName(
+                Place("起點", latitude = 22.1, longitude = 114.1),
+                Place("終點", latitude = 22.2, longitude = 114.2)
+            )
+        )
+    }
+
+    @Test
     fun formatsResultSummary() {
         val routes = listOf(
             route("8X", transferCount = 0),
@@ -63,6 +115,20 @@ class RouteResultCardFormatterTest {
             arrivalMinutes = 10,
             transferCount = transferCount,
             walkingDistanceMeters = 100
+        )
+    }
+
+    private fun etaQuery(): FirstLegEtaQuery {
+        return FirstLegEtaQuery(
+            company = "CTB",
+            routeVariant = "8X-THR-1",
+            route = "8X",
+            boardingSeq = 6,
+            alightingSeq = 31,
+            bound = "O",
+            directionPath = "outbound",
+            rawInfo = "1|*|CTB||8X-THR-1||6||31||O|*|",
+            lang = "0"
         )
     }
 }

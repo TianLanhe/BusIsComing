@@ -105,3 +105,27 @@ object BusMonitorSpeechFormatter {
         return "當前汽車到站剩餘 ${firstEtaMinutes.coerceAtLeast(0)} 分鐘，${status.speechSuffix}"
     }
 }
+
+object BusMonitorSpeechPolicy {
+    fun shouldSpeak(lastStatus: BusMonitorStatus?, nextStatus: BusMonitorStatus): Boolean {
+        return lastStatus != nextStatus
+    }
+}
+
+object BusMonitorStopPolicy {
+    const val FALLBACK_SECOND_ETA_DELAY_MILLIS = 120_000L
+
+    fun shouldAutoStop(
+        nowMillis: Long,
+        firstEtaMillis: Long?,
+        secondEtaMillis: Long?
+    ): Boolean {
+        if (secondEtaMillis != null) return nowMillis >= secondEtaMillis
+        val first = firstEtaMillis ?: return false
+        return nowMillis >= first + FALLBACK_SECOND_ETA_DELAY_MILLIS
+    }
+
+    fun shouldStopManually(manualStopRequested: Boolean): Boolean {
+        return manualStopRequested
+    }
+}

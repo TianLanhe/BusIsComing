@@ -71,14 +71,14 @@ class EtaArrivalsBottomSheet(
     private fun render(root: LinearLayout, route: BusRouteOption, arrivals: List<EtaArrival>) {
         root.removeAllViews()
         root.addView(TextView(context).apply {
-            text = "首程 ${route.routeSegments.firstOrNull() ?: route.routeName} 候車時間"
+            text = EtaArrivalsSheetFormatter.title(route)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD
         })
 
         root.addView(TextView(context).apply {
-            text = subtitle(route, arrivals.firstOrNull())
+            text = EtaArrivalsSheetFormatter.subtitle(route, arrivals.firstOrNull())
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 14f
             layoutParams = LinearLayout.LayoutParams(
@@ -86,7 +86,7 @@ class EtaArrivalsBottomSheet(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(6) }
         })
-        updateTimeText(arrivals.firstOrNull())?.let { text ->
+        EtaArrivalsSheetFormatter.updateTimeText(arrivals.firstOrNull())?.let { text ->
             root.addView(TextView(context).apply {
                 this.text = text
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
@@ -100,17 +100,6 @@ class EtaArrivalsBottomSheet(
 
         arrivals.take(3).forEach { arrival ->
             root.addView(arrivalRow(arrival))
-        }
-    }
-
-    private fun subtitle(route: BusRouteOption, firstArrival: EtaArrival?): String {
-        val boarding = route.stopPreview?.boardingStopName
-        val destination = firstArrival?.destination
-        return when {
-            !boarding.isNullOrBlank() && !destination.isNullOrBlank() -> "$boarding 往 $destination"
-            route.stopPreview != null -> route.stopPreview.displayText()
-            !destination.isNullOrBlank() -> "往 $destination"
-            else -> route.routeSegments.joinToString(" → ")
         }
     }
 
@@ -133,7 +122,7 @@ class EtaArrivalsBottomSheet(
         })
 
         row.addView(TextView(context).apply {
-            text = minuteText(arrival.minutes)
+            text = EtaArrivalsSheetFormatter.minuteText(arrival.minutes)
             setTextColor(ContextCompat.getColor(context, R.color.bus_wait_accent))
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
@@ -167,25 +156,40 @@ class EtaArrivalsBottomSheet(
         return row
     }
 
-    private fun minuteText(minutes: Int): String {
+    private fun dp(value: Int): Int {
+        return (value * context.resources.displayMetrics.density).toInt()
+    }
+}
+
+object EtaArrivalsSheetFormatter {
+    fun title(route: BusRouteOption): String {
+        return "首程 ${route.routeSegments.firstOrNull() ?: route.routeName} 候車時間"
+    }
+
+    fun subtitle(route: BusRouteOption, firstArrival: EtaArrival?): String {
+        val boarding = route.stopPreview?.boardingStopName
+        val destination = firstArrival?.destination
+        return when {
+            !boarding.isNullOrBlank() && !destination.isNullOrBlank() -> "$boarding 往 $destination"
+            route.stopPreview != null -> route.stopPreview.displayText()
+            !destination.isNullOrBlank() -> "往 $destination"
+            else -> route.routeSegments.joinToString(" → ")
+        }
+    }
+
+    fun minuteText(minutes: Int): String {
         return if (minutes <= 0) "即將到站" else "$minutes 分鐘"
     }
 
-    private fun updateTimeText(arrival: EtaArrival?): String? {
+    fun updateTimeText(arrival: EtaArrival?): String? {
         val timestampMillis = arrival?.dataTimestampMillis ?: return null
         return "更新 ${ARRIVAL_TIME_FORMAT.get()!!.format(Date(timestampMillis))}"
     }
 
-    private fun dp(value: Int): Int {
-        return (value * context.resources.displayMetrics.density).toInt()
-    }
-
-    companion object {
-        private val ARRIVAL_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
-            override fun initialValue(): SimpleDateFormat {
-                return SimpleDateFormat("HH:mm", Locale.US).apply {
-                    timeZone = TimeZone.getTimeZone("Asia/Hong_Kong")
-                }
+    private val ARRIVAL_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+        override fun initialValue(): SimpleDateFormat {
+            return SimpleDateFormat("HH:mm", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("Asia/Hong_Kong")
             }
         }
     }
