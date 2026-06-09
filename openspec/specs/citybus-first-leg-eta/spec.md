@@ -2,9 +2,7 @@
 
 ## Purpose
 记录从 Citybus 点到点候选路线解析首程 bus leg、推导上车站点、查询公开 ETA、渐进式补全候车时间以及主界面展示和排序规则。
-
 ## Requirements
-
 ### Requirement: 解析每条候选路线的首程 ETA 信息
 
 系统 SHALL 从每条 Citybus 点到点候选路线中解析首程 bus leg，用于后续推导首程车辆 ETA。
@@ -26,7 +24,7 @@
 
 ### Requirement: 推导首程站点并查询 ETA
 
-系统 SHALL 使用首程 bus leg 调用 DATA.GOV.HK 城巴公开 API，推导上车站点并获取最近一班车 ETA。
+系统 SHALL 使用首程 bus leg 调用 DATA.GOV.HK 城巴公开 API，推导上车站点并获取最近一班车 ETA；当 ETA 响应中的 `seq` 与首程上车站序不一致但 `route`、`stop` 和 `dir` 已匹配时，系统 SHALL 使用保守降级策略避免错误丢弃有效 ETA。
 
 #### Scenario: 通过 route-stop 推导 stop_id
 - **WHEN** 系统获得首程 company、公开 route、direction path 和 boardingSeq
@@ -34,11 +32,21 @@
 - **AND** 系统 SHALL 在响应 data 中查找 `seq == boardingSeq` 的记录
 - **AND** 系统 SHALL 使用该记录的 `stop` 作为首程上车站点 `stop_id`
 
-#### Scenario: 查询并过滤 ETA
+#### Scenario: 查询 ETA 并优先使用严格匹配
 - **WHEN** 系统获得首程 company、stop_id、公开 route、原始 direction code 和 boardingSeq
 - **THEN** 系统 SHALL 请求 `https://rt.data.gov.hk/v2/transport/citybus/eta/{company}/{stop_id}/{route}`
-- **AND** 系统 SHALL 只使用 `route`、`stop`、`dir` 和 `seq` 均匹配首程信息的 ETA 记录
-- **AND** 系统 SHALL 使用匹配记录中最近的一班车计算候车时间
+- **AND** 系统 SHALL 优先使用 `route`、`stop`、`dir` 和 `seq` 均匹配首程信息且 `eta` 非空可解析的 ETA 记录
+- **AND** 系统 SHALL 使用严格匹配记录中最近的一班车计算候车时间
+
+#### Scenario: 严格匹配缺失时降级匹配 ETA
+- **WHEN** ETA 响应中没有 `route`、`stop`、`dir` 和 `seq` 均匹配且 `eta` 非空可解析的记录
+- **AND** ETA 响应中存在 `route`、`stop` 和 `dir` 均匹配且 `eta` 非空可解析的记录
+- **THEN** 系统 SHALL 使用这些降级匹配记录中最近的一班车计算候车时间
+
+#### Scenario: 降级匹配仍要求路线站点和方向一致
+- **WHEN** ETA 响应中的记录 `seq` 与 boardingSeq 不一致
+- **AND** 该记录的 `route`、`stop` 或 `dir` 任一字段不匹配首程信息
+- **THEN** 系统 SHALL NOT 使用该记录计算候车时间
 
 #### Scenario: 计算候车分钟数
 - **WHEN** 系统获得匹配 ETA 的 ISO 时间
@@ -47,36 +55,37 @@
 - **AND** 剩余时间大于 0 秒时候车时间 SHALL 按分钟向上取整
 
 #### Scenario: ETA 不可用
-- **WHEN** route-stop 找不到上车站点、ETA 响应没有匹配记录、网络请求失败或响应解析失败
+- **WHEN** route-stop 找不到上车站点、ETA 响应没有严格匹配或降级匹配的非空可解析记录、网络请求失败或响应解析失败
 - **THEN** 系统 SHALL 将该路线候车时间标记为不可用
 
 ### Requirement: 渐进式补全候车时间
 
-系统 SHALL 在路线查询完成后优先补全总耗时最低的前 5 条路线 ETA，并在剩余路线后台补全期间保持列表可用。
+系统 SHALL 在路线查询完成后立即展示聚合后的路线列表，并在后台渐进式补全候车时间。
 
-#### Scenario: 前 5 条 ETA 完成后展示
+#### Scenario: 路线聚合完成后立即展示
 - **WHEN** 路线聚合去重完成并按总耗时升序排序
-- **THEN** 系统 SHALL 优先并发查询前 5 条路线的首程 ETA
-- **AND** 当前 5 条路线 ETA 均完成或失败时，系统 SHALL 展示完整路线列表
+- **THEN** 系统 SHALL 立即展示完整路线列表
+- **AND** 系统 SHALL NOT 等待前 5 条路线 ETA 完成或达到 ETA 超时后才展示路线列表
 
-#### Scenario: 前 5 条 ETA 最多等待 5 秒
-- **WHEN** 前 5 条路线中仍有 ETA 查询未完成且等待时间达到 5 秒
-- **THEN** 系统 SHALL 展示完整路线列表
-- **AND** 未完成的前 5 条路线候车时间 SHALL 显示为查询中
-- **AND** 系统 SHALL 在后台继续补全这些未完成的 ETA，并在完成后更新对应结果行
+#### Scenario: 初始候车状态
+- **WHEN** 系统首次展示路线列表
+- **THEN** 可解析首程 ETA 信息且 ETA 尚未完成的路线候车时间 SHALL 显示为查询中
+- **AND** 缺少可解析首程 ETA 信息的路线候车时间 SHALL 显示为不可用
+
+#### Scenario: ETA 后台补全
+- **WHEN** 路线列表已经展示且存在可解析首程 ETA 信息的路线
+- **THEN** 系统 SHALL 在后台使用有上限的并发方式补全这些路线的 ETA
+- **AND** 每条路线 ETA 完成后，系统 SHALL 更新对应结果行的候车时间显示
 
 #### Scenario: 少于 5 条路线
 - **WHEN** 聚合去重后的路线结果少于 5 条
-- **THEN** 系统 SHALL 只优先补全实际存在的路线 ETA
+- **THEN** 系统 SHALL 立即展示实际存在的路线
+- **AND** 系统 SHALL 只为实际存在且可解析首程 ETA 信息的路线后台补全 ETA
 
-#### Scenario: 剩余路线后台补全
-- **WHEN** 完整路线列表已经展示且仍有非首屏路线 ETA 未完成
-- **THEN** 系统 SHALL 在后台继续补全剩余路线 ETA
-- **AND** 每条路线 ETA 完成后，系统 SHALL 更新对应结果行的候车时间显示
-
-#### Scenario: 旧查询更新被忽略
+#### Scenario: 旧查询更新被取消或忽略
 - **WHEN** 用户在后台 ETA 补全期间发起新的路线查询、切换已保存路线或离开主界面
-- **THEN** 系统 SHALL 忽略旧查询后续 ETA 更新
+- **THEN** 系统 SHALL 取消或停止调度旧查询尚未完成的 ETA 补全任务
+- **AND** 系统 MUST 忽略旧查询后续 ETA 更新
 
 ### Requirement: 候车时间列展示状态
 
@@ -143,3 +152,23 @@
 - **WHEN** 系统需要为多条路线补全 ETA
 - **THEN** 系统 SHALL 使用有上限的并发执行方式
 - **AND** 系统 SHALL NOT 为每条路线创建无界线程或无界并发请求
+
+### Requirement: 路线查询任务不被旧 ETA 补全阻塞
+
+系统 SHALL 确保新的路线查询可以独立开始，不被上一轮路线查询遗留的 ETA 补全任务阻塞。
+
+#### Scenario: 首次路线回调后查询任务结束
+- **WHEN** 系统完成路线聚合并发出初始路线列表回调
+- **THEN** 当前路线查询任务 SHALL 不再同步等待剩余 ETA 补全全部完成
+- **AND** 剩余 ETA 补全 SHALL 由独立后台任务继续执行
+
+#### Scenario: 连续点击查询
+- **WHEN** 用户在上一轮 ETA 补全尚未全部完成时再次点击查询
+- **THEN** 系统 SHALL 立即启动新一轮路线查询
+- **AND** 新路线查询 SHALL NOT 等待上一轮剩余 ETA 补全任务完成
+
+#### Scenario: ETA 按完成顺序更新
+- **WHEN** 多个后台 ETA 请求并发执行且后提交的请求先完成
+- **THEN** 系统 SHALL 允许已完成 ETA 尽快更新对应路线
+- **AND** 系统 SHALL NOT 因较早提交但较慢的 ETA 请求阻塞后续已完成 ETA 的界面更新
+
