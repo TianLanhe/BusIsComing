@@ -1,6 +1,7 @@
 package com.example.busiscoming.ui.main
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.res.ColorStateList
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -39,6 +40,9 @@ import com.example.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.example.busiscoming.data.repository.RouteDetailRepository
 import com.example.busiscoming.data.repository.RouteConfigRepository
 import com.example.busiscoming.service.BusMonitorService
+import com.example.busiscoming.service.BusMonitorSessionStore
+import com.example.busiscoming.service.BusMonitorSpeechPreviewer
+import com.example.busiscoming.data.model.BusMonitorSessionPolicy
 import com.example.busiscoming.ui.common.applyStatusBarPadding
 import com.example.busiscoming.ui.edit.RouteEditActivity
 import com.example.busiscoming.ui.manage.RouteManageActivity
@@ -84,6 +88,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeDetailBottomSheet: RouteDetailBottomSheet
     private lateinit var etaArrivalsBottomSheet: EtaArrivalsBottomSheet
     private lateinit var monitorSettingsBottomSheet: MonitorSettingsBottomSheet
+    private lateinit var monitorSpeechPreviewer: BusMonitorSpeechPreviewer
     private lateinit var temporaryRouteBottomSheet: TemporaryRouteBottomSheet
 
     private var routeConfigs: List<RouteConfig> = emptyList()
@@ -103,14 +108,20 @@ class MainActivity : AppCompatActivity() {
         title = "BusIsComing"
 
         routeConfigRepository = RouteConfigRepository(this)
+        clearExpiredMonitorSession()
         routeDetailBottomSheet = RouteDetailBottomSheet(this, routeDetailRepository)
         etaArrivalsBottomSheet = EtaArrivalsBottomSheet(this)
-        monitorSettingsBottomSheet = MonitorSettingsBottomSheet(this) { result ->
-            pendingMonitorStart?.copy(
-                walkingMinutes = result.walkingMinutes,
-                voiceEnabled = result.voiceEnabled
-            )?.let { startMonitor(it) }
-        }
+        monitorSpeechPreviewer = BusMonitorSpeechPreviewer(this)
+        monitorSettingsBottomSheet = MonitorSettingsBottomSheet(
+            context = this,
+            onVoicePreview = { monitorSpeechPreviewer.playPreview() },
+            onStart = { result ->
+                pendingMonitorStart?.copy(
+                    walkingMinutes = result.walkingMinutes,
+                    voiceEnabled = result.voiceEnabled
+                )?.let { startMonitor(it) }
+            }
+        )
         temporaryRouteBottomSheet = TemporaryRouteBottomSheet(
             context = this,
             routeConfigRepository = routeConfigRepository,
@@ -131,6 +142,7 @@ class MainActivity : AppCompatActivity() {
         routeDetailBottomSheet.dispose()
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
+        monitorSpeechPreviewer.release()
         temporaryRouteBottomSheet.dispose()
         queryExecutor.shutdownNow()
         placeSearchExecutor.shutdownNow()
@@ -170,6 +182,23 @@ class MainActivity : AppCompatActivity() {
             SortField.ARRIVAL to findViewById(R.id.sortArrivalButton),
             SortField.WALKING_DISTANCE to findViewById(R.id.sortWalkingDistanceButton)
         )
+    }
+
+    private fun clearExpiredMonitorSession() {
+        val store = BusMonitorSessionStore(this)
+        val snapshot = store.load() ?: return
+        if (BusMonitorSessionPolicy.shouldClearOnRestore(System.currentTimeMillis(), snapshot) ||
+            !isMonitorNotificationActive()
+        ) {
+            store.clear()
+        }
+    }
+
+    private fun isMonitorNotificationActive(): Boolean {
+        val manager = getSystemService(NotificationManager::class.java)
+        return manager.activeNotifications.any { notification ->
+            notification.id == BusMonitorService.NOTIFICATION_ID
+        }
     }
 
     private fun setupResultList() {

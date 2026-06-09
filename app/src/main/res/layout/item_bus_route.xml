@@ -18,80 +18,95 @@
         android:paddingHorizontal="14dp"
         android:paddingVertical="12dp">
 
-        <LinearLayout
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/busRouteNameText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/bus_text_primary"
-                android:textSize="20sp"
-                android:textStyle="bold" />
+            android:minHeight="60dp">
 
             <LinearLayout
-                android:id="@+id/busWaitArea"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="12dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="end"
-                android:minWidth="92dp"
-                android:orientation="vertical"
-                android:paddingHorizontal="4dp">
+                android:id="@+id/busRouteTextColumn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:layout_marginEnd="142dp"
+                android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/busArrivalText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:gravity="bottom|end"
+                    android:id="@+id/busRouteNameText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
                     android:maxLines="1"
-                    android:textColor="@color/bus_wait_accent"
-                    android:textSize="16sp"
+                    android:textColor="@color/bus_text_primary"
+                    android:textSize="20sp"
                     android:textStyle="bold" />
 
                 <TextView
+                    android:id="@+id/busStopPreviewText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/busWaitArea"
+                android:layout_width="138dp"
+                android:layout_height="60dp"
+                android:layout_gravity="end|center_vertical"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical|end"
+                android:orientation="vertical"
+                android:paddingStart="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:gravity="center_vertical|end"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/busArrivalText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:gravity="end"
+                        android:maxLines="1"
+                        android:textColor="@color/bus_wait_accent"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <androidx.appcompat.widget.AppCompatImageButton
+                        android:id="@+id/busMonitorButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="通知欄監控"
+                        android:padding="14dp"
+                        android:scaleType="center"
+                        android:src="@drawable/ic_notification_bell"
+                        app:tint="@color/bus_text_secondary" />
+                </LinearLayout>
+
+                <TextView
                     android:id="@+id/busNextArrivalText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:gravity="top|end"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="48dp"
+                    android:ellipsize="end"
+                    android:gravity="end"
                     android:maxLines="1"
                     android:textColor="@color/bus_text_secondary"
                     android:textSize="12sp"
                     android:visibility="gone" />
             </LinearLayout>
-
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/busMonitorButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="通知欄監控"
-                android:padding="14dp"
-                android:scaleType="center"
-                android:src="@drawable/ic_notification_bell"
-                app:tint="@color/bus_text_secondary" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/busStopPreviewText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="14sp"
-            android:visibility="gone" />
+        </FrameLayout>
 
         <View
             android:layout_width="match_parent"

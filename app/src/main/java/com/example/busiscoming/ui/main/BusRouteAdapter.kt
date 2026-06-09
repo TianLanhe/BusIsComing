@@ -69,14 +69,19 @@ class BusRouteAdapter(
             }
             itemView.setOnClickListener { onRouteClick(route) }
             val canOpenEtaArrivals = RouteCardActionPolicy.canOpenEtaArrivals(route.waitTimeState)
-            waitArea.isEnabled = canOpenEtaArrivals
+            waitArea.isEnabled = true
+            waitArea.isClickable = canOpenEtaArrivals
+            waitArea.isFocusable = canOpenEtaArrivals
             waitArea.contentDescription = if (canOpenEtaArrivals) {
-                "查看首程候車班次，${arrivalText.text}，$nextArrival"
+                listOfNotNull("查看首程候車班次", arrivalText.text, nextArrival).joinToString("，")
             } else {
                 arrivalText.text.toString()
             }
-            waitArea.setOnClickListener {
-                if (canOpenEtaArrivals) onEtaClick(route)
+            if (canOpenEtaArrivals) {
+                waitArea.setOnClickListener { onEtaClick(route) }
+            } else {
+                waitArea.setOnClickListener(null)
+                waitArea.isClickable = false
             }
             val canMonitor = RouteCardActionPolicy.canStartMonitor(route)
             monitorButton.isEnabled = canMonitor

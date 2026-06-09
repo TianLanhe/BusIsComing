@@ -1,5 +1,6 @@
 package com.example.busiscoming.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,13 +8,18 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.busiscoming.R
+import com.example.busiscoming.data.model.BusMonitorNotificationFormatter
+import com.example.busiscoming.data.model.BusMonitorRefreshPolicy
+import com.example.busiscoming.data.model.BusMonitorSessionPolicy
+import com.example.busiscoming.data.model.BusMonitorSessionSnapshot
 import com.example.busiscoming.data.model.BusMonitorSpeechFormatter
 import com.example.busiscoming.data.model.BusMonitorSpeechPolicy
 import com.example.busiscoming.data.model.BusMonitorStateEvaluator
@@ -35,72 +41,102 @@ class BusMonitorService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val etaExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val etaService = CitybusFirstLegEtaService()
-    private var session: MonitorSession? = null
+    private lateinit var sessionStore: BusMonitorSessionStore
+    private lateinit var refreshScheduler: BusMonitorRefreshScheduler
+    private lateinit var speechController: BusMonitorSpeechController
+    private var session: BusMonitorSessionSnapshot? = null
     private var isRefreshing = false
-    private var lastStatus: BusMonitorStatus? = null
-    private var textToSpeech: TextToSpeech? = null
-    private var ttsReady = false
-    private var pendingSpeech: String? = null
-    private var lastSuccessfulNotificationText: String? = null
-    private var consecutiveFailureCount = 0
 
     private val refreshRunnable = Runnable { refreshEta() }
 
     override fun onCreate() {
         super.onCreate()
+        sessionStore = BusMonitorSessionStore(this)
+        refreshScheduler = BusMonitorRefreshScheduler(this)
+        speechController = BusMonitorSpeechController(applicationContext)
         ensureNotificationChannel()
-        textToSpeech = TextToSpeech(applicationContext) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-            if (ttsReady) {
-                textToSpeech?.language = Locale.TRADITIONAL_CHINESE
-                pendingSpeech?.let { speak(it) }
-                pendingSpeech = null
-            }
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        return when (intent?.action) {
             ACTION_STOP -> {
-                stopMonitoring()
-                return START_NOT_STICKY
+                stopMonitoring(clearSession = true)
+                START_NOT_STICKY
             }
-            ACTION_REFRESH -> {
-                refreshEta()
-                return START_STICKY
-            }
-            ACTION_START -> {
-                val nextSession = intent.toMonitorSession() ?: return START_NOT_STICKY
-                session = nextSession
-                lastStatus = null
-                startForeground(
-                    NOTIFICATION_ID,
-                    buildNotification(
-                        title = "${nextSession.routeName} 通知欄監控",
-                        text = "正在更新候車時間...",
-                        priorityStatus = null
-                    )
-                )
-                refreshEta()
-                return START_STICKY
-            }
+            ACTION_START -> startNewSession(intent)
+            ACTION_REFRESH -> refreshExistingSession()
+            else -> refreshExistingSession()
         }
-        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (sessionStore.load() != null) {
+            refreshScheduler.scheduleNext()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         mainHandler.removeCallbacks(refreshRunnable)
         etaExecutor.shutdownNow()
-        textToSpeech?.stop()
-        textToSpeech?.shutdown()
-        textToSpeech = null
+        speechController.release()
         super.onDestroy()
     }
 
+    private fun startNewSession(intent: Intent): Int {
+        if (!canPostNotifications()) {
+            sessionStore.clear()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        speechController.release()
+        speechController = BusMonitorSpeechController(applicationContext)
+        val nextSession = intent.toMonitorSessionSnapshot(nowMillis = System.currentTimeMillis())
+            ?: return START_NOT_STICKY
+        session = nextSession
+        sessionStore.save(nextSession)
+        startForegroundFor(
+            snapshot = nextSession,
+            text = "正在取得候車時間...",
+            priorityStatus = null
+        )
+        refreshEta()
+        return START_STICKY
+    }
+
+    private fun refreshExistingSession(): Int {
+        if (!canPostNotifications()) {
+            stopMonitoring(clearSession = true)
+            return START_NOT_STICKY
+        }
+        val currentSession = restoreActiveSessionOrStop() ?: return START_NOT_STICKY
+        startForegroundFor(
+            snapshot = currentSession,
+            text = currentSession.lastSuccessfulNotificationText ?: "正在取得候車時間...",
+            priorityStatus = currentSession.lastStatus
+        )
+        refreshEta()
+        return START_STICKY
+    }
+
+    private fun restoreActiveSessionOrStop(): BusMonitorSessionSnapshot? {
+        val currentSession = session ?: sessionStore.load()
+        if (currentSession == null) {
+            stopMonitoring(clearSession = true)
+            return null
+        }
+        if (BusMonitorSessionPolicy.shouldClearOnRestore(System.currentTimeMillis(), currentSession)) {
+            stopMonitoring(clearSession = true)
+            return null
+        }
+        session = currentSession
+        return currentSession
+    }
+
     private fun refreshEta() {
-        val currentSession = session ?: return
+        val currentSession = restoreActiveSessionOrStop() ?: return
         if (isRefreshing) return
         isRefreshing = true
         etaExecutor.execute {
@@ -108,100 +144,138 @@ class BusMonitorService : Service() {
                 .getOrDefault(WaitTimeState.Unavailable)
             mainHandler.post {
                 isRefreshing = false
-                updateNotification(waitTimeState, currentSession)
-                scheduleNextRefresh()
+                val shouldContinue = updateNotification(waitTimeState, currentSession)
+                if (shouldContinue) {
+                    scheduleNextRefresh()
+                }
             }
         }
     }
 
-    private fun updateNotification(waitTimeState: WaitTimeState, currentSession: MonitorSession) {
+    private fun updateNotification(
+        waitTimeState: WaitTimeState,
+        currentSession: BusMonitorSessionSnapshot
+    ): Boolean {
+        val activeSession = session ?: currentSession
         val manager = getSystemService(NotificationManager::class.java)
         val available = waitTimeState as? WaitTimeState.Available
         if (available == null || available.arrivals.isEmpty()) {
-            consecutiveFailureCount += 1
-            val fallbackText = lastSuccessfulNotificationText?.let { "$it · 更新失敗" }
-                ?: "暫無 ETA，1 分鐘後重試"
-            manager.notify(
-                NOTIFICATION_ID,
-                buildNotification(
-                    title = "${currentSession.routeName} 通知欄監控",
-                    text = fallbackText,
-                    priorityStatus = null
-                )
-            )
-            if (consecutiveFailureCount >= MAX_CONSECUTIVE_FAILURES) {
-                stopMonitoring()
-            }
-            return
+            return handleFailedRefresh(manager, activeSession)
         }
 
-        consecutiveFailureCount = 0
         val firstArrival = available.arrivals.first()
         val status = BusMonitorStateEvaluator.evaluate(
             firstEtaMinutes = firstArrival.minutes,
-            walkingMinutes = currentSession.walkingMinutes
+            walkingMinutes = activeSession.walkingMinutes
         )
-        val remainingText = if (firstArrival.minutes <= 0) {
-            "即將到站"
-        } else {
-            "剩餘 ${firstArrival.minutes} 分鐘"
+        val updatedAtText = NOW_TIME_FORMAT.get()!!.format(Date())
+        val notificationText = BusMonitorNotificationFormatter.successText(
+            status = status,
+            firstEtaMinutes = firstArrival.minutes,
+            nextEtaMinutes = available.nextArrival?.minutes,
+            walkingMinutes = activeSession.walkingMinutes,
+            updatedAtText = updatedAtText
+        )
+        var lastSpokenStatus = activeSession.lastSpokenStatus
+        if (activeSession.voiceEnabled && BusMonitorSpeechPolicy.shouldSpeak(lastSpokenStatus, status)) {
+            val phrase = BusMonitorSpeechFormatter.phrase(firstArrival.minutes, status)
+            if (speechController.speak(phrase) != BusMonitorSpeechResult.UNAVAILABLE) {
+                lastSpokenStatus = status
+            }
         }
-        val nextText = available.nextArrival?.let { next ->
-            if (next.minutes <= 0) "下一班即將到站" else "下一班 ${next.minutes} 分鐘"
-        }
-        val notificationText = listOfNotNull(
-            "${status.displayText} · $remainingText",
-            nextText,
-            "步行 ${currentSession.walkingMinutes} 分鐘"
-        ).joinToString(" · ") + " · 更新 ${NOW_TIME_FORMAT.get()!!.format(Date())}"
-        lastSuccessfulNotificationText = notificationText
 
+        val updatedSession = BusMonitorSessionPolicy.recordSuccessfulRefresh(
+            snapshot = activeSession,
+            nowMillis = System.currentTimeMillis(),
+            status = status,
+            lastSpokenStatus = lastSpokenStatus,
+            notificationText = notificationText,
+            firstEtaMillis = firstArrival.etaMillis,
+            secondEtaMillis = available.nextArrival?.etaMillis
+        )
+        session = updatedSession
+        sessionStore.save(updatedSession)
         manager.notify(
             NOTIFICATION_ID,
             buildNotification(
-                title = "${currentSession.routeName} 通知欄監控",
+                title = "${updatedSession.routeName} 通知欄監控",
                 text = notificationText,
                 priorityStatus = status
             )
         )
 
-        if (currentSession.voiceEnabled && BusMonitorSpeechPolicy.shouldSpeak(lastStatus, status)) {
-            val phrase = BusMonitorSpeechFormatter.phrase(firstArrival.minutes, status)
-            speak(phrase)
+        if (shouldAutoStop(updatedSession)) {
+            stopMonitoring(clearSession = true)
+            return false
         }
-        lastStatus = status
-
-        if (shouldAutoStop(available, currentSession)) {
-            stopMonitoring()
-        }
+        return true
     }
 
-    private fun shouldAutoStop(waitTimeState: WaitTimeState.Available, currentSession: MonitorSession): Boolean {
-        val now = System.currentTimeMillis()
+    private fun handleFailedRefresh(
+        manager: NotificationManager,
+        activeSession: BusMonitorSessionSnapshot
+    ): Boolean {
+        val failedSession = BusMonitorSessionPolicy.recordFailure(activeSession)
+        session = failedSession
+        sessionStore.save(failedSession)
+        val fallbackText = BusMonitorNotificationFormatter.failureText(
+            lastSuccessfulNotificationText = failedSession.lastSuccessfulNotificationText,
+            failureCount = failedSession.consecutiveFailureCount
+        )
+        manager.notify(
+            NOTIFICATION_ID,
+            buildNotification(
+                title = "${failedSession.routeName} 通知欄監控",
+                text = fallbackText,
+                priorityStatus = failedSession.lastStatus
+            )
+        )
+        if (BusMonitorRefreshPolicy.shouldStopAfterFailureCount(failedSession.consecutiveFailureCount)) {
+            stopMonitoring(clearSession = true)
+            return false
+        }
+        return true
+    }
+
+    private fun shouldAutoStop(currentSession: BusMonitorSessionSnapshot): Boolean {
         return BusMonitorStopPolicy.shouldAutoStop(
-            nowMillis = now,
-            firstEtaMillis = waitTimeState.arrivals.firstOrNull()?.etaMillis,
-            secondEtaMillis = waitTimeState.nextArrival?.etaMillis
+            nowMillis = System.currentTimeMillis(),
+            firstEtaMillis = currentSession.firstEtaMillis,
+            secondEtaMillis = currentSession.secondEtaMillis
         )
     }
 
     private fun scheduleNextRefresh() {
         mainHandler.removeCallbacks(refreshRunnable)
-        mainHandler.postDelayed(refreshRunnable, REFRESH_INTERVAL_MILLIS)
+        mainHandler.postDelayed(refreshRunnable, BusMonitorRefreshPolicy.REFRESH_INTERVAL_MILLIS)
+        refreshScheduler.scheduleNext()
     }
 
-    private fun speak(text: String) {
-        if (!ttsReady) {
-            pendingSpeech = text
-            return
-        }
-        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "bus-monitor-${System.currentTimeMillis()}")
-    }
-
-    private fun stopMonitoring() {
+    private fun stopMonitoring(clearSession: Boolean) {
         mainHandler.removeCallbacks(refreshRunnable)
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        refreshScheduler.cancel()
+        if (clearSession) {
+            sessionStore.clear()
+        }
+        session = null
+        speechController.release()
+        stopForegroundCompat()
         stopSelf()
+    }
+
+    private fun startForegroundFor(
+        snapshot: BusMonitorSessionSnapshot,
+        text: String,
+        priorityStatus: BusMonitorStatus?
+    ) {
+        startForeground(
+            NOTIFICATION_ID,
+            buildNotification(
+                title = "${snapshot.routeName} 通知欄監控",
+                text = text,
+                priorityStatus = priorityStatus
+            )
+        )
     }
 
     private fun buildNotification(
@@ -217,30 +291,10 @@ class BusMonitorService : Service() {
             },
             pendingIntentFlags()
         )
-        val refreshIntent = PendingIntent.getService(
-            this,
-            REQUEST_REFRESH,
-            Intent(this, BusMonitorService::class.java).setAction(ACTION_REFRESH),
-            pendingIntentFlags()
-        )
-        val stopIntent = PendingIntent.getService(
-            this,
-            REQUEST_STOP,
-            Intent(this, BusMonitorService::class.java).setAction(ACTION_STOP),
-            pendingIntentFlags()
-        )
-        val channelId = if (priorityStatus == BusMonitorStatus.LEAVE_NOW ||
-            priorityStatus == BusMonitorStatus.LATE
-        ) {
-            CHANNEL_ALERT_ID
-        } else {
-            CHANNEL_STATUS_ID
-        }
-        val priority = when (priorityStatus) {
-            BusMonitorStatus.LATE -> NotificationCompat.PRIORITY_HIGH
-            BusMonitorStatus.LEAVE_NOW -> NotificationCompat.PRIORITY_DEFAULT
-            else -> NotificationCompat.PRIORITY_LOW
-        }
+        val refreshIntent = servicePendingIntent(REQUEST_REFRESH, ACTION_REFRESH)
+        val stopIntent = servicePendingIntent(REQUEST_STOP, ACTION_STOP)
+        val channelId = BusMonitorNotificationContract.channelIdFor(priorityStatus)
+        val priority = BusMonitorNotificationContract.priorityFor(priorityStatus)
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_notification_bell)
             .setContentTitle(title)
@@ -249,6 +303,10 @@ class BusMonitorService : Service() {
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(BusMonitorNotificationContract.COMPAT_LOCKSCREEN_VISIBILITY)
+            .setPublicVersion(buildPublicNotification(channelId, title, text))
             .setPriority(priority)
             .addAction(android.R.drawable.ic_menu_view, "打開 App", openIntent)
             .addAction(android.R.drawable.ic_popup_sync, "刷新", refreshIntent)
@@ -256,21 +314,51 @@ class BusMonitorService : Service() {
             .build()
     }
 
+    private fun buildPublicNotification(channelId: String, title: String, text: String): Notification {
+        return NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.drawable.ic_notification_bell)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setOngoing(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(BusMonitorNotificationContract.COMPAT_LOCKSCREEN_VISIBILITY)
+            .build()
+    }
+
+    private fun servicePendingIntent(requestCode: Int, action: String): PendingIntent {
+        val intent = Intent(this, BusMonitorService::class.java).setAction(action)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(this, requestCode, intent, pendingIntentFlags())
+        } else {
+            PendingIntent.getService(this, requestCode, intent, pendingIntentFlags())
+        }
+    }
+
     private fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val statusChannel = NotificationChannel(
-            CHANNEL_STATUS_ID,
+            BusMonitorNotificationContract.STATUS_CHANNEL_ID,
             "巴士通知欄監控",
-            NotificationManager.IMPORTANCE_LOW
+            BusMonitorNotificationContract.STATUS_CHANNEL_IMPORTANCE
         ).apply {
-            description = "每分鐘更新候車時間和出門狀態"
+            description = "每分鐘嘗試更新候車時間和出門狀態"
+            lockscreenVisibility = BusMonitorNotificationContract.LOCKSCREEN_VISIBILITY
+            enableVibration(false)
+            setSound(null, null)
+            setShowBadge(false)
         }
         val alertChannel = NotificationChannel(
-            CHANNEL_ALERT_ID,
+            BusMonitorNotificationContract.ALERT_CHANNEL_ID,
             "巴士出門提醒",
-            NotificationManager.IMPORTANCE_DEFAULT
+            BusMonitorNotificationContract.ALERT_CHANNEL_IMPORTANCE
         ).apply {
-            description = "狀態跨過出門門檻時使用"
+            description = "立即出門或快遲到時提高提醒權重"
+            lockscreenVisibility = BusMonitorNotificationContract.LOCKSCREEN_VISIBILITY
+            enableVibration(false)
+            setSound(null, null)
+            setShowBadge(false)
         }
         getSystemService(NotificationManager::class.java).apply {
             createNotificationChannel(statusChannel)
@@ -278,46 +366,48 @@ class BusMonitorService : Service() {
         }
     }
 
-    private fun pendingIntentFlags(): Int {
-        return PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+    private fun canPostNotifications(): Boolean {
+        return !BusMonitorNotificationContract.requiresRuntimeNotificationPermission(Build.VERSION.SDK_INT) ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
-    private fun Intent.toMonitorSession(): MonitorSession? {
-        return MonitorSession(
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
+
+    private fun Intent.toMonitorSessionSnapshot(nowMillis: Long): BusMonitorSessionSnapshot? {
+        val query = FirstLegEtaQuery(
+            company = getStringExtra(EXTRA_COMPANY) ?: return null,
+            routeVariant = getStringExtra(EXTRA_ROUTE_VARIANT) ?: return null,
+            route = getStringExtra(EXTRA_ROUTE) ?: return null,
+            boardingSeq = getIntExtra(EXTRA_BOARDING_SEQ, -1).takeIf { it >= 0 } ?: return null,
+            alightingSeq = getIntExtra(EXTRA_ALIGHTING_SEQ, -1).takeIf { it >= 0 } ?: return null,
+            bound = getStringExtra(EXTRA_BOUND) ?: return null,
+            directionPath = getStringExtra(EXTRA_DIRECTION_PATH) ?: return null,
+            rawInfo = getStringExtra(EXTRA_RAW_INFO).orEmpty(),
+            lang = getStringExtra(EXTRA_LANG).orEmpty().ifBlank { "0" }
+        )
+        return BusMonitorSessionPolicy.newSession(
+            nowMillis = nowMillis,
             routeName = getStringExtra(EXTRA_ROUTE_NAME) ?: return null,
-            walkingMinutes = getIntExtra(EXTRA_WALKING_MINUTES, 1).coerceAtLeast(1),
+            walkingMinutes = getIntExtra(EXTRA_WALKING_MINUTES, 1),
             voiceEnabled = getBooleanExtra(EXTRA_VOICE_ENABLED, true),
-            query = FirstLegEtaQuery(
-                company = getStringExtra(EXTRA_COMPANY) ?: return null,
-                routeVariant = getStringExtra(EXTRA_ROUTE_VARIANT) ?: return null,
-                route = getStringExtra(EXTRA_ROUTE) ?: return null,
-                boardingSeq = getIntExtra(EXTRA_BOARDING_SEQ, -1).takeIf { it >= 0 } ?: return null,
-                alightingSeq = getIntExtra(EXTRA_ALIGHTING_SEQ, -1).takeIf { it >= 0 } ?: return null,
-                bound = getStringExtra(EXTRA_BOUND) ?: return null,
-                directionPath = getStringExtra(EXTRA_DIRECTION_PATH) ?: return null,
-                rawInfo = getStringExtra(EXTRA_RAW_INFO).orEmpty(),
-                lang = getStringExtra(EXTRA_LANG).orEmpty().ifBlank { "0" }
-            )
+            query = query
         )
     }
 
-    private data class MonitorSession(
-        val routeName: String,
-        val walkingMinutes: Int,
-        val voiceEnabled: Boolean,
-        val query: FirstLegEtaQuery
-    )
-
     companion object {
-        private const val CHANNEL_STATUS_ID = "bus_monitor_status"
-        private const val CHANNEL_ALERT_ID = "bus_monitor_alert"
-        private const val NOTIFICATION_ID = 8201
-        private const val REFRESH_INTERVAL_MILLIS = 60_000L
-        private const val MAX_CONSECUTIVE_FAILURES = 10
+        internal const val NOTIFICATION_ID = 8201
         private const val ACTION_START = "com.example.busiscoming.action.START_BUS_MONITOR"
         private const val ACTION_REFRESH = "com.example.busiscoming.action.REFRESH_BUS_MONITOR"
         private const val ACTION_STOP = "com.example.busiscoming.action.STOP_BUS_MONITOR"
+
         private const val REQUEST_OPEN = 100
         private const val REQUEST_REFRESH = 101
         private const val REQUEST_STOP = 102
@@ -365,6 +455,15 @@ class BusMonitorService : Service() {
                 putExtra(EXTRA_RAW_INFO, query.rawInfo)
                 putExtra(EXTRA_LANG, query.lang)
             }
+        }
+
+        fun refreshIntent(context: Context): Intent {
+            return Intent(context, BusMonitorService::class.java).setAction(ACTION_REFRESH)
+        }
+
+        internal fun pendingIntentFlags(): Int {
+            return PendingIntent.FLAG_UPDATE_CURRENT or
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
         }
     }
 }
