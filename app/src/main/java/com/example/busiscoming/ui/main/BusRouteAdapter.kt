@@ -44,7 +44,7 @@ class BusRouteAdapter(
         private val onMonitorClick: (BusRouteOption) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
         private val routeNameText: TextView = itemView.findViewById(R.id.busRouteNameText)
-        private val waitArea: LinearLayout = itemView.findViewById(R.id.busWaitArea)
+        private val etaTextColumn: LinearLayout = itemView.findViewById(R.id.busEtaTextColumn)
         private val arrivalText: TextView = itemView.findViewById(R.id.busArrivalText)
         private val nextArrivalText: TextView = itemView.findViewById(R.id.busNextArrivalText)
         private val monitorButton: ImageButton = itemView.findViewById(R.id.busMonitorButton)
@@ -71,19 +71,19 @@ class BusRouteAdapter(
             }
             itemView.setOnClickListener { onRouteClick(route) }
             val canOpenEtaArrivals = RouteCardActionPolicy.canOpenEtaArrivals(route.waitTimeState)
-            waitArea.isEnabled = true
-            waitArea.isClickable = canOpenEtaArrivals
-            waitArea.isFocusable = canOpenEtaArrivals
-            waitArea.contentDescription = if (canOpenEtaArrivals) {
+            etaTextColumn.isEnabled = true
+            etaTextColumn.isClickable = canOpenEtaArrivals
+            etaTextColumn.isFocusable = canOpenEtaArrivals
+            etaTextColumn.contentDescription = if (canOpenEtaArrivals) {
                 listOfNotNull("查看首程候車班次", arrivalText.text, nextArrival).joinToString("，")
             } else {
                 arrivalText.text.toString()
             }
             if (canOpenEtaArrivals) {
-                waitArea.setOnClickListener { onEtaClick(route) }
+                etaTextColumn.setOnClickListener { onEtaClick(route) }
             } else {
-                waitArea.setOnClickListener(null)
-                waitArea.isClickable = false
+                etaTextColumn.setOnClickListener(null)
+                etaTextColumn.isClickable = false
             }
             val canMonitor = RouteCardActionPolicy.canStartMonitor(route)
             monitorButton.isEnabled = canMonitor

@@ -13,11 +13,12 @@ class RouteCardLayoutContractTest {
     fun routeAndStopPreviewUseLeftColumnWithStableRightWaitBlock() {
         assertTrue(itemXml.contains("<FrameLayout"))
         assertFalse(itemXml.contains("android:layout_marginEnd=\"180dp\""))
-        assertFalse(itemXml.contains("android:id=\"@+id/busRouteTextColumn\""))
+        assertTrue(itemXml.contains("android:id=\"@+id/busRouteTextColumn\""))
+        assertTrue(itemXml.contains("android:layout_marginEnd=\"132dp\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busWaitArea\""))
-        assertTrue(itemXml.contains("android:layout_width=\"176dp\""))
-        assertTrue(itemXml.contains("android:layout_height=\"72dp\""))
-        assertTrue(itemXml.contains("android:layout_gravity=\"end|top\""))
+        assertTrue(itemXml.contains("android:layout_width=\"160dp\""))
+        assertTrue(itemXml.contains("android:layout_height=\"56dp\""))
+        assertTrue(itemXml.contains("android:layout_gravity=\"end|center_vertical\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busNextArrivalText\""))
         assertTrue(itemXml.contains("android:includeFontPadding=\"false\""))
         assertTrue(itemXml.indexOf("android:id=\"@+id/busRouteNameText\"") < itemXml.indexOf("android:id=\"@+id/busStopPreviewText\""))
@@ -34,7 +35,10 @@ class RouteCardLayoutContractTest {
         assertTrue(regressionPreview.contains("海底隧道巴士轉乘站"))
         assertTrue(stopBlock.contains("android:maxLines=\"1\""))
         assertTrue(stopBlock.contains("android:ellipsize=\"end\""))
-        assertTrue(stopBlock.contains("android:layout_marginEnd=\"176dp\""))
+        val columnStart = itemXml.indexOf("android:id=\"@+id/busRouteTextColumn\"")
+        assertTrue(columnStart >= 0)
+        val columnBlock = itemXml.substring(columnStart, itemXml.indexOf("</LinearLayout>", columnStart))
+        assertTrue(columnBlock.contains("android:layout_marginEnd=\"132dp\""))
         assertFalse(adapterKt.contains("updateStopPreviewEndMargin"))
         assertFalse(adapterKt.contains("STOP_PREVIEW_WITH_NEXT_END_MARGIN_DP"))
         assertFalse(adapterKt.contains("STOP_PREVIEW_WITHOUT_NEXT_END_MARGIN_DP"))
@@ -46,11 +50,12 @@ class RouteCardLayoutContractTest {
         assertTrue(topStart >= 0)
         val topBlock = itemXml.substring(topStart, itemXml.indexOf("</FrameLayout>", topStart))
 
-        assertTrue(topBlock.contains("android:layout_height=\"72dp\""))
+        assertTrue(topBlock.contains("android:layout_height=\"56dp\""))
         assertTrue(topBlock.contains("android:id=\"@+id/busWaitArea\""))
-        assertTrue(topBlock.contains("android:layout_width=\"176dp\""))
-        assertTrue(topBlock.contains("android:layout_height=\"72dp\""))
-        assertTrue(topBlock.contains("android:layout_gravity=\"end|top\""))
+        assertTrue(topBlock.contains("android:layout_width=\"160dp\""))
+        assertTrue(topBlock.contains("android:layout_height=\"56dp\""))
+        assertTrue(topBlock.contains("android:layout_gravity=\"end|center_vertical\""))
+        assertTrue(topBlock.contains("android:id=\"@+id/busEtaTextColumn\""))
     }
 
     @Test
@@ -71,10 +76,23 @@ class RouteCardLayoutContractTest {
     @Test
     fun routeEtaAndMonitorClicksRemainSeparate() {
         assertTrue(adapterKt.contains("itemView.setOnClickListener { onRouteClick(route) }"))
-        assertTrue(adapterKt.contains("waitArea.setOnClickListener { onEtaClick(route) }"))
+        assertTrue(adapterKt.contains("etaTextColumn.setOnClickListener { onEtaClick(route) }"))
+        assertFalse(adapterKt.contains("waitArea.setOnClickListener"))
         assertTrue(adapterKt.contains("monitorButton.setOnClickListener"))
         assertTrue(adapterKt.contains("if (canMonitor) onMonitorClick(route)"))
-        assertTrue(adapterKt.contains("waitArea.isEnabled = true"))
+        assertTrue(adapterKt.contains("etaTextColumn.isEnabled = true"))
         assertTrue(adapterKt.contains("LARGE_FONT_SCALE_THRESHOLD"))
+    }
+
+    @Test
+    fun topRightPaddingUsesBellVisualPaddingWhileBottomKeepsContentInset() {
+        assertTrue(itemXml.contains("android:paddingStart=\"14dp\""))
+        assertTrue(itemXml.contains("android:paddingEnd=\"0dp\""))
+        assertTrue(itemXml.contains("android:layout_marginEnd=\"14dp\""))
+
+        val dividerStart = itemXml.indexOf("android:layout_height=\"1dp\"")
+        assertTrue(dividerStart >= 0)
+        val dividerBlock = itemXml.substring(dividerStart, itemXml.indexOf("/>", dividerStart))
+        assertTrue(dividerBlock.contains("android:layout_marginEnd=\"14dp\""))
     }
 }
