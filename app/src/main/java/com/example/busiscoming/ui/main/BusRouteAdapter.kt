@@ -57,7 +57,9 @@ class BusRouteAdapter(
             arrivalText.setTextColor(waitStatusColor(route.waitTimeState))
             val nextArrival = RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState)
             nextArrivalText.text = nextArrival.orEmpty()
-            nextArrivalText.visibility = if (nextArrival == null) View.GONE else View.VISIBLE
+            val shouldShowNextArrival = nextArrival != null &&
+                itemView.resources.configuration.fontScale <= LARGE_FONT_SCALE_THRESHOLD
+            nextArrivalText.visibility = if (shouldShowNextArrival) View.VISIBLE else View.GONE
             routeInfoText.text = RouteResultCardFormatter.info(route)
 
             val preview = route.stopPreview
@@ -100,5 +102,8 @@ class BusRouteAdapter(
             return ContextCompat.getColor(itemView.context, colorRes)
         }
 
+        private companion object {
+            const val LARGE_FONT_SCALE_THRESHOLD = 1.15f
+        }
     }
 }

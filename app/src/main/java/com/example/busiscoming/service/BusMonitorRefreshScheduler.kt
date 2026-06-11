@@ -16,15 +16,48 @@ class BusMonitorRefreshScheduler(private val context: Context) {
             nowElapsedRealtime = SystemClock.elapsedRealtime(),
             delayMillis = delayMillis
         )
-        val pendingIntent = refreshPendingIntent()
+        scheduleAtElapsedRealtime(triggerAtElapsedRealtime, refreshPendingIntent())
+    }
+
+    fun scheduleAutoStop(stopAtMillis: Long, nowMillis: Long = System.currentTimeMillis()) {
+        val delayMillis = (stopAtMillis - nowMillis).coerceAtLeast(0L)
+        val triggerAtElapsedRealtime = SystemClock.elapsedRealtime() + delayMillis
+        scheduleAtElapsedRealtime(triggerAtElapsedRealtime, autoStopPendingIntent())
+    }
+
+    fun cancelRefresh() {
+        alarmManager?.cancel(refreshPendingIntent())
+    }
+
+    fun cancelAutoStop() {
+        alarmManager?.cancel(autoStopPendingIntent())
+    }
+
+    fun cancel() {
+        cancelRefresh()
+        cancelAutoStop()
+    }
+
+    private fun scheduleAtElapsedRealtime(
+        triggerAtElapsedRealtime: Long,
+        pendingIntent: PendingIntent
+    ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager?.setAndAllowWhileIdle(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                triggerAtElapsedRealtime,
-                pendingIntent
-            )
+            if (shouldUseExactIdleAlarm()) {
+                alarmManager?.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAtElapsedRealtime,
+                    pendingIntent
+                )
+            } else {
+                alarmManager?.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerAtElapsedRealtime,
+                    pendingIntent
+                )
+            }
         } else {
-            alarmManager?.set(
+            alarmManager?.setExact(
                 AlarmManager.ELAPSED_REALTIME_WAKEUP,
                 triggerAtElapsedRealtime,
                 pendingIntent
@@ -32,8 +65,11 @@ class BusMonitorRefreshScheduler(private val context: Context) {
         }
     }
 
-    fun cancel() {
-        alarmManager?.cancel(refreshPendingIntent())
+    private fun shouldUseExactIdleAlarm(): Boolean {
+        return BusMonitorSchedulingCapability.shouldUseExactIdleAlarm(
+            sdkInt = Build.VERSION.SDK_INT,
+            canScheduleExactAlarms = BusMonitorSchedulingCapability.canScheduleExactAlarms(alarmManager)
+        )
     }
 
     private fun refreshPendingIntent(): PendingIntent {
@@ -54,7 +90,26 @@ class BusMonitorRefreshScheduler(private val context: Context) {
         }
     }
 
+    private fun autoStopPendingIntent(): PendingIntent {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PendingIntent.getForegroundService(
+                context,
+                REQUEST_AUTO_STOP,
+                BusMonitorService.autoStopIntent(context),
+                BusMonitorService.pendingIntentFlags()
+            )
+        } else {
+            PendingIntent.getService(
+                context,
+                REQUEST_AUTO_STOP,
+                BusMonitorService.autoStopIntent(context),
+                BusMonitorService.pendingIntentFlags()
+            )
+        }
+    }
+
     companion object {
         private const val REQUEST_REFRESH = 201
+        private const val REQUEST_AUTO_STOP = 202
     }
 }

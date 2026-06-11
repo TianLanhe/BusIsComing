@@ -12,14 +12,45 @@ class RouteCardLayoutContractTest {
     @Test
     fun routeAndStopPreviewUseLeftColumnWithStableRightWaitBlock() {
         assertTrue(itemXml.contains("<FrameLayout"))
-        assertTrue(itemXml.contains("android:id=\"@+id/busRouteTextColumn\""))
-        assertTrue(itemXml.contains("android:layout_marginEnd=\"142dp\""))
+        assertFalse(itemXml.contains("android:layout_marginEnd=\"180dp\""))
+        assertFalse(itemXml.contains("android:id=\"@+id/busRouteTextColumn\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busWaitArea\""))
-        assertTrue(itemXml.contains("android:layout_width=\"138dp\""))
-        assertTrue(itemXml.contains("android:layout_height=\"60dp\""))
-        assertTrue(itemXml.contains("android:layout_gravity=\"end|center_vertical\""))
+        assertTrue(itemXml.contains("android:layout_width=\"176dp\""))
+        assertTrue(itemXml.contains("android:layout_height=\"72dp\""))
+        assertTrue(itemXml.contains("android:layout_gravity=\"end|top\""))
+        assertTrue(itemXml.contains("android:id=\"@+id/busNextArrivalText\""))
+        assertTrue(itemXml.contains("android:includeFontPadding=\"false\""))
         assertTrue(itemXml.indexOf("android:id=\"@+id/busRouteNameText\"") < itemXml.indexOf("android:id=\"@+id/busStopPreviewText\""))
         assertTrue(itemXml.indexOf("android:id=\"@+id/busStopPreviewText\"") < itemXml.indexOf("android:id=\"@+id/busWaitArea\""))
+    }
+
+    @Test
+    fun stopPreviewUsesSingleLineInsideFixedLeftColumn() {
+        val stopStart = itemXml.indexOf("android:id=\"@+id/busStopPreviewText\"")
+        assertTrue(stopStart >= 0)
+        val stopBlock = itemXml.substring(stopStart, itemXml.indexOf("/>", stopStart))
+        val regressionPreview = "興華邨豐興樓 → 海底隧道巴士轉乘站"
+
+        assertTrue(regressionPreview.contains("海底隧道巴士轉乘站"))
+        assertTrue(stopBlock.contains("android:maxLines=\"1\""))
+        assertTrue(stopBlock.contains("android:ellipsize=\"end\""))
+        assertTrue(stopBlock.contains("android:layout_marginEnd=\"176dp\""))
+        assertFalse(adapterKt.contains("updateStopPreviewEndMargin"))
+        assertFalse(adapterKt.contains("STOP_PREVIEW_WITH_NEXT_END_MARGIN_DP"))
+        assertFalse(adapterKt.contains("STOP_PREVIEW_WITHOUT_NEXT_END_MARGIN_DP"))
+    }
+
+    @Test
+    fun topSectionKeepsStableWaitBlockHeightAndWidth() {
+        val topStart = itemXml.indexOf("<FrameLayout")
+        assertTrue(topStart >= 0)
+        val topBlock = itemXml.substring(topStart, itemXml.indexOf("</FrameLayout>", topStart))
+
+        assertTrue(topBlock.contains("android:layout_height=\"72dp\""))
+        assertTrue(topBlock.contains("android:id=\"@+id/busWaitArea\""))
+        assertTrue(topBlock.contains("android:layout_width=\"176dp\""))
+        assertTrue(topBlock.contains("android:layout_height=\"72dp\""))
+        assertTrue(topBlock.contains("android:layout_gravity=\"end|top\""))
     }
 
     @Test
@@ -44,5 +75,6 @@ class RouteCardLayoutContractTest {
         assertTrue(adapterKt.contains("monitorButton.setOnClickListener"))
         assertTrue(adapterKt.contains("if (canMonitor) onMonitorClick(route)"))
         assertTrue(adapterKt.contains("waitArea.isEnabled = true"))
+        assertTrue(adapterKt.contains("LARGE_FONT_SCALE_THRESHOLD"))
     }
 }

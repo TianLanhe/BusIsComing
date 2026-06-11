@@ -118,15 +118,45 @@ object BusMonitorSpeechPolicy {
 }
 
 object BusMonitorTtsLanguagePolicy {
+    const val LANGUAGE_MISSING_DATA = -1
+    const val LANGUAGE_NOT_SUPPORTED = -2
+
     val fallbackLocales: List<Locale> = listOf(
         Locale.TRADITIONAL_CHINESE,
         Locale.forLanguageTag("zh-HK"),
-        Locale.TAIWAN,
+        Locale.forLanguageTag("yue-HK"),
+        Locale.SIMPLIFIED_CHINESE,
         Locale.CHINESE
     )
 
     fun chooseSupportedLocale(languageResult: (Locale) -> Int): Locale? {
-        return fallbackLocales.firstOrNull { locale -> isLanguageUsable(languageResult(locale)) }
+        return when (val selection = selectSupportedLocale(languageResult)) {
+            is BusMonitorTtsLanguageSelection.Supported -> selection.locale
+            is BusMonitorTtsLanguageSelection.Unavailable -> null
+        }
+    }
+
+    fun selectSupportedLocale(languageResult: (Locale) -> Int): BusMonitorTtsLanguageSelection {
+        val checks = mutableListOf<BusMonitorTtsLanguageCheck>()
+        fallbackLocales.forEach { locale ->
+            val result = languageResult(locale)
+            checks += BusMonitorTtsLanguageCheck(locale = locale, result = result)
+            if (isLanguageUsable(result)) {
+                return BusMonitorTtsLanguageSelection.Supported(
+                    locale = locale,
+                    checks = checks.toList()
+                )
+            }
+        }
+        val reason = if (checks.any { it.result == LANGUAGE_MISSING_DATA }) {
+            BusMonitorTtsLanguageUnavailableReason.MISSING_DATA
+        } else {
+            BusMonitorTtsLanguageUnavailableReason.NOT_SUPPORTED
+        }
+        return BusMonitorTtsLanguageSelection.Unavailable(
+            reason = reason,
+            checks = checks.toList()
+        )
     }
 
     fun isLanguageUsable(languageResult: Int): Boolean {
@@ -134,27 +164,60 @@ object BusMonitorTtsLanguagePolicy {
     }
 }
 
+data class BusMonitorTtsLanguageCheck(
+    val locale: Locale,
+    val result: Int
+)
+
+sealed class BusMonitorTtsLanguageSelection {
+    data class Supported(
+        val locale: Locale,
+        val checks: List<BusMonitorTtsLanguageCheck>
+    ) : BusMonitorTtsLanguageSelection()
+
+    data class Unavailable(
+        val reason: BusMonitorTtsLanguageUnavailableReason,
+        val checks: List<BusMonitorTtsLanguageCheck>
+    ) : BusMonitorTtsLanguageSelection()
+}
+
+enum class BusMonitorTtsLanguageUnavailableReason {
+    MISSING_DATA,
+    NOT_SUPPORTED
+}
+
 object BusMonitorNotificationFormatter {
+    fun title(routeName: String, status: BusMonitorStatus?): String {
+        return listOf(firstLegRoute(routeName), status?.displayText ?: "監控中")
+            .joinToString(" · ")
+    }
+
     fun successText(
-        status: BusMonitorStatus,
         firstEtaMinutes: Int,
         nextEtaMinutes: Int?,
         walkingMinutes: Int,
         updatedAtText: String
     ): String {
-        val remainingText = if (firstEtaMinutes <= 0) {
-            "即將到站"
-        } else {
-            "剩餘 $firstEtaMinutes 分鐘"
-        }
-        val nextText = nextEtaMinutes?.let { minutes ->
-            if (minutes <= 0) "下一班即將到站" else "下一班 $minutes 分鐘"
-        }
+        return bodyText(
+            firstEtaMinutes = firstEtaMinutes,
+            nextEtaMinutes = nextEtaMinutes,
+            walkingMinutes = walkingMinutes,
+            updatedAtText = updatedAtText
+        )
+    }
+
+    fun bodyText(
+        firstEtaMinutes: Int,
+        nextEtaMinutes: Int?,
+        walkingMinutes: Int,
+        updatedAtText: String
+    ): String {
         return listOfNotNull(
-            "${status.displayText} · $remainingText",
-            nextText,
+            marginText(firstEtaMinutes = firstEtaMinutes, walkingMinutes = walkingMinutes),
+            carText(firstEtaMinutes),
             "步行 $walkingMinutes 分鐘",
-            "更新 $updatedAtText"
+            nextEtaMinutes?.let { "下一班 ${it.coerceAtLeast(0)} 分鐘" },
+            "$updatedAtText 更新"
         ).joinToString(" · ")
     }
 
@@ -163,6 +226,33 @@ object BusMonitorNotificationFormatter {
             "資料延遲 · $lastText · 更新失敗 $failureCount 次"
         } ?: "資料延遲 · 暫無 ETA，1 分鐘後重試"
     }
+
+    fun firstLegRoute(routeName: String): String {
+        return routeName
+            .split("→", "->")
+            .firstOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: routeName.ifBlank { "巴士" }
+    }
+
+    private fun marginText(firstEtaMinutes: Int, walkingMinutes: Int): String {
+        val waitMarginMinutes = firstEtaMinutes - walkingMinutes
+        return if (waitMarginMinutes >= 0) {
+            "剩餘 $waitMarginMinutes 分鐘"
+        } else {
+            "已過 ${kotlin.math.abs(waitMarginMinutes)} 分鐘"
+        }
+    }
+
+    private fun carText(firstEtaMinutes: Int): String {
+        return "車 ${firstEtaMinutes.coerceAtLeast(0)} 分鐘到"
+    }
+}
+
+enum class BusMonitorStopTargetSource {
+    SECOND_ETA,
+    FIRST_ETA_FALLBACK
 }
 
 object BusMonitorStopPolicy {
@@ -170,12 +260,9 @@ object BusMonitorStopPolicy {
 
     fun shouldAutoStop(
         nowMillis: Long,
-        firstEtaMillis: Long?,
-        secondEtaMillis: Long?
+        stopAtMillis: Long?
     ): Boolean {
-        if (secondEtaMillis != null) return nowMillis >= secondEtaMillis
-        val first = firstEtaMillis ?: return false
-        return nowMillis >= first + FALLBACK_SECOND_ETA_DELAY_MILLIS
+        return stopAtMillis != null && nowMillis >= stopAtMillis
     }
 
     fun shouldStopManually(manualStopRequested: Boolean): Boolean {
@@ -213,6 +300,8 @@ data class BusMonitorSessionSnapshot(
     val lastSuccessfulUpdateMillis: Long? = null,
     val firstEtaMillis: Long? = null,
     val secondEtaMillis: Long? = null,
+    val stopAtMillis: Long? = null,
+    val stopTargetSource: BusMonitorStopTargetSource? = null,
     val consecutiveFailureCount: Int = 0,
     val interrupted: Boolean = false
 )
@@ -242,8 +331,7 @@ object BusMonitorSessionPolicy {
             nowMillis >= snapshot.expiresAtMillis ||
             BusMonitorStopPolicy.shouldAutoStop(
                 nowMillis = nowMillis,
-                firstEtaMillis = snapshot.firstEtaMillis,
-                secondEtaMillis = snapshot.secondEtaMillis
+                stopAtMillis = snapshot.stopAtMillis
             )
     }
 
@@ -256,6 +344,12 @@ object BusMonitorSessionPolicy {
         firstEtaMillis: Long?,
         secondEtaMillis: Long?
     ): BusMonitorSessionSnapshot {
+        val stopTarget = resolveStopTarget(
+            currentStopAtMillis = snapshot.stopAtMillis,
+            currentStopTargetSource = snapshot.stopTargetSource,
+            firstEtaMillis = firstEtaMillis,
+            secondEtaMillis = secondEtaMillis
+        )
         return snapshot.copy(
             lastStatus = status,
             lastSpokenStatus = lastSpokenStatus,
@@ -263,9 +357,32 @@ object BusMonitorSessionPolicy {
             lastSuccessfulUpdateMillis = nowMillis,
             firstEtaMillis = firstEtaMillis,
             secondEtaMillis = secondEtaMillis,
+            stopAtMillis = stopTarget.stopAtMillis,
+            stopTargetSource = stopTarget.source,
             consecutiveFailureCount = 0,
             interrupted = false
         )
+    }
+
+    private fun resolveStopTarget(
+        currentStopAtMillis: Long?,
+        currentStopTargetSource: BusMonitorStopTargetSource?,
+        firstEtaMillis: Long?,
+        secondEtaMillis: Long?
+    ): StopTarget {
+        if (currentStopAtMillis != null && currentStopTargetSource != null) {
+            return StopTarget(currentStopAtMillis, currentStopTargetSource)
+        }
+        if (secondEtaMillis != null) {
+            return StopTarget(secondEtaMillis, BusMonitorStopTargetSource.SECOND_ETA)
+        }
+        if (firstEtaMillis != null) {
+            return StopTarget(
+                firstEtaMillis + BusMonitorStopPolicy.FALLBACK_SECOND_ETA_DELAY_MILLIS,
+                BusMonitorStopTargetSource.FIRST_ETA_FALLBACK
+            )
+        }
+        return StopTarget(null, null)
     }
 
     fun recordFailure(snapshot: BusMonitorSessionSnapshot): BusMonitorSessionSnapshot {
@@ -275,6 +392,11 @@ object BusMonitorSessionPolicy {
     fun markInterrupted(snapshot: BusMonitorSessionSnapshot): BusMonitorSessionSnapshot {
         return snapshot.copy(interrupted = true)
     }
+
+    private data class StopTarget(
+        val stopAtMillis: Long?,
+        val source: BusMonitorStopTargetSource?
+    )
 }
 
 object BusMonitorSessionSnapshotCodec {
@@ -303,6 +425,8 @@ object BusMonitorSessionSnapshotCodec {
         snapshot.lastSuccessfulUpdateMillis?.let { values[KEY_LAST_UPDATE_MILLIS] = it.toString() }
         snapshot.firstEtaMillis?.let { values[KEY_FIRST_ETA_MILLIS] = it.toString() }
         snapshot.secondEtaMillis?.let { values[KEY_SECOND_ETA_MILLIS] = it.toString() }
+        snapshot.stopAtMillis?.let { values[KEY_STOP_AT_MILLIS] = it.toString() }
+        snapshot.stopTargetSource?.let { values[KEY_STOP_TARGET_SOURCE] = it.name }
         return values
     }
 
@@ -332,6 +456,8 @@ object BusMonitorSessionSnapshotCodec {
             lastSuccessfulUpdateMillis = values[KEY_LAST_UPDATE_MILLIS]?.toLongOrNull(),
             firstEtaMillis = values[KEY_FIRST_ETA_MILLIS]?.toLongOrNull(),
             secondEtaMillis = values[KEY_SECOND_ETA_MILLIS]?.toLongOrNull(),
+            stopAtMillis = values[KEY_STOP_AT_MILLIS]?.toLongOrNull(),
+            stopTargetSource = values[KEY_STOP_TARGET_SOURCE].toStopTargetSourceOrNull(),
             consecutiveFailureCount = values[KEY_CONSECUTIVE_FAILURES]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
             interrupted = values[KEY_INTERRUPTED]?.toBooleanStrictOrNull() ?: false
         )
@@ -340,6 +466,12 @@ object BusMonitorSessionSnapshotCodec {
     private fun String?.toBusMonitorStatusOrNull(): BusMonitorStatus? {
         return this?.let { value ->
             runCatching { BusMonitorStatus.valueOf(value) }.getOrNull()
+        }
+    }
+
+    private fun String?.toStopTargetSourceOrNull(): BusMonitorStopTargetSource? {
+        return this?.let { value ->
+            runCatching { BusMonitorStopTargetSource.valueOf(value) }.getOrNull()
         }
     }
 
@@ -354,6 +486,8 @@ object BusMonitorSessionSnapshotCodec {
     private const val KEY_LAST_UPDATE_MILLIS = "last_update_millis"
     private const val KEY_FIRST_ETA_MILLIS = "first_eta_millis"
     private const val KEY_SECOND_ETA_MILLIS = "second_eta_millis"
+    private const val KEY_STOP_AT_MILLIS = "stop_at_millis"
+    private const val KEY_STOP_TARGET_SOURCE = "stop_target_source"
     private const val KEY_CONSECUTIVE_FAILURES = "consecutive_failures"
     private const val KEY_INTERRUPTED = "interrupted"
     private const val KEY_COMPANY = "company"

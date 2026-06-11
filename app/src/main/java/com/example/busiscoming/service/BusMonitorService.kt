@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.busiscoming.R
@@ -46,6 +48,8 @@ class BusMonitorService : Service() {
     private lateinit var speechController: BusMonitorSpeechController
     private var session: BusMonitorSessionSnapshot? = null
     private var isRefreshing = false
+    private var monitorWakeLock: PowerManager.WakeLock? = null
+    private val speechRetryAfterByStatus = mutableMapOf<BusMonitorStatus, Long>()
 
     private val refreshRunnable = Runnable { refreshEta() }
 
@@ -63,6 +67,10 @@ class BusMonitorService : Service() {
                 stopMonitoring(clearSession = true)
                 START_NOT_STICKY
             }
+            ACTION_AUTO_STOP -> {
+                stopMonitoring(clearSession = true)
+                START_NOT_STICKY
+            }
             ACTION_START -> startNewSession(intent)
             ACTION_REFRESH -> refreshExistingSession()
             else -> refreshExistingSession()
@@ -72,8 +80,9 @@ class BusMonitorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (sessionStore.load() != null) {
+        sessionStore.load()?.let { currentSession ->
             refreshScheduler.scheduleNext()
+            scheduleAutoStopIfNeeded(currentSession)
         }
         super.onTaskRemoved(rootIntent)
     }
@@ -81,8 +90,14 @@ class BusMonitorService : Service() {
     override fun onDestroy() {
         mainHandler.removeCallbacks(refreshRunnable)
         etaExecutor.shutdownNow()
+        releaseWakeLock()
         speechController.release()
         super.onDestroy()
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        stopMonitoring(clearSession = true)
+        super.onTimeout(startId, fgsType)
     }
 
     private fun startNewSession(intent: Intent): Int {
@@ -97,6 +112,7 @@ class BusMonitorService : Service() {
             ?: return START_NOT_STICKY
         session = nextSession
         sessionStore.save(nextSession)
+        acquireWakeLock(nextSession)
         startForegroundFor(
             snapshot = nextSession,
             text = "正在取得候車時間...",
@@ -112,6 +128,8 @@ class BusMonitorService : Service() {
             return START_NOT_STICKY
         }
         val currentSession = restoreActiveSessionOrStop() ?: return START_NOT_STICKY
+        acquireWakeLock(currentSession)
+        scheduleAutoStopIfNeeded(currentSession)
         startForegroundFor(
             snapshot = currentSession,
             text = currentSession.lastSuccessfulNotificationText ?: "正在取得候車時間...",
@@ -169,19 +187,40 @@ class BusMonitorService : Service() {
             walkingMinutes = activeSession.walkingMinutes
         )
         val updatedAtText = NOW_TIME_FORMAT.get()!!.format(Date())
-        val notificationText = BusMonitorNotificationFormatter.successText(
-            status = status,
+        val notificationBody = BusMonitorNotificationFormatter.bodyText(
             firstEtaMinutes = firstArrival.minutes,
             nextEtaMinutes = available.nextArrival?.minutes,
             walkingMinutes = activeSession.walkingMinutes,
             updatedAtText = updatedAtText
         )
         var lastSpokenStatus = activeSession.lastSpokenStatus
-        if (activeSession.voiceEnabled && BusMonitorSpeechPolicy.shouldSpeak(lastSpokenStatus, status)) {
+        val shouldSpeak = activeSession.voiceEnabled &&
+            BusMonitorSpeechPolicy.shouldSpeak(lastSpokenStatus, status)
+        Log.d(
+            TAG,
+            "Monitor speech decision route=${activeSession.routeName} voiceEnabled=${activeSession.voiceEnabled} " +
+                "firstEtaMinutes=${firstArrival.minutes} walkingMinutes=${activeSession.walkingMinutes} " +
+                "lastStatus=${activeSession.lastStatus} nextStatus=$status lastSpokenStatus=$lastSpokenStatus " +
+                "shouldSpeak=$shouldSpeak"
+        )
+        if (shouldSpeak && !shouldThrottleSpeech(status)) {
             val phrase = BusMonitorSpeechFormatter.phrase(firstArrival.minutes, status)
-            if (speechController.speak(phrase) != BusMonitorSpeechResult.UNAVAILABLE) {
+            Log.d(TAG, "Monitor speech request status=$status text=$phrase")
+            val speechResult = speechController.speak(
+                text = phrase,
+                mode = BusMonitorSpeechAudioMode.MONITOR
+            ) { result ->
+                handleSpeechEvent(status, result)
+            }
+            Log.d(
+                TAG,
+                "Monitor speech immediateResult=$speechResult status=$status countsAsSpoken=${speechResult.countsAsSpoken}"
+            )
+            if (speechResult.countsAsSpoken) {
                 lastSpokenStatus = status
             }
+        } else if (shouldSpeak) {
+            Log.d(TAG, "Monitor speech throttled status=$status retryAfter=${speechRetryAfterByStatus[status]}")
         }
 
         val updatedSession = BusMonitorSessionPolicy.recordSuccessfulRefresh(
@@ -189,17 +228,20 @@ class BusMonitorService : Service() {
             nowMillis = System.currentTimeMillis(),
             status = status,
             lastSpokenStatus = lastSpokenStatus,
-            notificationText = notificationText,
+            notificationText = notificationBody,
             firstEtaMillis = firstArrival.etaMillis,
             secondEtaMillis = available.nextArrival?.etaMillis
         )
         session = updatedSession
         sessionStore.save(updatedSession)
+        acquireWakeLock(updatedSession)
+        scheduleAutoStopIfNeeded(updatedSession)
         manager.notify(
             NOTIFICATION_ID,
             buildNotification(
-                title = "${updatedSession.routeName} 通知欄監控",
-                text = notificationText,
+                title = BusMonitorNotificationFormatter.title(updatedSession.routeName, status),
+                text = notificationBody,
+                bigText = notificationBody,
                 priorityStatus = status
             )
         )
@@ -218,6 +260,7 @@ class BusMonitorService : Service() {
         val failedSession = BusMonitorSessionPolicy.recordFailure(activeSession)
         session = failedSession
         sessionStore.save(failedSession)
+        scheduleAutoStopIfNeeded(failedSession)
         val fallbackText = BusMonitorNotificationFormatter.failureText(
             lastSuccessfulNotificationText = failedSession.lastSuccessfulNotificationText,
             failureCount = failedSession.consecutiveFailureCount
@@ -225,8 +268,9 @@ class BusMonitorService : Service() {
         manager.notify(
             NOTIFICATION_ID,
             buildNotification(
-                title = "${failedSession.routeName} 通知欄監控",
+                title = BusMonitorNotificationFormatter.title(failedSession.routeName, failedSession.lastStatus),
                 text = fallbackText,
+                bigText = fallbackText,
                 priorityStatus = failedSession.lastStatus
             )
         )
@@ -240,8 +284,7 @@ class BusMonitorService : Service() {
     private fun shouldAutoStop(currentSession: BusMonitorSessionSnapshot): Boolean {
         return BusMonitorStopPolicy.shouldAutoStop(
             nowMillis = System.currentTimeMillis(),
-            firstEtaMillis = currentSession.firstEtaMillis,
-            secondEtaMillis = currentSession.secondEtaMillis
+            stopAtMillis = currentSession.stopAtMillis
         )
     }
 
@@ -249,15 +292,23 @@ class BusMonitorService : Service() {
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.postDelayed(refreshRunnable, BusMonitorRefreshPolicy.REFRESH_INTERVAL_MILLIS)
         refreshScheduler.scheduleNext()
+        session?.let { scheduleAutoStopIfNeeded(it) }
+    }
+
+    private fun scheduleAutoStopIfNeeded(currentSession: BusMonitorSessionSnapshot) {
+        val stopAtMillis = currentSession.stopAtMillis ?: return
+        refreshScheduler.scheduleAutoStop(stopAtMillis)
     }
 
     private fun stopMonitoring(clearSession: Boolean) {
         mainHandler.removeCallbacks(refreshRunnable)
         refreshScheduler.cancel()
+        speechRetryAfterByStatus.clear()
         if (clearSession) {
             sessionStore.clear()
         }
         session = null
+        releaseWakeLock()
         speechController.release()
         stopForegroundCompat()
         stopSelf()
@@ -271,16 +322,71 @@ class BusMonitorService : Service() {
         startForeground(
             NOTIFICATION_ID,
             buildNotification(
-                title = "${snapshot.routeName} 通知欄監控",
+                title = BusMonitorNotificationFormatter.title(snapshot.routeName, priorityStatus),
                 text = text,
+                bigText = text,
                 priorityStatus = priorityStatus
             )
         )
     }
 
+    private fun handleSpeechEvent(status: BusMonitorStatus, result: BusMonitorSpeechResult) {
+        Log.d(TAG, "Monitor speech event status=$status result=$result countsAsSpoken=${result.countsAsSpoken}")
+        if (result.countsAsSpoken) {
+            speechRetryAfterByStatus.remove(status)
+            mainHandler.post { markSpokenStatus(status) }
+        } else if (result is BusMonitorSpeechResult.Failure) {
+            speechRetryAfterByStatus[status] =
+                System.currentTimeMillis() + BusMonitorRefreshPolicy.REFRESH_INTERVAL_MILLIS
+            Log.w(TAG, "Monitor speech failed: reason=${result.reason} detail=${result.detail}")
+        }
+    }
+
+    private fun shouldThrottleSpeech(status: BusMonitorStatus): Boolean {
+        val retryAfter = speechRetryAfterByStatus[status] ?: return false
+        return System.currentTimeMillis() < retryAfter
+    }
+
+    private fun acquireWakeLock(snapshot: BusMonitorSessionSnapshot) {
+        val timeoutMillis = BusMonitorWakeLockPolicy.timeoutMillis(
+            nowMillis = System.currentTimeMillis(),
+            expiresAtMillis = snapshot.expiresAtMillis,
+            stopAtMillis = snapshot.stopAtMillis
+        )
+        val currentWakeLock = monitorWakeLock
+        if (currentWakeLock?.isHeld == true) {
+            currentWakeLock.release()
+        }
+        val powerManager = getSystemService(PowerManager::class.java) ?: return
+        monitorWakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "$packageName:BusMonitor"
+        ).apply {
+            setReferenceCounted(false)
+            acquire(timeoutMillis)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        val wakeLock = monitorWakeLock
+        if (wakeLock?.isHeld == true) {
+            wakeLock.release()
+        }
+        monitorWakeLock = null
+    }
+
+    private fun markSpokenStatus(status: BusMonitorStatus) {
+        val currentSession = session ?: sessionStore.load() ?: return
+        if (currentSession.lastSpokenStatus == status) return
+        val updatedSession = currentSession.copy(lastSpokenStatus = status)
+        session = updatedSession
+        sessionStore.save(updatedSession)
+    }
+
     private fun buildNotification(
         title: String,
         text: String,
+        bigText: String,
         priorityStatus: BusMonitorStatus?
     ): Notification {
         val openIntent = PendingIntent.getActivity(
@@ -299,27 +405,26 @@ class BusMonitorService : Service() {
             .setSmallIcon(R.drawable.ic_notification_bell)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(BusMonitorNotificationContract.COMPAT_LOCKSCREEN_VISIBILITY)
-            .setPublicVersion(buildPublicNotification(channelId, title, text))
+            .setPublicVersion(buildPublicNotification(channelId, title, text, bigText))
             .setPriority(priority)
-            .addAction(android.R.drawable.ic_menu_view, "打開 App", openIntent)
             .addAction(android.R.drawable.ic_popup_sync, "刷新", refreshIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止", stopIntent)
             .build()
     }
 
-    private fun buildPublicNotification(channelId: String, title: String, text: String): Notification {
+    private fun buildPublicNotification(channelId: String, title: String, text: String, bigText: String): Notification {
         return NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.drawable.ic_notification_bell)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setOngoing(true)
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
@@ -404,8 +509,10 @@ class BusMonitorService : Service() {
 
     companion object {
         internal const val NOTIFICATION_ID = 8201
+        private const val TAG = "BusMonitorService"
         private const val ACTION_START = "com.example.busiscoming.action.START_BUS_MONITOR"
         private const val ACTION_REFRESH = "com.example.busiscoming.action.REFRESH_BUS_MONITOR"
+        private const val ACTION_AUTO_STOP = "com.example.busiscoming.action.AUTO_STOP_BUS_MONITOR"
         private const val ACTION_STOP = "com.example.busiscoming.action.STOP_BUS_MONITOR"
 
         private const val REQUEST_OPEN = 100
@@ -459,6 +566,10 @@ class BusMonitorService : Service() {
 
         fun refreshIntent(context: Context): Intent {
             return Intent(context, BusMonitorService::class.java).setAction(ACTION_REFRESH)
+        }
+
+        fun autoStopIntent(context: Context): Intent {
+            return Intent(context, BusMonitorService::class.java).setAction(ACTION_AUTO_STOP)
         }
 
         internal fun pendingIntentFlags(): Int {

@@ -7,7 +7,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.example.busiscoming.R
 import com.example.busiscoming.data.model.BusRouteOption
@@ -15,7 +14,6 @@ import com.example.busiscoming.data.model.WalkingScenarioModifier
 import com.example.busiscoming.data.model.WalkingSpeedPreset
 import com.example.busiscoming.data.model.WalkingTimeCalculator
 import com.example.busiscoming.data.model.WalkingTimeEstimate
-import com.example.busiscoming.service.BusMonitorSpeechResult
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -34,7 +32,6 @@ data class MonitorWalkingInputs(
 
 class MonitorSettingsBottomSheet(
     private val context: Context,
-    private val onVoicePreview: () -> BusMonitorSpeechResult,
     private val onStart: (MonitorSettingsResult) -> Unit
 ) {
     private var dialog: BottomSheetDialog? = null
@@ -204,21 +201,6 @@ class MonitorSettingsBottomSheet(
             )
         }
         root.addView(voiceSwitch)
-        root.addView(MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-            text = "試聽語音"
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(6) }
-            setOnClickListener {
-                val message = when (onVoicePreview()) {
-                    BusMonitorSpeechResult.SPOKEN -> "正在播放語音試聽"
-                    BusMonitorSpeechResult.QUEUED -> "正在準備語音，稍後播放試聽"
-                    BusMonitorSpeechResult.UNAVAILABLE -> "此設備暫時無法播放語音提醒"
-                }
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            }
-        })
         return root
     }
 

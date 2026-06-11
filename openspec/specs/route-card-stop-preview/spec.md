@@ -28,42 +28,13 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **THEN** 系統 SHALL 從第一段 bus leg 派生首程 ETA 所需資料
 - **AND** 系統 SHALL NOT 使用另一套不同規則重複解析 `showroutep2p(...)` 來生成首程 ETA 資料
 
-### Requirement: 使用公開 API 推導預覽站點名稱
-系統 SHALL 使用 DATA.GOV.HK 城巴公開 API 推導卡片預覽所需的上車站與下車站名稱。
-
-#### Scenario: 通過 route-stop 推導 stop id
-- **WHEN** 系統獲得預覽站點的 company、公開 route、direction path 和 station seq
-- **THEN** 系統 SHALL 請求 `https://rt.data.gov.hk/v2/transport/citybus/route-stop/{company}/{route}/{direction}`
-- **AND** 系統 SHALL 在響應 data 中查找 `seq == station seq` 的記錄
-- **AND** 系統 SHALL 使用該記錄的 `stop` 作為 stop id
-
-#### Scenario: 通過 stop 查詢站名
-- **WHEN** 系統獲得預覽站點 stop id
-- **THEN** 系統 SHALL 請求 DATA.GOV.HK 城巴 `stop/{stop_id}` 站點資料
-- **AND** 系統 SHALL 使用繁體中文站名作為卡片站點預覽名稱
-
-#### Scenario: 成功建立站點預覽
-- **WHEN** 系統成功解析同一路線的上車 stop id、下車 stop id 和對應站名
-- **THEN** 系統 SHALL 為該路線生成站點預覽
-- **AND** 站點預覽 SHALL 包含上車站顯示名與下車站顯示名
-
-#### Scenario: 任一站點推導失敗
-- **WHEN** 上車站或下車站任一方無法推導 stop id、查詢站名失敗、響應為空或解析失敗
-- **THEN** 系統 SHALL 將該路線站點預覽視為不可用
-- **AND** 系統 SHALL NOT 影響該路線的主卡片結果展示
-
 ### Requirement: 緩存與去重站點預覽請求
-系統 SHALL 對站點預覽所需的 route-stop、stop name 和 preview 結果做進程內成功緩存，並在同一次查詢中去重網絡請求。
+系統 SHALL 對站點預覽所需的 P2P stop map 和 preview 結果做進程內成功緩存，並在同一次查詢中去重網絡請求。
 
-#### Scenario: route-stop 成功結果緩存 1 天
-- **WHEN** 系統成功查詢某個 company、route 和 direction path 的 route-stop 資料
+#### Scenario: P2P stop map 成功結果緩存 1 天
+- **WHEN** 系統成功解析某個 `rawInfo + lang` 的 P2P stop map
 - **THEN** 系統 SHALL 在 App 進程內緩存該結果 1 天
-- **AND** 1 天內再次解析相同 company、route 和 direction path 時 SHALL 優先使用緩存
-
-#### Scenario: stop name 成功結果緩存 1 天
-- **WHEN** 系統成功查詢某個 stop id 的站名
-- **THEN** 系統 SHALL 按 company、stop id 和語言在 App 進程內緩存該站名 1 天
-- **AND** 1 天內再次需要相同站名時 SHALL 優先使用緩存
+- **AND** 1 天內再次解析相同 `rawInfo + lang` 時 SHALL 優先使用緩存
 
 #### Scenario: preview 成功結果緩存 1 天
 - **WHEN** 系統成功生成某個 `rawInfo + lang` 對應的站點預覽
@@ -71,12 +42,12 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **AND** 1 天內再次綁定相同 `rawInfo + lang` 的路線卡片時 SHALL 優先使用緩存
 
 #### Scenario: 失敗結果不緩存
-- **WHEN** route-stop 查詢失敗、stop 查詢失敗、響應為空、缺少 station seq、缺少站名或解析失敗
+- **WHEN** P2P stop map 查詢失敗、響應為空、缺少 station seq、缺少站名或解析失敗
 - **THEN** 系統 SHALL NOT 緩存該失敗結果
 - **AND** 後續重新查詢或重試時 SHALL 重新嘗試生成站點預覽
 
 #### Scenario: 同一次查詢聚合唯一請求
-- **WHEN** 多條候選路線需要相同 company、route、direction path 或相同 stop id 的資料
+- **WHEN** 多條候選路線需要相同 `rawInfo + lang` 的 P2P stop map
 - **THEN** 系統 SHALL 將相同資料請求去重
 - **AND** 系統 SHALL 將一次成功結果應用到所有依賴該資料的路線卡片
 
@@ -86,7 +57,7 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **AND** 系統 SHALL NOT 為每張路線卡片建立無界線程或無界網絡請求
 
 ### Requirement: 路線卡片漸進展示站點預覽
-系統 SHALL 在不阻塞路線列表首屏展示的前提下，於路線卡片中漸進展示成功解析的站點預覽。
+系統 SHALL 在不阻塞路線列表首屏展示的前提下，於路線卡片中漸進展示成功解析的站點預覽，且站點預覽 SHALL 被限制在左側文本區內單行展示。
 
 #### Scenario: 路線列表先於站點預覽展示
 - **WHEN** 路線查詢成功並返回一條或多條路線
@@ -98,16 +69,24 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **THEN** 該路線卡片 SHALL 在路線文字與底部信息區之間展示單行 `上車 A站  →  下車 B站`
 - **AND** `A站` SHALL 為首程上車站顯示名
 - **AND** `B站` SHALL 為末程下車站顯示名
+- **AND** 站點預覽 SHALL 使用左側文本區可用寬度，不得侵入右側候車資訊區
 
 #### Scenario: 站點預覽未完成或不可用
 - **WHEN** 某條路線站點預覽尚未完成、缺少元數據或補全失敗
 - **THEN** 該路線卡片 SHALL 隱藏站點預覽行
 - **AND** 該路線卡片 SHALL 繼續展示路線、價格、耗時、候車與步行距離
 
-#### Scenario: 超長站名保持卡片可讀
-- **WHEN** 上車站名或下車站名超過卡片單行可用寬度
-- **THEN** 系統 SHALL 使用省略、權重或同等策略保持預覽為單行可讀
-- **AND** 站點預覽 SHALL NOT 與路線、候車、價格、耗時或步行距離文字重疊
+#### Scenario: 長站名單行省略
+- **WHEN** 上車站名或下車站名超過左側文本區單行可用寬度
+- **THEN** 系統 SHALL 使用尾部省略、權重或同等策略保持預覽為單行可讀
+- **AND** 站點預覽 SHALL NOT 換行展示
+- **AND** 站點預覽 SHALL NOT 與路線、候車、下一班、鈴鐺、價格、耗時或步行距離文字重疊
+
+#### Scenario: 大字體仍保持單行
+- **WHEN** 用戶在系統字體縮放變大時查看包含站點預覽的結果卡片
+- **THEN** 站點預覽 SHALL 仍保持單行展示
+- **AND** 超出左側文本區的內容 SHALL 被省略
+- **AND** 卡片頂部高度 SHALL NOT 因站點預覽換行而增加
 
 #### Scenario: 舊查詢預覽結果被忽略
 - **WHEN** 用戶在站點預覽補全期間發起新查詢、切換已保存路線、清空結果或離開主界面
@@ -126,4 +105,23 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **WHEN** 兩條候選路線的路線段、價格、耗時和步行距離相同，但推導出的上車站或下車站不同
 - **THEN** 系統 SHALL 將它們保留為不同路線結果
 - **AND** 系統 SHALL NOT 用其中一條路線的站點預覽覆蓋另一條路線
+
+### Requirement: 使用 P2P stop map 推導預覽站點名稱
+系統 SHALL 使用 Citybus P2P stop map 推導卡片預覽所需的上車站與下車站名稱。
+
+#### Scenario: 通過 P2P stop map 推導首末站
+- **WHEN** 系統成功取得某條路線 `rawInfo + lang` 對應的 P2P stop map
+- **THEN** 系統 SHALL 使用第一段 bus leg 的 `routeVariant + boardingSeq` 查找上車站
+- **AND** 系統 SHALL 使用最後一段 bus leg 的 `routeVariant + alightingSeq` 查找下車站
+- **AND** 系統 SHALL 使用兩個站點的展示名生成站點預覽
+
+#### Scenario: 預覽站點對齊 route variant
+- **WHEN** P2P route variant 與公開 route-stop 站序不一致
+- **THEN** 系統 SHALL 使用 P2P stop map 中對應 `routeVariant + seq` 的站點
+- **AND** 系統 SHALL NOT 使用 DATA.GOV.HK `route-stop` 的公開 route seq 覆蓋站點預覽
+
+#### Scenario: 任一站點推導失敗
+- **WHEN** P2P stop map 不可用、上車站或下車站任一方不存在、站名缺失或解析失敗
+- **THEN** 系統 SHALL 將該路線站點預覽視為不可用
+- **AND** 系統 SHALL NOT 影響該路線的主卡片結果展示
 

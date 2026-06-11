@@ -1,6 +1,7 @@
 package com.example.busiscoming.ui.main
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.NotificationManager
 import android.content.res.ColorStateList
 import android.content.Intent
@@ -11,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
 import android.graphics.Typeface
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -40,8 +42,8 @@ import com.example.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.example.busiscoming.data.repository.RouteDetailRepository
 import com.example.busiscoming.data.repository.RouteConfigRepository
 import com.example.busiscoming.service.BusMonitorService
+import com.example.busiscoming.service.BusMonitorSchedulingCapability
 import com.example.busiscoming.service.BusMonitorSessionStore
-import com.example.busiscoming.service.BusMonitorSpeechPreviewer
 import com.example.busiscoming.data.model.BusMonitorSessionPolicy
 import com.example.busiscoming.ui.common.applyStatusBarPadding
 import com.example.busiscoming.ui.edit.RouteEditActivity
@@ -88,7 +90,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeDetailBottomSheet: RouteDetailBottomSheet
     private lateinit var etaArrivalsBottomSheet: EtaArrivalsBottomSheet
     private lateinit var monitorSettingsBottomSheet: MonitorSettingsBottomSheet
-    private lateinit var monitorSpeechPreviewer: BusMonitorSpeechPreviewer
     private lateinit var temporaryRouteBottomSheet: TemporaryRouteBottomSheet
 
     private var routeConfigs: List<RouteConfig> = emptyList()
@@ -111,10 +112,8 @@ class MainActivity : AppCompatActivity() {
         clearExpiredMonitorSession()
         routeDetailBottomSheet = RouteDetailBottomSheet(this, routeDetailRepository)
         etaArrivalsBottomSheet = EtaArrivalsBottomSheet(this)
-        monitorSpeechPreviewer = BusMonitorSpeechPreviewer(this)
         monitorSettingsBottomSheet = MonitorSettingsBottomSheet(
             context = this,
-            onVoicePreview = { monitorSpeechPreviewer.playPreview() },
             onStart = { result ->
                 pendingMonitorStart?.copy(
                     walkingMinutes = result.walkingMinutes,
@@ -142,7 +141,6 @@ class MainActivity : AppCompatActivity() {
         routeDetailBottomSheet.dispose()
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
-        monitorSpeechPreviewer.release()
         temporaryRouteBottomSheet.dispose()
         queryExecutor.shutdownNow()
         placeSearchExecutor.shutdownNow()
@@ -376,6 +374,7 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     override fun onFailure(error: Throwable) {
+                        Log.e(LOG_TAG, "Bus route query failed", error)
                         mainHandler.post {
                             if (querySequence != queryId || isFinishing || isDestroyed) return@post
                             finishQueryLoading()
@@ -549,6 +548,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        promptHighPriorityMonitorSettingsIfNeeded()
         ContextCompat.startForegroundService(
             this,
             BusMonitorService.startIntent(
@@ -560,6 +560,25 @@ class MainActivity : AppCompatActivity() {
         )
         pendingMonitorStart = null
         Toast.makeText(this, "已開始通知欄監控", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun promptHighPriorityMonitorSettingsIfNeeded() {
+        val alarmManager = getSystemService(AlarmManager::class.java)
+        if (!BusMonitorSchedulingCapability.canScheduleExactAlarms(alarmManager)) {
+            val intent = BusMonitorSchedulingCapability.exactAlarmSettingsIntent(this)
+            if (intent != null && intent.resolveActivity(packageManager) != null) {
+                Toast.makeText(this, "可開啟鬧鐘與提醒，提升候車監控準時性", Toast.LENGTH_LONG).show()
+                startActivity(intent)
+                return
+            }
+        }
+        if (!BusMonitorSchedulingCapability.isIgnoringBatteryOptimizations(this)) {
+            val intent = BusMonitorSchedulingCapability.batteryOptimizationSettingsIntent(this)
+            if (intent.resolveActivity(packageManager) != null) {
+                Toast.makeText(this, "可允許忽略電池最佳化，提升鎖屏更新可靠性", Toast.LENGTH_LONG).show()
+                startActivity(intent)
+            }
+        }
     }
 
     private fun requiresNotificationPermission(): Boolean {
@@ -968,3 +987,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
+private const val LOG_TAG = "MainActivity"

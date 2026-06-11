@@ -9,11 +9,16 @@ import com.example.busiscoming.data.model.BusMonitorSessionSnapshotCodec
 import com.example.busiscoming.data.model.BusMonitorStateEvaluator
 import com.example.busiscoming.data.model.BusMonitorStatus
 import com.example.busiscoming.data.model.BusMonitorStopPolicy
+import com.example.busiscoming.data.model.BusMonitorStopTargetSource
 import com.example.busiscoming.data.model.BusMonitorTtsLanguagePolicy
+import com.example.busiscoming.data.model.BusMonitorTtsLanguageSelection
+import com.example.busiscoming.data.model.BusMonitorTtsLanguageUnavailableReason
 import com.example.busiscoming.data.model.FirstLegEtaQuery
 import com.example.busiscoming.data.model.WalkingScenarioModifier
 import com.example.busiscoming.data.model.WalkingSpeedPreset
 import com.example.busiscoming.data.model.WalkingTimeCalculator
+import com.example.busiscoming.service.BusMonitorSpeechFailureReason
+import com.example.busiscoming.service.BusMonitorSpeechResult
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -90,31 +95,16 @@ class BusMonitorModelsTest {
         assertFalse(
             BusMonitorStopPolicy.shouldAutoStop(
                 nowMillis = now,
-                firstEtaMillis = 9_000L,
-                secondEtaMillis = 10_001L
+                stopAtMillis = 10_001L
             )
         )
         assertTrue(
             BusMonitorStopPolicy.shouldAutoStop(
                 nowMillis = now,
-                firstEtaMillis = 9_000L,
-                secondEtaMillis = 10_000L
+                stopAtMillis = 10_000L
             )
         )
-        assertFalse(
-            BusMonitorStopPolicy.shouldAutoStop(
-                nowMillis = now,
-                firstEtaMillis = now - BusMonitorStopPolicy.FALLBACK_SECOND_ETA_DELAY_MILLIS + 1,
-                secondEtaMillis = null
-            )
-        )
-        assertTrue(
-            BusMonitorStopPolicy.shouldAutoStop(
-                nowMillis = now,
-                firstEtaMillis = now - BusMonitorStopPolicy.FALLBACK_SECOND_ETA_DELAY_MILLIS,
-                secondEtaMillis = null
-            )
-        )
+        assertFalse(BusMonitorStopPolicy.shouldAutoStop(nowMillis = now, stopAtMillis = null))
     }
 
     @Test
@@ -126,19 +116,53 @@ class BusMonitorModelsTest {
     @Test
     fun formatsMonitorNotificationSuccessAndFailureStates() {
         assertEquals(
-            "立即出門 · 剩餘 10 分鐘 · 下一班 18 分鐘 · 步行 8 分鐘 · 更新 08:30",
-            BusMonitorNotificationFormatter.successText(
-                status = BusMonitorStatus.LEAVE_NOW,
-                firstEtaMinutes = 10,
-                nextEtaMinutes = 18,
-                walkingMinutes = 8,
-                updatedAtText = "08:30"
+            "82X · 準備出門",
+            BusMonitorNotificationFormatter.title("82X → 102", BusMonitorStatus.PREPARE)
+        )
+        assertEquals(
+            "82X · 立即出門",
+            BusMonitorNotificationFormatter.title("82X", BusMonitorStatus.LEAVE_NOW)
+        )
+        assertEquals(
+            "82X · 快遲到了",
+            BusMonitorNotificationFormatter.title("82X", BusMonitorStatus.LATE)
+        )
+        assertEquals(
+            "剩餘 2 分鐘 · 車 5 分鐘到 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新",
+            BusMonitorNotificationFormatter.bodyText(
+                firstEtaMinutes = 5,
+                nextEtaMinutes = 25,
+                walkingMinutes = 3,
+                updatedAtText = "12:45"
             )
         )
         assertEquals(
-            "資料延遲 · 立即出門 · 剩餘 10 分鐘 · 更新失敗 2 次",
+            "已過 1 分鐘 · 車 2 分鐘到 · 步行 3 分鐘 · 12:45 更新",
+            BusMonitorNotificationFormatter.bodyText(
+                firstEtaMinutes = 2,
+                nextEtaMinutes = null,
+                walkingMinutes = 3,
+                updatedAtText = "12:45"
+            )
+        )
+        assertEquals(
+            BusMonitorNotificationFormatter.bodyText(
+                firstEtaMinutes = 5,
+                nextEtaMinutes = 25,
+                walkingMinutes = 3,
+                updatedAtText = "12:45"
+            ),
+            BusMonitorNotificationFormatter.successText(
+                firstEtaMinutes = 5,
+                nextEtaMinutes = 25,
+                walkingMinutes = 3,
+                updatedAtText = "12:45"
+            )
+        )
+        assertEquals(
+            "資料延遲 · 剩餘 2 分鐘 · 車 5 分鐘到 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新 · 更新失敗 2 次",
             BusMonitorNotificationFormatter.failureText(
-                lastSuccessfulNotificationText = "立即出門 · 剩餘 10 分鐘",
+                lastSuccessfulNotificationText = "剩餘 2 分鐘 · 車 5 分鐘到 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新",
                 failureCount = 2
             )
         )
@@ -175,6 +199,86 @@ class BusMonitorModelsTest {
         )
 
         assertEquals(refreshed, decoded)
+    }
+
+    @Test
+    fun firstSuccessfulRefreshFixesSecondEtaStopTarget() {
+        val session = BusMonitorSessionPolicy.newSession(
+            nowMillis = 1_000L,
+            routeName = "A12",
+            walkingMinutes = 8,
+            voiceEnabled = true,
+            query = etaQuery()
+        )
+
+        val refreshed = BusMonitorSessionPolicy.recordSuccessfulRefresh(
+            snapshot = session,
+            nowMillis = 2_000L,
+            status = BusMonitorStatus.LEAVE_NOW,
+            lastSpokenStatus = BusMonitorStatus.LEAVE_NOW,
+            notificationText = "立即出門",
+            firstEtaMillis = 11_000L,
+            secondEtaMillis = 21_000L
+        )
+
+        assertEquals(21_000L, refreshed.stopAtMillis)
+        assertEquals(BusMonitorStopTargetSource.SECOND_ETA, refreshed.stopTargetSource)
+    }
+
+    @Test
+    fun firstSuccessfulRefreshUsesFirstEtaFallbackStopTargetWhenSecondEtaMissing() {
+        val session = BusMonitorSessionPolicy.newSession(
+            nowMillis = 1_000L,
+            routeName = "A12",
+            walkingMinutes = 8,
+            voiceEnabled = true,
+            query = etaQuery()
+        )
+
+        val refreshed = BusMonitorSessionPolicy.recordSuccessfulRefresh(
+            snapshot = session,
+            nowMillis = 2_000L,
+            status = BusMonitorStatus.LEAVE_NOW,
+            lastSpokenStatus = BusMonitorStatus.LEAVE_NOW,
+            notificationText = "立即出門",
+            firstEtaMillis = 11_000L,
+            secondEtaMillis = null
+        )
+
+        assertEquals(131_000L, refreshed.stopAtMillis)
+        assertEquals(BusMonitorStopTargetSource.FIRST_ETA_FALLBACK, refreshed.stopTargetSource)
+    }
+
+    @Test
+    fun laterSuccessfulRefreshDoesNotExtendFixedStopTarget() {
+        val session = BusMonitorSessionPolicy.recordSuccessfulRefresh(
+            snapshot = BusMonitorSessionPolicy.newSession(
+                nowMillis = 1_000L,
+                routeName = "A12",
+                walkingMinutes = 8,
+                voiceEnabled = true,
+                query = etaQuery()
+            ),
+            nowMillis = 2_000L,
+            status = BusMonitorStatus.LEAVE_NOW,
+            lastSpokenStatus = BusMonitorStatus.LEAVE_NOW,
+            notificationText = "立即出門",
+            firstEtaMillis = 11_000L,
+            secondEtaMillis = 21_000L
+        )
+
+        val refreshedAgain = BusMonitorSessionPolicy.recordSuccessfulRefresh(
+            snapshot = session,
+            nowMillis = 3_000L,
+            status = BusMonitorStatus.PREPARE,
+            lastSpokenStatus = BusMonitorStatus.PREPARE,
+            notificationText = "準備出門",
+            firstEtaMillis = 30_000L,
+            secondEtaMillis = 60_000L
+        )
+
+        assertEquals(21_000L, refreshedAgain.stopAtMillis)
+        assertEquals(BusMonitorStopTargetSource.SECOND_ETA, refreshedAgain.stopTargetSource)
     }
 
     @Test
@@ -240,6 +344,50 @@ class BusMonitorModelsTest {
         assertEquals(Locale.TRADITIONAL_CHINESE, BusMonitorTtsLanguagePolicy.fallbackLocales.first())
         assertTrue(BusMonitorTtsLanguagePolicy.isLanguageUsable(0))
         assertFalse(BusMonitorTtsLanguagePolicy.isLanguageUsable(-1))
+    }
+
+    @Test
+    fun ttsLanguagePolicyKeepsDiagnosticsForMissingDataAndUnsupportedLanguages() {
+        val missingData = BusMonitorTtsLanguagePolicy.selectSupportedLocale { locale ->
+            if (locale == Locale.TRADITIONAL_CHINESE) {
+                BusMonitorTtsLanguagePolicy.LANGUAGE_MISSING_DATA
+            } else {
+                BusMonitorTtsLanguagePolicy.LANGUAGE_NOT_SUPPORTED
+            }
+        }
+        val unsupported = BusMonitorTtsLanguagePolicy.selectSupportedLocale {
+            BusMonitorTtsLanguagePolicy.LANGUAGE_NOT_SUPPORTED
+        }
+
+        assertTrue(missingData is BusMonitorTtsLanguageSelection.Unavailable)
+        assertEquals(
+            BusMonitorTtsLanguageUnavailableReason.MISSING_DATA,
+            (missingData as BusMonitorTtsLanguageSelection.Unavailable).reason
+        )
+        assertTrue(unsupported is BusMonitorTtsLanguageSelection.Unavailable)
+        assertEquals(
+            BusMonitorTtsLanguageUnavailableReason.NOT_SUPPORTED,
+            (unsupported as BusMonitorTtsLanguageSelection.Unavailable).reason
+        )
+        assertTrue(BusMonitorTtsLanguagePolicy.fallbackLocales.contains(Locale.SIMPLIFIED_CHINESE))
+        assertTrue(BusMonitorTtsLanguagePolicy.fallbackLocales.contains(Locale.forLanguageTag("yue-HK")))
+    }
+
+    @Test
+    fun speechResultTracksSpokenAndDiagnosticFailureStates() {
+        assertTrue(BusMonitorSpeechResult.Started.countsAsSpoken)
+        assertTrue(BusMonitorSpeechResult.Completed.countsAsSpoken)
+        assertFalse(BusMonitorSpeechResult.Accepted.countsAsSpoken)
+        assertFalse(
+            BusMonitorSpeechResult.Failure(
+                BusMonitorSpeechFailureReason.LANGUAGE_MISSING_DATA
+            ).countsAsSpoken
+        )
+        assertFalse(
+            BusMonitorSpeechResult.Failure(
+                BusMonitorSpeechFailureReason.AUDIO_FOCUS_DENIED
+            ).countsAsSpoken
+        )
     }
 
     private fun etaQuery(): FirstLegEtaQuery {
