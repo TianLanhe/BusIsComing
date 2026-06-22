@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <item name="tag_initial_padding" type="id" />
+    <item name="temporaryOriginCandidateList" type="id" />
+    <item name="temporaryDestinationCandidateList" type="id" />
+    <item name="temporaryOriginInput" type="id" />
+    <item name="temporaryDestinationInput" type="id" />
+    <item name="routeDetailScroll" type="id" />
+    <item name="instrumentedPlaceInput" type="id" />
 </resources>

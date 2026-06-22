@@ -16,6 +16,7 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -83,8 +84,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var resultStatusProgress: ProgressBar
     private lateinit var resultStatusTitle: TextView
     private lateinit var resultStatusMessage: TextView
+    private lateinit var resultListContainer: View
     private lateinit var resultSwipeRefresh: SwipeRefreshLayout
     private lateinit var resultList: RecyclerView
+    private lateinit var resultRefreshOverlay: MaterialCardView
+    private lateinit var resultRefreshProgress: ProgressBar
+    private lateinit var resultRefreshSuccess: ImageView
     private lateinit var sortButtons: Map<SortField, MaterialButton>
     private lateinit var busRouteAdapter: BusRouteAdapter
     private lateinit var routeDetailBottomSheet: RouteDetailBottomSheet
@@ -102,6 +107,10 @@ class MainActivity : AppCompatActivity() {
     private var isQueryInProgress: Boolean = false
     private var preserveSortOnNextResults: Boolean = false
     private var pendingMonitorStart: PendingMonitorStart? = null
+    private val refreshFeedbackState = RouteRefreshFeedbackState()
+    private var refreshFinishRunnable: Runnable? = null
+    private var refreshViewport: RefreshViewport? = null
+    private var resultListBasePadding: ViewPadding? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -171,8 +180,18 @@ class MainActivity : AppCompatActivity() {
         resultStatusProgress = findViewById(R.id.resultStatusProgress)
         resultStatusTitle = findViewById(R.id.resultStatusTitle)
         resultStatusMessage = findViewById(R.id.resultStatusMessage)
+        resultListContainer = findViewById(R.id.resultListContainer)
         resultSwipeRefresh = findViewById(R.id.resultSwipeRefresh)
         resultList = findViewById(R.id.busRouteList)
+        resultRefreshOverlay = findViewById(R.id.resultRefreshOverlay)
+        resultRefreshProgress = findViewById(R.id.resultRefreshProgress)
+        resultRefreshSuccess = findViewById(R.id.resultRefreshSuccess)
+        resultListBasePadding = ViewPadding(
+            left = resultList.paddingLeft,
+            top = resultList.paddingTop,
+            right = resultList.paddingRight,
+            bottom = resultList.paddingBottom
+        )
         sortButtons = mapOf(
             SortField.ROUTE to findViewById(R.id.sortRouteButton),
             SortField.PRICE to findViewById(R.id.sortPriceButton),
@@ -208,6 +227,7 @@ class MainActivity : AppCompatActivity() {
         resultList.layoutManager = LinearLayoutManager(this)
         resultList.adapter = busRouteAdapter
         resultSwipeRefresh.setColorSchemeResources(R.color.bus_chip_selected)
+        renderRefreshFeedback()
         updateSwipeRefreshState()
     }
 
@@ -342,7 +362,7 @@ class MainActivity : AppCompatActivity() {
         updateTemporaryQueryContext()
         busRouteRepository.cancelProgressiveQueries()
         if (isRefresh) {
-            showRefreshLoadingState()
+            showRefreshLoadingState(queryId)
         } else {
             showLoadingState()
         }
@@ -354,8 +374,12 @@ class MainActivity : AppCompatActivity() {
                     override fun onInitialRoutes(routes: List<BusRouteOption>) {
                         mainHandler.post {
                             if (querySequence != queryId || isFinishing || isDestroyed) return@post
-                            finishQueryLoading()
-                            showInitialRoutes(routes)
+                            if (isRefresh) {
+                                handleRefreshSuccess(queryId, routes)
+                            } else {
+                                finishQueryLoading()
+                                showInitialRoutes(routes)
+                            }
                         }
                     }
 
@@ -377,10 +401,10 @@ class MainActivity : AppCompatActivity() {
                         Log.e(LOG_TAG, "Bus route query failed", error)
                         mainHandler.post {
                             if (querySequence != queryId || isFinishing || isDestroyed) return@post
-                            finishQueryLoading()
                             if (isRefresh) {
-                                Toast.makeText(this@MainActivity, "刷新失敗，請稍後重試", Toast.LENGTH_SHORT).show()
+                                handleRefreshFailure(queryId)
                             } else {
+                                finishQueryLoading()
                                 currentResults = emptyList()
                                 sortField = null
                                 sortDirection = SortDirection.ASC
@@ -408,6 +432,46 @@ class MainActivity : AppCompatActivity() {
         updateSortControls()
         updateResultSummary(routes)
         displayResults(currentResults)
+    }
+
+    private fun handleRefreshSuccess(queryId: Int, routes: List<BusRouteOption>) {
+        val result = if (routes.isEmpty()) RouteRefreshResult.EMPTY else RouteRefreshResult.NON_EMPTY
+        if (!refreshFeedbackState.succeed(queryId, result)) return
+
+        if (routes.isNotEmpty()) {
+            showInitialRoutes(routes)
+            resultList.scrollToPosition(0)
+        }
+        renderRefreshFeedback()
+        scheduleRefreshSuccessFinish(queryId)
+    }
+
+    private fun scheduleRefreshSuccessFinish(queryId: Int) {
+        refreshFinishRunnable?.let(mainHandler::removeCallbacks)
+        val runnable = Runnable { finishRefreshSuccess(queryId) }
+        refreshFinishRunnable = runnable
+        mainHandler.postDelayed(runnable, REFRESH_SUCCESS_DURATION_MS)
+    }
+
+    private fun finishRefreshSuccess(queryId: Int) {
+        val action = refreshFeedbackState.finishSuccess(queryId) ?: return
+        refreshFinishRunnable = null
+        if (action == RouteRefreshFinishAction.SHOW_EMPTY_RESULTS) {
+            showInitialRoutes(emptyList())
+        }
+        refreshViewport = null
+        renderRefreshFeedback()
+        finishQueryLoading()
+    }
+
+    private fun handleRefreshFailure(queryId: Int) {
+        if (!refreshFeedbackState.fail(queryId)) return
+        refreshFinishRunnable?.let(mainHandler::removeCallbacks)
+        refreshFinishRunnable = null
+        renderRefreshFeedback()
+        finishQueryLoading()
+        restoreRefreshViewport()
+        Toast.makeText(this, "刷新失敗，請稍後重試", Toast.LENGTH_SHORT).show()
     }
 
     private fun updateRouteWaitTime(routeId: String, waitTimeState: WaitTimeState) {
@@ -462,7 +526,7 @@ class MainActivity : AppCompatActivity() {
             busRouteAdapter.submitList(emptyList())
             sortControls.visibility = View.GONE
             hideResultSummary()
-            resultSwipeRefresh.visibility = View.GONE
+            resultListContainer.visibility = View.GONE
             showStatus(
                 title = "暫無可用巴士路線",
                 message = "可以換一條常用路線，或稍後再試。",
@@ -472,11 +536,11 @@ class MainActivity : AppCompatActivity() {
             hideStatus()
             sortControls.visibility = View.VISIBLE
             resultSummaryContainer.visibility = View.VISIBLE
-            val shouldAnimate = resultSwipeRefresh.visibility != View.VISIBLE
-            resultSwipeRefresh.visibility = View.VISIBLE
+            val shouldAnimate = resultListContainer.visibility != View.VISIBLE
+            resultListContainer.visibility = View.VISIBLE
             busRouteAdapter.submitList(results)
             if (shouldAnimate) {
-                animateIn(resultSwipeRefresh)
+                animateIn(resultListContainer)
             }
         }
         updateSwipeRefreshState()
@@ -664,7 +728,7 @@ class MainActivity : AppCompatActivity() {
         busRouteAdapter.submitList(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
-        resultSwipeRefresh.visibility = View.GONE
+        resultListContainer.visibility = View.GONE
         hideStatus()
         updateSwipeRefreshState()
     }
@@ -672,6 +736,10 @@ class MainActivity : AppCompatActivity() {
     private fun invalidateActiveQuery() {
         querySequence += 1
         busRouteRepository.cancelProgressiveQueries()
+        cancelRefreshFeedback()
+        if (::queryButton.isInitialized) {
+            setQueryLoading(false)
+        }
     }
 
     private fun renderRouteShortcuts() {
@@ -825,7 +893,7 @@ class MainActivity : AppCompatActivity() {
         busRouteAdapter.submitList(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
-        resultSwipeRefresh.visibility = View.GONE
+        resultListContainer.visibility = View.GONE
         showStatus(
             title = "正在查詢路線",
             message = "正在匹配可用巴士方案和候車時間。",
@@ -833,17 +901,23 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun showRefreshLoadingState() {
+    private fun showRefreshLoadingState(queryId: Int) {
+        if (!refreshFeedbackState.start(queryId)) {
+            resultSwipeRefresh.isRefreshing = false
+            return
+        }
+        captureRefreshViewport()
         setQueryLoading(true)
-        resultSwipeRefresh.isRefreshing = true
+        resultSwipeRefresh.isRefreshing = false
         hideStatus()
+        renderRefreshFeedback()
     }
 
     private fun displayFailure() {
         busRouteAdapter.submitList(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
-        resultSwipeRefresh.visibility = View.GONE
+        resultListContainer.visibility = View.GONE
         showStatus(
             title = "路線查詢失敗",
             message = "請稍後重試，或換一條常用路線再查。",
@@ -861,6 +935,56 @@ class MainActivity : AppCompatActivity() {
     private fun finishQueryLoading() {
         resultSwipeRefresh.isRefreshing = false
         setQueryLoading(false)
+    }
+
+    private fun captureRefreshViewport() {
+        val layoutManager = resultList.layoutManager as? LinearLayoutManager ?: return
+        val position = layoutManager.findFirstVisibleItemPosition()
+        if (position == RecyclerView.NO_POSITION) return
+        val offset = layoutManager.findViewByPosition(position)?.top ?: 0
+        refreshViewport = RefreshViewport(position, offset)
+    }
+
+    private fun restoreRefreshViewport() {
+        val viewport = refreshViewport ?: return
+        refreshViewport = null
+        resultList.post {
+            val layoutManager = resultList.layoutManager as? LinearLayoutManager ?: return@post
+            layoutManager.scrollToPositionWithOffset(viewport.position, viewport.offset)
+        }
+    }
+
+    private fun cancelRefreshFeedback() {
+        refreshFinishRunnable?.let(mainHandler::removeCallbacks)
+        refreshFinishRunnable = null
+        refreshViewport = null
+        refreshFeedbackState.cancel()
+        if (::resultRefreshOverlay.isInitialized) {
+            renderRefreshFeedback()
+        }
+    }
+
+    private fun renderRefreshFeedback() {
+        val basePadding = resultListBasePadding ?: return
+        val isVisible = refreshFeedbackState.visualState != RouteRefreshVisualState.IDLE
+        resultRefreshOverlay.visibility = if (isVisible) View.VISIBLE else View.GONE
+        resultRefreshProgress.visibility =
+            if (refreshFeedbackState.visualState == RouteRefreshVisualState.REFRESHING) View.VISIBLE else View.GONE
+        resultRefreshSuccess.visibility =
+            if (refreshFeedbackState.visualState == RouteRefreshVisualState.SUCCESS) View.VISIBLE else View.GONE
+        resultRefreshOverlay.contentDescription = getString(
+            if (refreshFeedbackState.visualState == RouteRefreshVisualState.SUCCESS) {
+                R.string.route_refresh_complete
+            } else {
+                R.string.route_refreshing
+            }
+        )
+        resultList.setPadding(
+            basePadding.left,
+            basePadding.top + if (isVisible) dp(REFRESH_LIST_TOP_INSET_DP) else 0,
+            basePadding.right,
+            basePadding.bottom
+        )
     }
 
     private fun updateSwipeRefreshState() {
@@ -972,6 +1096,18 @@ class MainActivity : AppCompatActivity() {
         val voiceEnabled: Boolean = true
     )
 
+    private data class RefreshViewport(
+        val position: Int,
+        val offset: Int
+    )
+
+    private data class ViewPadding(
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int
+    )
+
     private sealed class QueryContext {
         data class Saved(val routeId: Long) : QueryContext()
         data class Temporary(val origin: Place, val destination: Place) : QueryContext()
@@ -979,6 +1115,8 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_POST_NOTIFICATIONS = 301
+        private const val REFRESH_LIST_TOP_INSET_DP = 44
+        private const val REFRESH_SUCCESS_DURATION_MS = 500L
 
         private val RESULT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {

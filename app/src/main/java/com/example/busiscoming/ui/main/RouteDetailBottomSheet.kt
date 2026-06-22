@@ -13,10 +13,10 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.NestedScrollView
 import com.example.busiscoming.R
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.data.model.RouteDetail
@@ -339,7 +339,7 @@ class RouteDetailBottomSheet(
         }
         val closeButton: MaterialButton
         val loadingRow: LinearLayout
-        val detailScroll: ScrollView
+        val detailScroll: NestedScrollView
         val detailContainer: LinearLayout
         val errorContainer: LinearLayout
         val errorMessage: TextView
@@ -435,9 +435,11 @@ class RouteDetailBottomSheet(
             detailContainer = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
             }
-            detailScroll = ScrollView(activity).apply {
+            detailScroll = NestedScrollView(activity).apply {
+                id = R.id.routeDetailScroll
                 visibility = View.GONE
                 isFillViewport = false
+                isNestedScrollingEnabled = true
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT

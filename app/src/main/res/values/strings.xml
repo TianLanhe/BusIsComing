@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">BusIsComing</string>
+    <string name="route_refreshing">正在刷新</string>
+    <string name="route_refresh_complete">刷新完成</string>
 </resources>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/routeEditScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bus_surface"
@@ -60,7 +61,7 @@
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/originInputLayout"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="輸入起點關鍵字，並從匹配清單中選擇">
@@ -98,9 +99,18 @@
                         android:textSize="13sp" />
                 </LinearLayout>
 
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/originCandidateList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/status_card_background"
+                    android:nestedScrollingEnabled="true"
+                    android:visibility="gone" />
+
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/destinationInputLayout"
-                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
@@ -138,13 +148,23 @@
                         android:textColor="@color/bus_text_secondary"
                         android:textSize="13sp" />
                 </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/destinationCandidateList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/status_card_background"
+                    android:nestedScrollingEnabled="true"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/swapPlacesButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_gravity="end|center_vertical"
+                android:layout_gravity="end|top"
+                android:layout_marginTop="52dp"
                 android:background="@drawable/sort_chip_background"
                 android:contentDescription="交換起點和終點"
                 android:padding="9dp"

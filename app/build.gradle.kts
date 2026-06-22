@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.jsoup)
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.core.ktx)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }

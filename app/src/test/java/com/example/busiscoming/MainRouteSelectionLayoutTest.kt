@@ -21,4 +21,14 @@ class MainRouteSelectionLayoutTest {
     fun doesNotShowStandaloneSortTitle() {
         assertFalse(layoutXml.contains("android:text=\"排序\""))
     }
+
+    @Test
+    fun resultListUsesFixedRefreshOverlayContainer() {
+        assertTrue(layoutXml.contains("android:id=\"@+id/resultListContainer\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/resultRefreshOverlay\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/resultRefreshProgress\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/resultRefreshSuccess\""))
+        assertTrue(layoutXml.contains("android:clickable=\"false\""))
+        assertTrue(layoutXml.contains("android:focusable=\"false\""))
+    }
 }

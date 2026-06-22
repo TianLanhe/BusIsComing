@@ -32,7 +32,8 @@
 
         <activity
             android:name=".ui.edit.RouteEditActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".ui.manage.RouteManageActivity"
             android:exported="false" />
