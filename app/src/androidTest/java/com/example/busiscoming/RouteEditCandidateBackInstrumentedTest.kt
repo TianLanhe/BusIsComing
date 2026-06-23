@@ -27,7 +27,7 @@ class RouteEditCandidateBackInstrumentedTest {
     fun firstBackClosesCandidatesAndSecondBackReturnsToMainPage() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
-                activity.startActivity(Intent(activity, RouteEditActivity::class.java))
+                activity.startActivity(prefilledRouteEditIntent(activity))
             }
             onView(withId(R.id.routeEditTitle)).check(matches(isDisplayed()))
             onView(withId(R.id.originCandidateList)).perform(setVisible())
@@ -50,6 +50,18 @@ class RouteEditCandidateBackInstrumentedTest {
                 view.visibility = View.VISIBLE
                 uiController.loopMainThreadUntilIdle()
             }
+        }
+    }
+
+    private fun prefilledRouteEditIntent(activity: MainActivity): Intent {
+        return Intent(activity, RouteEditActivity::class.java).apply {
+            putExtra(RouteEditActivity.EXTRA_PREFILL_NAME, "測試路線")
+            putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_NAME, "測試起點")
+            putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LATITUDE, 22.3)
+            putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LONGITUDE, 114.2)
+            putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_NAME, "測試終點")
+            putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_LATITUDE, 22.4)
+            putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_LONGITUDE, 114.3)
         }
     }
 }

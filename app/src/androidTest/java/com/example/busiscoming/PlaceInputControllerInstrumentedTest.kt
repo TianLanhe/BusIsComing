@@ -1,21 +1,22 @@
 package com.example.busiscoming
 
 import android.content.Context
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.busiscoming.data.location.CurrentLocationSnapshot
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.repository.PlaceSearchRepository
 import com.example.busiscoming.ui.common.PlaceInputController
@@ -25,6 +26,7 @@ import com.google.android.material.textfield.TextInputLayout
 import java.util.concurrent.Executors
 import java.io.FileInputStream
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,7 +35,7 @@ import org.junit.runner.RunWith
 class PlaceInputControllerInstrumentedTest {
     @Test
     fun inlineCandidatesLimitResultsIgnoreStaleSearchAndRemainScrollable() {
-        ActivityScenario.launch(RouteEditActivity::class.java).use { scenario ->
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
             val executor = Executors.newSingleThreadExecutor()
             lateinit var controller: PlaceInputController
             lateinit var input: MaterialAutoCompleteTextView
@@ -102,13 +104,11 @@ class PlaceInputControllerInstrumentedTest {
             scenario.onActivity { activity ->
                 assertEquals(100, candidateList.adapter?.itemCount)
                 assertTrue(candidateList.isNestedScrollingEnabled)
-                val insets = checkNotNull(ViewCompat.getRootWindowInsets(candidateList))
-                val rowHeight = dp(activity, 48)
-                val visibleHeight = candidateList.rootView.height -
-                    insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-                val allowedHeight = maxOf((visibleHeight * 0.4f).toInt(), rowHeight * 3)
-                assertTrue(candidateList.layoutParams.height >= rowHeight * 3)
-                assertTrue(candidateList.layoutParams.height <= allowedHeight)
+                assertTrue(candidateList.background != null)
+                val rowHeight = dp(activity, 52)
+                val visibleRows = candidateList.layoutParams.height / rowHeight
+                assertEquals(0, candidateList.layoutParams.height % rowHeight)
+                assertTrue(visibleRows in 3..6)
                 candidateList.requestRectangleOnScreen(
                     android.graphics.Rect(0, 0, candidateList.width, candidateList.height),
                     true
@@ -119,9 +119,35 @@ class PlaceInputControllerInstrumentedTest {
                 val adapter = candidateList.adapter as RecyclerView.Adapter<RecyclerView.ViewHolder>
                 val holder = adapter.createViewHolder(candidateList, 0)
                 adapter.bindViewHolder(holder, 0)
-                assertEquals("新候選1", (holder.itemView as TextView).text.toString())
+                val row = holder.itemView as LinearLayout
+                assertEquals(rowHeight, row.layoutParams.height)
+                assertTrue(row.background != null)
+                val nameView = row.getChildAt(0) as TextView
+                val distanceContainer = row.getChildAt(1) as LinearLayout
+                assertEquals("新候選1", nameView.text.toString())
+                assertEquals(16f, nameView.textSize / activity.resources.displayMetrics.scaledDensity, 0.1f)
+                assertEquals(View.GONE, distanceContainer.visibility)
+
+                controller.setCurrentLocationSnapshot(
+                    CurrentLocationSnapshot(
+                        latitude = 22.3,
+                        longitude = 114.2,
+                        accuracyMeters = 20f,
+                        elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
+                    )
+                )
+                adapter.bindViewHolder(holder, 0)
+                val distanceIcon = distanceContainer.getChildAt(0) as ImageView
+                val distanceView = distanceContainer.getChildAt(1) as TextView
+                assertEquals(View.VISIBLE, distanceContainer.visibility)
+                assertEquals(dp(activity, 14), distanceIcon.layoutParams.width)
+                assertEquals("0m", distanceView.text.toString())
+                assertEquals(13f, distanceView.textSize / activity.resources.displayMetrics.scaledDensity, 0.1f)
+                assertTrue(row.contentDescription.toString().contains("距離目前位置 0 米"))
+                assertFalse(row.contentDescription.toString().contains("•"))
                 holder.itemView.performClick()
                 assertEquals("新候選1", controller.selectedPlace?.name)
+                assertEquals("新候選1", input.text.toString())
             }
 
             scenario.onActivity {
@@ -142,6 +168,19 @@ class PlaceInputControllerInstrumentedTest {
 
     private fun place(name: String): Place {
         return Place(name = name, latitude = 22.3, longitude = 114.2)
+    }
+
+    private fun prefilledRouteEditIntent(): Intent {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        return Intent(context, RouteEditActivity::class.java).apply {
+            putExtra(RouteEditActivity.EXTRA_PREFILL_NAME, "測試路線")
+            putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_NAME, "測試起點")
+            putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LATITUDE, 22.3)
+            putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LONGITUDE, 114.2)
+            putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_NAME, "測試終點")
+            putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_LATITUDE, 22.4)
+            putExtra(RouteEditActivity.EXTRA_PREFILL_DESTINATION_LONGITUDE, 114.3)
+        }
     }
 
     private fun dp(context: Context, value: Int): Int {

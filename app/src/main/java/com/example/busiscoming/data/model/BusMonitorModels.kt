@@ -1,12 +1,8 @@
 package com.example.busiscoming.data.model
 
+import com.example.busiscoming.data.location.GeoDistanceCalculator
 import java.util.Locale
-import kotlin.math.atan2
 import kotlin.math.ceil
-import kotlin.math.cos
-import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 enum class WalkingSpeedPreset(
     val label: String,
@@ -78,15 +74,12 @@ object WalkingTimeCalculator {
     }
 
     fun straightLineDistanceMeters(from: Place, toLatitude: Double, toLongitude: Double): Int {
-        val earthRadiusMeters = 6_371_000.0
-        val startLat = Math.toRadians(from.latitude)
-        val endLat = Math.toRadians(toLatitude)
-        val deltaLat = Math.toRadians(toLatitude - from.latitude)
-        val deltaLon = Math.toRadians(toLongitude - from.longitude)
-        val a = sin(deltaLat / 2) * sin(deltaLat / 2) +
-            cos(startLat) * cos(endLat) * sin(deltaLon / 2) * sin(deltaLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return (earthRadiusMeters * c).roundToInt().coerceAtLeast(0)
+        return GeoDistanceCalculator.distanceMeters(
+            fromLatitude = from.latitude,
+            fromLongitude = from.longitude,
+            toLatitude = toLatitude,
+            toLongitude = toLongitude
+        )
     }
 }
 

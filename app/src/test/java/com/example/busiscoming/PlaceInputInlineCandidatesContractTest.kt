@@ -19,6 +19,7 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(editLayoutXml.contains("android:id=\"@+id/originCandidateList\""))
         assertTrue(editLayoutXml.contains("android:id=\"@+id/destinationCandidateList\""))
         assertTrue(editLayoutXml.contains("android:id=\"@+id/routeEditScroll\""))
+        assertTrue(editLayoutXml.contains("<androidx.core.widget.NestedScrollView"))
     }
 
     @Test
@@ -26,6 +27,8 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(controllerKt.contains("private val candidateList: RecyclerView"))
         assertTrue(controllerKt.contains("fun hideCandidates(): Boolean"))
         assertTrue(controllerKt.contains("WindowInsetsCompat.Type.ime()"))
+        assertTrue(controllerKt.contains("place_candidate_list_background"))
+        assertTrue(controllerKt.contains("PlaceDistanceFormatter"))
         assertFalse(controllerKt.contains("showDropDown()"))
         assertFalse(controllerKt.contains("dismissDropDown()"))
     }
