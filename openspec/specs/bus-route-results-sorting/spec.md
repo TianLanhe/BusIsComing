@@ -1,0 +1,53 @@
+# bus-route-results-sorting Specification
+
+## Purpose
+TBD - created by archiving change build-bus-query-mvp. Update Purpose after archive.
+## Requirements
+### Requirement: 按价格排序巴士结果
+
+系统 SHALL 允许用户通过价格表头按港币价格排序当前展示的巴士路线结果。
+
+#### Scenario: 价格升序排序
+- **WHEN** 用户在当前结果集未按价格排序时点击价格表头
+- **THEN** 系统按价格升序展示当前结果集
+
+#### Scenario: 价格降序排序
+- **WHEN** 用户在当前结果集已按价格升序排序时再次点击价格表头
+- **THEN** 系统按价格降序展示当前结果集
+
+### Requirement: 按预计等候时间排序巴士结果
+
+系统 SHALL 允许用户通过预计等候时间表头按车辆等待分钟数排序当前展示的巴士路线结果。
+
+#### Scenario: 等待时间升序排序
+- **WHEN** 用户在当前结果集未按预计等候时间排序时点击预计等候时间表头
+- **THEN** 系统按等待分钟数升序展示当前结果集
+
+#### Scenario: 等待时间降序排序
+- **WHEN** 用户在当前结果集已按等待时间升序排序时再次点击预计等候时间表头
+- **THEN** 系统按等待分钟数降序展示当前结果集
+
+### Requirement: 展示当前排序方向
+
+系统 SHALL 在当前激活的可排序表头上展示排序方向。
+
+#### Scenario: 展示升序方向
+- **WHEN** 当前结果按价格或预计等候时间升序排序
+- **THEN** 激活表头展示升序方向标记
+
+#### Scenario: 展示降序方向
+- **WHEN** 当前结果按价格或预计等候时间降序排序
+- **THEN** 激活表头展示降序方向标记
+
+### Requirement: 排序时保留结果集
+
+系统 SHALL 在排序时只改变当前巴士路线结果集的展示顺序，并且 MUST NOT 增加、删除或重复结果行。
+
+#### Scenario: 排序保留所有行
+- **WHEN** 用户对非空巴士路线结果集排序
+- **THEN** 展示行仍包含排序前相同的路线结果，只改变顺序
+
+#### Scenario: 排序处理相同值
+- **WHEN** 两条或多条路线结果在排序字段上具有相同价格或等待时间
+- **THEN** 系统保持所有匹配行可见，不丢失或重复数据
+

@@ -174,3 +174,25 @@ TBD - created by archiving change add-route-detail-bottom-sheet. Update Purpose 
 - **THEN** 系统 SHALL NOT 缓存该失败结果
 - **AND** 用户后续重试或再次打开同一路线详情时 SHALL 重新请求详情接口
 
+### Requirement: 路線詳情內容優先處理巢狀滾動
+系統 SHALL 讓路線詳情內容與底部彈層協調巢狀滾動，確保長內容可完整向下及向上瀏覽。
+
+#### Scenario: 展開大量途經站後滾動詳情
+- **WHEN** 用戶展開包含大量途經站的路線分段
+- **THEN** 用戶 SHALL 能夠向上滑動查看後續站點
+- **AND** 用戶 SHALL 能夠再向下滑動返回詳情頂部
+
+#### Scenario: 內容未到頂時向下滑動
+- **WHEN** 路線詳情內容目前未位於滾動頂部且用戶向下滑動
+- **THEN** 系統 SHALL 優先將詳情內容向頂部滾動
+- **AND** 底部彈層 SHALL NOT 在內容回到頂部前先行收合或關閉
+
+#### Scenario: 內容到頂後繼續向下拖動
+- **WHEN** 路線詳情內容已位於滾動頂部且用戶繼續向下拖動
+- **THEN** 系統 SHALL 沿用既有底部彈層收合或關閉行為
+
+#### Scenario: 保持既有詳情彈層行為
+- **WHEN** 用戶打開、展開、收合或關閉路線詳情
+- **THEN** 系統 SHALL 保持既有初始彈層高度、長內容展開、拖動關閉及右上角關閉按鈕
+- **AND** 系統 SHALL NOT 改動詳情載入、失敗、重試、時間線、途經站折疊、資料解析或快取行為
+

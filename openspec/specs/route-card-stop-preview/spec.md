@@ -57,7 +57,7 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **AND** 系統 SHALL NOT 為每張路線卡片建立無界線程或無界網絡請求
 
 ### Requirement: 路線卡片漸進展示站點預覽
-系統 SHALL 在不阻塞路線列表首屏展示的前提下，於路線卡片中漸進展示成功解析的站點預覽，且站點預覽 SHALL 被限制在左側文本區內單行展示。
+系統 SHALL 在不阻塞路線列表首屏展示的前提下，於路線卡片中漸進展示成功解析的站點預覽，且站點預覽 SHALL 被限制在左側文本區內單行展示，並使用右側候車資訊區之前的最大可用寬度。
 
 #### Scenario: 路線列表先於站點預覽展示
 - **WHEN** 路線查詢成功並返回一條或多條路線
@@ -70,6 +70,18 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **AND** `A站` SHALL 為首程上車站顯示名
 - **AND** `B站` SHALL 為末程下車站顯示名
 - **AND** 站點預覽 SHALL 使用左側文本區可用寬度，不得侵入右側候車資訊區
+
+#### Scenario: 站點預覽使用候車區前最大可用寬度
+- **WHEN** 某條路線的站點預覽較長，且卡片右側展示主候車狀態、下一班摘要和通知鈴鐺
+- **THEN** 站點預覽 SHALL 使用右側候車資訊區左邊界之前的最大可用單行寬度
+- **AND** 站點預覽 SHALL NOT 提前縮短到明顯小於左側可用空間的寬度
+- **AND** 站點預覽 SHALL NOT 與右側主候車狀態、下一班摘要或通知鈴鐺重疊
+
+#### Scenario: 右側 padding 收斂後站點預覽延伸
+- **WHEN** 卡片頂部右側視覺 padding 被收斂以對齊左側文字起點
+- **THEN** 站點預覽 SHALL 可使用因此增加的左側文本可用寬度
+- **AND** 站點預覽 SHALL 仍以候車文字欄左邊界作為避讓邊界
+- **AND** 站點預覽 SHALL NOT 覆蓋、貼壓或遮擋主候車狀態與下一班摘要
 
 #### Scenario: 站點預覽未完成或不可用
 - **WHEN** 某條路線站點預覽尚未完成、缺少元數據或補全失敗
