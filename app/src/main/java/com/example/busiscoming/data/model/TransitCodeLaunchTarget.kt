@@ -1,77 +1,73 @@
 package com.example.busiscoming.data.model
 
-import java.net.URLEncoder
-
 enum class TransitCodeProvider(val displayName: String) {
-    WECHAT("微信"),
-    ALIPAY("支付寶")
+    WECHAT_SDK("微信 SDK"),
+    ALIPAY_HK("AlipayHK")
 }
+
+enum class TransitCodeLaunchType {
+    WECHAT_MINI_PROGRAM,
+    VIEW_URI
+}
+
+data class WechatMiniProgramParams(
+    val appId: String,
+    val userName: String,
+    val path: String,
+    val miniprogramTypeName: String,
+    val miniprogramType: Int
+)
 
 data class TransitCodeLaunchTarget(
     val provider: TransitCodeProvider,
     val title: String,
     val description: String,
-    val uri: String
+    val launchType: TransitCodeLaunchType,
+    val uri: String? = null,
+    val wechatMiniProgramParams: WechatMiniProgramParams? = null
 )
 
 object TransitCodeLaunchTargets {
-    const val WECHAT_JUMP_WXA_URI =
-        "weixin://app/wxbe05102357855fc7/jumpWxa/?userName=gh_a2de39e7aeb4"
-    const val WECHAT_BUSINESS_URI =
-        "weixin://dl/business/?appid=wxbe05102357855fc7&env_version=release"
-    const val WECHAT_BUSINESS_HOME_PATH_URI =
-        "weixin://dl/business/?appid=wxbe05102357855fc7&path=pages/index/index&env_version=release"
-    const val ALIPAY_APP_ID_URI =
-        "alipays://platformapi/startapp?appId=200011235"
-    const val ALIPAY_SA_ID_URI =
-        "alipays://platformapi/startapp?saId=200011235"
-    const val ALIPAY_H5_RENDER_URL =
-        "https://render.alipay.com/p/s/i?appId=200011235"
-    const val ALIPAY_DS_BASE_URL =
-        "https://ds.alipay.com/?scheme="
+    const val WECHAT_APP_ID = "wx0a914d80e5b75bfa"
+    const val WECHAT_MINI_PROGRAM_USER_NAME = "gh_a2de39e7aeb4"
+    const val WECHAT_MINI_PROGRAM_PATH = ""
+    const val WECHAT_MINIPROGRAM_TYPE_RELEASE_NAME = "MINIPTOGRAM_TYPE_RELEASE"
+    const val WECHAT_MINIPROGRAM_TYPE_TEST_NAME = "MINIPROGRAM_TYPE_TEST"
+    const val WECHAT_MINIPROGRAM_TYPE_PREVIEW_NAME = "MINIPROGRAM_TYPE_PREVIEW"
+    const val WECHAT_MINIPROGRAM_TYPE_RELEASE = 0
+    const val WECHAT_MINIPROGRAM_TYPE_TEST = 1
+    const val WECHAT_MINIPROGRAM_TYPE_PREVIEW = 2
+    const val ALIPAY_HK_SCHEME_URI = "alipayhk://platformapi/startApp?appId=85200098"
+    const val ALIPAY_HK_RENDER_URL = "https://render.alipay.hk/p/s/hkwallet/landing/easygo"
 
     val all: List<TransitCodeLaunchTarget> = listOf(
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.WECHAT,
-            title = "微信 jumpWxa",
-            description = "嘗試直接打開騰訊乘車碼小程序。",
-            uri = WECHAT_JUMP_WXA_URI
+        wechatMiniProgramTarget(
+            title = "微信 SDK 正式版",
+            description = "用正式版 miniprogramType 拉起騰訊乘車碼小程序。",
+            miniprogramTypeName = WECHAT_MINIPROGRAM_TYPE_RELEASE_NAME,
+            miniprogramType = WECHAT_MINIPROGRAM_TYPE_RELEASE
         ),
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.WECHAT,
-            title = "微信明文 Scheme",
-            description = "嘗試通過微信 business scheme 打開入口。",
-            uri = WECHAT_BUSINESS_URI
+        wechatMiniProgramTarget(
+            title = "微信 SDK 測試版",
+            description = "用測試版 miniprogramType 拉起騰訊乘車碼小程序。",
+            miniprogramTypeName = WECHAT_MINIPROGRAM_TYPE_TEST_NAME,
+            miniprogramType = WECHAT_MINIPROGRAM_TYPE_TEST
         ),
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.WECHAT,
-            title = "微信首頁 path",
-            description = "嘗試指定小程序首頁 path。",
-            uri = WECHAT_BUSINESS_HOME_PATH_URI
+        wechatMiniProgramTarget(
+            title = "微信 SDK 預覽版",
+            description = "用預覽版 miniprogramType 拉起騰訊乘車碼小程序。",
+            miniprogramTypeName = WECHAT_MINIPROGRAM_TYPE_PREVIEW_NAME,
+            miniprogramType = WECHAT_MINIPROGRAM_TYPE_PREVIEW
         ),
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.ALIPAY,
-            title = "支付寶 appId",
-            description = "嘗試以 appId 直接打開乘車碼入口。",
-            uri = ALIPAY_APP_ID_URI
+        viewUriTarget(
+            title = "AlipayHK Scheme",
+            description = "嘗試通過 AlipayHK scheme 打開 EasyGo 入口。",
+            uri = ALIPAY_HK_SCHEME_URI
         ),
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.ALIPAY,
-            title = "支付寶 saId",
-            description = "嘗試以 saId 打開支付寶服務入口。",
-            uri = ALIPAY_SA_ID_URI
-        ),
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.ALIPAY,
-            title = "支付寶 H5 render",
-            description = "嘗試通過支付寶 H5 中轉頁打開。",
-            uri = ALIPAY_H5_RENDER_URL
-        ),
-        TransitCodeLaunchTarget(
-            provider = TransitCodeProvider.ALIPAY,
-            title = "支付寶 ds 包裝",
-            description = "嘗試通過 ds.alipay.com 包裝 scheme。",
-            uri = buildAlipayDsWrapperUrl(ALIPAY_APP_ID_URI)
+        viewUriTarget(
+            title = "AlipayHK HTTPS",
+            description = "嘗試通過 AlipayHK HTTPS 中轉頁打開 EasyGo。",
+            uri = ALIPAY_HK_RENDER_URL
         )
     )
 
@@ -79,7 +75,38 @@ object TransitCodeLaunchTargets {
         return all.filter { it.provider == provider }
     }
 
-    fun buildAlipayDsWrapperUrl(innerScheme: String): String {
-        return ALIPAY_DS_BASE_URL + URLEncoder.encode(innerScheme, "UTF-8")
+    private fun wechatMiniProgramTarget(
+        title: String,
+        description: String,
+        miniprogramTypeName: String,
+        miniprogramType: Int
+    ): TransitCodeLaunchTarget {
+        return TransitCodeLaunchTarget(
+            provider = TransitCodeProvider.WECHAT_SDK,
+            title = title,
+            description = description,
+            launchType = TransitCodeLaunchType.WECHAT_MINI_PROGRAM,
+            wechatMiniProgramParams = WechatMiniProgramParams(
+                appId = WECHAT_APP_ID,
+                userName = WECHAT_MINI_PROGRAM_USER_NAME,
+                path = WECHAT_MINI_PROGRAM_PATH,
+                miniprogramTypeName = miniprogramTypeName,
+                miniprogramType = miniprogramType
+            )
+        )
+    }
+
+    private fun viewUriTarget(
+        title: String,
+        description: String,
+        uri: String
+    ): TransitCodeLaunchTarget {
+        return TransitCodeLaunchTarget(
+            provider = TransitCodeProvider.ALIPAY_HK,
+            title = title,
+            description = description,
+            launchType = TransitCodeLaunchType.VIEW_URI,
+            uri = uri
+        )
     }
 }

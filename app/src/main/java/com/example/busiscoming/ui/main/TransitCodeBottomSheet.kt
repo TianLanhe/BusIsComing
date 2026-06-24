@@ -2,6 +2,8 @@ package com.example.busiscoming.ui.main
 
 import android.content.Context
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -23,6 +25,15 @@ class TransitCodeBottomSheet(
 ) {
     private var dialog: BottomSheetDialog? = null
     private var contentRoot: LinearLayout? = null
+    private var diagnosticContainer: LinearLayout? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val diagnosticObserver: (TransitCodeDiagnosticResult) -> Unit = { result ->
+        mainHandler.post { renderDiagnostic(result) }
+    }
+
+    init {
+        TransitCodeDiagnostics.addObserver(diagnosticObserver)
+    }
 
     fun show() {
         dialog?.dismiss()
@@ -48,7 +59,7 @@ class TransitCodeBottomSheet(
             typeface = Typeface.DEFAULT_BOLD
         })
         content.addView(TextView(context).apply {
-            text = "逐條嘗試微信或支付寶候選入口；不會自動嘗試下一條。"
+            text = "逐條嘗試微信 SDK 或 AlipayHK 候選入口；不會自動嘗試下一條。"
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 13f
             layoutParams = LinearLayout.LayoutParams(
@@ -57,23 +68,27 @@ class TransitCodeBottomSheet(
             ).apply { topMargin = dp(6) }
         })
 
-        addProviderSection(content, TransitCodeProvider.WECHAT)
-        addProviderSection(content, TransitCodeProvider.ALIPAY)
+        addProviderSection(content, TransitCodeProvider.WECHAT_SDK)
+        addProviderSection(content, TransitCodeProvider.ALIPAY_HK)
+        addDiagnosticSection(content)
 
         bottomSheetDialog.setContentView(scroll)
         bottomSheetDialog.setOnDismissListener {
             if (dialog == bottomSheetDialog) {
                 dialog = null
                 contentRoot = null
+                diagnosticContainer = null
             }
         }
         bottomSheetDialog.show()
     }
 
     fun dispose() {
+        TransitCodeDiagnostics.removeObserver(diagnosticObserver)
         dialog?.dismiss()
         dialog = null
         contentRoot = null
+        diagnosticContainer = null
     }
 
     fun isShowing(): Boolean {
@@ -84,6 +99,10 @@ class TransitCodeBottomSheet(
         val texts = mutableListOf<String>()
         collectText(contentRoot, texts)
         return texts
+    }
+
+    fun refreshDiagnostics() {
+        renderDiagnostic(TransitCodeDiagnostics.latest())
     }
 
     private fun addProviderSection(content: LinearLayout, provider: TransitCodeProvider) {
@@ -146,8 +165,55 @@ class TransitCodeBottomSheet(
 
     private fun unavailableMessage(provider: TransitCodeProvider): Int {
         return when (provider) {
-            TransitCodeProvider.WECHAT -> R.string.transit_code_wechat_launch_failed
-            TransitCodeProvider.ALIPAY -> R.string.transit_code_alipay_launch_failed
+            TransitCodeProvider.WECHAT_SDK -> R.string.transit_code_wechat_launch_failed
+            TransitCodeProvider.ALIPAY_HK -> R.string.transit_code_alipay_hk_launch_failed
+        }
+    }
+
+    private fun addDiagnosticSection(content: LinearLayout) {
+        content.addView(TextView(context).apply {
+            text = "最近診斷"
+            setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(18) }
+        })
+        diagnosticContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = diagnosticBackground()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8) }
+        }
+        content.addView(diagnosticContainer)
+        renderDiagnostic(TransitCodeDiagnostics.latest())
+    }
+
+    private fun renderDiagnostic(result: TransitCodeDiagnosticResult?) {
+        val container = diagnosticContainer ?: return
+        container.removeAllViews()
+        val lines = result?.toDisplayLines() ?: listOf("最近診斷", "點擊任一實驗入口後會顯示結果。")
+        lines.forEachIndexed { index, line ->
+            container.addView(TextView(context).apply {
+                text = line
+                setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
+                textSize = if (index == 0) 13f else 12f
+                if (index == 0) {
+                    typeface = Typeface.DEFAULT_BOLD
+                    setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    if (index > 0) topMargin = dp(4)
+                }
+            })
         }
     }
 
@@ -158,6 +224,11 @@ class TransitCodeBottomSheet(
     private fun selectableItemBackground() = TypedValue().let { value ->
         context.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
         ContextCompat.getDrawable(context, value.resourceId)
+    }
+
+    private fun diagnosticBackground() = android.graphics.drawable.GradientDrawable().apply {
+        setColor(ContextCompat.getColor(context, R.color.bus_surface_variant))
+        cornerRadius = dp(8).toFloat()
     }
 
     private fun collectText(view: View?, texts: MutableList<String>) {

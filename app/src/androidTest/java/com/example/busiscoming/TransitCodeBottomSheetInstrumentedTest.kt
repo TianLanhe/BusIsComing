@@ -11,6 +11,7 @@ import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.ui.main.MainActivity
 import com.example.busiscoming.ui.main.TransitCodeBottomSheet
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -37,13 +38,14 @@ class TransitCodeBottomSheetInstrumentedTest {
                 val sheet = transitCodeSheet(activity)
                 assertTrue(sheet.isShowing())
                 assertTrue(sheet.textSnapshot().contains("實驗性乘車碼入口"))
-                assertTrue(sheet.textSnapshot().contains("逐條嘗試微信或支付寶候選入口；不會自動嘗試下一條。"))
+                assertTrue(sheet.textSnapshot().contains("逐條嘗試微信 SDK 或 AlipayHK 候選入口；不會自動嘗試下一條。"))
+                assertTrue(sheet.textSnapshot().contains("最近診斷"))
             }
         }
     }
 
     @Test
-    fun bottomSheetListsThreeWechatAndFourAlipayTargets() {
+    fun bottomSheetListsWechatSdkAndAlipayHkTargets() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 activity.findViewById<View>(R.id.transitCodeButton).performClick()
@@ -53,17 +55,26 @@ class TransitCodeBottomSheetInstrumentedTest {
             scenario.onActivity { activity ->
                 val labels = transitCodeSheet(activity).textSnapshot()
                 listOf(
-                    "微信",
+                    "微信 SDK",
+                    "微信 SDK 正式版",
+                    "微信 SDK 測試版",
+                    "微信 SDK 預覽版",
+                    "AlipayHK",
+                    "AlipayHK Scheme",
+                    "AlipayHK HTTPS",
+                    "最近診斷"
+                ).forEach { label ->
+                    assertTrue("Missing label: $label", labels.contains(label))
+                }
+                listOf(
                     "微信 jumpWxa",
                     "微信明文 Scheme",
                     "微信首頁 path",
                     "支付寶",
                     "支付寶 appId",
-                    "支付寶 saId",
-                    "支付寶 H5 render",
-                    "支付寶 ds 包裝"
+                    "支付寶 H5 render"
                 ).forEach { label ->
-                    assertTrue("Missing label: $label", labels.contains(label))
+                    assertFalse("Unexpected label: $label", labels.contains(label))
                 }
             }
         }

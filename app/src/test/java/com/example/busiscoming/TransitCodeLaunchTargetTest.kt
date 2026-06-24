@@ -1,57 +1,66 @@
 package com.example.busiscoming
 
 import com.example.busiscoming.data.model.TransitCodeLaunchTargets
+import com.example.busiscoming.data.model.TransitCodeLaunchType
 import com.example.busiscoming.data.model.TransitCodeProvider
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TransitCodeLaunchTargetTest {
     @Test
-    fun definesThreeWechatAndFourAlipayTargets() {
-        assertEquals(7, TransitCodeLaunchTargets.all.size)
-        assertEquals(3, TransitCodeLaunchTargets.forProvider(TransitCodeProvider.WECHAT).size)
-        assertEquals(4, TransitCodeLaunchTargets.forProvider(TransitCodeProvider.ALIPAY).size)
+    fun definesThreeWechatSdkAndTwoAlipayHkTargets() {
+        assertEquals(5, TransitCodeLaunchTargets.all.size)
+        assertEquals(3, TransitCodeLaunchTargets.forProvider(TransitCodeProvider.WECHAT_SDK).size)
+        assertEquals(2, TransitCodeLaunchTargets.forProvider(TransitCodeProvider.ALIPAY_HK).size)
 
         assertEquals(
-            listOf("微信 jumpWxa", "微信明文 Scheme", "微信首頁 path"),
-            TransitCodeLaunchTargets.forProvider(TransitCodeProvider.WECHAT).map { it.title }
+            listOf("微信 SDK 正式版", "微信 SDK 測試版", "微信 SDK 預覽版"),
+            TransitCodeLaunchTargets.forProvider(TransitCodeProvider.WECHAT_SDK).map { it.title }
         )
         assertEquals(
-            listOf("支付寶 appId", "支付寶 saId", "支付寶 H5 render", "支付寶 ds 包裝"),
-            TransitCodeLaunchTargets.forProvider(TransitCodeProvider.ALIPAY).map { it.title }
+            listOf("AlipayHK Scheme", "AlipayHK HTTPS"),
+            TransitCodeLaunchTargets.forProvider(TransitCodeProvider.ALIPAY_HK).map { it.title }
         )
     }
 
     @Test
-    fun buildsExpectedWechatUris() {
-        val uris = TransitCodeLaunchTargets.forProvider(TransitCodeProvider.WECHAT).map { it.uri }
+    fun buildsExpectedWechatMiniProgramParams() {
+        val targets = TransitCodeLaunchTargets.forProvider(TransitCodeProvider.WECHAT_SDK)
+        val params = targets.map { target ->
+            assertEquals(TransitCodeLaunchType.WECHAT_MINI_PROGRAM, target.launchType)
+            assertNull(target.uri)
+            assertNotNull(target.wechatMiniProgramParams)
+            target.wechatMiniProgramParams!!
+        }
 
+        assertEquals(listOf(0, 1, 2), params.map { it.miniprogramType })
         assertEquals(
-            "weixin://app/wxbe05102357855fc7/jumpWxa/?userName=gh_a2de39e7aeb4",
-            uris[0]
+            listOf(
+                "MINIPTOGRAM_TYPE_RELEASE",
+                "MINIPROGRAM_TYPE_TEST",
+                "MINIPROGRAM_TYPE_PREVIEW"
+            ),
+            params.map { it.miniprogramTypeName }
         )
-        assertEquals(
-            "weixin://dl/business/?appid=wxbe05102357855fc7&env_version=release",
-            uris[1]
-        )
-        assertEquals(
-            "weixin://dl/business/?appid=wxbe05102357855fc7&path=pages/index/index&env_version=release",
-            uris[2]
-        )
+        params.forEach {
+            assertEquals("wx0a914d80e5b75bfa", it.appId)
+            assertEquals("gh_a2de39e7aeb4", it.userName)
+            assertEquals("", it.path)
+        }
     }
 
     @Test
-    fun buildsExpectedAlipayUrisAndEncodedDsWrapper() {
-        val uris = TransitCodeLaunchTargets.forProvider(TransitCodeProvider.ALIPAY).map { it.uri }
+    fun buildsExpectedAlipayHkUris() {
+        val targets = TransitCodeLaunchTargets.forProvider(TransitCodeProvider.ALIPAY_HK)
+        val uris = targets.map { target ->
+            assertEquals(TransitCodeLaunchType.VIEW_URI, target.launchType)
+            assertNull(target.wechatMiniProgramParams)
+            target.uri
+        }
 
-        assertEquals("alipays://platformapi/startapp?appId=200011235", uris[0])
-        assertEquals("alipays://platformapi/startapp?saId=200011235", uris[1])
-        assertEquals("https://render.alipay.com/p/s/i?appId=200011235", uris[2])
-        assertEquals(
-            "https://ds.alipay.com/?scheme=alipays%3A%2F%2Fplatformapi%2Fstartapp%3FappId%3D200011235",
-            uris[3]
-        )
-        assertTrue(uris[3].contains("scheme=alipays%3A%2F%2F"))
+        assertEquals("alipayhk://platformapi/startApp?appId=85200098", uris[0])
+        assertEquals("https://render.alipay.hk/p/s/hkwallet/landing/easygo", uris[1])
     }
 }

@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.jsoup)
     implementation(libs.play.services.location)
+    implementation(libs.wechat.sdk.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.core.ktx)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -186,6 +186,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         loadRouteConfigs()
         retryCurrentPlaceAfterLocationSettings()
+        transitCodeBottomSheet.refreshDiagnostics()
     }
 
     private fun bindViews() {
