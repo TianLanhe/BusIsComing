@@ -1,6 +1,8 @@
 package com.example.busiscoming.ui.edit
 
+import android.content.ActivityNotFoundException
 import android.graphics.Rect
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -14,8 +16,17 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscoming.R
+import com.example.busiscoming.data.location.CurrentLocationCoordinator
+import com.example.busiscoming.data.location.CurrentLocationResult
+import com.example.busiscoming.data.location.LocationPermissionStateStore
+import com.example.busiscoming.data.location.LocationPermissionUtils
+import com.example.busiscoming.data.location.MockPlaceNameResolver
+import com.example.busiscoming.data.location.SystemLocationUtils
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfig
 import com.example.busiscoming.data.model.RouteConfigValidator
@@ -34,6 +45,9 @@ import java.util.concurrent.Executors
 class RouteEditActivity : AppCompatActivity() {
     private lateinit var repository: RouteConfigRepository
     private lateinit var placeSearchRepository: PlaceSearchRepository
+    private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
+    private lateinit var locationPermissionStateStore: LocationPermissionStateStore
+    private lateinit var routeEditScroll: NestedScrollView
     private lateinit var routeEditContent: View
     private lateinit var nameInputLayout: TextInputLayout
     private lateinit var originInputLayout: TextInputLayout
@@ -46,6 +60,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var destinationSearchLoading: View
     private lateinit var originCandidateList: RecyclerView
     private lateinit var destinationCandidateList: RecyclerView
+    private lateinit var swapPlacesButton: View
     private lateinit var originController: PlaceInputController
     private lateinit var destinationController: PlaceInputController
     private var candidateBackCallback: OnBackInvokedCallback? = null
@@ -53,6 +68,10 @@ class RouteEditActivity : AppCompatActivity() {
     private var routeId: Long = NO_ROUTE_ID
     private val mainHandler = Handler(Looper.getMainLooper())
     private val searchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var originTouchedByUser: Boolean = false
+    private var currentPlaceGeneration: Int = 0
+    private var pendingCurrentPlaceRequest: PendingCurrentPlaceRequest? = null
+    private var pendingLocationSettingsRetry: PendingCurrentPlaceRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,9 +81,12 @@ class RouteEditActivity : AppCompatActivity() {
         findViewById<View>(R.id.routeEditContent).applyStatusBarPadding()
         repository = RouteConfigRepository(this)
         placeSearchRepository = CitybusPlaceSearchRepository()
+        currentLocationCoordinator = CurrentLocationCoordinator(this)
+        locationPermissionStateStore = LocationPermissionStateStore(this)
         routeId = intent.getLongExtra(EXTRA_ROUTE_ID, NO_ROUTE_ID)
 
         bindViews()
+        configureLocationEndIcon()
         setupPlaceInputs()
         setupBackHandling()
         setupMode()
@@ -79,6 +101,11 @@ class RouteEditActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        retryCurrentOriginAfterLocationSettings()
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
             handleBack()
@@ -88,6 +115,9 @@ class RouteEditActivity : AppCompatActivity() {
     }
 
     private fun bindViews() {
+        routeEditScroll = findViewById<NestedScrollView>(R.id.routeEditScroll).apply {
+            isNestedScrollingEnabled = true
+        }
         routeEditContent = findViewById(R.id.routeEditContent)
         nameInputLayout = findViewById(R.id.routeNameInputLayout)
         originInputLayout = findViewById(R.id.originInputLayout)
@@ -101,7 +131,8 @@ class RouteEditActivity : AppCompatActivity() {
         originCandidateList = findViewById(R.id.originCandidateList)
         destinationCandidateList = findViewById(R.id.destinationCandidateList)
         findViewById<MaterialButton>(R.id.backRouteButton).setOnClickListener { handleBack() }
-        findViewById<View>(R.id.swapPlacesButton).setOnClickListener { view ->
+        swapPlacesButton = findViewById(R.id.swapPlacesButton)
+        swapPlacesButton.setOnClickListener { view ->
             animateSwap(view)
             swapPlaces()
         }
@@ -125,9 +156,16 @@ class RouteEditActivity : AppCompatActivity() {
                     destinationController.hideCandidates()
                     ensureCandidateVisible(originInputLayout, originCandidateList)
                 }
+                syncSwapButtonVisibility()
                 syncCandidateBackPriority()
             },
+            onUserTextEdited = {
+                originTouchedByUser = true
+                currentPlaceGeneration += 1
+            },
             onPlaceSelected = {
+                originTouchedByUser = true
+                currentPlaceGeneration += 1
                 focusUnselectedPeer(destinationController, destinationInput)
             }
         )
@@ -146,6 +184,7 @@ class RouteEditActivity : AppCompatActivity() {
                     originController.hideCandidates()
                     ensureCandidateVisible(destinationInputLayout, destinationCandidateList)
                 }
+                syncSwapButtonVisibility()
                 syncCandidateBackPriority()
             },
             onPlaceSelected = {
@@ -162,6 +201,131 @@ class RouteEditActivity : AppCompatActivity() {
         })
     }
 
+    private fun configureLocationEndIcon() {
+        originInputLayout.endIconMode = TextInputLayout.END_ICON_CUSTOM
+        originInputLayout.setEndIconDrawable(R.drawable.ic_location_outline)
+        originInputLayout.setEndIconContentDescription(getString(R.string.use_my_location))
+        originInputLayout.setEndIconOnClickListener {
+            requestCurrentOrigin(isAuto = false)
+        }
+    }
+
+    private fun requestCurrentOrigin(isAuto: Boolean) {
+        if (isAuto && originTouchedByUser) return
+        val generation = ++currentPlaceGeneration
+        if (!LocationPermissionUtils.hasForegroundLocationPermission(this)) {
+            if (isAuto && locationPermissionStateStore.isAutoRequestDenied()) {
+                handleCurrentOriginFailure(isAuto)
+                return
+            }
+            pendingCurrentPlaceRequest = PendingCurrentPlaceRequest(
+                generation = generation,
+                isAuto = isAuto
+            )
+            ActivityCompat.requestPermissions(
+                this,
+                LocationPermissionUtils.permissions,
+                REQUEST_LOCATION_PERMISSION
+            )
+            return
+        }
+        continueCurrentOriginWithPermission(generation, isAuto)
+    }
+
+    private fun continueCurrentOriginWithPermission(generation: Int, isAuto: Boolean) {
+        if (!SystemLocationUtils.isLocationEnabled(this)) {
+            if (isAuto) {
+                handleCurrentOriginFailure(isAuto)
+            } else {
+                promptLocationSettingsForCurrentOrigin(
+                    PendingCurrentPlaceRequest(
+                        generation = generation,
+                        isAuto = isAuto
+                    )
+                )
+            }
+            return
+        }
+        resolveCurrentOrigin(generation, isAuto)
+    }
+
+    private fun resolveCurrentOrigin(generation: Int, isAuto: Boolean) {
+        currentLocationCoordinator.getCurrentLocation { result ->
+            if (isFinishing || isDestroyed || currentPlaceGeneration != generation) return@getCurrentLocation
+            when (result) {
+                is CurrentLocationResult.Success -> {
+                    originController.setCurrentLocationSnapshot(result.snapshot)
+                    destinationController.setCurrentLocationSnapshot(result.snapshot)
+                    originController.setSelectedPlace(MockPlaceNameResolver.resolve(result.snapshot))
+                }
+                CurrentLocationResult.NoPermission,
+                CurrentLocationResult.Timeout,
+                CurrentLocationResult.Unavailable -> handleCurrentOriginFailure(isAuto)
+            }
+        }
+    }
+
+    private fun requestCandidateLocationSnapshotIfPermitted() {
+        if (!LocationPermissionUtils.hasForegroundLocationPermission(this)) return
+        currentLocationCoordinator.getCurrentLocation { result ->
+            if (isFinishing || isDestroyed) return@getCurrentLocation
+            if (result is CurrentLocationResult.Success) {
+                originController.setCurrentLocationSnapshot(result.snapshot)
+                destinationController.setCurrentLocationSnapshot(result.snapshot)
+            }
+        }
+    }
+
+    private fun handleCurrentOriginFailure(isAuto: Boolean) {
+        if (isAuto) {
+            originController.setHelperText("暫時無法取得目前位置，請手動選擇起點")
+        } else {
+            Toast.makeText(this, "暫時無法取得目前位置", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_LOCATION_PERMISSION) return
+        val pending = pendingCurrentPlaceRequest ?: return
+        pendingCurrentPlaceRequest = null
+        val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+        if (!granted) {
+            if (pending.isAuto) {
+                locationPermissionStateStore.setAutoRequestDenied(true)
+            }
+            handleCurrentOriginFailure(pending.isAuto)
+            return
+        }
+        continueCurrentOriginWithPermission(pending.generation, pending.isAuto)
+    }
+
+    private fun promptLocationSettingsForCurrentOrigin(pending: PendingCurrentPlaceRequest) {
+        pendingLocationSettingsRetry = pending
+        Toast.makeText(this, "請開啟系統定位", Toast.LENGTH_SHORT).show()
+        try {
+            startActivity(SystemLocationUtils.settingsIntent())
+        } catch (_: ActivityNotFoundException) {
+            pendingLocationSettingsRetry = null
+            handleCurrentOriginFailure(pending.isAuto)
+        }
+    }
+
+    private fun retryCurrentOriginAfterLocationSettings() {
+        val pending = pendingLocationSettingsRetry ?: return
+        pendingLocationSettingsRetry = null
+        if (currentPlaceGeneration != pending.generation) return
+        if (!SystemLocationUtils.isLocationEnabled(this)) {
+            handleCurrentOriginFailure(pending.isAuto)
+            return
+        }
+        resolveCurrentOrigin(pending.generation, pending.isAuto)
+    }
+
     private fun handleBack() {
         if (!hideCandidateLists()) {
             finish()
@@ -176,9 +340,20 @@ class RouteEditActivity : AppCompatActivity() {
 
     private fun syncCandidateBackPriority() {
         updateCandidateBackPriority(
-            originCandidateList.visibility == View.VISIBLE ||
-                destinationCandidateList.visibility == View.VISIBLE
+            originController.isCandidateVisible() ||
+                destinationController.isCandidateVisible()
         )
+    }
+
+    private fun syncSwapButtonVisibility() {
+        swapPlacesButton.visibility = if (
+            originController.isCandidateVisible() ||
+            destinationController.isCandidateVisible()
+        ) {
+            View.GONE
+        } else {
+            View.VISIBLE
+        }
     }
 
     private fun updateCandidateBackPriority(enabled: Boolean) {
@@ -216,6 +391,28 @@ class RouteEditActivity : AppCompatActivity() {
             val parent = inputLayout.parent as? View ?: return@post
             val rect = Rect(0, inputLayout.top, parent.width, candidateList.bottom)
             parent.requestRectangleOnScreen(rect, true)
+            scrollCandidateIntoVisibleArea(candidateList)
+            candidateList.postDelayed({
+                ViewCompat.requestApplyInsets(candidateList)
+                candidateList.post {
+                    scrollCandidateIntoVisibleArea(candidateList)
+                    ViewCompat.requestApplyInsets(candidateList)
+                }
+            }, CANDIDATE_VISIBILITY_RECHECK_MS)
+        }
+    }
+
+    private fun scrollCandidateIntoVisibleArea(candidateList: RecyclerView) {
+        if (candidateList.height <= 0) return
+        val visibleFrame = Rect()
+        routeEditScroll.getWindowVisibleDisplayFrame(visibleFrame)
+        val candidateLocation = IntArray(2)
+        candidateList.getLocationOnScreen(candidateLocation)
+        val candidateBottom = candidateLocation[1] + candidateList.height
+        val desiredBottom = visibleFrame.bottom - dp(CANDIDATE_BOTTOM_SAFE_INSET_DP)
+        val overlap = candidateBottom - desiredBottom
+        if (overlap > 0) {
+            routeEditScroll.scrollBy(0, overlap)
         }
     }
 
@@ -233,6 +430,11 @@ class RouteEditActivity : AppCompatActivity() {
             title = pageTitle
             screenTitleText.text = pageTitle
             applyPrefillIfPresent()
+            if (isClone) {
+                requestCandidateLocationSnapshotIfPermitted()
+            } else {
+                requestCurrentOrigin(isAuto = true)
+            }
             return
         }
 
@@ -248,6 +450,7 @@ class RouteEditActivity : AppCompatActivity() {
         nameInput.setText(route.name)
         originController.setSelectedPlace(route.origin)
         destinationController.setSelectedPlace(route.destination)
+        requestCandidateLocationSnapshotIfPermitted()
     }
 
     private fun saveRoute() {
@@ -315,6 +518,11 @@ class RouteEditActivity : AppCompatActivity() {
         )
     }
 
+    private data class PendingCurrentPlaceRequest(
+        val generation: Int,
+        val isAuto: Boolean
+    )
+
     companion object {
         const val EXTRA_ROUTE_ID = "extra_route_id"
         const val EXTRA_PREFILL_NAME = "extra_prefill_name"
@@ -325,5 +533,12 @@ class RouteEditActivity : AppCompatActivity() {
         const val EXTRA_PREFILL_DESTINATION_LATITUDE = "extra_prefill_destination_latitude"
         const val EXTRA_PREFILL_DESTINATION_LONGITUDE = "extra_prefill_destination_longitude"
         const val NO_ROUTE_ID = -1L
+        private const val REQUEST_LOCATION_PERMISSION = 401
+        private const val CANDIDATE_VISIBILITY_RECHECK_MS = 80L
+        private const val CANDIDATE_BOTTOM_SAFE_INSET_DP = 8
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }

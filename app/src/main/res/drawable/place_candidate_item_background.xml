@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/bus_surface_variant">
+    <item>
+        <shape>
+            <solid android:color="@color/bus_card_surface" />
+        </shape>
+    </item>
+</ripple>

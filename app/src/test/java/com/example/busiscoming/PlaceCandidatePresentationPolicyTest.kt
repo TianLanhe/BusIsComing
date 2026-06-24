@@ -11,11 +11,11 @@ class PlaceCandidatePresentationPolicyTest {
     }
 
     @Test
-    fun candidateHeightUsesFortyPercentWithAtLeastThreeRows() {
+    fun candidateHeightUsesAvailableSpaceWithThreeToSixRows() {
         assertEquals(
-            400,
+            288,
             PlaceCandidatePresentationPolicy.heightPx(
-                visibleHeightPx = 1_000,
+                availableHeightPx = 1_000,
                 rowHeightPx = 48,
                 itemCount = 20
             )
@@ -23,7 +23,7 @@ class PlaceCandidatePresentationPolicyTest {
         assertEquals(
             144,
             PlaceCandidatePresentationPolicy.heightPx(
-                visibleHeightPx = 200,
+                availableHeightPx = 180,
                 rowHeightPx = 48,
                 itemCount = 20
             )
@@ -31,7 +31,7 @@ class PlaceCandidatePresentationPolicyTest {
         assertEquals(
             96,
             PlaceCandidatePresentationPolicy.heightPx(
-                visibleHeightPx = 1_000,
+                availableHeightPx = 1_000,
                 rowHeightPx = 48,
                 itemCount = 2
             )

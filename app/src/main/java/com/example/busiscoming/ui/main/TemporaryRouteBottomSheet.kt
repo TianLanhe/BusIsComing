@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscoming.R
+import com.example.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfigValidator
 import com.example.busiscoming.data.repository.CitybusPlaceSearchRepository
@@ -36,16 +37,25 @@ class TemporaryRouteBottomSheet(
     private val mainHandler: android.os.Handler,
     private val searchExecutor: ExecutorService,
     private val placeSearchRepository: PlaceSearchRepository = CitybusPlaceSearchRepository(),
+    private val onCurrentPlaceRequested: (
+        isAuto: Boolean,
+        callback: (CurrentPlaceSelectionResult) -> Unit
+    ) -> Unit = { _, callback -> callback(CurrentPlaceSelectionResult.Failure) },
     private val onQuery: (Place, Place) -> Unit,
     private val onSaved: (Long) -> Unit
 ) {
     private var dialog: BottomSheetDialog? = null
     private var originController: PlaceInputController? = null
     private var destinationController: PlaceInputController? = null
+    private var swapButton: AppCompatImageButton? = null
     private var candidateBackCallback: OnBackInvokedCallback? = null
+    private var currentPlaceGeneration: Int = 0
+    private var originTouchedByUser: Boolean = false
 
     fun show() {
         dispose()
+        originTouchedByUser = false
+        currentPlaceGeneration += 1
         val bottomSheetDialog = BottomSheetDialog(context)
         dialog = bottomSheetDialog
 
@@ -82,6 +92,7 @@ class TemporaryRouteBottomSheet(
         val originInputLayout = placeInputLayout("輸入起點關鍵字，並從匹配清單中選擇")
         val originInput = placeInput(R.id.temporaryOriginInput)
         originInputLayout.addView(originInput)
+        configureLocationEndIcon(originInputLayout)
         inputColumn.addView(originInputLayout)
         val originLoading = loadingRow()
         inputColumn.addView(originLoading)
@@ -103,7 +114,7 @@ class TemporaryRouteBottomSheet(
         inputColumn.addView(destinationCandidates)
 
         inputFrame.addView(inputColumn)
-        val swapButton = AppCompatImageButton(context).apply {
+        val swapControl = AppCompatImageButton(context).apply {
             layoutParams = FrameLayout.LayoutParams(
                 dp(48),
                 dp(48),
@@ -115,7 +126,8 @@ class TemporaryRouteBottomSheet(
             setImageResource(R.drawable.ic_swap_curved)
             scaleType = android.widget.ImageView.ScaleType.CENTER
         }
-        inputFrame.addView(swapButton)
+        swapButton = swapControl
+        inputFrame.addView(swapControl)
         content.addView(inputFrame)
 
         originController = PlaceInputController(
@@ -134,7 +146,13 @@ class TemporaryRouteBottomSheet(
                 }
                 setCandidateMode(visible)
             },
+            onUserTextEdited = {
+                originTouchedByUser = true
+                currentPlaceGeneration += 1
+            },
             onPlaceSelected = {
+                originTouchedByUser = true
+                currentPlaceGeneration += 1
                 focusUnselectedPeer(destinationController, destinationInput)
             }
         )
@@ -159,7 +177,7 @@ class TemporaryRouteBottomSheet(
             }
         )
 
-        swapButton.setOnClickListener { view ->
+        swapControl.setOnClickListener { view ->
             view.animate().rotationBy(180f).setDuration(220L).start()
             originController?.swapWith(destinationController ?: return@setOnClickListener)
         }
@@ -189,6 +207,7 @@ class TemporaryRouteBottomSheet(
         }
         bottomSheetDialog.setOnDismissListener { disposeControllers() }
         bottomSheetDialog.show()
+        requestCurrentOriginIfNeeded(isAuto = true)
     }
 
     fun dispose() {
@@ -226,6 +245,43 @@ class TemporaryRouteBottomSheet(
         return origin to destination
     }
 
+    private fun configureLocationEndIcon(inputLayout: TextInputLayout) {
+        inputLayout.endIconMode = TextInputLayout.END_ICON_CUSTOM
+        inputLayout.setEndIconDrawable(R.drawable.ic_location_outline)
+        inputLayout.setEndIconContentDescription(context.getString(R.string.use_my_location))
+        inputLayout.setEndIconOnClickListener {
+            requestCurrentOriginIfNeeded(isAuto = false)
+        }
+    }
+
+    private fun requestCurrentOriginIfNeeded(isAuto: Boolean) {
+        if (isAuto && originTouchedByUser) return
+        val generation = ++currentPlaceGeneration
+        onCurrentPlaceRequested(isAuto) { result ->
+            mainHandler.post {
+                if (dialog?.isShowing != true || currentPlaceGeneration != generation) return@post
+                when (result) {
+                    is CurrentPlaceSelectionResult.Success -> {
+                        originController?.setCurrentLocationSnapshot(result.snapshot)
+                        destinationController?.setCurrentLocationSnapshot(result.snapshot)
+                        originController?.setSelectedPlace(result.place)
+                    }
+                    CurrentPlaceSelectionResult.Failure -> {
+                        if (isAuto) {
+                            originController?.setHelperText("暫時無法取得目前位置，請手動選擇起點")
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "暫時無法取得目前位置",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private fun hideCandidateLists(): Boolean {
         val originHidden = originController?.hideCandidates() == true
         val destinationHidden = destinationController?.hideCandidates() == true
@@ -245,12 +301,16 @@ class TemporaryRouteBottomSheet(
     }
 
     private fun setCandidateMode(enabled: Boolean) {
-        updateCandidateBackPriority(enabled)
+        val hasVisibleCandidates = enabled ||
+            originController?.isCandidateVisible() == true ||
+            destinationController?.isCandidateVisible() == true
+        swapButton?.visibility = if (hasVisibleCandidates) View.GONE else View.VISIBLE
+        updateCandidateBackPriority(hasVisibleCandidates)
         val bottomSheet = dialog?.findViewById<FrameLayout>(
             com.google.android.material.R.id.design_bottom_sheet
         ) ?: return
         bottomSheet.layoutParams = bottomSheet.layoutParams.apply {
-            height = if (enabled) {
+            height = if (hasVisibleCandidates) {
                 ViewGroup.LayoutParams.MATCH_PARENT
             } else {
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -258,7 +318,7 @@ class TemporaryRouteBottomSheet(
         }
         val behavior = BottomSheetBehavior.from(bottomSheet)
         behavior.peekHeight = BottomSheetBehavior.PEEK_HEIGHT_AUTO
-        behavior.state = if (enabled) {
+        behavior.state = if (hasVisibleCandidates) {
             BottomSheetBehavior.STATE_EXPANDED
         } else {
             BottomSheetBehavior.STATE_COLLAPSED
@@ -292,6 +352,7 @@ class TemporaryRouteBottomSheet(
             )
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
             hint = hintText
+            isEndIconVisible = false
         }
     }
 
@@ -304,7 +365,11 @@ class TemporaryRouteBottomSheet(
             )
             threshold = 1
             inputType = android.text.InputType.TYPE_CLASS_TEXT
-            maxLines = 2
+            maxLines = 1
+            minHeight = dp(56)
+            setSingleLine(true)
+            setPadding(dp(16), paddingTop, dp(16), paddingBottom)
+            textSize = 16f
         }
     }
 
@@ -315,7 +380,6 @@ class TemporaryRouteBottomSheet(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(6) }
-            background = ContextCompat.getDrawable(context, R.drawable.status_card_background)
             isNestedScrollingEnabled = true
             visibility = View.GONE
         }
@@ -352,6 +416,7 @@ class TemporaryRouteBottomSheet(
         destinationController?.dispose()
         originController = null
         destinationController = null
+        swapButton = null
     }
 
     private fun dp(value: Int): Int {

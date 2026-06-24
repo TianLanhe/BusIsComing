@@ -2,11 +2,14 @@ package com.example.busiscoming.ui.common
 
 import android.content.Context
 import android.os.Handler
+import android.text.TextUtils
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -14,6 +17,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscoming.R
+import com.example.busiscoming.data.location.CurrentLocationSnapshot
+import com.example.busiscoming.data.location.GeoDistanceCalculator
+import com.example.busiscoming.data.location.PlaceDistanceFormatter
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.repository.PlaceSearchRepository
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -31,7 +37,8 @@ class PlaceInputController(
     private val searchExecutor: ExecutorService,
     private val isActive: () -> Boolean,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
-    private val onPlaceSelected: (Place) -> Unit = {}
+    private val onPlaceSelected: (Place) -> Unit = {},
+    private val onUserTextEdited: () -> Unit = {}
 ) {
     private val rowHeightPx = dp(context, CANDIDATE_ROW_HEIGHT_DP)
     private val adapter = PlaceCandidateAdapter(context) { place ->
@@ -41,7 +48,7 @@ class PlaceInputController(
     private var suppressTextChange = false
     private var searchSequence = 0
     private var pendingSearch: Runnable? = null
-    private var visibleHeightPx = context.resources.displayMetrics.heightPixels
+    private var imeTopPx = context.resources.displayMetrics.heightPixels
 
     var selectedPlace: Place? = null
         private set
@@ -51,10 +58,12 @@ class PlaceInputController(
         candidateList.layoutManager = LinearLayoutManager(context)
         candidateList.adapter = adapter
         candidateList.isNestedScrollingEnabled = true
+        candidateList.background = ContextCompat.getDrawable(context, R.drawable.place_candidate_list_background)
+        candidateList.elevation = dp(context, 2).toFloat()
         candidateList.visibility = View.GONE
         ViewCompat.setOnApplyWindowInsetsListener(candidateList) { view, insets ->
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            visibleHeightPx = (view.rootView.height - imeBottom).coerceAtLeast(rowHeightPx * MIN_VISIBLE_ROWS)
+            imeTopPx = (view.rootView.height - imeBottom).coerceAtLeast(rowHeightPx * MIN_VISIBLE_ROWS)
             updateCandidateHeight()
             insets
         }
@@ -77,6 +86,8 @@ class PlaceInputController(
 
     fun text(): String = input.text?.toString().orEmpty()
 
+    fun isCandidateVisible(): Boolean = candidateList.visibility == View.VISIBLE
+
     fun setSelectedPlace(place: Place) {
         cancelPendingSearch()
         adapter.submitPlaces(emptyList())
@@ -87,6 +98,10 @@ class PlaceInputController(
         input.setSelection(input.text?.length ?: 0)
         suppressTextChange = false
         clearMessages()
+    }
+
+    fun setHelperText(message: String?) {
+        inputLayout.helperText = message
     }
 
     fun setRawText(text: String) {
@@ -136,6 +151,10 @@ class PlaceInputController(
         inputLayout.helperText = null
     }
 
+    fun setCurrentLocationSnapshot(snapshot: CurrentLocationSnapshot?) {
+        adapter.setCurrentLocationSnapshot(snapshot)
+    }
+
     fun dispose() {
         pendingSearch?.let { mainHandler.removeCallbacks(it) }
         pendingSearch = null
@@ -149,6 +168,7 @@ class PlaceInputController(
 
         selectedPlace = null
         clearMessages()
+        onUserTextEdited()
         schedulePlaceSearch(keyword)
     }
 
@@ -218,8 +238,11 @@ class PlaceInputController(
     }
 
     private fun updateCandidateHeight() {
+        val candidateTop = candidateTopInRoot()
+        val availableHeight = (imeTopPx - candidateTop - dp(candidateList.context, CANDIDATE_BOTTOM_SAFE_INSET_DP))
+            .coerceAtLeast(0)
         val height = PlaceCandidatePresentationPolicy.heightPx(
-            visibleHeightPx = visibleHeightPx,
+            availableHeightPx = availableHeight,
             rowHeightPx = rowHeightPx,
             itemCount = adapter.itemCount
         )
@@ -242,11 +265,20 @@ class PlaceInputController(
         loadingView.visibility = if (isLoading) View.VISIBLE else View.GONE
     }
 
+    private fun candidateTopInRoot(): Int {
+        val rootLocation = IntArray(2)
+        val candidateLocation = IntArray(2)
+        candidateList.rootView.getLocationOnScreen(rootLocation)
+        candidateList.getLocationOnScreen(candidateLocation)
+        return candidateLocation[1] - rootLocation[1]
+    }
+
     private class PlaceCandidateAdapter(
         private val context: Context,
         private val onClick: (Place) -> Unit
     ) : RecyclerView.Adapter<PlaceCandidateViewHolder>() {
         private val places = mutableListOf<Place>()
+        private var currentLocationSnapshot: CurrentLocationSnapshot? = null
 
         fun submitPlaces(newPlaces: List<Place>) {
             places.clear()
@@ -254,45 +286,104 @@ class PlaceInputController(
             notifyDataSetChanged()
         }
 
+        fun setCurrentLocationSnapshot(snapshot: CurrentLocationSnapshot?) {
+            currentLocationSnapshot = snapshot
+            notifyDataSetChanged()
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaceCandidateViewHolder {
-            val view = TextView(context).apply {
+            val view = LinearLayout(context).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     dp(context, CANDIDATE_ROW_HEIGHT_DP)
                 )
+                orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(context, 14), 0, dp(context, 14), 0)
-                setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
-                textSize = 15f
-                background = ContextCompat.getDrawable(context, R.drawable.table_row_background)
+                setPadding(dp(context, 16), 0, dp(context, 12), 0)
+                background = ContextCompat.getDrawable(context, R.drawable.place_candidate_item_background)
+                isClickable = true
+                isFocusable = true
             }
+            val nameView = TextView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
+                textSize = 16f
+            }
+            val distanceContainer = LinearLayout(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { marginStart = dp(context, 10) }
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                visibility = View.GONE
+            }
+            val icon = ImageView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(context, 14), dp(context, 14))
+                setImageResource(R.drawable.ic_location_outline)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }
+            val distanceView = TextView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { marginStart = dp(context, 4) }
+                maxLines = 1
+                setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
+                textSize = 13f
+            }
+            distanceContainer.addView(icon)
+            distanceContainer.addView(distanceView)
+            view.addView(nameView)
+            view.addView(distanceContainer)
             return PlaceCandidateViewHolder(view, onClick)
         }
 
         override fun onBindViewHolder(holder: PlaceCandidateViewHolder, position: Int) {
-            holder.bind(places[position])
+            holder.bind(places[position], currentLocationSnapshot)
         }
 
         override fun getItemCount(): Int = places.size
     }
 
     private class PlaceCandidateViewHolder(
-        private val textView: TextView,
+        private val rowView: LinearLayout,
         private val onClick: (Place) -> Unit
-    ) : RecyclerView.ViewHolder(textView) {
-        fun bind(place: Place) {
-            textView.text = place.name
-            textView.setOnClickListener { onClick(place) }
+    ) : RecyclerView.ViewHolder(rowView) {
+        private val nameView = rowView.getChildAt(0) as TextView
+        private val distanceContainer = rowView.getChildAt(1) as LinearLayout
+        private val distanceView = distanceContainer.getChildAt(1) as TextView
+
+        fun bind(place: Place, snapshot: CurrentLocationSnapshot?) {
+            nameView.text = place.name
+            val distanceMeters = snapshot?.let {
+                GeoDistanceCalculator.distanceMeters(
+                    fromLatitude = it.latitude,
+                    fromLongitude = it.longitude,
+                    toLatitude = place.latitude,
+                    toLongitude = place.longitude
+                )
+            }
+            if (distanceMeters == null) {
+                distanceContainer.visibility = View.GONE
+                rowView.contentDescription = place.name
+            } else {
+                distanceContainer.visibility = View.VISIBLE
+                distanceView.text = PlaceDistanceFormatter.compact(distanceMeters)
+                rowView.contentDescription = "${place.name}，${PlaceDistanceFormatter.accessibility(distanceMeters)}"
+            }
+            rowView.setOnClickListener { onClick(place) }
         }
     }
 
     companion object {
         private const val MIN_SEARCH_LENGTH = 1
         private const val SEARCH_DEBOUNCE_MS = 300L
-        private const val CANDIDATE_ROW_HEIGHT_DP = 48
+        private const val CANDIDATE_ROW_HEIGHT_DP = 52
         private const val MIN_VISIBLE_ROWS = 3
+        private const val CANDIDATE_BOTTOM_SAFE_INSET_DP = 8
 
         private fun dp(context: Context, value: Int): Int {
             return (value * context.resources.displayMetrics.density).toInt()

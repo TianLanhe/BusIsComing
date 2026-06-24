@@ -3,6 +3,7 @@ package com.example.busiscoming.ui.main
 import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
 import android.content.res.ColorStateList
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -27,6 +28,14 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.busiscoming.R
+import com.example.busiscoming.data.location.CurrentLocationCoordinator
+import com.example.busiscoming.data.location.CurrentLocationResult
+import com.example.busiscoming.data.location.CurrentPlaceSelectionResult
+import com.example.busiscoming.data.location.LocationPermissionStateStore
+import com.example.busiscoming.data.location.LocationPermissionUtils
+import com.example.busiscoming.data.location.MockPlaceNameResolver
+import com.example.busiscoming.data.location.NearbyRouteSelectionPolicy
+import com.example.busiscoming.data.location.SystemLocationUtils
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfig
@@ -60,6 +69,8 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
     private lateinit var routeConfigRepository: RouteConfigRepository
+    private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
+    private lateinit var locationPermissionStateStore: LocationPermissionStateStore
     private val busRouteRepository: BusRouteRepository = CitybusBusRouteRepository()
     private val routeDetailRepository: RouteDetailRepository = CitybusRouteDetailRepository()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -111,6 +122,12 @@ class MainActivity : AppCompatActivity() {
     private var refreshFinishRunnable: Runnable? = null
     private var refreshViewport: RefreshViewport? = null
     private var resultListBasePadding: ViewPadding? = null
+    private var hasAttemptedNearbyRouteSelection: Boolean = false
+    private var nearbySelectedRouteId: Long? = null
+    private var manualRouteSelectionGeneration: Int = 0
+    private val shownLocationFallbackToasts = mutableSetOf<LocationFallbackToast>()
+    private var pendingLocationPermissionAction: PendingLocationPermissionAction? = null
+    private var pendingLocationSettingsCurrentPlaceCallback: ((CurrentPlaceSelectionResult) -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,6 +135,8 @@ class MainActivity : AppCompatActivity() {
         title = "BusIsComing"
 
         routeConfigRepository = RouteConfigRepository(this)
+        currentLocationCoordinator = CurrentLocationCoordinator(this)
+        locationPermissionStateStore = LocationPermissionStateStore(this)
         clearExpiredMonitorSession()
         routeDetailBottomSheet = RouteDetailBottomSheet(this, routeDetailRepository)
         etaArrivalsBottomSheet = EtaArrivalsBottomSheet(this)
@@ -135,6 +154,7 @@ class MainActivity : AppCompatActivity() {
             routeConfigRepository = routeConfigRepository,
             mainHandler = mainHandler,
             searchExecutor = placeSearchExecutor,
+            onCurrentPlaceRequested = ::requestCurrentPlaceForTemporaryQuery,
             onQuery = ::queryTemporaryRoute,
             onSaved = { savedRouteId -> selectSavedRouteAfterCreate(savedRouteId) }
         )
@@ -159,6 +179,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadRouteConfigs()
+        retryCurrentPlaceAfterLocationSettings()
     }
 
     private fun bindViews() {
@@ -276,8 +297,54 @@ class MainActivity : AppCompatActivity() {
 
         selectedRoute = routeConfigs.firstOrNull { it.id == previousSelectedId } ?: routeConfigs.first()
         renderRouteShortcuts()
+        maybeStartNearbyRouteSelection()
         if (previousRouteSnapshot != routeIdentitySnapshot(routeConfigs)) {
             clearResults()
+        }
+    }
+
+    private fun maybeStartNearbyRouteSelection() {
+        if (hasAttemptedNearbyRouteSelection || routeConfigs.size < 2) return
+        hasAttemptedNearbyRouteSelection = true
+        val generation = manualRouteSelectionGeneration
+        if (LocationPermissionUtils.hasForegroundLocationPermission(this)) {
+            selectNearbyRouteWhenLocationAvailable(generation)
+            return
+        }
+        if (locationPermissionStateStore.isAutoRequestDenied()) {
+            showLocationFallbackToast(LocationFallbackToast.PERMISSION_DENIED)
+            return
+        }
+        pendingLocationPermissionAction = PendingLocationPermissionAction.NearbyRoute(generation)
+        ActivityCompat.requestPermissions(
+            this,
+            LocationPermissionUtils.permissions,
+            REQUEST_LOCATION_PERMISSION
+        )
+    }
+
+    private fun selectNearbyRouteWhenLocationAvailable(generation: Int) {
+        if (!SystemLocationUtils.isLocationEnabled(this)) {
+            showLocationFallbackToast(LocationFallbackToast.UNAVAILABLE)
+            return
+        }
+        currentLocationCoordinator.getCurrentLocation { result ->
+            if (isFinishing || isDestroyed || manualRouteSelectionGeneration != generation) return@getCurrentLocation
+            when (result) {
+                is CurrentLocationResult.Success -> {
+                    val route = NearbyRouteSelectionPolicy.selectRoute(result.snapshot, routeConfigs)
+                    if (route == null) {
+                        showLocationFallbackToast(LocationFallbackToast.IMPRECISE)
+                        return@getCurrentLocation
+                    }
+                    selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
+                    nearbySelectedRouteId = selectedRoute?.id
+                    renderRouteShortcuts()
+                }
+                CurrentLocationResult.NoPermission -> showLocationFallbackToast(LocationFallbackToast.PERMISSION_DENIED)
+                CurrentLocationResult.Timeout,
+                CurrentLocationResult.Unavailable -> showLocationFallbackToast(LocationFallbackToast.UNAVAILABLE)
+            }
         }
     }
 
@@ -657,12 +724,119 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != REQUEST_POST_NOTIFICATIONS) return
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            pendingMonitorStart?.let { startMonitor(it) }
-        } else {
-            pendingMonitorStart = null
-            Toast.makeText(this, "未允許通知權限，無法啟動通知欄監控", Toast.LENGTH_SHORT).show()
+        when (requestCode) {
+            REQUEST_POST_NOTIFICATIONS -> {
+                if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                    pendingMonitorStart?.let { startMonitor(it) }
+                } else {
+                    pendingMonitorStart = null
+                    Toast.makeText(this, "未允許通知權限，無法啟動通知欄監控", Toast.LENGTH_SHORT).show()
+                }
+            }
+            REQUEST_LOCATION_PERMISSION -> {
+                val action = pendingLocationPermissionAction
+                pendingLocationPermissionAction = null
+                val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+                if (!granted) {
+                    if (action?.isAuto == true) {
+                        locationPermissionStateStore.setAutoRequestDenied(true)
+                    }
+                    when (action) {
+                        is PendingLocationPermissionAction.NearbyRoute -> {
+                            showLocationFallbackToast(LocationFallbackToast.PERMISSION_DENIED)
+                        }
+                        is PendingLocationPermissionAction.CurrentPlace -> {
+                            action.callback(CurrentPlaceSelectionResult.Failure)
+                        }
+                        null -> Unit
+                    }
+                    return
+                }
+                when (action) {
+                    is PendingLocationPermissionAction.NearbyRoute -> {
+                        selectNearbyRouteWhenLocationAvailable(action.generation)
+                    }
+                    is PendingLocationPermissionAction.CurrentPlace -> {
+                        continueCurrentPlaceWithPermission(action.isAuto, action.callback)
+                    }
+                    null -> Unit
+                }
+            }
+        }
+    }
+
+    private fun requestCurrentPlaceForTemporaryQuery(
+        isAuto: Boolean,
+        callback: (CurrentPlaceSelectionResult) -> Unit
+    ) {
+        if (LocationPermissionUtils.hasForegroundLocationPermission(this)) {
+            continueCurrentPlaceWithPermission(isAuto, callback)
+            return
+        }
+        if (isAuto && locationPermissionStateStore.isAutoRequestDenied()) {
+            callback(CurrentPlaceSelectionResult.Failure)
+            return
+        }
+        pendingLocationPermissionAction = PendingLocationPermissionAction.CurrentPlace(
+            callback = callback,
+            requestIsAuto = isAuto
+        )
+        ActivityCompat.requestPermissions(
+            this,
+            LocationPermissionUtils.permissions,
+            REQUEST_LOCATION_PERMISSION
+        )
+    }
+
+    private fun continueCurrentPlaceWithPermission(
+        isAuto: Boolean,
+        callback: (CurrentPlaceSelectionResult) -> Unit
+    ) {
+        if (!SystemLocationUtils.isLocationEnabled(this)) {
+            if (isAuto) {
+                callback(CurrentPlaceSelectionResult.Failure)
+            } else {
+                promptLocationSettingsForCurrentPlace(callback)
+            }
+            return
+        }
+        resolveCurrentPlace(callback)
+    }
+
+    private fun promptLocationSettingsForCurrentPlace(
+        callback: (CurrentPlaceSelectionResult) -> Unit
+    ) {
+        pendingLocationSettingsCurrentPlaceCallback = callback
+        Toast.makeText(this, "請開啟系統定位", Toast.LENGTH_SHORT).show()
+        try {
+            startActivity(SystemLocationUtils.settingsIntent())
+        } catch (_: ActivityNotFoundException) {
+            pendingLocationSettingsCurrentPlaceCallback = null
+            callback(CurrentPlaceSelectionResult.Failure)
+        }
+    }
+
+    private fun retryCurrentPlaceAfterLocationSettings() {
+        val callback = pendingLocationSettingsCurrentPlaceCallback ?: return
+        pendingLocationSettingsCurrentPlaceCallback = null
+        if (!SystemLocationUtils.isLocationEnabled(this)) {
+            callback(CurrentPlaceSelectionResult.Failure)
+            return
+        }
+        resolveCurrentPlace(callback)
+    }
+
+    private fun resolveCurrentPlace(callback: (CurrentPlaceSelectionResult) -> Unit) {
+        currentLocationCoordinator.getCurrentLocation { result ->
+            when (result) {
+                is CurrentLocationResult.Success -> {
+                    val place = MockPlaceNameResolver.resolve(result.snapshot)
+                    callback(CurrentPlaceSelectionResult.Success(place, result.snapshot))
+                }
+                CurrentLocationResult.NoPermission,
+                CurrentLocationResult.Timeout,
+                CurrentLocationResult.Unavailable -> callback(CurrentPlaceSelectionResult.Failure)
+            }
         }
     }
 
@@ -777,13 +951,28 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(10), dp(10), dp(10), dp(10))
                 minimumHeight = dp(74)
-                addView(TextView(context).apply {
-                    text = route.name
-                    maxLines = 1
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
-                    textSize = 15f
-                    typeface = Typeface.DEFAULT_BOLD
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(TextView(context).apply {
+                        text = route.name
+                        maxLines = 1
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
+                        textSize = 15f
+                        typeface = Typeface.DEFAULT_BOLD
+                        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    })
+                    if (isSelected && nearbySelectedRouteId == route.id) {
+                        addView(TextView(context).apply {
+                            text = "附近"
+                            setTextColor(ContextCompat.getColor(context, R.color.bus_chip_selected))
+                            textSize = 11f
+                            typeface = Typeface.DEFAULT_BOLD
+                            background = ContextCompat.getDrawable(context, R.drawable.sort_chip_background)
+                            setPadding(dp(6), dp(2), dp(6), dp(2))
+                        })
+                    }
                 })
                 addView(TextView(context).apply {
                     text = route.pathLabel()
@@ -802,6 +991,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectRoute(route: RouteConfig) {
         if (selectedRoute?.id == route.id) return
+        manualRouteSelectionGeneration += 1
+        nearbySelectedRouteId = null
         selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
         renderRouteShortcuts()
         clearResults()
@@ -875,8 +1066,19 @@ class MainActivity : AppCompatActivity() {
         temporaryRouteBottomSheet.show()
     }
 
+    private fun showLocationFallbackToast(type: LocationFallbackToast) {
+        if (!shownLocationFallbackToasts.add(type)) return
+        val message = when (type) {
+            LocationFallbackToast.PERMISSION_DENIED -> "未允許定位，已按常用排序選擇路線"
+            LocationFallbackToast.UNAVAILABLE -> "暫時無法取得目前位置，已按常用排序選擇路線"
+            LocationFallbackToast.IMPRECISE -> "目前位置不夠精確，已按常用排序選擇路線"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
     private fun selectSavedRouteAfterCreate(savedRouteId: Long, clearExistingResults: Boolean = true) {
         routeConfigs = routeConfigRepository.getAll()
+        nearbySelectedRouteId = null
         selectedRoute = routeConfigs.firstOrNull { it.id == savedRouteId } ?: selectedRoute
         emptyRouteState.visibility = if (routeConfigs.isEmpty()) View.VISIBLE else View.GONE
         queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
@@ -1108,6 +1310,20 @@ class MainActivity : AppCompatActivity() {
         val bottom: Int
     )
 
+    private enum class LocationFallbackToast {
+        PERMISSION_DENIED,
+        UNAVAILABLE,
+        IMPRECISE
+    }
+
+    private sealed class PendingLocationPermissionAction(val isAuto: Boolean) {
+        data class NearbyRoute(val generation: Int) : PendingLocationPermissionAction(isAuto = true)
+        data class CurrentPlace(
+            val callback: (CurrentPlaceSelectionResult) -> Unit,
+            val requestIsAuto: Boolean
+        ) : PendingLocationPermissionAction(isAuto = requestIsAuto)
+    }
+
     private sealed class QueryContext {
         data class Saved(val routeId: Long) : QueryContext()
         data class Temporary(val origin: Place, val destination: Place) : QueryContext()
@@ -1115,6 +1331,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_POST_NOTIFICATIONS = 301
+        private const val REQUEST_LOCATION_PERMISSION = 302
         private const val REFRESH_LIST_TOP_INSET_DP = 44
         private const val REFRESH_SUCCESS_DURATION_MS = 500L
 
