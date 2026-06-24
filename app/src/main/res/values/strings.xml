@@ -3,4 +3,7 @@
     <string name="route_refreshing">正在刷新</string>
     <string name="route_refresh_complete">刷新完成</string>
     <string name="use_my_location">使用我的位置</string>
+    <string name="transit_code_wechat_launch_failed">未能開啟微信乘車碼入口，請嘗試其他入口或手動打開微信。</string>
+    <string name="transit_code_alipay_launch_failed">未能開啟支付寶乘車碼入口，請嘗試其他入口或手動打開支付寶。</string>
+    <string name="transit_code_generic_launch_failed">未能開啟此實驗入口。</string>
 </resources>

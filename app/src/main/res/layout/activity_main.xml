@@ -24,6 +24,19 @@
             android:textStyle="bold" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/transitCodeButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginEnd="6dp"
+            android:minHeight="40dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="8dp"
+            android:text="乘車碼"
+            android:textColor="@color/bus_chip_selected"
+            android:textSize="14sp" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/manageRoutesButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

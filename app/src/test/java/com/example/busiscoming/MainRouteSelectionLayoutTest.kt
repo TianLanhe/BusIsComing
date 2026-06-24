@@ -12,6 +12,8 @@ class MainRouteSelectionLayoutTest {
     fun exposesAllEntryAndTemporaryQueryContextBar() {
         assertTrue(layoutXml.contains("android:id=\"@+id/routePickerButton\""))
         assertTrue(layoutXml.contains("android:text=\"全部\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/transitCodeButton\""))
+        assertTrue(layoutXml.contains("android:text=\"乘車碼\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQueryContextBar\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQueryContextPathText\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQuerySaveButton\""))
