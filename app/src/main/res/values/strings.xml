@@ -6,4 +6,5 @@
     <string name="transit_code_wechat_launch_failed">未能開啟微信乘車碼入口，請查看診斷結果。</string>
     <string name="transit_code_alipay_hk_launch_failed">未能開啟 AlipayHK 乘車碼入口，請查看診斷結果。</string>
     <string name="transit_code_generic_launch_failed">未能開啟此實驗入口，請查看診斷結果。</string>
+    <string name="transit_code_launch_failed">未能開啟乘車碼，請確認已安裝 AlipayHK 或支付寶。</string>
 </resources>

@@ -14,36 +14,37 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="巴士查詢"
-            android:textColor="@color/bus_text_primary"
-            android:textSize="24sp"
-            android:textStyle="bold" />
-
         <com.google.android.material.button.MaterialButton
             android:id="@+id/transitCodeButton"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:layout_marginEnd="6dp"
-            android:minHeight="40dp"
+            android:layout_height="44dp"
+            android:minHeight="44dp"
             android:minWidth="0dp"
-            android:paddingHorizontal="8dp"
+            android:paddingHorizontal="16dp"
             android:text="乘車碼"
-            android:textColor="@color/bus_chip_selected"
-            android:textSize="14sp" />
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            app:backgroundTint="@color/bus_chip_selected"
+            app:cornerRadius="6dp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/manageRoutesButton"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:minHeight="44dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="16dp"
+            android:text="管理路線"
             android:textColor="@color/white"
+            android:textSize="14sp"
             app:backgroundTint="@color/bus_chip_selected"
-            app:cornerRadius="6dp"
-            android:text="管理路線" />
+            app:cornerRadius="6dp" />
     </LinearLayout>
 
     <LinearLayout

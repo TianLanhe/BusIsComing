@@ -107,7 +107,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etaArrivalsBottomSheet: EtaArrivalsBottomSheet
     private lateinit var monitorSettingsBottomSheet: MonitorSettingsBottomSheet
     private lateinit var temporaryRouteBottomSheet: TemporaryRouteBottomSheet
-    private lateinit var transitCodeBottomSheet: TransitCodeBottomSheet
+    private lateinit var transitCodePaymentLauncher: TransitCodePaymentLaunchAction
 
     private var routeConfigs: List<RouteConfig> = emptyList()
     private var selectedRoute: RouteConfig? = null
@@ -159,10 +159,7 @@ class MainActivity : AppCompatActivity() {
             onQuery = ::queryTemporaryRoute,
             onSaved = { savedRouteId -> selectSavedRouteAfterCreate(savedRouteId) }
         )
-        transitCodeBottomSheet = TransitCodeBottomSheet(
-            context = this,
-            launcher = TransitCodeLauncher.forActivity(this)
-        )
+        transitCodePaymentLauncher = TransitCodePaymentLauncher.forActivity(this)
         findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
         bindViews()
         setupResultList()
@@ -176,7 +173,6 @@ class MainActivity : AppCompatActivity() {
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
         temporaryRouteBottomSheet.dispose()
-        transitCodeBottomSheet.dispose()
         queryExecutor.shutdownNow()
         placeSearchExecutor.shutdownNow()
         super.onDestroy()
@@ -186,7 +182,6 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         loadRouteConfigs()
         retryCurrentPlaceAfterLocationSettings()
-        transitCodeBottomSheet.refreshDiagnostics()
     }
 
     private fun bindViews() {
@@ -264,7 +259,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, RouteManageActivity::class.java))
         }
         findViewById<MaterialButton>(R.id.transitCodeButton).setOnClickListener {
-            transitCodeBottomSheet.show()
+            val outcome = transitCodePaymentLauncher.launchTransitCode()
+            if (outcome.shouldShowFailureToast) {
+                Toast.makeText(this, R.string.transit_code_launch_failed, Toast.LENGTH_SHORT).show()
+            }
         }
         findViewById<MaterialButton>(R.id.emptyAddRouteButton).setOnClickListener {
             startActivity(Intent(this, RouteEditActivity::class.java))

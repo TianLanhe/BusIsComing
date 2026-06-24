@@ -10,6 +10,12 @@ import com.example.busiscoming.data.local.RouteConfigDbHelper
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.ui.main.MainActivity
 import com.example.busiscoming.ui.main.TransitCodeBottomSheet
+import com.example.busiscoming.ui.main.TransitCodePaymentLaunchAction
+import com.example.busiscoming.ui.main.TransitCodePaymentLaunchOutcome
+import com.example.busiscoming.ui.main.TransitCodeLauncher
+import com.example.busiscoming.ui.main.ViewUriLauncher
+import com.example.busiscoming.ui.main.WechatMiniProgramClient
+import com.example.busiscoming.ui.main.WechatMiniProgramLaunchReport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -27,19 +33,20 @@ class TransitCodeBottomSheetInstrumentedTest {
     }
 
     @Test
-    fun clickingMainTransitCodeShowsExperimentalBottomSheet() {
+    fun showingExperimentalBottomSheetDirectlyDisplaysExperimentCopy() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var sheet: TransitCodeBottomSheet
             scenario.onActivity { activity ->
-                activity.findViewById<View>(R.id.transitCodeButton).performClick()
+                sheet = showTransitCodeSheet(activity)
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
             scenario.onActivity { activity ->
-                val sheet = transitCodeSheet(activity)
                 assertTrue(sheet.isShowing())
                 assertTrue(sheet.textSnapshot().contains("實驗性乘車碼入口"))
                 assertTrue(sheet.textSnapshot().contains("逐條嘗試微信 SDK 或 AlipayHK 候選入口；不會自動嘗試下一條。"))
                 assertTrue(sheet.textSnapshot().contains("最近診斷"))
+                sheet.dispose()
             }
         }
     }
@@ -47,13 +54,14 @@ class TransitCodeBottomSheetInstrumentedTest {
     @Test
     fun bottomSheetListsWechatSdkAndAlipayHkTargets() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var sheet: TransitCodeBottomSheet
             scenario.onActivity { activity ->
-                activity.findViewById<View>(R.id.transitCodeButton).performClick()
+                sheet = showTransitCodeSheet(activity)
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
             scenario.onActivity { activity ->
-                val labels = transitCodeSheet(activity).textSnapshot()
+                val labels = sheet.textSnapshot()
                 listOf(
                     "微信 SDK",
                     "微信 SDK 正式版",
@@ -76,15 +84,18 @@ class TransitCodeBottomSheetInstrumentedTest {
                 ).forEach { label ->
                     assertFalse("Unexpected label: $label", labels.contains(label))
                 }
+                sheet.dispose()
             }
         }
     }
 
     @Test
-    fun openingAndClosingBottomSheetKeepsDisplayedRouteResults() {
+    fun clickingMainTransitCodeUsesFormalLauncherAndKeepsDisplayedRouteResults() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val paymentLauncher = RecordingPaymentLaunchAction()
             lateinit var before: ResultSnapshot
             scenario.onActivity { activity ->
+                setPaymentLauncher(activity, paymentLauncher)
                 prepareResults(activity, routes("保留", 4))
                 before = snapshot(activity)
             }
@@ -93,14 +104,10 @@ class TransitCodeBottomSheetInstrumentedTest {
                 activity.findViewById<View>(R.id.transitCodeButton).performClick()
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            scenario.onActivity { activity ->
-                val sheet = transitCodeSheet(activity)
-                assertTrue(sheet.isShowing())
-                sheet.dispose()
-            }
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
             scenario.onActivity { activity ->
+                assertEquals(1, paymentLauncher.calls)
+                assertFalse(rootText(activity).contains("實驗性乘車碼入口"))
                 assertEquals(before, snapshot(activity))
             }
         }
@@ -140,6 +147,16 @@ class TransitCodeBottomSheetInstrumentedTest {
         )
     }
 
+    private fun showTransitCodeSheet(activity: MainActivity): TransitCodeBottomSheet {
+        return TransitCodeBottomSheet(
+            context = activity,
+            launcher = TransitCodeLauncher(
+                viewUriLauncher = FakeViewUriLauncher,
+                wechatMiniProgramClient = FakeWechatMiniProgramClient
+            )
+        ).also { it.show() }
+    }
+
     private fun invoke(
         target: Any,
         name: String,
@@ -151,10 +168,27 @@ class TransitCodeBottomSheetInstrumentedTest {
         }.invoke(target, *args)
     }
 
-    private fun transitCodeSheet(activity: MainActivity): TransitCodeBottomSheet {
-        return activity.javaClass.getDeclaredField("transitCodeBottomSheet").apply {
+    private fun setPaymentLauncher(
+        activity: MainActivity,
+        launcher: RecordingPaymentLaunchAction
+    ) {
+        activity.javaClass.getDeclaredField("transitCodePaymentLauncher").apply {
             isAccessible = true
-        }.get(activity) as TransitCodeBottomSheet
+        }.set(activity, launcher)
+    }
+
+    private fun rootText(activity: MainActivity): String {
+        return collectText(activity.window.decorView.rootView).joinToString("\n")
+    }
+
+    private fun collectText(view: View): List<String> {
+        return when (view) {
+            is TextView -> listOf(view.text.toString())
+            is android.view.ViewGroup -> {
+                (0 until view.childCount).flatMap { index -> collectText(view.getChildAt(index)) }
+            }
+            else -> emptyList()
+        }
     }
 
     private data class ResultSnapshot(
@@ -167,4 +201,41 @@ class TransitCodeBottomSheetInstrumentedTest {
         val summary: String,
         val updatedAt: String
     )
+
+    private class RecordingPaymentLaunchAction : TransitCodePaymentLaunchAction {
+        var calls: Int = 0
+
+        override fun launchTransitCode(): TransitCodePaymentLaunchOutcome {
+            calls += 1
+            return TransitCodePaymentLaunchOutcome(
+                started = true,
+                startedTarget = null,
+                attempts = emptyList(),
+                shouldShowFailureToast = false
+            )
+        }
+    }
+
+    private object FakeViewUriLauncher : ViewUriLauncher {
+        override fun resolveActivity(uri: String): String? {
+            return "fake.package/FakeActivity"
+        }
+
+        override fun start(uri: String) = Unit
+    }
+
+    private object FakeWechatMiniProgramClient : WechatMiniProgramClient {
+        override fun launch(params: com.example.busiscoming.data.model.WechatMiniProgramParams): WechatMiniProgramLaunchReport {
+            return WechatMiniProgramLaunchReport(
+                appPackageName = "com.example.busiscoming",
+                appSignatureSha256 = "AA:BB",
+                wechatPackageVisible = true,
+                registerAppResult = true,
+                isWXAppInstalled = true,
+                wxAppSupportApi = 123,
+                isWXAppSupportApi = true,
+                sendReqResult = true
+            )
+        }
+    }
 }
