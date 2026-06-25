@@ -31,10 +31,12 @@ import com.example.busiscoming.R
 import com.example.busiscoming.data.location.CurrentLocationCoordinator
 import com.example.busiscoming.data.location.CurrentLocationResult
 import com.example.busiscoming.data.location.CurrentPlaceSelectionResult
+import com.example.busiscoming.data.location.GoogleReverseGeocodingPlaceNameResolver
 import com.example.busiscoming.data.location.LocationPermissionStateStore
 import com.example.busiscoming.data.location.LocationPermissionUtils
-import com.example.busiscoming.data.location.MockPlaceNameResolver
 import com.example.busiscoming.data.location.NearbyRouteSelectionPolicy
+import com.example.busiscoming.data.location.PlaceNameResolutionResult
+import com.example.busiscoming.data.location.PlaceNameResolver
 import com.example.busiscoming.data.location.SystemLocationUtils
 import com.example.busiscoming.data.model.BusRouteOption
 import com.example.busiscoming.data.model.Place
@@ -71,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeConfigRepository: RouteConfigRepository
     private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
+    private lateinit var placeNameResolver: PlaceNameResolver
     private val busRouteRepository: BusRouteRepository = CitybusBusRouteRepository()
     private val routeDetailRepository: RouteDetailRepository = CitybusRouteDetailRepository()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -138,6 +141,7 @@ class MainActivity : AppCompatActivity() {
         routeConfigRepository = RouteConfigRepository(this)
         currentLocationCoordinator = CurrentLocationCoordinator(this)
         locationPermissionStateStore = LocationPermissionStateStore(this)
+        placeNameResolver = GoogleReverseGeocodingPlaceNameResolver(this)
         clearExpiredMonitorSession()
         routeDetailBottomSheet = RouteDetailBottomSheet(this, routeDetailRepository)
         etaArrivalsBottomSheet = EtaArrivalsBottomSheet(this)
@@ -835,15 +839,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resolveCurrentPlace(callback: (CurrentPlaceSelectionResult) -> Unit) {
+        var finished = false
+        val timeout = Runnable {
+            if (finished) return@Runnable
+            finished = true
+            callback(CurrentPlaceSelectionResult.Failure)
+        }
+        mainHandler.postDelayed(timeout, CURRENT_PLACE_TOTAL_TIMEOUT_MS)
+
+        fun finish(result: CurrentPlaceSelectionResult) {
+            if (finished) return
+            finished = true
+            mainHandler.removeCallbacks(timeout)
+            callback(result)
+        }
+
         currentLocationCoordinator.getCurrentLocation { result ->
             when (result) {
                 is CurrentLocationResult.Success -> {
-                    val place = MockPlaceNameResolver.resolve(result.snapshot)
-                    callback(CurrentPlaceSelectionResult.Success(place, result.snapshot))
+                    placeNameResolver.resolve(result.snapshot) { nameResult ->
+                        when (nameResult) {
+                            is PlaceNameResolutionResult.Success -> {
+                                finish(
+                                    CurrentPlaceSelectionResult.Success(
+                                        place = Place(
+                                            name = nameResult.addressName,
+                                            latitude = result.snapshot.latitude,
+                                            longitude = result.snapshot.longitude
+                                        ),
+                                        snapshot = result.snapshot,
+                                        attribution = nameResult.attribution
+                                    )
+                                )
+                            }
+                            PlaceNameResolutionResult.Failure -> finish(CurrentPlaceSelectionResult.Failure)
+                        }
+                    }
                 }
                 CurrentLocationResult.NoPermission,
                 CurrentLocationResult.Timeout,
-                CurrentLocationResult.Unavailable -> callback(CurrentPlaceSelectionResult.Failure)
+                CurrentLocationResult.Unavailable -> finish(CurrentPlaceSelectionResult.Failure)
             }
         }
     }
@@ -1342,6 +1377,7 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_LOCATION_PERMISSION = 302
         private const val REFRESH_LIST_TOP_INSET_DP = 44
         private const val REFRESH_SUCCESS_DURATION_MS = 500L
+        private const val CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L
 
         private val RESULT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {

@@ -18,6 +18,7 @@ import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscoming.R
 import com.example.busiscoming.data.location.CurrentPlaceSelectionResult
+import com.example.busiscoming.data.location.PlaceAttribution
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfigValidator
 import com.example.busiscoming.data.repository.CitybusPlaceSearchRepository
@@ -47,6 +48,7 @@ class TemporaryRouteBottomSheet(
     private var dialog: BottomSheetDialog? = null
     private var originController: PlaceInputController? = null
     private var destinationController: PlaceInputController? = null
+    private var originAttributionText: TextView? = null
     private var swapButton: AppCompatImageButton? = null
     private var candidateBackCallback: OnBackInvokedCallback? = null
     private var currentPlaceGeneration: Int = 0
@@ -94,6 +96,9 @@ class TemporaryRouteBottomSheet(
         originInputLayout.addView(originInput)
         configureLocationEndIcon(originInputLayout)
         inputColumn.addView(originInputLayout)
+        val originAttribution = attributionText()
+        originAttributionText = originAttribution
+        inputColumn.addView(originAttribution)
         val originLoading = loadingRow()
         inputColumn.addView(originLoading)
         val originCandidates = candidateList(R.id.temporaryOriginCandidateList)
@@ -149,10 +154,12 @@ class TemporaryRouteBottomSheet(
             onUserTextEdited = {
                 originTouchedByUser = true
                 currentPlaceGeneration += 1
+                hideOriginAttribution()
             },
             onPlaceSelected = {
                 originTouchedByUser = true
                 currentPlaceGeneration += 1
+                hideOriginAttribution()
                 focusUnselectedPeer(destinationController, destinationInput)
             }
         )
@@ -265,8 +272,10 @@ class TemporaryRouteBottomSheet(
                         originController?.setCurrentLocationSnapshot(result.snapshot)
                         destinationController?.setCurrentLocationSnapshot(result.snapshot)
                         originController?.setSelectedPlace(result.place)
+                        showOriginAttribution(result.attribution)
                     }
                     CurrentPlaceSelectionResult.Failure -> {
+                        hideOriginAttribution()
                         if (isAuto) {
                             originController?.setHelperText("暫時無法取得目前位置，請手動選擇起點")
                         } else {
@@ -286,6 +295,18 @@ class TemporaryRouteBottomSheet(
         val originHidden = originController?.hideCandidates() == true
         val destinationHidden = destinationController?.hideCandidates() == true
         return originHidden || destinationHidden
+    }
+
+    private fun showOriginAttribution(attribution: PlaceAttribution?) {
+        originAttributionText?.visibility = if (attribution == PlaceAttribution.GOOGLE_MAPS) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    private fun hideOriginAttribution() {
+        originAttributionText?.visibility = View.GONE
     }
 
     private fun focusUnselectedPeer(
@@ -407,6 +428,19 @@ class TemporaryRouteBottomSheet(
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
                 textSize = 13f
             })
+        }
+    }
+
+    private fun attributionText(): TextView {
+        return TextView(context).apply {
+            text = context.getString(R.string.google_maps_address_attribution)
+            setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
+            textSize = 12f
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(4) }
         }
     }
 
