@@ -1,5 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) {
+        file.inputStream().use { stream ->
+            load(stream)
+        }
+    }
+}
+
+fun String.asBuildConfigString(): String {
+    return "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
 
 android {
@@ -18,6 +33,19 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "GOOGLE_GEOCODING_API_KEY",
+            (
+                localProperties.getProperty("GOOGLE_GEOCODING_API_KEY")
+                    ?: System.getenv("GOOGLE_GEOCODING_API_KEY")
+                    ?: ""
+            ).asBuildConfigString()
+        )
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {
@@ -45,7 +73,9 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.wechat.sdk.android)
     testImplementation(libs.junit)
+    testImplementation(libs.json)
     androidTestImplementation(libs.androidx.test.core.ktx)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.rules)
 }

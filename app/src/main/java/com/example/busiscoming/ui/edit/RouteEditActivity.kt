@@ -23,9 +23,12 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.busiscoming.R
 import com.example.busiscoming.data.location.CurrentLocationCoordinator
 import com.example.busiscoming.data.location.CurrentLocationResult
+import com.example.busiscoming.data.location.GoogleReverseGeocodingPlaceNameResolver
 import com.example.busiscoming.data.location.LocationPermissionStateStore
 import com.example.busiscoming.data.location.LocationPermissionUtils
-import com.example.busiscoming.data.location.MockPlaceNameResolver
+import com.example.busiscoming.data.location.PlaceAttribution
+import com.example.busiscoming.data.location.PlaceNameResolutionResult
+import com.example.busiscoming.data.location.PlaceNameResolver
 import com.example.busiscoming.data.location.SystemLocationUtils
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfig
@@ -47,6 +50,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var placeSearchRepository: PlaceSearchRepository
     private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
+    private lateinit var placeNameResolver: PlaceNameResolver
     private lateinit var routeEditScroll: NestedScrollView
     private lateinit var routeEditContent: View
     private lateinit var nameInputLayout: TextInputLayout
@@ -57,6 +61,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var originInput: MaterialAutoCompleteTextView
     private lateinit var destinationInput: MaterialAutoCompleteTextView
     private lateinit var originSearchLoading: View
+    private lateinit var originAttributionText: TextView
     private lateinit var destinationSearchLoading: View
     private lateinit var originCandidateList: RecyclerView
     private lateinit var destinationCandidateList: RecyclerView
@@ -72,6 +77,8 @@ class RouteEditActivity : AppCompatActivity() {
     private var currentPlaceGeneration: Int = 0
     private var pendingCurrentPlaceRequest: PendingCurrentPlaceRequest? = null
     private var pendingLocationSettingsRetry: PendingCurrentPlaceRequest? = null
+    private var currentPlaceTimeoutRunnable: Runnable? = null
+    private var hasPrefetchedCurrentAddress: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +90,7 @@ class RouteEditActivity : AppCompatActivity() {
         placeSearchRepository = CitybusPlaceSearchRepository()
         currentLocationCoordinator = CurrentLocationCoordinator(this)
         locationPermissionStateStore = LocationPermissionStateStore(this)
+        placeNameResolver = GoogleReverseGeocodingPlaceNameResolver(this)
         routeId = intent.getLongExtra(EXTRA_ROUTE_ID, NO_ROUTE_ID)
 
         bindViews()
@@ -127,6 +135,7 @@ class RouteEditActivity : AppCompatActivity() {
         originInput = findViewById(R.id.originInput)
         destinationInput = findViewById(R.id.destinationInput)
         originSearchLoading = findViewById(R.id.originSearchLoading)
+        originAttributionText = findViewById(R.id.originAttributionText)
         destinationSearchLoading = findViewById(R.id.destinationSearchLoading)
         originCandidateList = findViewById(R.id.originCandidateList)
         destinationCandidateList = findViewById(R.id.destinationCandidateList)
@@ -162,10 +171,14 @@ class RouteEditActivity : AppCompatActivity() {
             onUserTextEdited = {
                 originTouchedByUser = true
                 currentPlaceGeneration += 1
+                cancelCurrentPlaceTimeout()
+                hideOriginAttribution()
             },
             onPlaceSelected = {
                 originTouchedByUser = true
                 currentPlaceGeneration += 1
+                cancelCurrentPlaceTimeout()
+                hideOriginAttribution()
                 focusUnselectedPeer(destinationController, destinationInput)
             }
         )
@@ -250,33 +263,88 @@ class RouteEditActivity : AppCompatActivity() {
     }
 
     private fun resolveCurrentOrigin(generation: Int, isAuto: Boolean) {
+        scheduleCurrentPlaceTimeout(generation, isAuto)
         currentLocationCoordinator.getCurrentLocation { result ->
             if (isFinishing || isDestroyed || currentPlaceGeneration != generation) return@getCurrentLocation
             when (result) {
                 is CurrentLocationResult.Success -> {
                     originController.setCurrentLocationSnapshot(result.snapshot)
                     destinationController.setCurrentLocationSnapshot(result.snapshot)
-                    originController.setSelectedPlace(MockPlaceNameResolver.resolve(result.snapshot))
+                    placeNameResolver.resolve(result.snapshot) { nameResult ->
+                        if (isFinishing || isDestroyed || currentPlaceGeneration != generation) return@resolve
+                        cancelCurrentPlaceTimeout()
+                        when (nameResult) {
+                            is PlaceNameResolutionResult.Success -> {
+                                originController.setSelectedPlace(
+                                    Place(
+                                        name = nameResult.addressName,
+                                        latitude = result.snapshot.latitude,
+                                        longitude = result.snapshot.longitude
+                                    )
+                                )
+                                showOriginAttribution(nameResult.attribution)
+                            }
+                            PlaceNameResolutionResult.Failure -> handleCurrentOriginFailure(isAuto)
+                        }
+                    }
                 }
                 CurrentLocationResult.NoPermission,
                 CurrentLocationResult.Timeout,
-                CurrentLocationResult.Unavailable -> handleCurrentOriginFailure(isAuto)
+                CurrentLocationResult.Unavailable -> {
+                    cancelCurrentPlaceTimeout()
+                    handleCurrentOriginFailure(isAuto)
+                }
             }
         }
     }
 
     private fun requestCandidateLocationSnapshotIfPermitted() {
         if (!LocationPermissionUtils.hasForegroundLocationPermission(this)) return
+        if (!SystemLocationUtils.isLocationEnabled(this)) return
         currentLocationCoordinator.getCurrentLocation { result ->
             if (isFinishing || isDestroyed) return@getCurrentLocation
             if (result is CurrentLocationResult.Success) {
                 originController.setCurrentLocationSnapshot(result.snapshot)
                 destinationController.setCurrentLocationSnapshot(result.snapshot)
+                if (!hasPrefetchedCurrentAddress) {
+                    hasPrefetchedCurrentAddress = true
+                    placeNameResolver.prefetch(result.snapshot)
+                }
             }
         }
     }
 
+    private fun scheduleCurrentPlaceTimeout(generation: Int, isAuto: Boolean) {
+        cancelCurrentPlaceTimeout()
+        val timeout = Runnable {
+            if (isFinishing || isDestroyed || currentPlaceGeneration != generation) return@Runnable
+            currentPlaceTimeoutRunnable = null
+            currentPlaceGeneration += 1
+            handleCurrentOriginFailure(isAuto)
+        }
+        currentPlaceTimeoutRunnable = timeout
+        mainHandler.postDelayed(timeout, CURRENT_PLACE_TOTAL_TIMEOUT_MS)
+    }
+
+    private fun cancelCurrentPlaceTimeout() {
+        currentPlaceTimeoutRunnable?.let(mainHandler::removeCallbacks)
+        currentPlaceTimeoutRunnable = null
+    }
+
+    private fun showOriginAttribution(attribution: PlaceAttribution?) {
+        originAttributionText.visibility = if (attribution == PlaceAttribution.GOOGLE_MAPS) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    private fun hideOriginAttribution() {
+        originAttributionText.visibility = View.GONE
+    }
+
     private fun handleCurrentOriginFailure(isAuto: Boolean) {
+        hideOriginAttribution()
         if (isAuto) {
             originController.setHelperText("暫時無法取得目前位置，請手動選擇起點")
         } else {
@@ -482,7 +550,9 @@ class RouteEditActivity : AppCompatActivity() {
     }
 
     private fun swapPlaces() {
+        cancelCurrentPlaceTimeout()
         originController.swapWith(destinationController)
+        hideOriginAttribution()
     }
 
     private fun applyPrefillIfPresent() {
@@ -534,6 +604,7 @@ class RouteEditActivity : AppCompatActivity() {
         const val EXTRA_PREFILL_DESTINATION_LONGITUDE = "extra_prefill_destination_longitude"
         const val NO_ROUTE_ID = -1L
         private const val REQUEST_LOCATION_PERMISSION = 401
+        private const val CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L
         private const val CANDIDATE_VISIBILITY_RECHECK_MS = 80L
         private const val CANDIDATE_BOTTOM_SAFE_INSET_DP = 8
     }

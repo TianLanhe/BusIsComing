@@ -2,8 +2,8 @@ package com.example.busiscoming
 
 import com.example.busiscoming.data.location.CurrentLocationSnapshot
 import com.example.busiscoming.data.location.GeoDistanceCalculator
-import com.example.busiscoming.data.location.MockPlaceNameResolver
 import com.example.busiscoming.data.location.NearbyRouteSelectionPolicy
+import com.example.busiscoming.data.location.PlaceNameResolutionResult
 import com.example.busiscoming.data.location.PlaceDistanceFormatter
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.model.RouteConfig
@@ -34,11 +34,16 @@ class LocationFeaturePolicyTest {
     }
 
     @Test
-    fun mockResolverKeepsOriginalCoordinates() {
+    fun currentPlaceKeepsOriginalCoordinatesWithResolvedAddressName() {
         val snapshot = CurrentLocationSnapshot(22.2766, 114.2395, 30f, 1_000L)
-        val place = MockPlaceNameResolver.resolve(snapshot)
+        val nameResult = PlaceNameResolutionResult.Success("柴灣道")
+        val place = Place(
+            name = nameResult.addressName,
+            latitude = snapshot.latitude,
+            longitude = snapshot.longitude
+        )
 
-        assertEquals("目前位置附近", place.name)
+        assertEquals("柴灣道", place.name)
         assertEquals(22.2766, place.latitude, 0.0)
         assertEquals(114.2395, place.longitude, 0.0)
     }
