@@ -4,11 +4,12 @@
     android:id="@+id/mainRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bus_surface"
+    android:background="@drawable/app_page_background"
     android:orientation="vertical"
     android:padding="20dp">
 
     <LinearLayout
+        android:id="@+id/normalTopActions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
@@ -48,48 +49,94 @@
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/firstRunTopActions"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:gravity="start|center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/firstRunTransitCodeButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:elevation="0dp"
+            android:minHeight="44dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="16dp"
+            android:text="乘車碼"
+            android:textColor="@color/bus_chip_selected"
+            android:textSize="14sp"
+            app:backgroundTint="@color/white"
+            app:cornerRadius="6dp"
+            app:elevation="0dp"
+            app:strokeColor="@color/bus_divider"
+            app:strokeWidth="1dp" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/emptyRouteState"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
-        android:background="@drawable/empty_state_background"
-        android:gravity="center_horizontal"
+        android:layout_height="0dp"
+        android:layout_marginTop="0dp"
+        android:layout_weight="1"
+        android:gravity="top"
         android:orientation="vertical"
-        android:padding="24dp"
+        android:paddingTop="78dp"
         android:visibility="gone">
 
         <TextView
-            android:layout_width="wrap_content"
+            android:id="@+id/firstRunHeadlineText"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="還沒有儲存路線"
+            android:gravity="start"
+            android:maxLines="2"
+            android:lineSpacingMultiplier="1.18"
+            android:text="@string/first_run_home_headline"
             android:textColor="@color/bus_text_primary"
-            android:textSize="18sp"
+            android:textSize="27sp"
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/firstRunSampleLabelText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center"
-            android:text="新增常用起點和終點後即可查詢"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="14sp" />
+            android:layout_marginTop="18dp"
+            android:text="@string/first_run_sample_label"
+            android:textColor="@color/bus_chip_selected"
+            android:textSize="12sp"
+            android:textStyle="bold" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/emptyAddRouteButton"
-            android:layout_width="wrap_content"
+        <include
+            android:id="@+id/firstRunSampleRouteCard"
+            layout="@layout/item_bus_route"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="新增路線" />
+            android:layout_marginTop="8dp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/emptyTemporaryQueryButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        <LinearLayout
+            android:id="@+id/firstRunActionGroup"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="查詢臨時起點和終點" />
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="18dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/emptyAddRouteButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/first_run_add_route" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/emptyTemporaryQueryButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/first_run_temporary_query" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout

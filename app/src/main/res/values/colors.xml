@@ -7,6 +7,11 @@
     <color name="teal_700">#FFD98A1F</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="bus_page_gradient_start">#FFD8E9E3</color>
+    <color name="bus_page_gradient_center">#FFECF4F1</color>
+    <color name="bus_page_gradient_end">#FFF8FAF9</color>
+    <color name="bus_form_gradient_start">#FFFFFFFF</color>
+    <color name="bus_form_gradient_end">#FFEAF4EF</color>
     <color name="bus_surface">#FFF8FAF9</color>
     <color name="bus_surface_variant">#FFE8EFEC</color>
     <color name="bus_card_surface">#FFFFFFFF</color>

@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Bundle
 import android.graphics.Typeface
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -81,8 +82,17 @@ class MainActivity : AppCompatActivity() {
     private val placeSearchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     private lateinit var queryButton: MaterialButton
+    private lateinit var normalTopActions: LinearLayout
+    private lateinit var firstRunTopActions: LinearLayout
+    private lateinit var transitCodeButton: MaterialButton
+    private lateinit var firstRunTransitCodeButton: MaterialButton
+    private lateinit var manageRoutesButton: MaterialButton
     private lateinit var emptyTemporaryQueryButton: MaterialButton
     private lateinit var emptyRouteState: LinearLayout
+    private lateinit var firstRunHeadlineText: TextView
+    private lateinit var firstRunSampleLabelText: TextView
+    private lateinit var firstRunSampleRouteCard: View
+    private lateinit var firstRunActionGroup: LinearLayout
     private lateinit var queryControls: LinearLayout
     private lateinit var routeShortcutCardsContainer: LinearLayout
     private lateinit var routePickerButton: MaterialButton
@@ -132,6 +142,7 @@ class MainActivity : AppCompatActivity() {
     private val shownLocationFallbackToasts = mutableSetOf<LocationFallbackToast>()
     private var pendingLocationPermissionAction: PendingLocationPermissionAction? = null
     private var pendingLocationSettingsCurrentPlaceCallback: ((CurrentPlaceSelectionResult) -> Unit)? = null
+    private var hasPlayedFirstRunIntroAnimation: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -190,8 +201,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindViews() {
         queryButton = findViewById(R.id.queryButton)
+        normalTopActions = findViewById(R.id.normalTopActions)
+        firstRunTopActions = findViewById(R.id.firstRunTopActions)
+        transitCodeButton = findViewById(R.id.transitCodeButton)
+        firstRunTransitCodeButton = findViewById(R.id.firstRunTransitCodeButton)
+        manageRoutesButton = findViewById(R.id.manageRoutesButton)
         emptyTemporaryQueryButton = findViewById(R.id.emptyTemporaryQueryButton)
         emptyRouteState = findViewById(R.id.emptyRouteState)
+        firstRunHeadlineText = findViewById(R.id.firstRunHeadlineText)
+        firstRunSampleLabelText = findViewById(R.id.firstRunSampleLabelText)
+        firstRunSampleRouteCard = findViewById(R.id.firstRunSampleRouteCard)
+        firstRunActionGroup = findViewById(R.id.firstRunActionGroup)
         queryControls = findViewById(R.id.queryControls)
         routeShortcutCardsContainer = findViewById(R.id.routeShortcutCardsContainer)
         routePickerButton = findViewById(R.id.routePickerButton)
@@ -226,6 +246,7 @@ class MainActivity : AppCompatActivity() {
             SortField.ARRIVAL to findViewById(R.id.sortArrivalButton),
             SortField.WALKING_DISTANCE to findViewById(R.id.sortWalkingDistanceButton)
         )
+        BusRouteCardBinder(firstRunSampleRouteCard).bind(FirstRunRoutePreview.route())
     }
 
     private fun clearExpiredMonitorSession() {
@@ -259,15 +280,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupActions() {
-        findViewById<MaterialButton>(R.id.manageRoutesButton).setOnClickListener {
+        manageRoutesButton.setOnClickListener {
             startActivity(Intent(this, RouteManageActivity::class.java))
         }
-        findViewById<MaterialButton>(R.id.transitCodeButton).setOnClickListener {
-            val outcome = transitCodePaymentLauncher.launchTransitCode()
-            if (outcome.shouldShowFailureToast) {
-                Toast.makeText(this, R.string.transit_code_launch_failed, Toast.LENGTH_SHORT).show()
-            }
-        }
+        transitCodeButton.setOnClickListener { launchTransitCode() }
+        firstRunTransitCodeButton.setOnClickListener { launchTransitCode() }
         findViewById<MaterialButton>(R.id.emptyAddRouteButton).setOnClickListener {
             startActivity(Intent(this, RouteEditActivity::class.java))
         }
@@ -290,25 +307,20 @@ class MainActivity : AppCompatActivity() {
         routeConfigs = routeConfigRepository.getAll()
 
         if (routeConfigs.isEmpty()) {
-            invalidateActiveQuery()
+            if (currentQueryContext is QueryContext.Saved) {
+                clearResults()
+            }
             selectedRoute = null
-            currentQueryContext = null
-            hideTemporaryQueryContext()
-            emptyRouteState.visibility = View.VISIBLE
-            queryControls.visibility = View.GONE
-            resultSection.visibility = View.GONE
-            currentResults = emptyList()
-            busRouteAdapter.submitList(emptyList())
+            routeShortcutCardsContainer.removeAllViews()
+            routePickerButton.visibility = View.GONE
+            renderHomeShell()
             updateSwipeRefreshState()
             return
         }
 
-        emptyRouteState.visibility = View.GONE
-        queryControls.visibility = View.VISIBLE
-        resultSection.visibility = View.VISIBLE
-
         selectedRoute = routeConfigs.firstOrNull { it.id == previousSelectedId } ?: routeConfigs.first()
         renderRouteShortcuts()
+        renderHomeShell()
         maybeStartNearbyRouteSelection()
         if (previousRouteSnapshot != routeIdentitySnapshot(routeConfigs)) {
             clearResults()
@@ -439,6 +451,7 @@ class MainActivity : AppCompatActivity() {
         currentQueryContext = queryContext
         preserveSortOnNextResults = preserveSort
         updateTemporaryQueryContext()
+        renderHomeShell()
         busRouteRepository.cancelProgressiveQueries()
         if (isRefresh) {
             showRefreshLoadingState(queryId)
@@ -947,6 +960,7 @@ class MainActivity : AppCompatActivity() {
         hideResultSummary()
         resultListContainer.visibility = View.GONE
         hideStatus()
+        renderHomeShell()
         updateSwipeRefreshState()
     }
 
@@ -1109,6 +1123,68 @@ class MainActivity : AppCompatActivity() {
         temporaryRouteBottomSheet.show()
     }
 
+    private fun renderHomeShell() {
+        if (!::emptyRouteState.isInitialized) return
+        val isFirstRun = shouldShowFirstRun()
+        normalTopActions.visibility = if (isFirstRun) View.GONE else View.VISIBLE
+        firstRunTopActions.visibility = if (isFirstRun) View.VISIBLE else View.GONE
+        emptyRouteState.visibility = if (isFirstRun) View.VISIBLE else View.GONE
+        queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
+        resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE
+        manageRoutesButton.visibility = if (isFirstRun) View.GONE else View.VISIBLE
+        if (isFirstRun) animateFirstRunIntroIfNeeded()
+    }
+
+    private fun shouldShowFirstRun(): Boolean {
+        return routeConfigs.isEmpty() &&
+            currentQueryContext == null &&
+            !isQueryInProgress &&
+            currentResults.isEmpty()
+    }
+
+    private fun launchTransitCode() {
+        val outcome = transitCodePaymentLauncher.launchTransitCode()
+        if (outcome.shouldShowFailureToast) {
+            Toast.makeText(this, R.string.transit_code_launch_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun animateFirstRunIntroIfNeeded() {
+        if (hasPlayedFirstRunIntroAnimation) return
+        hasPlayedFirstRunIntroAnimation = true
+        val views = listOf(
+            firstRunHeadlineText,
+            firstRunSampleLabelText,
+            firstRunSampleRouteCard,
+            firstRunActionGroup
+        )
+        if (!areSystemAnimationsEnabled()) {
+            views.forEach { view ->
+                view.alpha = 1f
+                view.translationY = 0f
+            }
+            return
+        }
+        views.forEachIndexed { index, view ->
+            view.alpha = 0f
+            view.translationY = dp(8).toFloat()
+            view.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setStartDelay(index * FIRST_RUN_INTRO_STAGGER_MS)
+                .setDuration(FIRST_RUN_INTRO_DURATION_MS)
+                .start()
+        }
+    }
+
+    private fun areSystemAnimationsEnabled(): Boolean {
+        return Settings.Global.getFloat(
+            contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) > 0f
+    }
+
     private fun showLocationFallbackToast(type: LocationFallbackToast) {
         if (!shownLocationFallbackToasts.add(type)) return
         val message = when (type) {
@@ -1123,10 +1199,8 @@ class MainActivity : AppCompatActivity() {
         routeConfigs = routeConfigRepository.getAll()
         nearbySelectedRouteId = null
         selectedRoute = routeConfigs.firstOrNull { it.id == savedRouteId } ?: selectedRoute
-        emptyRouteState.visibility = if (routeConfigs.isEmpty()) View.VISIBLE else View.GONE
-        queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
-        resultSection.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         renderRouteShortcuts()
+        renderHomeShell()
         if (clearExistingResults) {
             clearResults()
         }
@@ -1378,6 +1452,8 @@ class MainActivity : AppCompatActivity() {
         private const val REFRESH_LIST_TOP_INSET_DP = 44
         private const val REFRESH_SUCCESS_DURATION_MS = 500L
         private const val CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L
+        private const val FIRST_RUN_INTRO_DURATION_MS = 180L
+        private const val FIRST_RUN_INTRO_STAGGER_MS = 45L
 
         private val RESULT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {

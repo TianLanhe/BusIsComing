@@ -7,6 +7,7 @@ import org.junit.Test
 
 class MainRouteSelectionLayoutTest {
     private val layoutXml = File("src/main/res/layout/activity_main.xml").readText()
+    private val stringsXml = File("src/main/res/values/strings.xml").readText()
     private val manifestXml = File("src/main/AndroidManifest.xml").readText()
     private val mainActivityKt =
         File("src/main/java/com/example/busiscoming/ui/main/MainActivity.kt").readText()
@@ -35,6 +36,50 @@ class MainRouteSelectionLayoutTest {
         assertTrue(transitCodeButton.contains("app:cornerRadius=\"6dp\""))
         assertTrue(manageRoutesButton.contains("app:cornerRadius=\"6dp\""))
         assertFalse(transitCodeButton.contains("Widget.MaterialComponents.Button.TextButton"))
+    }
+
+    @Test
+    fun firstRunStateUsesWarmCopySampleCardAndGradientBackground() {
+        assertTrue(layoutXml.contains("android:background=\"@drawable/app_page_background\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/firstRunTopActions\""))
+        assertTrue(xmlBlockForId("@+id/firstRunTopActions").contains("android:gravity=\"start|center_vertical\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/firstRunTransitCodeButton\""))
+        assertTrue(xmlBlockForId("@+id/firstRunTransitCodeButton").contains("android:layout_height=\"44dp\""))
+        assertTrue(xmlBlockForId("@+id/firstRunTransitCodeButton").contains("android:textSize=\"14sp\""))
+        assertTrue(layoutXml.contains("app:elevation=\"0dp\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/firstRunHeadlineText\""))
+        assertTrue(layoutXml.contains("android:text=\"@string/first_run_home_headline\""))
+        assertTrue(xmlBlockForId("@+id/firstRunHeadlineText").contains("android:gravity=\"start\""))
+        assertTrue(xmlBlockForId("@+id/firstRunHeadlineText").contains("android:textSize=\"27sp\""))
+        assertTrue(xmlBlockForId("@+id/firstRunHeadlineText").contains("android:maxLines=\"2\""))
+        assertTrue(layoutXml.contains("android:paddingTop=\"78dp\""))
+        assertTrue(stringsXml.contains("把常走的路線放在這裡，\\n出門前一按即查。"))
+        assertTrue(layoutXml.contains("android:id=\"@+id/firstRunSampleLabelText\""))
+        assertTrue(stringsXml.contains("示例預覽"))
+        assertFalse(layoutXml.contains("不可點擊"))
+        assertFalse(xmlBlockForId("@+id/firstRunSampleLabelText").contains("android:background="))
+        assertTrue(layoutXml.contains("android:id=\"@+id/firstRunSampleRouteCard\""))
+        assertTrue(layoutXml.contains("layout=\"@layout/item_bus_route\""))
+        assertTrue(layoutXml.contains("android:text=\"@string/first_run_add_route\""))
+        assertTrue(layoutXml.contains("android:text=\"@string/first_run_temporary_query\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/firstRunActionGroup\""))
+        assertTrue(xmlBlockForId("@+id/firstRunActionGroup").contains("android:layout_width=\"wrap_content\""))
+        assertTrue(xmlBlockForId("@+id/firstRunActionGroup").contains("android:layout_gravity=\"center_horizontal\""))
+        assertTrue(xmlBlockForId("@+id/emptyAddRouteButton").contains("android:layout_width=\"wrap_content\""))
+        assertTrue(xmlBlockForId("@+id/emptyTemporaryQueryButton").contains("android:layout_width=\"wrap_content\""))
+        assertTrue(stringsXml.contains("新增常用路線"))
+        assertTrue(stringsXml.contains("直接查詢一次"))
+    }
+
+    @Test
+    fun firstRunPolicyHidesManageRouteAndKeepsTemporaryResultsVisible() {
+        assertTrue(mainActivityKt.contains("private fun renderHomeShell()"))
+        assertTrue(mainActivityKt.contains("normalTopActions.visibility = if (isFirstRun) View.GONE else View.VISIBLE"))
+        assertTrue(mainActivityKt.contains("firstRunTopActions.visibility = if (isFirstRun) View.VISIBLE else View.GONE"))
+        assertTrue(mainActivityKt.contains("manageRoutesButton.visibility = if (isFirstRun) View.GONE else View.VISIBLE"))
+        assertTrue(mainActivityKt.contains("resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE"))
+        assertTrue(mainActivityKt.contains("currentQueryContext == null"))
+        assertTrue(mainActivityKt.contains("FirstRunRoutePreview.route()"))
     }
 
     @Test
@@ -73,6 +118,18 @@ class MainRouteSelectionLayoutTest {
         assertTrue("Missing MaterialButton start for $id", start >= 0)
         val end = layoutXml.indexOf("/>", idIndex)
         assertTrue("Missing MaterialButton end for $id", end >= 0)
+        return layoutXml.substring(start, end)
+    }
+
+    private fun xmlBlockForId(id: String): String {
+        val idIndex = layoutXml.indexOf("android:id=\"$id\"")
+        assertTrue("Missing view id $id", idIndex >= 0)
+        val start = layoutXml.lastIndexOf("<", idIndex)
+        assertTrue("Missing view start for $id", start >= 0)
+        val selfClose = layoutXml.indexOf("/>", idIndex)
+        val nestedClose = layoutXml.indexOf(">", idIndex)
+        val end = if (selfClose >= 0 && selfClose < nestedClose + 2000) selfClose else nestedClose
+        assertTrue("Missing view end for $id", end >= 0)
         return layoutXml.substring(start, end)
     }
 }

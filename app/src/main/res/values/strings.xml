@@ -4,6 +4,11 @@
     <string name="route_refresh_complete">刷新完成</string>
     <string name="use_my_location">使用我的位置</string>
     <string name="google_maps_address_attribution">地址由 Google Maps 提供</string>
+    <string name="first_run_home_headline">把常走的路線放在這裡，\n出門前一按即查。</string>
+    <string name="first_run_sample_label">示例預覽</string>
+    <string name="first_run_add_route">新增常用路線</string>
+    <string name="first_run_temporary_query">直接查詢一次</string>
+    <string name="route_edit_subtitle">選擇常用起點和終點，儲存後可在主頁快速查詢。</string>
     <string name="transit_code_wechat_launch_failed">未能開啟微信乘車碼入口，請查看診斷結果。</string>
     <string name="transit_code_alipay_hk_launch_failed">未能開啟 AlipayHK 乘車碼入口，請查看診斷結果。</string>
     <string name="transit_code_generic_launch_failed">未能開啟此實驗入口，請查看診斷結果。</string>

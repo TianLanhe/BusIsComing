@@ -4,7 +4,7 @@
     android:id="@+id/routeManageRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bus_surface"
+    android:background="@drawable/app_page_background"
     android:orientation="vertical"
     android:padding="20dp">
 
@@ -35,7 +35,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:text="管理常用起點和終點，查詢時直接選擇。"
+        android:text="整理常用起點和終點，出門前可以更快查詢。"
         android:textColor="@color/bus_text_secondary"
         android:textSize="14sp" />
 
@@ -79,6 +79,8 @@
         android:id="@+id/routeConfigList"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="1" />
+        android:layout_marginTop="14dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp" />
 </LinearLayout>

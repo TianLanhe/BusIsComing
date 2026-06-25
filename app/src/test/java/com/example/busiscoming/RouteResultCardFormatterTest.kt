@@ -5,6 +5,7 @@ import com.example.busiscoming.data.model.EtaArrival
 import com.example.busiscoming.data.model.FirstLegEtaQuery
 import com.example.busiscoming.data.model.WaitTimeState
 import com.example.busiscoming.ui.main.RouteCardActionPolicy
+import com.example.busiscoming.ui.main.FirstRunRoutePreview
 import com.example.busiscoming.ui.main.RouteResultCardFormatter
 import com.example.busiscoming.ui.main.TemporaryRouteSaveDialog
 import com.example.busiscoming.data.model.Place
@@ -104,6 +105,19 @@ class RouteResultCardFormatterTest {
         )
 
         assertEquals("共 3 條路線，2 條直達", RouteResultCardFormatter.resultSummary(routes))
+    }
+
+    @Test
+    fun firstRunPreviewUsesRealRouteCardFormatting() {
+        val route = FirstRunRoutePreview.route()
+
+        assertEquals("118", route.routeName)
+        assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(route.waitTimeState))
+        assertEquals("下一班 11 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState))
+        assertEquals("柴灣  →  中環", route.stopPreview?.displayText())
+        assertEquals("HK$ 11.8 · 耗時 38 分鐘 · 步行 160 米", RouteResultCardFormatter.info(route))
+        assertFalse(RouteCardActionPolicy.canStartMonitor(route))
+        assertTrue(RouteCardActionPolicy.canOpenEtaArrivals(route.waitTimeState))
     }
 
     private fun route(name: String, transferCount: Int): BusRouteOption {

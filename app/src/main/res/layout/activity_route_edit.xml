@@ -4,7 +4,7 @@
     android:id="@+id/routeEditScroll"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bus_surface"
+    android:background="@drawable/app_page_background"
     android:fillViewport="true">
 
     <LinearLayout
@@ -32,32 +32,58 @@
             android:textSize="24sp"
             android:textStyle="bold" />
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/routeNameInputLayout"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        <TextView
+            android:id="@+id/routeEditSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:hint="輸入路線名稱，如：上學、回家、去公司">
+            android:layout_marginTop="8dp"
+            android:text="@string/route_edit_subtitle"
+            android:textColor="@color/bus_text_secondary"
+            android:textSize="14sp" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/routeNameInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textCapSentences"
-                android:maxLines="1" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <FrameLayout
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/routeEditFormCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp">
+            android:layout_marginTop="18dp"
+            app:cardBackgroundColor="@android:color/transparent"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="@drawable/route_edit_form_background"
                 android:orientation="vertical"
-                android:paddingEnd="56dp">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="16dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/routeNameInputLayout"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="輸入路線名稱，如：上學、回家、去公司">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/routeNameInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textCapSentences"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingEnd="56dp">
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/originInputLayout"
@@ -175,20 +201,22 @@
                     android:layout_marginTop="6dp"
                     android:nestedScrollingEnabled="true"
                     android:visibility="gone" />
-            </LinearLayout>
+                    </LinearLayout>
 
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/swapPlacesButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_gravity="end|top"
-                android:layout_marginTop="52dp"
-                android:background="@drawable/sort_chip_background"
-                android:contentDescription="交換起點和終點"
-                android:padding="9dp"
-                android:scaleType="center"
-                app:srcCompat="@drawable/ic_swap_curved" />
-        </FrameLayout>
+                    <androidx.appcompat.widget.AppCompatImageButton
+                        android:id="@+id/swapPlacesButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="end|top"
+                        android:layout_marginTop="52dp"
+                        android:background="@drawable/sort_chip_background"
+                        android:contentDescription="交換起點和終點"
+                        android:padding="9dp"
+                        android:scaleType="center"
+                        app:srcCompat="@drawable/ic_swap_curved" />
+                </FrameLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveRouteButton"

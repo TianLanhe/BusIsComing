@@ -8,6 +8,7 @@ import org.junit.Test
 class RouteCardLayoutContractTest {
     private val itemXml = File("src/main/res/layout/item_bus_route.xml").readText()
     private val adapterKt = File("src/main/java/com/example/busiscoming/ui/main/BusRouteAdapter.kt").readText()
+    private val binderKt = File("src/main/java/com/example/busiscoming/ui/main/BusRouteCardBinder.kt").readText()
 
     @Test
     fun routeAndStopPreviewUseLeftColumnWithStableRightWaitBlock() {
@@ -75,13 +76,18 @@ class RouteCardLayoutContractTest {
 
     @Test
     fun routeEtaAndMonitorClicksRemainSeparate() {
-        assertTrue(adapterKt.contains("itemView.setOnClickListener { onRouteClick(route) }"))
-        assertTrue(adapterKt.contains("etaTextColumn.setOnClickListener { onEtaClick(route) }"))
-        assertFalse(adapterKt.contains("waitArea.setOnClickListener"))
-        assertTrue(adapterKt.contains("monitorButton.setOnClickListener"))
-        assertTrue(adapterKt.contains("if (canMonitor) onMonitorClick(route)"))
-        assertTrue(adapterKt.contains("etaTextColumn.isEnabled = true"))
-        assertTrue(adapterKt.contains("LARGE_FONT_SCALE_THRESHOLD"))
+        assertTrue(adapterKt.contains("BusRouteCardBinder(itemView)"))
+        assertTrue(adapterKt.contains("routeClick = onRouteClick"))
+        assertTrue(adapterKt.contains("etaClick = onEtaClick"))
+        assertTrue(adapterKt.contains("monitorClick = onMonitorClick"))
+        assertTrue(binderKt.contains("itemView.setOnClickListener"))
+        assertTrue(binderKt.contains("actions.routeClick"))
+        assertTrue(binderKt.contains("etaTextColumn.setOnClickListener"))
+        assertFalse(binderKt.contains("waitArea.setOnClickListener"))
+        assertTrue(binderKt.contains("monitorButton.setOnClickListener"))
+        assertTrue(binderKt.contains("actions.monitorClick"))
+        assertTrue(binderKt.contains("etaTextColumn.isEnabled = true"))
+        assertTrue(binderKt.contains("LARGE_FONT_SCALE_THRESHOLD"))
     }
 
     @Test
