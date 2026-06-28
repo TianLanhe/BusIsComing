@@ -4,7 +4,7 @@
 TBD - created by archiving change improve-main-route-selection. Update Purpose after archive.
 ## Requirements
 ### Requirement: 主頁以常用路線區塊作為查詢入口
-系統 SHALL 在主頁使用單一「常用路線」區塊作為路線選擇入口，不同時展示獨立的已選路線大卡與快捷路線小卡。
+系統 SHALL 在主頁使用單一「常用路線」區塊作為路線選擇入口，不同時展示獨立的已選路線大卡與快捷路線小卡；當沒有保存路線且沒有臨時查詢上下文時，系統 SHALL 展示首次引導頁作為建立常用路線的入口。
 
 #### Scenario: 展示少於三條常用路線
 - **WHEN** 用戶打開主頁且已保存常用路線數量為 1 到 2 條
@@ -22,11 +22,29 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 主頁展示常用路線卡片
 - **THEN** 系統 SHALL NOT 在卡片中展示使用次數、最近使用時間、排序規則或排名
 
-#### Scenario: 沒有常用路線
+#### Scenario: 沒有常用路線且沒有臨時查詢上下文
 - **WHEN** 用戶打開主頁且沒有任何已保存常用路線
-- **THEN** 系統 SHALL 展示沒有常用路線的空狀態
-- **AND** 系統 SHALL 提供新增常用路線入口
-- **AND** 系統 SHALL 提供查詢臨時起點和終點入口
+- **AND** 系統沒有進行中、成功、失敗或暫無結果的臨時查詢上下文
+- **THEN** 系統 SHALL 展示首次引導頁
+- **AND** 首次引導頁 SHALL 以兩行主標題顯示 `把常走的路線放在這裡，` 與 `出門前一按即查。`
+- **AND** 首次引導頁 SHALL 顯示 `示例預覽` 結果卡片
+- **AND** 首次引導頁 SHALL 提供 `新增常用路線` 主入口
+- **AND** 首次引導頁 SHALL 提供 `直接查詢一次` 次入口
+- **AND** 系統 SHALL 隱藏常用路線選擇區塊和常規結果區
+
+#### Scenario: 沒有常用路線但存在臨時查詢上下文
+- **WHEN** 用戶沒有任何已保存常用路線
+- **AND** 系統存在進行中、成功、失敗或暫無結果的臨時查詢上下文
+- **THEN** 系統 SHALL 隱藏首次引導頁
+- **AND** 系統 SHALL 顯示臨時查詢上下文、查詢狀態或查詢結果區
+- **AND** 系統 SHALL NOT 要求用戶先保存常用路線才能查看本次臨時查詢結果
+
+#### Scenario: 關閉臨時查詢彈層未發起查詢
+- **WHEN** 用戶在沒有任何已保存常用路線時點擊 `直接查詢一次`
+- **AND** 系統打開臨時查詢底部彈層
+- **AND** 用戶關閉彈層且未發起臨時查詢
+- **THEN** 系統 SHALL 仍顯示首次引導頁
+- **AND** 系統 SHALL NOT 顯示空的臨時查詢結果區
 
 ### Requirement: 常用路線卡片支持快捷選中
 系統 SHALL 允許用戶直接在主頁點選常用路線卡片來切換當前查詢路線。
@@ -87,8 +105,13 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 ### Requirement: 臨時查詢使用底部彈層
 系統 SHALL 以底部彈層承載臨時起點和終點查詢流程，避免臨時查詢輸入框常駐主頁。
 
-#### Scenario: 打開臨時查詢彈層
-- **WHEN** 用戶點擊 `查詢臨時起點和終點`
+#### Scenario: 從首次引導頁打開臨時查詢彈層
+- **WHEN** 用戶在首次引導頁點擊 `直接查詢一次`
+- **THEN** 系統 SHALL 打開標題為 `臨時查詢` 的底部彈層
+- **AND** 主頁背景 SHALL 保持可識別但不可直接操作
+
+#### Scenario: 從完整列表打開臨時查詢彈層
+- **WHEN** 用戶點擊完整常用路線列表中的 `查詢臨時起點和終點`
 - **THEN** 系統 SHALL 打開標題為 `臨時查詢` 的底部彈層
 - **AND** 主頁背景 SHALL 保持可識別但不可直接操作
 
@@ -351,16 +374,31 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **THEN** 系統 SHALL NOT 在任何主頁快捷卡上顯示 `附近` 標籤
 
 ### Requirement: 主頁頂部提供乘車碼與管理路線入口
-系統 SHALL 在主頁頂部使用兩個同級主要操作入口承載 `乘車碼` 與 `管理路線`，並移除原有 `巴士查詢` 標題文案。
+系統 SHALL 在主頁頂部提供正式 `乘車碼` 入口，並在有可管理路線或正常主頁狀態時提供 `管理路線` 入口；系統 SHALL NOT 在主頁頂部顯示原有 `巴士查詢` 標題文案。
 
-#### Scenario: 主頁頂部顯示雙操作入口
-- **WHEN** 用戶打開主頁
-- **THEN** 系統 SHALL 在主頁頂部左側顯示 `乘車碼` 按鈕
-- **AND** 系統 SHALL 在主頁頂部右側顯示 `管理路線` 按鈕
+#### Scenario: 無保存路線首次引導頁只顯示乘車碼入口
+- **WHEN** 用戶打開主頁且系統顯示首次引導頁
+- **THEN** 系統 SHALL 在主頁頂部左側顯示 `乘車碼` 入口
+- **AND** `乘車碼` 入口 SHALL 使用低於主要按鈕的 tonal 或等效低權重按鈕樣式
+- **AND** `乘車碼` 入口 SHALL 保持接近預覽方向的 34dp 高度和緊湊文字尺寸
+- **AND** 系統 SHALL NOT 顯示 `管理路線` 入口
 - **AND** 系統 SHALL NOT 在主頁頂部顯示 `巴士查詢` 文案
 
+#### Scenario: 有保存路線時主頁頂部顯示雙操作入口
+- **WHEN** 用戶打開主頁且存在一條或多條已保存常用路線
+- **THEN** 系統 SHALL 在主頁頂部左側顯示 `乘車碼` 按鈕
+- **AND** 系統 SHALL 在主頁頂部右側顯示 `管理路線` 按鈕
+- **AND** 兩個按鈕 SHALL 保持既有位置與主要按鈕視覺層級
+- **AND** 系統 SHALL NOT 在主頁頂部顯示 `巴士查詢` 文案
+
+#### Scenario: 無保存路線但顯示臨時查詢結果時頂部入口
+- **WHEN** 用戶沒有任何已保存常用路線
+- **AND** 系統正在顯示臨時查詢上下文、查詢狀態或查詢結果
+- **THEN** 系統 SHALL 顯示 `乘車碼` 入口
+- **AND** 系統 SHALL NOT 因沒有已保存路線而要求用戶先打開 `管理路線`
+
 #### Scenario: 兩個頂部入口使用同級主要樣式
-- **WHEN** 用戶查看主頁頂部
+- **WHEN** 用戶查看存在已保存常用路線的主頁頂部
 - **THEN** `乘車碼` 與 `管理路線` SHALL 使用一致的主要按鈕視覺層級
 - **AND** 兩個按鈕 SHALL 保持可辨識間距
 - **AND** 兩個按鈕 SHALL 在常見窄屏和系統字體放大時避免文字重疊或互相遮擋
@@ -376,8 +414,8 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **THEN** 系統 SHALL 打開既有路線管理頁
 - **AND** 該操作 SHALL NOT 觸發乘車碼拉起流程
 
-#### Scenario: 頂部入口與常用路線區塊保持清楚分隔
-- **WHEN** 用戶打開主頁且常用路線區塊或空狀態區塊可見
-- **THEN** 頂部雙操作入口與下方內容 SHALL 保持緊湊但可辨識的垂直間距
-- **AND** `常用路線` 標題、快捷卡、空狀態新增入口和臨時查詢入口 SHALL NOT 與頂部按鈕重疊
+#### Scenario: 頂部入口與主頁內容保持清楚分隔
+- **WHEN** 用戶打開主頁且常用路線區塊、首次引導頁或臨時查詢結果區可見
+- **THEN** 頂部入口與下方內容 SHALL 保持緊湊但可辨識的垂直間距
+- **AND** `常用路線` 標題、快捷卡、首次引導主文案、示例預覽、主要操作入口和臨時查詢結果區 SHALL NOT 與頂部按鈕重疊
 

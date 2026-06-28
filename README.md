@@ -5,6 +5,8 @@
 
 一個面向香港巴士通勤場景的 Android App，用於保存常用起終點、快速比較 Citybus 點到點路線，並在出門前監控首程巴士 ETA。
 
+[官方網站](https://www.busiscoming.com/)
+
 </div>
 
 ## 功能特色
