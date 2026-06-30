@@ -34,25 +34,34 @@
             android:layout_weight="1" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/manageRoutesButton"
-            android:layout_width="wrap_content"
+            android:id="@+id/settingsButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="44dp"
             android:layout_height="44dp"
             android:layout_marginStart="8dp"
+            android:contentDescription="@string/settings"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
             android:minHeight="44dp"
-            android:minWidth="0dp"
-            android:paddingHorizontal="16dp"
-            android:text="管理路線"
-            android:textColor="@color/white"
-            android:textSize="14sp"
-            app:backgroundTint="@color/bus_chip_selected"
-            app:cornerRadius="6dp" />
+            android:minWidth="44dp"
+            android:padding="0dp"
+            app:backgroundTint="@color/white"
+            app:cornerRadius="22dp"
+            app:icon="@drawable/ic_settings_outline"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconSize="22dp"
+            app:strokeColor="@color/bus_divider"
+            app:strokeWidth="1dp" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/firstRunTopActions"
         android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:gravity="start|center_vertical"
+        android:layout_height="44dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
 
@@ -70,6 +79,33 @@
             app:backgroundTint="@color/white"
             app:cornerRadius="6dp"
             app:elevation="0dp"
+            app:strokeColor="@color/bus_divider"
+            app:strokeWidth="1dp" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/firstRunSettingsButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:contentDescription="@string/settings"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            android:minHeight="44dp"
+            android:minWidth="44dp"
+            android:padding="0dp"
+            app:backgroundTint="@color/white"
+            app:cornerRadius="22dp"
+            app:icon="@drawable/ic_settings_outline"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconSize="22dp"
             app:strokeColor="@color/bus_divider"
             app:strokeWidth="1dp" />
     </LinearLayout>
@@ -174,6 +210,29 @@
                 android:text="全部"
                 android:textColor="@color/bus_chip_selected"
                 android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/routeManageIconButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="6dp"
+                android:contentDescription="@string/manage_routes"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="40dp"
+                android:minWidth="40dp"
+                android:padding="0dp"
+                app:backgroundTint="@color/white"
+                app:cornerRadius="20dp"
+                app:icon="@drawable/ic_route_manage"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="22dp"
+                app:strokeColor="@color/bus_divider"
+                app:strokeWidth="1dp" />
         </LinearLayout>
 
         <LinearLayout
@@ -245,6 +304,18 @@
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:textColor="@color/bus_text_primary"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/temporaryQueryEditButton"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:minHeight="36dp"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="8dp"
+                    android:text="編輯"
+                    android:textColor="@color/bus_chip_selected"
                     android:textSize="13sp" />
 
                 <com.google.android.material.button.MaterialButton

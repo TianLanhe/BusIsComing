@@ -61,6 +61,7 @@ import com.example.busiscoming.data.model.BusMonitorSessionPolicy
 import com.example.busiscoming.ui.common.applyStatusBarPadding
 import com.example.busiscoming.ui.edit.RouteEditActivity
 import com.example.busiscoming.ui.manage.RouteManageActivity
+import com.example.busiscoming.ui.settings.SettingsActivity
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -86,7 +87,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var firstRunTopActions: LinearLayout
     private lateinit var transitCodeButton: MaterialButton
     private lateinit var firstRunTransitCodeButton: MaterialButton
-    private lateinit var manageRoutesButton: MaterialButton
+    private lateinit var settingsButton: MaterialButton
+    private lateinit var firstRunSettingsButton: MaterialButton
     private lateinit var emptyTemporaryQueryButton: MaterialButton
     private lateinit var emptyRouteState: LinearLayout
     private lateinit var firstRunHeadlineText: TextView
@@ -96,9 +98,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var queryControls: LinearLayout
     private lateinit var routeShortcutCardsContainer: LinearLayout
     private lateinit var routePickerButton: MaterialButton
+    private lateinit var routeManageIconButton: MaterialButton
     private lateinit var resultSection: LinearLayout
     private lateinit var temporaryQueryContextBar: MaterialCardView
     private lateinit var temporaryQueryContextPathText: TextView
+    private lateinit var temporaryQueryEditButton: MaterialButton
     private lateinit var temporaryQuerySaveButton: MaterialButton
     private lateinit var sortControls: LinearLayout
     private lateinit var resultSummaryContainer: LinearLayout
@@ -205,7 +209,8 @@ class MainActivity : AppCompatActivity() {
         firstRunTopActions = findViewById(R.id.firstRunTopActions)
         transitCodeButton = findViewById(R.id.transitCodeButton)
         firstRunTransitCodeButton = findViewById(R.id.firstRunTransitCodeButton)
-        manageRoutesButton = findViewById(R.id.manageRoutesButton)
+        settingsButton = findViewById(R.id.settingsButton)
+        firstRunSettingsButton = findViewById(R.id.firstRunSettingsButton)
         emptyTemporaryQueryButton = findViewById(R.id.emptyTemporaryQueryButton)
         emptyRouteState = findViewById(R.id.emptyRouteState)
         firstRunHeadlineText = findViewById(R.id.firstRunHeadlineText)
@@ -215,9 +220,11 @@ class MainActivity : AppCompatActivity() {
         queryControls = findViewById(R.id.queryControls)
         routeShortcutCardsContainer = findViewById(R.id.routeShortcutCardsContainer)
         routePickerButton = findViewById(R.id.routePickerButton)
+        routeManageIconButton = findViewById(R.id.routeManageIconButton)
         resultSection = findViewById(R.id.resultSection)
         temporaryQueryContextBar = findViewById(R.id.temporaryQueryContextBar)
         temporaryQueryContextPathText = findViewById(R.id.temporaryQueryContextPathText)
+        temporaryQueryEditButton = findViewById(R.id.temporaryQueryEditButton)
         temporaryQuerySaveButton = findViewById(R.id.temporaryQuerySaveButton)
         sortControls = findViewById(R.id.sortControls)
         resultSummaryContainer = findViewById(R.id.resultSummaryContainer)
@@ -280,7 +287,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupActions() {
-        manageRoutesButton.setOnClickListener {
+        settingsButton.setOnClickListener { openSettings() }
+        firstRunSettingsButton.setOnClickListener { openSettings() }
+        routeManageIconButton.setOnClickListener {
             startActivity(Intent(this, RouteManageActivity::class.java))
         }
         transitCodeButton.setOnClickListener { launchTransitCode() }
@@ -290,6 +299,7 @@ class MainActivity : AppCompatActivity() {
         }
         emptyTemporaryQueryButton.setOnClickListener { showTemporaryRouteSheet() }
         routePickerButton.setOnClickListener { showRoutePicker() }
+        temporaryQueryEditButton.setOnClickListener { editCurrentTemporaryQuery() }
         temporaryQuerySaveButton.setOnClickListener { saveCurrentTemporaryQuery() }
         queryButton.setOnClickListener { querySelectedRoute() }
         resultSwipeRefresh.setOnRefreshListener { refreshCurrentResults() }
@@ -1119,8 +1129,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showTemporaryRouteSheet() {
-        temporaryRouteBottomSheet.show()
+    private fun showTemporaryRouteSheet(origin: Place? = null, destination: Place? = null) {
+        temporaryRouteBottomSheet.show(origin, destination)
+    }
+
+    private fun openSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java))
+    }
+
+    private fun editCurrentTemporaryQuery() {
+        val context = currentQueryContext as? QueryContext.Temporary ?: return
+        showTemporaryRouteSheet(context.origin, context.destination)
     }
 
     private fun renderHomeShell() {
@@ -1131,7 +1150,7 @@ class MainActivity : AppCompatActivity() {
         emptyRouteState.visibility = if (isFirstRun) View.VISIBLE else View.GONE
         queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE
-        manageRoutesButton.visibility = if (isFirstRun) View.GONE else View.VISIBLE
+        routeManageIconButton.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         if (isFirstRun) animateFirstRunIntroIfNeeded()
     }
 

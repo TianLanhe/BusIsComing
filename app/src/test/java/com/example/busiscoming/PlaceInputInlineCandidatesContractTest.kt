@@ -40,4 +40,14 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(temporarySheetKt.contains("setCandidateMode"))
         assertTrue(temporarySheetKt.contains("BottomSheetBehavior.STATE_EXPANDED"))
     }
+
+    @Test
+    fun temporarySheetSupportsPrefilledEditWithoutOverwritingCurrentOrigin() {
+        assertTrue(temporarySheetKt.contains("fun show(initialOrigin: Place? = null, initialDestination: Place? = null)"))
+        assertTrue(temporarySheetKt.contains("applyInitialPlaces(initialOrigin, initialDestination)"))
+        assertTrue(temporarySheetKt.contains("originController?.setSelectedPlace(initialOrigin)"))
+        assertTrue(temporarySheetKt.contains("destinationController?.setSelectedPlace(initialDestination)"))
+        assertTrue(temporarySheetKt.contains("if (initialOrigin == null)"))
+        assertTrue(temporarySheetKt.contains("requestCurrentOriginIfNeeded(isAuto = true)"))
+    }
 }

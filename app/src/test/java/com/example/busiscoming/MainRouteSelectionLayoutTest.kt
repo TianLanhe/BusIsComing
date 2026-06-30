@@ -20,29 +20,59 @@ class MainRouteSelectionLayoutTest {
         assertTrue(layoutXml.contains("android:text=\"乘車碼\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQueryContextBar\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQueryContextPathText\""))
+        assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQueryEditButton\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/temporaryQuerySaveButton\""))
     }
 
     @Test
-    fun topBarShowsTransitCodeAndManageRoutesWithoutBusQueryTitle() {
+    fun topBarShowsTransitCodeAndSettingsWithoutBusQueryTitleOrTopManageButton() {
         val transitCodeButton = xmlBlockFor("@+id/transitCodeButton")
-        val manageRoutesButton = xmlBlockFor("@+id/manageRoutesButton")
+        val settingsButton = xmlBlockFor("@+id/settingsButton")
 
         assertFalse(layoutXml.contains("android:text=\"巴士查詢\""))
+        assertFalse(layoutXml.contains("android:id=\"@+id/manageRoutesButton\""))
         assertTrue(transitCodeButton.contains("android:text=\"乘車碼\""))
-        assertTrue(manageRoutesButton.contains("android:text=\"管理路線\""))
+        assertTrue(settingsButton.contains("android:contentDescription=\"@string/settings\""))
+        assertTrue(settingsButton.contains("app:icon=\"@drawable/ic_settings_outline\""))
         assertTrue(transitCodeButton.contains("app:backgroundTint=\"@color/bus_chip_selected\""))
-        assertTrue(manageRoutesButton.contains("app:backgroundTint=\"@color/bus_chip_selected\""))
+        assertTrue(settingsButton.contains("app:backgroundTint=\"@color/white\""))
+        assertTrue(settingsButton.contains("app:strokeColor=\"@color/bus_divider\""))
+        assertTrue(settingsButton.contains("app:strokeWidth=\"1dp\""))
         assertTrue(transitCodeButton.contains("app:cornerRadius=\"6dp\""))
-        assertTrue(manageRoutesButton.contains("app:cornerRadius=\"6dp\""))
+        assertTrue(settingsButton.contains("app:cornerRadius=\"22dp\""))
         assertFalse(transitCodeButton.contains("Widget.MaterialComponents.Button.TextButton"))
+    }
+
+    @Test
+    fun firstRunTopActionsAlsoExposeSettings() {
+        val firstRunActions = xmlContainerForId("@+id/firstRunTopActions")
+
+        assertTrue(firstRunActions.contains("android:gravity=\"center_vertical\""))
+        assertTrue(firstRunActions.contains("@+id/firstRunTransitCodeButton"))
+        assertTrue(firstRunActions.contains("@+id/firstRunSettingsButton"))
+        assertTrue(xmlBlockFor("@+id/firstRunSettingsButton").contains("android:contentDescription=\"@string/settings\""))
+        assertTrue(xmlBlockFor("@+id/firstRunSettingsButton").contains("app:icon=\"@drawable/ic_settings_outline\""))
+    }
+
+    @Test
+    fun frequentRoutesHeaderKeepsAllAndAddsCompactManageIcon() {
+        val header = xmlContainerForId("@+id/frequentRoutesHeader")
+        val pickerButton = xmlBlockFor("@+id/routePickerButton")
+        val manageButton = xmlBlockFor("@+id/routeManageIconButton")
+
+        assertTrue(header.contains("@+id/routePickerButton"))
+        assertTrue(header.contains("@+id/routeManageIconButton"))
+        assertTrue(pickerButton.contains("android:text=\"全部\""))
+        assertTrue(manageButton.contains("android:contentDescription=\"@string/manage_routes\""))
+        assertTrue(manageButton.contains("app:icon=\"@drawable/ic_route_manage\""))
+        assertTrue(manageButton.contains("android:layout_marginStart=\"6dp\""))
+        assertFalse(header.contains("android:text=\"管理路線\""))
     }
 
     @Test
     fun firstRunStateUsesWarmCopySampleCardAndGradientBackground() {
         assertTrue(layoutXml.contains("android:background=\"@drawable/app_page_background\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/firstRunTopActions\""))
-        assertTrue(xmlBlockForId("@+id/firstRunTopActions").contains("android:gravity=\"start|center_vertical\""))
         assertTrue(layoutXml.contains("android:id=\"@+id/firstRunTransitCodeButton\""))
         assertTrue(xmlBlockForId("@+id/firstRunTransitCodeButton").contains("android:layout_height=\"44dp\""))
         assertTrue(xmlBlockForId("@+id/firstRunTransitCodeButton").contains("android:textSize=\"14sp\""))
@@ -76,7 +106,7 @@ class MainRouteSelectionLayoutTest {
         assertTrue(mainActivityKt.contains("private fun renderHomeShell()"))
         assertTrue(mainActivityKt.contains("normalTopActions.visibility = if (isFirstRun) View.GONE else View.VISIBLE"))
         assertTrue(mainActivityKt.contains("firstRunTopActions.visibility = if (isFirstRun) View.VISIBLE else View.GONE"))
-        assertTrue(mainActivityKt.contains("manageRoutesButton.visibility = if (isFirstRun) View.GONE else View.VISIBLE"))
+        assertTrue(mainActivityKt.contains("routeManageIconButton.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE"))
         assertTrue(mainActivityKt.contains("resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE"))
         assertTrue(mainActivityKt.contains("currentQueryContext == null"))
         assertTrue(mainActivityKt.contains("FirstRunRoutePreview.route()"))
@@ -94,6 +124,17 @@ class MainRouteSelectionLayoutTest {
     fun manifestDeclaresPaymentWalletPackageVisibility() {
         assertTrue(manifestXml.contains("<package android:name=\"hk.alipay.wallet\" />"))
         assertTrue(manifestXml.contains("<package android:name=\"com.eg.android.AlipayGphone\" />"))
+    }
+
+    @Test
+    fun mainActivityWiresSettingsRouteManagementAndTemporaryEdit() {
+        assertTrue(mainActivityKt.contains("openSettings()"))
+        assertTrue(mainActivityKt.contains("SettingsActivity::class.java"))
+        assertTrue(mainActivityKt.contains("routeManageIconButton.setOnClickListener"))
+        assertTrue(mainActivityKt.contains("temporaryQueryEditButton.setOnClickListener"))
+        assertTrue(mainActivityKt.contains("editCurrentTemporaryQuery()"))
+        assertTrue(mainActivityKt.contains("showTemporaryRouteSheet(context.origin, context.destination)"))
+        assertTrue(mainActivityKt.contains("temporaryRouteBottomSheet.show(origin, destination)"))
     }
 
     @Test
@@ -130,6 +171,16 @@ class MainRouteSelectionLayoutTest {
         val nestedClose = layoutXml.indexOf(">", idIndex)
         val end = if (selfClose >= 0 && selfClose < nestedClose + 2000) selfClose else nestedClose
         assertTrue("Missing view end for $id", end >= 0)
+        return layoutXml.substring(start, end)
+    }
+
+    private fun xmlContainerForId(id: String): String {
+        val idIndex = layoutXml.indexOf("android:id=\"$id\"")
+        assertTrue("Missing view id $id", idIndex >= 0)
+        val start = layoutXml.lastIndexOf("<LinearLayout", idIndex)
+        assertTrue("Missing LinearLayout start for $id", start >= 0)
+        val end = layoutXml.indexOf("</LinearLayout>", idIndex)
+        assertTrue("Missing LinearLayout end for $id", end >= 0)
         return layoutXml.substring(start, end)
     }
 }
