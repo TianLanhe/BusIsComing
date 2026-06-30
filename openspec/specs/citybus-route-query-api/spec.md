@@ -15,9 +15,15 @@ TBD - created by archiving change citybus-route-query. Update Purpose after arch
 - **WHEN** 系统构造路线查询请求
 - **THEN** `t` 参数 MUST 使用当前香港时间并格式化为 `yyyy-MM-dd HH:mm`
 
-#### Scenario: 保留请求头和 Cookie
-- **WHEN** 系统发起 Citybus 路线查询请求
-- **THEN** 请求 SHALL 包含用户提供 cURL 中的关键 headers 和 Cookie，包括 `Accept`、`Accept-Language`、`Connection`、`Referer`、`Sec-Fetch-*`、`User-Agent`、`sec-ch-*` 和 Cookie
+#### Scenario: 使用最小必要請求
+- **WHEN** 系統發起 Citybus 路線查詢請求
+- **THEN** 系統 SHALL 使用無顯式 header 的 GET 請求
+- **AND** 系統 SHALL NOT 顯式設置 `Cookie`、`User-Agent`、`Referer`、`Sec-Fetch-*`、`sec-ch-ua*`、`Connection` 或 `Accept-Language`
+
+#### Scenario: 路線查詢日誌不輸出完整 cURL
+- **WHEN** debug build 記錄 Citybus 路線查詢資訊
+- **THEN** 日誌 SHALL 只包含脫敏摘要
+- **AND** 日誌 SHALL NOT 包含完整 cURL、完整 URL、完整 query string、headers、cookies、`slat=`、`slon=`、`elat=` 或 `elon=`
 
 ### Requirement: 解析 Citybus 路线查询 HTML
 
@@ -58,4 +64,3 @@ TBD - created by archiving change citybus-route-query. Update Purpose after arch
 #### Scenario: 路线查询失败
 - **WHEN** 路线查询网络请求失败、HTTP 状态码非 2xx、HTML 缺少 `routelist2` 或 HTML 格式无法解析
 - **THEN** 系统 SHALL 将其视为路线查询失败
-

@@ -30,7 +30,7 @@
 - 2026-06-30 使用 `Pixel_8_API_36` 模擬器安裝 debug build，授予 `POST_NOTIFICATIONS` 後從既有常用路線執行查詢，點擊結果卡片 `通知欄監控` 入口。
 - 啟動面板顯示「鎖屏會顯示路線與 ETA；開啟語音後，狀態變更可能在鎖屏時播報。」提示，`語音播報` 開關、步行時間調整、步速預設、場景修正與 `開始監控` 均保持可用。
 - 點擊 `開始監控` 後進入 Android `Alarms & reminders` exact alarm 設定頁，未跳轉電池最佳化豁免頁。
-- `dumpsys package com.example.busiscoming` 確認 release manifest 宣告包含 `POST_NOTIFICATIONS`、`FOREGROUND_SERVICE_DATA_SYNC`、`SCHEDULE_EXACT_ALARM`、`WAKE_LOCK`，不包含 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`。
+- `dumpsys package com.golink.busiscoming` 確認 release manifest 宣告包含 `POST_NOTIFICATIONS`、`FOREGROUND_SERVICE_DATA_SYNC`、`SCHEDULE_EXACT_ALARM`、`WAKE_LOCK`，不包含 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`。
 - `dumpsys notification --noredact` 確認 BusIsComing 監控通知 id `8201` 使用 `bus_monitor_status_v2` channel、`actions=2`、`vis=PUBLIC`，標題與正文展示路線、狀態、ETA、步行和更新時間。
-- 展開通知欄確認 BusIsComing 通知顯示 `刷新` 和 `停止` action；點擊 `停止` 後通知移除，`dumpsys activity services com.example.busiscoming` 無 `BusMonitorService` 殘留。
+- 展開通知欄確認 BusIsComing 通知顯示 `刷新` 和 `停止` action；點擊 `停止` 後通知移除，`dumpsys activity services com.golink.busiscoming` 無 `BusMonitorService` 殘留。
 - `logcat` 確認狀態切換語音流程完成：TTS 初始化成功、取得 navigation guidance audio focus、utterance started、utterance completed，並釋放 audio focus。

@@ -11,9 +11,10 @@
 - **WHEN** 用户输入地点搜索关键词
 - **THEN** 系统请求 `https://mobile.citybus.com.hk/nwp3/bsearch_p3.php`，并携带 `l=0`、`q=<关键词>`、`limit=100`、`timestamp=<当前毫秒级时间戳>`
 
-#### Scenario: 保留请求头
-- **WHEN** 系统发起 Citybus 地点搜索请求
-- **THEN** 请求包含用户提供 cURL 中的 headers，包括 Cookie、Referer、User-Agent 和 `X-Requested-With`
+#### Scenario: 使用最小必要請求
+- **WHEN** 系統發起 Citybus 地點搜索請求
+- **THEN** 系統 SHALL 使用無顯式 header 的 GET 請求
+- **AND** 系統 SHALL NOT 顯式設置 `Cookie`、`User-Agent`、`Referer`、`X-Requested-With`、`Sec-Fetch-*`、`sec-ch-ua*`、`Connection` 或 `Accept-Language`
 
 ### Requirement: 解析 Citybus 地点搜索响应
 
@@ -46,4 +47,3 @@
 #### Scenario: 搜索失败
 - **WHEN** 地点搜索网络请求失败或响应解析失败
 - **THEN** 系统向界面提供“地点搜索失败，请稍后重试”的状态
-

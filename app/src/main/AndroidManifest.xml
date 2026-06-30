@@ -12,7 +12,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <queries>
-        <package android:name="com.tencent.mm" />
         <package android:name="com.eg.android.AlipayGphone" />
         <package android:name="hk.alipay.wallet" />
         <intent>
@@ -47,11 +46,6 @@
         <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false" />
-        <activity
-            android:name=".wxapi.WXEntryActivity"
-            android:exported="true"
-            android:launchMode="singleTop"
-            android:theme="@style/Theme.BusIsComing.WXEntry" />
         <activity
             android:name=".ui.main.MainActivity"
             android:exported="true">

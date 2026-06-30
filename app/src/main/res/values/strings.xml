@@ -32,8 +32,5 @@
     <string name="feedback_failed">暫時無法開啟問題反饋</string>
     <string name="privacy_policy_failed">暫時無法開啟隱私政策</string>
     <string name="website_failed">暫時無法開啟網站</string>
-    <string name="transit_code_wechat_launch_failed">未能開啟微信乘車碼入口，請查看診斷結果。</string>
-    <string name="transit_code_alipay_hk_launch_failed">未能開啟 AlipayHK 乘車碼入口，請查看診斷結果。</string>
-    <string name="transit_code_generic_launch_failed">未能開啟此實驗入口，請查看診斷結果。</string>
     <string name="transit_code_launch_failed">未能開啟乘車碼，請確認已安裝 AlipayHK 或支付寶。</string>
 </resources>

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_ID="com.example.busiscoming"
+APP_ID="com.golink.busiscoming"
 AVD_NAME="${AVD_NAME:-Pixel_8_API_36}"
 OUT_DIR="${HOME}/Desktop/appmock截图"
 DEVICE_DIR="/sdcard/Pictures/BusIsComingDemoScreenshots"
@@ -33,7 +33,7 @@ adb shell cmd uimode night no >/dev/null 2>&1 || true
 adb shell settings put system font_scale 1.0 >/dev/null 2>&1 || true
 
 ./gradlew :app:connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=com.example.busiscoming.DemoScreenshotInstrumentedTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.golink.busiscoming.DemoScreenshotInstrumentedTest \
   --no-daemon
 
 for file in "${FILES[@]}"; do

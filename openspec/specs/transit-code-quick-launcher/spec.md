@@ -1,7 +1,7 @@
 # transit-code-quick-launcher Specification
 
 ## Purpose
-TBD - created by archiving change add-transit-code-quick-launcher. Update Purpose after archive.
+定義當前生產 `乘車碼` 單按鈕入口：根據 AlipayHK 與支付寶安裝狀態自動組裝候選鏈，優先 AlipayHK，並與已移除的微信實驗入口完全解耦。
 ## Requirements
 ### Requirement: 正式乘車碼入口按安裝狀態組裝候選鏈
 系統 SHALL 在用戶使用正式 `乘車碼` 入口時，根據本機 AlipayHK 與支付寶安裝狀態自動組裝固定候選鏈，並優先使用 AlipayHK。
@@ -84,9 +84,15 @@ TBD - created by archiving change add-transit-code-quick-launcher. Update Purpos
 - **WHEN** App 在 Android 11+ 裝置上運行
 - **THEN** manifest SHALL 包含 `hk.alipay.wallet` package query 聲明
 - **AND** manifest SHALL 包含 `com.eg.android.AlipayGphone` package query 聲明
+- **AND** manifest SHALL NOT 包含 `com.tencent.mm` package query 聲明
+- **AND** manifest SHALL NOT 註冊 `.wxapi.WXEntryActivity`
+
+#### Scenario: 正式入口不依賴微信 OpenSDK
+- **WHEN** 開發者檢查當前 App 構建依賴
+- **THEN** Gradle dependencies SHALL NOT 引入 `wechat-sdk-android`
+- **AND** 正式乘車碼候選常量 SHALL 只包含 AlipayHK 與支付寶 package、scheme 和 HTTPS URL
 
 #### Scenario: package 檢測結果不可用時降級為未安裝
 - **WHEN** 系統查詢 AlipayHK 或支付寶 package 狀態時發生可捕獲異常或無法確認已安裝
 - **THEN** 系統 SHALL 將該錢包視為未安裝來組裝候選鏈
 - **AND** 系統 SHALL NOT 因 package 查詢失敗而讓 `乘車碼` 點擊崩潰
-

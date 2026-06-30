@@ -18,7 +18,7 @@ fun String.asBuildConfigString(): String {
 }
 
 android {
-    namespace = "com.example.busiscoming"
+    namespace = "com.golink.busiscoming"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -26,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.busiscoming"
+        applicationId = "com.golink.busiscoming"
         minSdk = 25
         targetSdk = 36
         versionCode = 1
@@ -71,7 +71,6 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.jsoup)
     implementation(libs.play.services.location)
-    implementation(libs.wechat.sdk.android)
     testImplementation(libs.junit)
     testImplementation(libs.json)
     androidTestImplementation(libs.androidx.test.core.ktx)

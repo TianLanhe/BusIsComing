@@ -11,7 +11,6 @@ recyclerview = "1.1.0"
 swiperefreshlayout = "1.1.0"
 jsoup = "1.17.2"
 playServicesLocation = "21.3.0"
-wechatSdk = "6.8.34"
 json = "20240303"
 
 [libraries]
@@ -28,7 +27,6 @@ androidx-swiperefreshlayout = { group = "androidx.swiperefreshlayout", name = "s
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 json = { group = "org.json", name = "json", version.ref = "json" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
-wechat-sdk-android = { group = "com.tencent.mm.opensdk", name = "wechat-sdk-android", version.ref = "wechatSdk" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

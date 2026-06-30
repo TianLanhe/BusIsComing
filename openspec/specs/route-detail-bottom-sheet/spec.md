@@ -30,6 +30,11 @@ TBD - created by archiving change add-route-detail-bottom-sheet. Update Purpose 
 - **THEN** 系统 SHALL 请求 `https://mobile.citybus.com.hk/nwp3/getp2pstopinroute.php`
 - **AND** 请求 SHALL 携带 `info=<rawInfo>`、`ginfo=<ginfo>`、`lid=<lid>` 和 `l=<lang>`
 
+#### Scenario: 使用最小必要請求
+- **WHEN** 系統發起 Citybus P2P 路線詳情請求
+- **THEN** 系統 SHALL 使用無顯式 header 的 GET 請求
+- **AND** 系統 SHALL NOT 顯式設置 `Cookie`、`User-Agent`、`Referer`、`Sec-Fetch-*`、`sec-ch-ua*`、`Connection` 或 `Accept-Language`
+
 #### Scenario: 点击后展示加载状态
 - **WHEN** 用户点击路线卡片且详情请求尚未完成
 - **THEN** 底部弹层 SHALL 展示路线详情加载状态
@@ -195,4 +200,3 @@ TBD - created by archiving change add-route-detail-bottom-sheet. Update Purpose 
 - **WHEN** 用戶打開、展開、收合或關閉路線詳情
 - **THEN** 系統 SHALL 保持既有初始彈層高度、長內容展開、拖動關閉及右上角關閉按鈕
 - **AND** 系統 SHALL NOT 改動詳情載入、失敗、重試、時間線、途經站折疊、資料解析或快取行為
-

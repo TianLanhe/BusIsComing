@@ -11,6 +11,11 @@ TBD - created by archiving change fix-p2p-stop-sequence-alignment. Update Purpos
 - **THEN** 系統 SHALL 請求 `https://mobile.citybus.com.hk/nwp3/showstops2.php`
 - **AND** 請求 SHALL 攜帶 `r=<rawInfo>` 和 `l=<lang>`
 
+#### Scenario: 使用最小必要請求
+- **WHEN** 系統發起 `showstops2.php` 請求
+- **THEN** 系統 SHALL 使用無顯式 header 的 GET 請求
+- **AND** 系統 SHALL NOT 顯式設置 `Cookie`、`User-Agent`、`Referer`、`Sec-Fetch-*`、`Connection` 或 `Accept-Language`
+
 #### Scenario: 缺少 rawInfo 時不查詢
 - **WHEN** 候選路線缺少完整 `rawInfo`
 - **THEN** 系統 SHALL NOT 發起 `showstops2.php` 請求
@@ -69,4 +74,3 @@ TBD - created by archiving change fix-p2p-stop-sequence-alignment. Update Purpos
 - **WHEN** 開發者查看 Citybus ETA 推導文檔
 - **THEN** 文檔 SHALL 保留 `route-stop/{company}/{route}/{directionPath}` 推導方式作為歷史方案和觀察參考
 - **AND** 文檔 SHALL 明確標註該方式不是新運行時 fallback
-
