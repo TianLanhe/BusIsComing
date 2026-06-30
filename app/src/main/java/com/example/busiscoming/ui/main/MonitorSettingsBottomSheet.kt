@@ -88,10 +88,11 @@ class MonitorSettingsBottomSheet(
 
     private fun limitNote(): TextView {
         return TextView(context).apply {
-            text = "啟動後會每分鐘嘗試更新；省電、鎖屏或網絡限制可能導致延遲。"
+            text = "啟動後會每分鐘嘗試更新；省電、鎖屏或網絡限制可能導致延遲。\n" +
+                "鎖屏會顯示路線與 ETA；開啟語音後，狀態變更可能在鎖屏時播報。"
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 12f
-            maxLines = 2
+            maxLines = 3
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT

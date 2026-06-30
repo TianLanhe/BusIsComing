@@ -12,6 +12,7 @@ import org.junit.Test
 class BusMonitorNotificationContractTest {
     private val serviceKt = File("src/main/java/com/example/busiscoming/service/BusMonitorService.kt").readText()
     private val schedulerKt = File("src/main/java/com/example/busiscoming/service/BusMonitorRefreshScheduler.kt").readText()
+    private val monitorSheetKt = File("src/main/java/com/example/busiscoming/ui/main/MonitorSettingsBottomSheet.kt").readText()
     private val manifestXml = File("src/main/AndroidManifest.xml").readText()
 
     @Test
@@ -70,7 +71,9 @@ class BusMonitorNotificationContractTest {
     fun monitorServiceSupportsHighPrioritySchedulingAndAutoStop() {
         assertTrue(manifestXml.contains("android.permission.SCHEDULE_EXACT_ALARM"))
         assertTrue(manifestXml.contains("android.permission.WAKE_LOCK"))
-        assertTrue(manifestXml.contains("android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"))
+        assertTrue(manifestXml.contains("android.permission.FOREGROUND_SERVICE_DATA_SYNC"))
+        assertTrue(manifestXml.contains("android:foregroundServiceType=\"dataSync\""))
+        assertFalse(manifestXml.contains("android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"))
 
         assertTrue(serviceKt.contains("ACTION_AUTO_STOP"))
         assertTrue(serviceKt.contains("acquireWakeLock"))
@@ -101,5 +104,13 @@ class BusMonitorNotificationContractTest {
         assertTrue(serviceKt.contains("Monitor speech immediateResult="))
         assertTrue(serviceKt.contains("speechRetryAfterByStatus"))
         assertTrue(serviceKt.contains("shouldThrottleSpeech(status)"))
+    }
+
+    @Test
+    fun monitorStartSheetDisclosesLockscreenNotificationAndSpeechBehavior() {
+        assertTrue(monitorSheetKt.contains("鎖屏會顯示路線與 ETA"))
+        assertTrue(monitorSheetKt.contains("狀態變更可能在鎖屏時播報"))
+        assertTrue(monitorSheetKt.contains("語音播報"))
+        assertTrue(monitorSheetKt.contains("開始監控"))
     }
 }

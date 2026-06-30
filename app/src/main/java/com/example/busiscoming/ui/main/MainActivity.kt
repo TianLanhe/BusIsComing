@@ -725,14 +725,6 @@ class MainActivity : AppCompatActivity() {
             if (intent != null && intent.resolveActivity(packageManager) != null) {
                 Toast.makeText(this, "可開啟鬧鐘與提醒，提升候車監控準時性", Toast.LENGTH_LONG).show()
                 startActivity(intent)
-                return
-            }
-        }
-        if (!BusMonitorSchedulingCapability.isIgnoringBatteryOptimizations(this)) {
-            val intent = BusMonitorSchedulingCapability.batteryOptimizationSettingsIntent(this)
-            if (intent.resolveActivity(packageManager) != null) {
-                Toast.makeText(this, "可允許忽略電池最佳化，提升鎖屏更新可靠性", Toast.LENGTH_LONG).show()
-                startActivity(intent)
             }
         }
     }
