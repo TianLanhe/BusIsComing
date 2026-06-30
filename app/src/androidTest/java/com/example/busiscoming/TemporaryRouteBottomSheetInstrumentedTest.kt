@@ -22,6 +22,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.example.busiscoming.data.model.Place
 import com.example.busiscoming.data.repository.PlaceSearchRepository
 import com.example.busiscoming.data.repository.RouteConfigRepository
@@ -31,7 +32,9 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import java.io.FileInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -158,6 +161,56 @@ class TemporaryRouteBottomSheetInstrumentedTest {
                 .inRoot(isDialog())
                 .check(matches(isDisplayed()))
             assertTrue(!queryCalled.get())
+
+            scenario.onActivity {
+                sheet.dispose()
+            }
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun prefilledTemporaryEditCanQueryWithoutAutoCurrentLocationOverride() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            val origin = Place("中環碼頭", 22.2879, 114.1588)
+            val destination = Place("太古城中心", 22.2867, 114.2166)
+            val autoCurrentRequested = AtomicBoolean(false)
+            val queriedOrigin = AtomicReference<Place>()
+            val queriedDestination = AtomicReference<Place>()
+            lateinit var sheet: TemporaryRouteBottomSheet
+            scenario.onActivity { activity ->
+                sheet = TemporaryRouteBottomSheet(
+                    context = activity,
+                    routeConfigRepository = RouteConfigRepository(activity),
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> = emptyList()
+                    },
+                    onCurrentPlaceRequested = { isAuto, callback ->
+                        if (isAuto) autoCurrentRequested.set(true)
+                        callback(CurrentPlaceSelectionResult.Failure)
+                    },
+                    onQuery = { queryOrigin, queryDestination ->
+                        queriedOrigin.set(queryOrigin)
+                        queriedDestination.set(queryDestination)
+                    },
+                    onSaved = {}
+                )
+                sheet.show(initialOrigin = origin, initialDestination = destination)
+            }
+
+            onView(withId(R.id.temporaryOriginInput)).inRoot(isDialog())
+                .check(matches(withText("中環碼頭")))
+            onView(withId(R.id.temporaryDestinationInput)).inRoot(isDialog())
+                .check(matches(withText("太古城中心")))
+            assertFalse(autoCurrentRequested.get())
+            saveScreenshot("temporary-edit-prefilled")
+
+            onView(withText("使用此路線查詢")).inRoot(isDialog()).perform(click())
+            assertEquals(origin, queriedOrigin.get())
+            assertEquals(destination, queriedDestination.get())
 
             scenario.onActivity {
                 sheet.dispose()

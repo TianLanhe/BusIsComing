@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/settingsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/app_page_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/settingsBackButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="返回上一頁" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/settings"
+            android:textColor="@color/bus_text_primary"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/bus_card_surface"
+            app:cardCornerRadius="8dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/bus_divider"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_name"
+                    android:textColor="@color/bus_text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/settingsVersionText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            style="@style/SettingsGroupLabel"
+            android:text="@string/settings_group_preferences" />
+
+        <LinearLayout
+            android:id="@+id/settingsLanguageRow"
+            style="@style/SettingsRow"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_language" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/SettingsGroupLabel"
+            android:text="@string/settings_group_support" />
+
+        <LinearLayout
+            android:id="@+id/settingsShareRow"
+            style="@style/SettingsRow"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_share_app" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsFeedbackRow"
+            style="@style/SettingsRow"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_feedback" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsRatingRow"
+            style="@style/SettingsRow"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_rate_app" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsUpdateRow"
+            style="@style/SettingsRow"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_check_update" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/SettingsGroupLabel"
+            android:text="@string/settings_group_about" />
+
+        <LinearLayout
+            android:id="@+id/settingsAboutRow"
+            style="@style/SettingsRow"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_about_us" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsPrivacyRow"
+            style="@style/SettingsRow"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_privacy_policy" />
+        </LinearLayout>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

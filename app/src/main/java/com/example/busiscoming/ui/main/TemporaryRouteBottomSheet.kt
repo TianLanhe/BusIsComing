@@ -54,7 +54,7 @@ class TemporaryRouteBottomSheet(
     private var currentPlaceGeneration: Int = 0
     private var originTouchedByUser: Boolean = false
 
-    fun show() {
+    fun show(initialOrigin: Place? = null, initialDestination: Place? = null) {
         dispose()
         originTouchedByUser = false
         currentPlaceGeneration += 1
@@ -183,6 +183,7 @@ class TemporaryRouteBottomSheet(
                 focusUnselectedPeer(originController, originInput)
             }
         )
+        applyInitialPlaces(initialOrigin, initialDestination)
 
         swapControl.setOnClickListener { view ->
             view.animate().rotationBy(180f).setDuration(220L).start()
@@ -214,7 +215,19 @@ class TemporaryRouteBottomSheet(
         }
         bottomSheetDialog.setOnDismissListener { disposeControllers() }
         bottomSheetDialog.show()
-        requestCurrentOriginIfNeeded(isAuto = true)
+        if (initialOrigin == null) {
+            requestCurrentOriginIfNeeded(isAuto = true)
+        }
+    }
+
+    private fun applyInitialPlaces(initialOrigin: Place?, initialDestination: Place?) {
+        if (initialOrigin != null) {
+            originController?.setSelectedPlace(initialOrigin)
+            originTouchedByUser = true
+        }
+        if (initialDestination != null) {
+            destinationController?.setSelectedPlace(initialDestination)
+        }
     }
 
     fun dispose() {
