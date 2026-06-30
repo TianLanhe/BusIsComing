@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var queryControls: LinearLayout
     private lateinit var routeShortcutCardsContainer: LinearLayout
     private lateinit var routePickerButton: MaterialButton
-    private lateinit var routeManageIconButton: MaterialButton
+    private lateinit var routeManageButton: MaterialButton
     private lateinit var resultSection: LinearLayout
     private lateinit var temporaryQueryContextBar: MaterialCardView
     private lateinit var temporaryQueryContextPathText: TextView
@@ -220,7 +220,7 @@ class MainActivity : AppCompatActivity() {
         queryControls = findViewById(R.id.queryControls)
         routeShortcutCardsContainer = findViewById(R.id.routeShortcutCardsContainer)
         routePickerButton = findViewById(R.id.routePickerButton)
-        routeManageIconButton = findViewById(R.id.routeManageIconButton)
+        routeManageButton = findViewById(R.id.routeManageButton)
         resultSection = findViewById(R.id.resultSection)
         temporaryQueryContextBar = findViewById(R.id.temporaryQueryContextBar)
         temporaryQueryContextPathText = findViewById(R.id.temporaryQueryContextPathText)
@@ -289,7 +289,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupActions() {
         settingsButton.setOnClickListener { openSettings() }
         firstRunSettingsButton.setOnClickListener { openSettings() }
-        routeManageIconButton.setOnClickListener {
+        routeManageButton.setOnClickListener {
             startActivity(Intent(this, RouteManageActivity::class.java))
         }
         transitCodeButton.setOnClickListener { launchTransitCode() }
@@ -1150,7 +1150,7 @@ class MainActivity : AppCompatActivity() {
         emptyRouteState.visibility = if (isFirstRun) View.VISIBLE else View.GONE
         queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE
-        routeManageIconButton.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
+        routeManageButton.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         if (isFirstRun) animateFirstRunIntroIfNeeded()
     }
 

@@ -212,27 +212,18 @@
                 android:textSize="14sp" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/routeManageIconButton"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                android:layout_width="40dp"
+                android:id="@+id/routeManageButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
                 android:layout_height="40dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="16dp"
                 android:contentDescription="@string/manage_routes"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
                 android:minHeight="40dp"
-                android:minWidth="40dp"
-                android:padding="0dp"
-                app:backgroundTint="@color/white"
-                app:cornerRadius="20dp"
-                app:icon="@drawable/ic_route_manage"
-                app:iconGravity="textStart"
-                app:iconPadding="0dp"
-                app:iconSize="22dp"
-                app:strokeColor="@color/bus_divider"
-                app:strokeWidth="1dp" />
+                android:minWidth="48dp"
+                android:paddingHorizontal="8dp"
+                android:text="@string/manage"
+                android:textColor="@color/bus_chip_selected"
+                android:textSize="14sp" />
         </LinearLayout>
 
         <LinearLayout

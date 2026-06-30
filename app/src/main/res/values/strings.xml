@@ -10,6 +10,7 @@
     <string name="first_run_temporary_query">直接查詢一次</string>
     <string name="route_edit_subtitle">選擇常用起點和終點，儲存後可在主頁快速查詢。</string>
     <string name="settings">設定</string>
+    <string name="manage">管理</string>
     <string name="manage_routes">管理路線</string>
     <string name="settings_group_preferences">偏好</string>
     <string name="settings_group_support">支援</string>

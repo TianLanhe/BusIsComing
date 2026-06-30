@@ -55,17 +55,18 @@ class MainRouteSelectionLayoutTest {
     }
 
     @Test
-    fun frequentRoutesHeaderKeepsAllAndAddsCompactManageIcon() {
+    fun frequentRoutesHeaderKeepsAllAndAddsCompactManageTextButton() {
         val header = xmlContainerForId("@+id/frequentRoutesHeader")
         val pickerButton = xmlBlockFor("@+id/routePickerButton")
-        val manageButton = xmlBlockFor("@+id/routeManageIconButton")
+        val manageButton = xmlBlockFor("@+id/routeManageButton")
 
         assertTrue(header.contains("@+id/routePickerButton"))
-        assertTrue(header.contains("@+id/routeManageIconButton"))
+        assertTrue(header.contains("@+id/routeManageButton"))
         assertTrue(pickerButton.contains("android:text=\"全部\""))
+        assertTrue(manageButton.contains("android:text=\"@string/manage\""))
         assertTrue(manageButton.contains("android:contentDescription=\"@string/manage_routes\""))
-        assertTrue(manageButton.contains("app:icon=\"@drawable/ic_route_manage\""))
-        assertTrue(manageButton.contains("android:layout_marginStart=\"6dp\""))
+        assertTrue(manageButton.contains("android:layout_marginStart=\"16dp\""))
+        assertFalse(manageButton.contains("app:icon="))
         assertFalse(header.contains("android:text=\"管理路線\""))
     }
 
@@ -106,7 +107,7 @@ class MainRouteSelectionLayoutTest {
         assertTrue(mainActivityKt.contains("private fun renderHomeShell()"))
         assertTrue(mainActivityKt.contains("normalTopActions.visibility = if (isFirstRun) View.GONE else View.VISIBLE"))
         assertTrue(mainActivityKt.contains("firstRunTopActions.visibility = if (isFirstRun) View.VISIBLE else View.GONE"))
-        assertTrue(mainActivityKt.contains("routeManageIconButton.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE"))
+        assertTrue(mainActivityKt.contains("routeManageButton.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE"))
         assertTrue(mainActivityKt.contains("resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE"))
         assertTrue(mainActivityKt.contains("currentQueryContext == null"))
         assertTrue(mainActivityKt.contains("FirstRunRoutePreview.route()"))
@@ -130,7 +131,7 @@ class MainRouteSelectionLayoutTest {
     fun mainActivityWiresSettingsRouteManagementAndTemporaryEdit() {
         assertTrue(mainActivityKt.contains("openSettings()"))
         assertTrue(mainActivityKt.contains("SettingsActivity::class.java"))
-        assertTrue(mainActivityKt.contains("routeManageIconButton.setOnClickListener"))
+        assertTrue(mainActivityKt.contains("routeManageButton.setOnClickListener"))
         assertTrue(mainActivityKt.contains("temporaryQueryEditButton.setOnClickListener"))
         assertTrue(mainActivityKt.contains("editCurrentTemporaryQuery()"))
         assertTrue(mainActivityKt.contains("showTemporaryRouteSheet(context.origin, context.destination)"))
