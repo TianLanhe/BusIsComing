@@ -1,8 +1,5 @@
-# transit-code-experimental-launcher Specification
+## MODIFIED Requirements
 
-## Purpose
-乘車碼實驗入口、微信 OpenSDK 接入與診斷面板已作為上架前清理項移除。當前 App 的生產乘車碼能力由 `transit-code-quick-launcher` 規格覆蓋，保留此規格用於明確「實驗入口不可再作為 current 能力」。
-## Requirements
 ### Requirement: 實驗乘車碼入口已移除
 系統 SHALL NOT 在當前生產 App 中保留乘車碼實驗底部彈層、微信 SDK 候選入口或微信回調診斷能力。
 
