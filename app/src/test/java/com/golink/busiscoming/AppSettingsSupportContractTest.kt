@@ -26,7 +26,11 @@ class AppSettingsSupportContractTest {
     fun manifestDeclaresSettingsAndAboutActivities() {
         assertTrue(manifestXml.contains(".ui.settings.SettingsActivity"))
         assertTrue(manifestXml.contains(".ui.settings.AboutActivity"))
+        assertTrue(manifestXml.contains(".ui.settings.RouteTransferActivity"))
         assertTrue(manifestXml.contains("android:exported=\"false\""))
+        assertFalse(manifestXml.contains("READ_EXTERNAL_STORAGE"))
+        assertFalse(manifestXml.contains("WRITE_EXTERNAL_STORAGE"))
+        assertFalse(manifestXml.contains("MANAGE_EXTERNAL_STORAGE"))
     }
 
     @Test
@@ -37,9 +41,11 @@ class AppSettingsSupportContractTest {
         assertTrue(settingsLayoutXml.contains("android:text=\"@string/app_name\""))
         assertTrue(settingsLayoutXml.contains("android:id=\"@+id/settingsVersionText\""))
         assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_preferences\""))
+        assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_route_data\""))
         assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_support\""))
         assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_about\""))
         assertEntry("settingsLanguageRow", "settings_language")
+        assertEntry("settingsRouteTransferRow", "settings_route_transfer")
         assertEntry("settingsShareRow", "settings_share_app")
         assertEntry("settingsFeedbackRow", "settings_feedback")
         assertEntry("settingsRatingRow", "settings_rate_app")
@@ -47,6 +53,12 @@ class AppSettingsSupportContractTest {
         assertEntry("settingsAboutRow", "settings_about_us")
         assertEntry("settingsPrivacyRow", "settings_privacy_policy")
         assertFalse(settingsLayoutXml.contains("首頁"))
+        val preferencesIndex = settingsLayoutXml.indexOf("@string/settings_group_preferences")
+        val routeDataIndex = settingsLayoutXml.indexOf("@string/settings_group_route_data")
+        val supportIndex = settingsLayoutXml.indexOf("@string/settings_group_support")
+        assertTrue(preferencesIndex < routeDataIndex)
+        assertTrue(routeDataIndex < supportIndex)
+        assertEquals(1, Regex("@\\+id/settingsRouteTransferRow").findAll(settingsLayoutXml).count())
     }
 
     @Test
@@ -77,6 +89,8 @@ class AppSettingsSupportContractTest {
     @Test
     fun activitiesWirePlaceholderAndExternalActions() {
         assertTrue(settingsActivityKt.contains("settingsLanguageRow"))
+        assertTrue(settingsActivityKt.contains("settingsRouteTransferRow"))
+        assertTrue(settingsActivityKt.contains("RouteTransferActivity::class.java"))
         assertTrue(settingsActivityKt.contains("unsupported_language_switch"))
         assertTrue(settingsActivityKt.contains("unsupported_rate_app"))
         assertTrue(settingsActivityKt.contains("unsupported_check_update"))

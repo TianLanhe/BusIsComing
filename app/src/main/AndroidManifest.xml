@@ -44,6 +44,9 @@
             android:name=".ui.settings.AboutActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.settings.RouteTransferActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false" />
         <activity

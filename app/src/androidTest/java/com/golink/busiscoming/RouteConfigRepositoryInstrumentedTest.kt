@@ -7,7 +7,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.RouteConfigDbHelper
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfig
+import com.golink.busiscoming.data.repository.RouteImportFailureStage
+import com.golink.busiscoming.data.repository.RouteImportMode
 import com.golink.busiscoming.data.repository.RouteConfigRepository
+import com.golink.busiscoming.data.transfer.TransferRoute
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -79,6 +82,134 @@ class RouteConfigRepositoryInstrumentedTest {
         assertEquals(listOf(secondId, firstId), routes.map { it.id })
         assertEquals(2, routes.first().usageCount)
         assertEquals(300L, routes.first().lastUsedAt)
+    }
+
+    @Test
+    fun mergeAddsOnlyDistinctRoutesAndPreservesExistingStatistics() {
+        repository = RouteConfigRepository(context)
+        val origin = Place("柴灣站", 22.2642, 114.2371)
+        val destination = Place("中環碼頭", 22.2878, 114.1582)
+        val existingId = repository!!.insert("上班", origin, destination)
+        repository!!.recordUsage(existingId, usedAtMillis = 1234)
+
+        val result = repository!!.importRoutes(
+            listOf(
+                TransferRoute(" 上班 ", origin, destination),
+                TransferRoute("假日", origin, destination),
+                TransferRoute("上班", origin, Place("灣仔站", 22.277, 114.173))
+            ),
+            RouteImportMode.MERGE
+        )
+
+        assertEquals(2, result.addedCount)
+        assertEquals(1, result.skippedCount)
+        assertEquals(0, result.deletedCount)
+        val routes = repository!!.getAll()
+        assertEquals(3, routes.size)
+        assertEquals(1, routes.single { it.id == existingId }.usageCount)
+        assertEquals(1234L, routes.single { it.id == existingId }.lastUsedAt)
+        routes.filter { it.id != existingId }.forEach {
+            assertEquals(0, it.usageCount)
+            assertNull(it.lastUsedAt)
+        }
+    }
+
+    @Test
+    fun replaceDeletesExistingRoutesRegeneratesIdsAndResetsStatistics() {
+        repository = RouteConfigRepository(context)
+        val firstId = repository!!.insert(
+            "舊一",
+            Place("舊起點一", 22.1, 114.1),
+            Place("舊終點一", 22.2, 114.2)
+        )
+        val secondId = repository!!.insert(
+            "舊二",
+            Place("舊起點二", 22.3, 114.3),
+            Place("舊終點二", 22.4, 114.4)
+        )
+        repository!!.recordUsage(firstId, 999)
+        val imported = TransferRoute(
+            "新路線",
+            Place("新起點", 22.5, 114.5),
+            Place("新終點", 22.6, 114.6)
+        )
+
+        val result = repository!!.importRoutes(listOf(imported, imported), RouteImportMode.REPLACE)
+
+        assertEquals(1, result.addedCount)
+        assertEquals(1, result.skippedCount)
+        assertEquals(2, result.deletedCount)
+        val saved = repository!!.getAll().single()
+        assertTrue(saved.id > maxOf(firstId, secondId))
+        assertEquals("新路線", saved.name)
+        assertEquals(0, saved.usageCount)
+        assertNull(saved.lastUsedAt)
+    }
+
+    @Test
+    fun replaceRejectsEmptyCandidatesWithoutChangingExistingRoutes() {
+        repository = RouteConfigRepository(context)
+        val id = repository!!.insert(
+            "保留",
+            Place("起點", 22.1, 114.1),
+            Place("終點", 22.2, 114.2)
+        )
+
+        try {
+            repository!!.importRoutes(emptyList(), RouteImportMode.REPLACE)
+            throw AssertionError("Expected empty replace to be rejected")
+        } catch (_: IllegalArgumentException) {
+            assertEquals(id, repository!!.getAll().single().id)
+        }
+    }
+
+    @Test
+    fun mergeFailureRollsBackEveryInsertedRoute() {
+        repository = RouteConfigRepository(context) { stage, index ->
+            if (stage == RouteImportFailureStage.BEFORE_INSERT && index == 1) error("injected")
+        }
+        val existingId = repository!!.insert(
+            "既有",
+            Place("既有起點", 22.1, 114.1),
+            Place("既有終點", 22.2, 114.2)
+        )
+        val incoming = listOf(
+            TransferRoute("新增一", Place("起點一", 22.3, 114.3), Place("終點一", 22.4, 114.4)),
+            TransferRoute("新增二", Place("起點二", 22.5, 114.5), Place("終點二", 22.6, 114.6))
+        )
+
+        try {
+            repository!!.importRoutes(incoming, RouteImportMode.MERGE)
+            throw AssertionError("Expected injected failure")
+        } catch (_: IllegalStateException) {
+            assertEquals(listOf(existingId), repository!!.getAll().map { it.id })
+        }
+    }
+
+    @Test
+    fun replaceFailureAfterDeleteRollsBackRoutesAndStatistics() {
+        repository = RouteConfigRepository(context) { stage, _ ->
+            if (stage == RouteImportFailureStage.AFTER_DELETE) error("injected")
+        }
+        val existingId = repository!!.insert(
+            "保留",
+            Place("起點", 22.1, 114.1),
+            Place("終點", 22.2, 114.2)
+        )
+        repository!!.recordUsage(existingId, 5678)
+
+        try {
+            repository!!.importRoutes(
+                listOf(TransferRoute("新增", Place("新起點", 22.3, 114.3), Place("新終點", 22.4, 114.4))),
+                RouteImportMode.REPLACE
+            )
+            throw AssertionError("Expected injected failure")
+        } catch (_: IllegalStateException) {
+            val existing = repository!!.getAll().single()
+            assertEquals(existingId, existing.id)
+            assertEquals(1, existing.usageCount)
+            assertEquals(5678L, existing.lastUsedAt)
+        }
     }
 
     @Test

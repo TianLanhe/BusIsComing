@@ -3,6 +3,8 @@ package com.golink.busiscoming.data.repository
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteException
 import com.golink.busiscoming.data.local.RouteConfigDbHelper
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_CREATED_AT
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_DESTINATION_LATITUDE
@@ -19,8 +21,12 @@ import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_UP
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.TABLE_ROUTE_CONFIGS
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfig
+import com.golink.busiscoming.data.transfer.TransferRoute
 
-class RouteConfigRepository(context: Context) {
+class RouteConfigRepository(
+    context: Context,
+    private val importFailureInjector: RouteImportFailureInjector = RouteImportFailureInjector.NONE
+) {
     private val dbHelper = RouteConfigDbHelper(context.applicationContext)
 
     fun getAll(): List<RouteConfig> {
@@ -57,16 +63,55 @@ class RouteConfigRepository(context: Context) {
 
     fun insert(name: String, origin: Place, destination: Place): Long {
         val now = System.currentTimeMillis()
-        val values = ContentValues().apply {
-            put(COLUMN_NAME, name)
-            putPlace(ORIGIN_PREFIX, origin)
-            putPlace(DESTINATION_PREFIX, destination)
-            put(COLUMN_CREATED_AT, now)
-            put(COLUMN_UPDATED_AT, now)
-            put(COLUMN_USAGE_COUNT, 0)
-            putNull(COLUMN_LAST_USED_AT)
-        }
+        val values = routeValues(name, origin, destination, now)
         return dbHelper.writableDatabase.insert(TABLE_ROUTE_CONFIGS, null, values)
+    }
+
+    fun importRoutes(routes: List<TransferRoute>, mode: RouteImportMode): RouteImportResult {
+        require(routes.isNotEmpty()) { "Import candidates must not be empty" }
+        val database = dbHelper.writableDatabase
+        database.beginTransaction()
+        return try {
+            val deletedCount: Int
+            val identities: MutableSet<RouteIdentity>
+            if (mode == RouteImportMode.REPLACE) {
+                deletedCount = database.delete(TABLE_ROUTE_CONFIGS, null, null)
+                importFailureInjector.invoke(RouteImportFailureStage.AFTER_DELETE, -1)
+                identities = HashSet()
+            } else {
+                deletedCount = 0
+                identities = getAll(database).mapTo(HashSet()) { it.identity() }
+            }
+
+            var addedCount = 0
+            var skippedCount = 0
+            routes.forEach { candidate ->
+                val normalized = candidate.copy(name = candidate.name.trim())
+                val identity = normalized.identity()
+                if (!identities.add(identity)) {
+                    skippedCount += 1
+                } else {
+                    importFailureInjector.invoke(RouteImportFailureStage.BEFORE_INSERT, addedCount)
+                    val insertedId = database.insert(
+                        TABLE_ROUTE_CONFIGS,
+                        null,
+                        routeValues(
+                            normalized.name,
+                            normalized.origin,
+                            normalized.destination,
+                            System.currentTimeMillis()
+                        )
+                    )
+                    if (insertedId == -1L) throw SQLiteException("Failed to import route")
+                    addedCount += 1
+                }
+            }
+            val result = RouteImportResult(addedCount, skippedCount, deletedCount)
+            database.setTransactionSuccessful()
+            result
+        } finally {
+            database.endTransaction()
+        }
     }
 
     fun update(config: RouteConfig) {
@@ -135,6 +180,37 @@ class RouteConfigRepository(context: Context) {
         )
     }
 
+    private fun getAll(database: SQLiteDatabase): List<RouteConfig> {
+        val routes = mutableListOf<RouteConfig>()
+        database.query(
+            TABLE_ROUTE_CONFIGS,
+            ROUTE_COLUMNS,
+            null,
+            null,
+            null,
+            null,
+            null
+        ).use { cursor ->
+            while (cursor.moveToNext()) routes += cursor.toRouteConfig()
+        }
+        return routes
+    }
+
+    private fun RouteConfig.identity() = RouteIdentity(name.trim(), origin, destination)
+
+    private fun TransferRoute.identity() = RouteIdentity(name.trim(), origin, destination)
+
+    private fun routeValues(name: String, origin: Place, destination: Place, now: Long) =
+        ContentValues().apply {
+            put(COLUMN_NAME, name)
+            putPlace(ORIGIN_PREFIX, origin)
+            putPlace(DESTINATION_PREFIX, destination)
+            put(COLUMN_CREATED_AT, now)
+            put(COLUMN_UPDATED_AT, now)
+            put(COLUMN_USAGE_COUNT, 0)
+            putNull(COLUMN_LAST_USED_AT)
+        }
+
     private fun ContentValues.putPlace(prefix: String, place: Place) {
         when (prefix) {
             ORIGIN_PREFIX -> {
@@ -187,4 +263,10 @@ class RouteConfigRepository(context: Context) {
             COLUMN_LAST_USED_AT
         )
     }
+
+    private data class RouteIdentity(
+        val name: String,
+        val origin: Place,
+        val destination: Place
+    )
 }

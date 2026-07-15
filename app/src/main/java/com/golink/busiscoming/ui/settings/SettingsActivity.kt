@@ -26,6 +26,9 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.settingsLanguageRow).setOnClickListener {
             Toast.makeText(this, R.string.unsupported_language_switch, Toast.LENGTH_SHORT).show()
         }
+        findViewById<View>(R.id.settingsRouteTransferRow).setOnClickListener {
+            startActivity(Intent(this, RouteTransferActivity::class.java))
+        }
         findViewById<View>(R.id.settingsShareRow).setOnClickListener {
             AppSupportActions.shareApp(this)
         }
