@@ -42,13 +42,41 @@ class LocationFeatureContractTest {
     @Test
     fun mainNearbyRouteSelectionDoesNotPersistOrOverrideManualChoice() {
         assertTrue(mainActivityKt.contains("routeConfigs.size < 2"))
-        assertTrue(mainActivityKt.contains("manualRouteSelectionGeneration != generation"))
+        assertTrue(mainActivityKt.contains("manualRouteSelectionGeneration == generation"))
         assertTrue(mainActivityKt.contains("NearbyRouteSelectionPolicy.selectRoute"))
         assertTrue(mainActivityKt.contains("nearbySelectedRouteId = selectedRoute?.id"))
         assertTrue(mainActivityKt.contains("text = \"附近\""))
         assertTrue(mainActivityKt.contains("nearbySelectedRouteId = null"))
         assertTrue(mainActivityKt.contains("recordUsage: Boolean = true"))
         assertTrue(mainActivityKt.contains("recordUsage = false"))
+    }
+
+    @Test
+    fun mainRanksSavedRoutesWithoutOverridingManualSelection() {
+        assertTrue(mainActivityKt.contains("SavedRouteLocationSorter.sort"))
+        assertTrue(mainActivityKt.contains("currentLocationSnapshot = result.snapshot"))
+        assertTrue(mainActivityKt.contains("manualRouteSelectionGeneration == generation"))
+        assertFalse(
+            mainActivityKt.contains(
+                "isFinishing || isDestroyed || manualRouteSelectionGeneration != generation"
+            )
+        )
+    }
+
+    @Test
+    fun mainPersistsAndConsumesSavedRouteUsageSessionState() {
+        assertTrue(mainActivityKt.contains("SavedRouteUsageSession("))
+        assertTrue(mainActivityKt.contains("savedRouteUsageSession.consumeUsageRecord(route.id)"))
+        assertTrue(mainActivityKt.contains("override fun onSaveInstanceState(outState: Bundle)"))
+        assertTrue(mainActivityKt.contains("STATE_SELECTED_ROUTE_ID"))
+        assertTrue(mainActivityKt.contains("STATE_RECORDED_USAGE_ROUTE_ID"))
+    }
+
+    @Test
+    fun mainDoesNotExposeSavedRouteRankingKeys() {
+        assertFalse(mainActivityKt.contains("text = route.usageCount"))
+        assertFalse(mainActivityKt.contains("text = route.lastUsedAt"))
+        assertFalse(mainActivityKt.contains("PlaceDistanceFormatter.compact"))
     }
 
     @Test

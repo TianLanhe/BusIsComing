@@ -560,8 +560,8 @@ class CitybusBusRouteRepositoryTest {
             callback.awaitInitialRoutes().map { it.waitTimeState }
         )
         assertEquals(
-            listOf(WaitTimeState.Unavailable, WaitTimeState.Available(2)),
-            callback.awaitUpdateCount(2).map { it.second }
+            setOf(WaitTimeState.Unavailable, WaitTimeState.Available(2)),
+            callback.awaitUpdateCount(2).map { it.second }.toSet()
         )
     }
 

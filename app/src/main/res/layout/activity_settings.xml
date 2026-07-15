@@ -82,6 +82,21 @@
 
         <TextView
             style="@style/SettingsGroupLabel"
+            android:text="@string/settings_group_route_data" />
+
+        <LinearLayout
+            android:id="@+id/settingsRouteTransferRow"
+            style="@style/SettingsRow"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_route_transfer" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/SettingsGroupLabel"
             android:text="@string/settings_group_support" />
 
         <LinearLayout

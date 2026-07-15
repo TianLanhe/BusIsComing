@@ -31,6 +31,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.location.CurrentLocationCoordinator
 import com.golink.busiscoming.data.location.CurrentLocationResult
+import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.GoogleReverseGeocodingPlaceNameResolver
 import com.golink.busiscoming.data.location.LocationPermissionStateStore
@@ -38,6 +39,7 @@ import com.golink.busiscoming.data.location.LocationPermissionUtils
 import com.golink.busiscoming.data.location.NearbyRouteSelectionPolicy
 import com.golink.busiscoming.data.location.PlaceNameResolutionResult
 import com.golink.busiscoming.data.location.PlaceNameResolver
+import com.golink.busiscoming.data.location.SavedRouteLocationSorter
 import com.golink.busiscoming.data.location.SystemLocationUtils
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
@@ -144,6 +146,8 @@ class MainActivity : AppCompatActivity() {
     private var hasAttemptedNearbyRouteSelection: Boolean = false
     private var nearbySelectedRouteId: Long? = null
     private var manualRouteSelectionGeneration: Int = 0
+    private var currentLocationSnapshot: CurrentLocationSnapshot? = null
+    private var savedRouteUsageSession = SavedRouteUsageSession()
     private val shownLocationFallbackToasts = mutableSetOf<LocationFallbackToast>()
     private var pendingLocationPermissionAction: PendingLocationPermissionAction? = null
     private var pendingLocationSettingsCurrentPlaceCallback: ((CurrentPlaceSelectionResult) -> Unit)? = null
@@ -151,6 +155,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoreSavedRouteUsageSession(savedInstanceState)
         setContentView(R.layout.activity_main)
         title = "BusIsComing"
 
@@ -184,6 +189,15 @@ class MainActivity : AppCompatActivity() {
         bindViews()
         setupResultList()
         setupActions()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val selectedRouteId = selectedRoute?.id ?: savedRouteUsageSession.selectedRouteId
+        selectedRouteId?.let { outState.putLong(STATE_SELECTED_ROUTE_ID, it) }
+        savedRouteUsageSession.recordedRouteId
+            ?.takeIf { it == selectedRouteId }
+            ?.let { outState.putLong(STATE_RECORDED_USAGE_ROUTE_ID, it) }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -312,10 +326,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun restoreSavedRouteUsageSession(savedInstanceState: Bundle?) {
+        if (savedInstanceState == null) return
+        val selectedRouteId = savedInstanceState.longOrNull(STATE_SELECTED_ROUTE_ID)
+        val recordedRouteId = savedInstanceState.longOrNull(STATE_RECORDED_USAGE_ROUTE_ID)
+        savedRouteUsageSession = SavedRouteUsageSession(
+            selectedRouteId = selectedRouteId,
+            recordedRouteId = recordedRouteId
+        )
+    }
+
+    private fun Bundle.longOrNull(key: String): Long? {
+        return if (containsKey(key)) getLong(key) else null
+    }
+
+    private fun loadRankedRouteConfigs(): List<RouteConfig> {
+        return SavedRouteLocationSorter.sort(
+            routes = routeConfigRepository.getAll(),
+            location = currentLocationSnapshot
+        )
+    }
+
     private fun loadRouteConfigs() {
-        val previousSelectedId = selectedRoute?.id
+        val previousSelectedId = selectedRoute?.id ?: savedRouteUsageSession.selectedRouteId
         val previousRouteSnapshot = routeIdentitySnapshot(routeConfigs)
-        routeConfigs = routeConfigRepository.getAll()
+        routeConfigs = loadRankedRouteConfigs()
 
         if (routeConfigs.isEmpty()) {
             if (currentQueryContext is QueryContext.Saved) {
@@ -330,6 +365,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         selectedRoute = routeConfigs.firstOrNull { it.id == previousSelectedId } ?: routeConfigs.first()
+        savedRouteUsageSession.selectSavedRoute(selectedRoute!!.id)
         renderRouteShortcuts()
         renderHomeShell()
         maybeStartNearbyRouteSelection()
@@ -364,15 +400,26 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentLocationCoordinator.getCurrentLocation { result ->
-            if (isFinishing || isDestroyed || manualRouteSelectionGeneration != generation) return@getCurrentLocation
+            if (isFinishing || isDestroyed) return@getCurrentLocation
             when (result) {
                 is CurrentLocationResult.Success -> {
+                    val canAutoSelect = manualRouteSelectionGeneration == generation
+                    currentLocationSnapshot = result.snapshot
+                    val selectedRouteId = selectedRoute?.id
+                    routeConfigs = loadRankedRouteConfigs()
+                    selectedRoute = routeConfigs.firstOrNull { it.id == selectedRouteId } ?: selectedRoute
+                    if (!canAutoSelect) {
+                        renderRouteShortcuts()
+                        return@getCurrentLocation
+                    }
                     val route = NearbyRouteSelectionPolicy.selectRoute(result.snapshot, routeConfigs)
                     if (route == null) {
+                        renderRouteShortcuts()
                         showLocationFallbackToast(LocationFallbackToast.IMPRECISE)
                         return@getCurrentLocation
                     }
                     selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
+                    savedRouteUsageSession.selectSavedRoute(route.id)
                     nearbySelectedRouteId = selectedRoute?.id
                     renderRouteShortcuts()
                 }
@@ -393,6 +440,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun queryTemporaryRoute(origin: Place, destination: Place) {
+        savedRouteUsageSession.onTemporaryQuery()
         queryRoute(origin, destination, null, QueryContext.Temporary(origin, destination))
     }
 
@@ -451,9 +499,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (RouteResultsRefreshPolicy.shouldRecordUsage(isRefresh, recordUsage)) sourceRoute?.let { route ->
+        val shouldRecordRouteUsage = sourceRoute?.let { route ->
+            RouteResultsRefreshPolicy.shouldRecordUsage(isRefresh, recordUsage) &&
+                savedRouteUsageSession.consumeUsageRecord(route.id)
+        } ?: false
+        if (shouldRecordRouteUsage) {
+            val route = sourceRoute ?: return
             routeConfigRepository.recordUsage(route.id)
-            routeConfigs = routeConfigRepository.getAll()
+            routeConfigs = loadRankedRouteConfigs()
             selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
             renderRouteShortcuts()
         }
@@ -1055,6 +1108,7 @@ class MainActivity : AppCompatActivity() {
         manualRouteSelectionGeneration += 1
         nearbySelectedRouteId = null
         selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
+        savedRouteUsageSession.selectSavedRoute(route.id)
         renderRouteShortcuts()
         clearResults()
     }
@@ -1210,9 +1264,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectSavedRouteAfterCreate(savedRouteId: Long, clearExistingResults: Boolean = true) {
-        routeConfigs = routeConfigRepository.getAll()
+        routeConfigs = loadRankedRouteConfigs()
         nearbySelectedRouteId = null
         selectedRoute = routeConfigs.firstOrNull { it.id == savedRouteId } ?: selectedRoute
+        selectedRoute?.let { savedRouteUsageSession.selectSavedRoute(it.id) }
         renderRouteShortcuts()
         renderHomeShell()
         if (clearExistingResults) {
@@ -1468,6 +1523,8 @@ class MainActivity : AppCompatActivity() {
         private const val CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L
         private const val FIRST_RUN_INTRO_DURATION_MS = 180L
         private const val FIRST_RUN_INTRO_STAGGER_MS = 45L
+        private const val STATE_SELECTED_ROUTE_ID = "selected_route_id"
+        private const val STATE_RECORDED_USAGE_ROUTE_ID = "recorded_usage_route_id"
 
         private val RESULT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {

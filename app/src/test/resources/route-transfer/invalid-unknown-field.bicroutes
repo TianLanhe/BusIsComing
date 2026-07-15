@@ -1,0 +1,13 @@
+{
+  "format": "com.golink.busiscoming.routes",
+  "version": 1,
+  "exportedAt": "2026-07-16T10:30:00Z",
+  "routes": [
+    {
+      "name": "上班",
+      "origin": { "name": "柴灣站", "latitude": 22.2642, "longitude": 114.2371 },
+      "destination": { "name": "中環碼頭", "latitude": 22.2878, "longitude": 114.1582 },
+      "usageCount": 99
+    }
+  ]
+}

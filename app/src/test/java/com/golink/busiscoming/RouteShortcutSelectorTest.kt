@@ -1,5 +1,7 @@
 package com.golink.busiscoming
 
+import com.golink.busiscoming.data.location.CurrentLocationSnapshot
+import com.golink.busiscoming.data.location.SavedRouteLocationSorter
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfig
 import com.golink.busiscoming.ui.main.RouteShortcutSelector
@@ -38,6 +40,21 @@ class RouteShortcutSelectorTest {
     @Test
     fun returnsAllRoutesWhenSavedRouteCountIsTwoOrLess() {
         assertEquals(listOf("A", "B"), RouteShortcutSelector.visibleRoutes(routes.take(2), routes[1]).map { it.name })
+    }
+
+    @Test
+    fun usesLocationRankedListAsShortcutBaseline() {
+        val ranked = SavedRouteLocationSorter.sort(
+            routes = routes,
+            location = CurrentLocationSnapshot(
+                latitude = routes[4].origin.latitude,
+                longitude = routes[4].origin.longitude,
+                accuracyMeters = 30f,
+                elapsedRealtimeMillis = 1_000L
+            )
+        )
+
+        assertEquals(listOf("E", "D", "C"), RouteShortcutSelector.visibleRoutes(ranked, null).map { it.name })
     }
 
     private fun route(id: Long, name: String): RouteConfig {
