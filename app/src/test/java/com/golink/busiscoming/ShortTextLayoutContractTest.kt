@@ -59,7 +59,7 @@ class ShortTextLayoutContractTest {
         assertStyleDefinesStableShortText("StableShortText.Title")
 
         val expectedStylesByLayout = mapOf(
-            "activity_main.xml" to listOf(
+            "fragment_frequent_routes.xml" to listOf(
                 "@style/StableShortText.Button",
                 "@style/StableShortText.Label",
                 "@style/StableShortText.Title"
