@@ -15,6 +15,7 @@
         android:orientation="horizontal">
 
         <TextView
+            style="@style/StableShortText.Title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -25,6 +26,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/addRouteButton"
+            style="@style/StableShortText.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="新增路線" />
@@ -51,6 +53,7 @@
         android:visibility="gone">
 
         <TextView
+            style="@style/StableShortText.Title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="還沒有儲存路線"
@@ -69,6 +72,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/emptyManageAddRouteButton"
+            style="@style/StableShortText.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"

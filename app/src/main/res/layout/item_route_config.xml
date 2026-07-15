@@ -43,7 +43,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/editRouteButton"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"
@@ -51,7 +51,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/cloneRouteButton"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"
@@ -59,7 +59,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/deleteRouteButton"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="40dp"

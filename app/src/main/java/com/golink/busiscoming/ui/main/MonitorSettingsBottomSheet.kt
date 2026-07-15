@@ -14,6 +14,7 @@ import com.golink.busiscoming.data.model.WalkingScenarioModifier
 import com.golink.busiscoming.data.model.WalkingSpeedPreset
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
 import com.golink.busiscoming.data.model.WalkingTimeEstimate
+import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -80,6 +81,7 @@ class MonitorSettingsBottomSheet(
     private fun title(text: String): TextView {
         return TextView(context).apply {
             this.text = text
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD
@@ -126,7 +128,7 @@ class MonitorSettingsBottomSheet(
 
             addView(stepButton("−") { adjustManualMinutes(-1) })
             walkingMinutesText = TextView(context).apply {
-                gravity = Gravity.CENTER
+                applyStableShortTextLayout(Gravity.CENTER)
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
                 textSize = 24f
                 typeface = Typeface.DEFAULT_BOLD
@@ -193,6 +195,7 @@ class MonitorSettingsBottomSheet(
         val root = sectionContainer(topMargin = 12)
         voiceSwitch = SwitchMaterial(context).apply {
             text = "語音播報"
+            applyStableShortTextLayout(Gravity.CENTER_VERTICAL)
             isChecked = true
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 15f
@@ -208,6 +211,7 @@ class MonitorSettingsBottomSheet(
     private fun startButton(): MaterialButton {
         return MaterialButton(context).apply {
             text = "開始監控"
+            applyStableShortTextLayout(Gravity.CENTER)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -237,6 +241,7 @@ class MonitorSettingsBottomSheet(
     private fun sectionLabel(text: String): TextView {
         return TextView(context).apply {
             this.text = text
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
@@ -246,6 +251,7 @@ class MonitorSettingsBottomSheet(
     private fun stepButton(text: String, onClick: () -> Unit): MaterialButton {
         return MaterialButton(context).apply {
             this.text = text
+            applyStableShortTextLayout(Gravity.CENTER)
             minWidth = dp(44)
             minHeight = dp(40)
             setOnClickListener { onClick() }
@@ -264,6 +270,7 @@ class MonitorSettingsBottomSheet(
     private fun chip(label: String, checked: Boolean = false): Chip {
         return Chip(context).apply {
             text = label
+            applyStableShortTextLayout(Gravity.CENTER)
             isCheckable = true
             isChecked = checked
         }

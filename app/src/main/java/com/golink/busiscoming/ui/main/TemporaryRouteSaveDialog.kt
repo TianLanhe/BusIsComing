@@ -2,6 +2,7 @@ package com.golink.busiscoming.ui.main
 
 import android.content.Context
 import android.graphics.Typeface
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -12,6 +13,7 @@ import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfigValidator
 import com.golink.busiscoming.data.repository.RouteConfigRepository
+import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 
@@ -46,6 +48,7 @@ object TemporaryRouteSaveDialog {
             setPadding(dp(context, 4), 0, dp(context, 4), 0)
             addView(TextView(context).apply {
                 text = "路線預覽"
+                applyStableShortTextLayout(Gravity.START)
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
                 textSize = 13f
                 typeface = Typeface.DEFAULT_BOLD
@@ -71,7 +74,11 @@ object TemporaryRouteSaveDialog {
             .create()
             .apply {
                 setOnShowListener {
-                    getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                    getButton(android.content.DialogInterface.BUTTON_NEGATIVE)
+                        .applyStableShortTextLayout(Gravity.CENTER)
+                    val positiveButton = getButton(android.content.DialogInterface.BUTTON_POSITIVE)
+                        .applyStableShortTextLayout(Gravity.CENTER)
+                    positiveButton.setOnClickListener {
                         val name = nameInput.text?.toString()?.trim().orEmpty()
                         val validation = RouteConfigValidator.validate(name, origin, destination)
                         nameLayout.error = validation.nameError
