@@ -60,6 +60,7 @@ import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.service.BusMonitorSchedulingCapability
 import com.golink.busiscoming.service.BusMonitorSessionStore
 import com.golink.busiscoming.data.model.BusMonitorSessionPolicy
+import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
 import com.golink.busiscoming.ui.edit.RouteEditActivity
 import com.golink.busiscoming.ui.manage.RouteManageActivity
@@ -1078,6 +1079,7 @@ class MainActivity : AppCompatActivity() {
                     if (isSelected && nearbySelectedRouteId == route.id) {
                         addView(TextView(context).apply {
                             text = "附近"
+                            applyStableShortTextLayout(Gravity.CENTER)
                             setTextColor(ContextCompat.getColor(context, R.color.bus_chip_selected))
                             textSize = 11f
                             typeface = Typeface.DEFAULT_BOLD
@@ -1119,6 +1121,7 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(TextView(this).apply {
             text = "常用路線"
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(this@MainActivity, R.color.bus_text_primary))
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD
@@ -1167,7 +1170,7 @@ class MainActivity : AppCompatActivity() {
     private fun createTemporaryQueryRow(onClick: () -> Unit): View {
         return TextView(this).apply {
             text = "查詢臨時起點和終點"
-            gravity = Gravity.CENTER_VERTICAL
+            applyStableShortTextLayout(Gravity.CENTER_VERTICAL)
             minHeight = dp(52)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 15f

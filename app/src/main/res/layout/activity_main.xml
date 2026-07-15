@@ -17,6 +17,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/transitCodeButton"
+            style="@style/StableShortText.Button"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
             android:minHeight="44dp"
@@ -67,6 +68,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/firstRunTransitCodeButton"
+            style="@style/StableShortText.Button.Outlined"
             android:layout_width="wrap_content"
             android:layout_height="44dp"
             android:elevation="0dp"
@@ -123,6 +125,7 @@
 
         <TextView
             android:id="@+id/firstRunHeadlineText"
+            style="@style/StableShortText.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="start"
@@ -135,6 +138,7 @@
 
         <TextView
             android:id="@+id/firstRunSampleLabelText"
+            style="@style/StableShortText.Label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
@@ -161,13 +165,14 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/emptyAddRouteButton"
+                style="@style/StableShortText.Button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/first_run_add_route" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/emptyTemporaryQueryButton"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                style="@style/StableShortText.Button.Outlined"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
@@ -191,6 +196,7 @@
 
             <TextView
                 android:id="@+id/frequentRoutesTitle"
+                style="@style/StableShortText.Title"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -201,7 +207,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/routePickerButton"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
                 android:minHeight="40dp"
@@ -213,7 +219,7 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/routeManageButton"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
                 android:layout_marginStart="16dp"
@@ -243,6 +249,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/queryButton"
+            style="@style/StableShortText.Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -276,6 +283,7 @@
                 android:paddingHorizontal="12dp">
 
                 <TextView
+                    style="@style/StableShortText.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="24dp"
                     android:background="@drawable/sort_chip_background"
@@ -299,7 +307,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/temporaryQueryEditButton"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    style="@style/StableShortText.Button.Text"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:minHeight="36dp"
@@ -311,7 +319,7 @@
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/temporaryQuerySaveButton"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    style="@style/StableShortText.Button.Text"
                     android:layout_width="wrap_content"
                     android:layout_height="36dp"
                     android:minHeight="36dp"
@@ -347,7 +355,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortRouteButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
                         android:layout_height="40dp"
                         android:minWidth="0dp"
@@ -358,7 +366,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortPriceButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
                         android:layout_height="40dp"
                         android:layout_marginStart="8dp"
@@ -370,7 +378,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortDurationButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
                         android:layout_height="40dp"
                         android:layout_marginStart="8dp"
@@ -382,7 +390,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortArrivalButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
                         android:layout_height="40dp"
                         android:layout_marginStart="8dp"
@@ -394,7 +402,7 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortWalkingDistanceButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
                         android:layout_height="40dp"
                         android:layout_marginStart="8dp"
@@ -470,6 +478,7 @@
 
                     <TextView
                         android:id="@+id/resultStatusTitle"
+                        style="@style/StableShortText.Title"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:textColor="@color/bus_text_primary"

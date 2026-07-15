@@ -2,6 +2,7 @@ package com.golink.busiscoming.ui.main
 
 import android.content.Context
 import android.os.Build
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -25,6 +26,7 @@ import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
+import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
@@ -75,6 +77,7 @@ class TemporaryRouteBottomSheet(
 
         content.addView(TextView(context).apply {
             text = "臨時查詢"
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 20f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -123,7 +126,7 @@ class TemporaryRouteBottomSheet(
             layoutParams = FrameLayout.LayoutParams(
                 dp(48),
                 dp(48),
-                android.view.Gravity.END or android.view.Gravity.TOP
+                Gravity.END or Gravity.TOP
             ).apply { topMargin = dp(52) }
             background = ContextCompat.getDrawable(context, R.drawable.sort_chip_background)
             contentDescription = "交換起點和終點"
@@ -192,6 +195,7 @@ class TemporaryRouteBottomSheet(
 
         content.addView(MaterialButton(context).apply {
             text = "使用此路線查詢"
+            applyStableShortTextLayout(Gravity.CENTER)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -200,6 +204,7 @@ class TemporaryRouteBottomSheet(
         })
         content.addView(MaterialButton(context).apply {
             text = "保存為常用"
+            applyStableShortTextLayout(Gravity.CENTER)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -425,7 +430,7 @@ class TemporaryRouteBottomSheet(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(6) }
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
             visibility = View.GONE
             addView(ProgressBar(context).apply {
@@ -438,6 +443,7 @@ class TemporaryRouteBottomSheet(
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { marginStart = dp(8) }
                 text = "正在匹配地點..."
+                applyStableShortTextLayout(Gravity.START)
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
                 textSize = 13f
             })
@@ -447,6 +453,7 @@ class TemporaryRouteBottomSheet(
     private fun attributionText(): TextView {
         return TextView(context).apply {
             text = context.getString(R.string.google_maps_address_attribution)
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 12f
             visibility = View.GONE

@@ -1,50 +1,42 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.BusIsComing" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
-        <item name="colorOnPrimary">@color/white</item>
-        <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="colorSecondaryVariant">@color/teal_700</item>
-        <item name="colorOnSecondary">@color/black</item>
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
-    </style>
-
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
     <style name="StableShortText">
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">start</item>
     </style>
 
     <style name="StableShortText.Title">
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">start</item>
     </style>
 
     <style name="StableShortText.Label">
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">center_vertical</item>
     </style>
 
     <style name="StableShortText.Button" parent="Widget.MaterialComponents.Button">
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">center</item>
     </style>
 
     <style name="StableShortText.Button.Text" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">center</item>
     </style>
 
     <style name="StableShortText.Button.Outlined" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">center</item>
@@ -55,6 +47,7 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_marginTop">20dp</item>
         <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">start</item>
@@ -63,20 +56,11 @@
         <item name="android:textStyle">bold</item>
     </style>
 
-    <style name="SettingsRow">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">52dp</item>
-        <item name="android:background">@drawable/result_card_background</item>
-        <item name="android:gravity">center_vertical</item>
-        <item name="android:orientation">horizontal</item>
-        <item name="android:paddingLeft">16dp</item>
-        <item name="android:paddingRight">16dp</item>
-    </style>
-
     <style name="SettingsRowText">
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:layout_weight">1</item>
+        <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>
         <item name="android:gravity">center_vertical</item>

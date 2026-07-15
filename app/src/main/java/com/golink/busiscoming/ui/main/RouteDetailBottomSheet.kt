@@ -25,6 +25,7 @@ import com.golink.busiscoming.data.model.RouteDetailExpansionState
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
 import com.golink.busiscoming.data.repository.RouteDetailRepository
+import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import java.util.Locale
@@ -262,6 +263,7 @@ class RouteDetailBottomSheet(
         if (label != null) {
             container.addView(TextView(activity).apply {
                 text = label
+                applyStableShortTextLayout(Gravity.START)
                 textSize = 13f
                 setTextColor(ContextCompat.getColor(activity, R.color.bus_text_secondary))
                 layoutParams = LinearLayout.LayoutParams(
@@ -278,6 +280,7 @@ class RouteDetailBottomSheet(
     private fun viaToggle(count: Int, expanded: Boolean): TextView {
         return TextView(activity).apply {
             text = viaToggleText(count, expanded)
+            applyStableShortTextLayout(Gravity.START)
             textSize = 14f
             setTextColor(ContextCompat.getColor(activity, R.color.bus_chip_selected))
             setPadding(0, dp(8), 0, dp(10))
@@ -372,6 +375,7 @@ class RouteDetailBottomSheet(
             })
             closeButton = MaterialButton(activity).apply {
                 text = "×"
+                applyStableShortTextLayout(Gravity.CENTER)
                 textSize = 20f
                 minWidth = 0
                 minHeight = 0
@@ -398,6 +402,7 @@ class RouteDetailBottomSheet(
             })
             loadingRow.addView(TextView(activity).apply {
                 text = "正在載入路線詳情"
+                applyStableShortTextLayout(Gravity.START)
                 textSize = 15f
                 setTextColor(ContextCompat.getColor(activity, R.color.bus_text_secondary))
                 layoutParams = LinearLayout.LayoutParams(
@@ -415,12 +420,14 @@ class RouteDetailBottomSheet(
                 visibility = View.GONE
             }
             errorMessage = TextView(activity).apply {
+                applyStableShortTextLayout(Gravity.START)
                 textSize = 16f
                 typeface = Typeface.DEFAULT_BOLD
                 setTextColor(ContextCompat.getColor(activity, R.color.bus_text_primary))
             }
             retryButton = MaterialButton(activity).apply {
                 text = "重試"
+                applyStableShortTextLayout(Gravity.CENTER)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT

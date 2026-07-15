@@ -47,25 +47,6 @@ TBD - created by archiving change strengthen-monitor-scheduling-and-auto-stop. U
 - **THEN** 系統 SHALL 依 wake lock timeout 自動釋放 wake lock
 - **AND** timeout SHALL NOT 晚於本次監控最大 session 時長或已知停止目標後的保護窗口
 
-### Requirement: 提供電池最佳化豁免入口
-系統 SHALL 在高優先級監控啟動流程中提供電池最佳化豁免入口，讓用戶可以提高短時候車監控的後台執行優先級。
-
-#### Scenario: App 尚未豁免電池最佳化
-- **WHEN** 用戶啟動通知欄監控
-- **AND** 系統尚未對 App 豁免電池最佳化
-- **THEN** 系統 SHALL 提供前往電池最佳化豁免設定的入口
-- **AND** 系統 SHALL 說明該設定用於提高候車期間通知更新與語音播報可靠性
-
-#### Scenario: 用戶拒絕電池最佳化豁免
-- **WHEN** 用戶未授予電池最佳化豁免
-- **THEN** 系統 SHALL 仍允許啟動監控
-- **AND** 系統 SHALL 保留前台服務、ongoing notification 和可用的 alarm fallback
-
-#### Scenario: App 已豁免電池最佳化
-- **WHEN** 用戶啟動通知欄監控
-- **AND** 系統已對 App 豁免電池最佳化
-- **THEN** 系統 SHALL NOT 重複要求用戶處理電池最佳化豁免
-
 ### Requirement: 前台服務 timeout 安全清理
 系統 SHALL 在 Android 15+ 前台服務 timeout 或系統要求停止時安全結束監控並釋放資源。
 
@@ -80,4 +61,25 @@ TBD - created by archiving change strengthen-monitor-scheduling-and-auto-stop. U
 - **WHEN** 用戶透過系統能力強制停止 App 或停止前台服務
 - **THEN** 系統 SHALL NOT 嘗試繞過該停止行為自動復活監控
 - **AND** 下次 App 啟動或服務恢復時系統 SHALL 清理已中斷的監控 session
+
+### Requirement: 不直接請求電池最佳化豁免
+系統 SHALL NOT 在通知欄監控啟動流程中直接請求忽略電池最佳化，並 SHALL 在未取得電池最佳化豁免時仍允許用戶啟動監控。
+
+#### Scenario: 啟動監控不跳轉電池豁免頁
+- **WHEN** 用戶點擊 `開始監控`
+- **AND** 通知權限已授權
+- **AND** App 尚未被系統豁免電池最佳化
+- **THEN** 系統 SHALL NOT 開啟 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 或等效的直接豁免請求頁
+- **AND** 系統 SHALL 繼續依既有監控流程啟動前台服務或處理 exact alarm special access
+
+#### Scenario: 不宣告電池豁免權限
+- **WHEN** App 生成可上架的 Android manifest
+- **THEN** manifest SHALL NOT 宣告 `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+- **AND** manifest SHALL 保留通知欄監控所需的前台服務、通知、wake lock 與 exact alarm 相關宣告
+
+#### Scenario: 電池限制下保持可理解降級
+- **WHEN** Android 省電、Doze 或廠商省電策略導致監控刷新延遲
+- **THEN** 系統 SHALL 保留最後一次成功資料或資料延遲狀態
+- **AND** 系統 SHALL 在下一個可用調度窗口繼續嘗試刷新，除非停止條件已達成
+- **AND** 系統 SHALL NOT 因未取得電池最佳化豁免而中止本次監控
 

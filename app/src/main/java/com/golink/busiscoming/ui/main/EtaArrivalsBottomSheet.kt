@@ -12,6 +12,7 @@ import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -72,6 +73,7 @@ class EtaArrivalsBottomSheet(
         root.removeAllViews()
         root.addView(TextView(context).apply {
             text = EtaArrivalsSheetFormatter.title(route)
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD
@@ -89,6 +91,7 @@ class EtaArrivalsBottomSheet(
         EtaArrivalsSheetFormatter.updateTimeText(arrivals.firstOrNull())?.let { text ->
             root.addView(TextView(context).apply {
                 this.text = text
+                applyStableShortTextLayout(Gravity.START)
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
                 textSize = 12f
                 layoutParams = LinearLayout.LayoutParams(
@@ -116,6 +119,7 @@ class EtaArrivalsBottomSheet(
 
         row.addView(TextView(context).apply {
             text = "第${arrival.sequence}班"
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 14f
             layoutParams = LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -123,6 +127,7 @@ class EtaArrivalsBottomSheet(
 
         row.addView(TextView(context).apply {
             text = EtaArrivalsSheetFormatter.minuteText(arrival.minutes)
+            applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_wait_accent))
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
@@ -138,9 +143,9 @@ class EtaArrivalsBottomSheet(
             )
             addView(TextView(context).apply {
                 text = arrival.arrivalTimeText
+                applyStableShortTextLayout(Gravity.END)
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
                 textSize = 14f
-                gravity = Gravity.END
             })
             val remark = arrival.remark
             if (!remark.isNullOrBlank()) {

@@ -17,7 +17,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/backRouteButton"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
+            style="@style/StableShortText.Button.Text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
@@ -25,6 +25,7 @@
 
         <TextView
             android:id="@+id/routeEditTitle"
+            style="@style/StableShortText.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="路線資訊"
@@ -108,6 +109,7 @@
 
                 <TextView
                     android:id="@+id/originAttributionText"
+                    style="@style/StableShortText.Label"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
@@ -132,6 +134,7 @@
                         android:indeterminate="true" />
 
                     <TextView
+                        style="@style/StableShortText.Label"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -186,6 +189,7 @@
                         android:indeterminate="true" />
 
                     <TextView
+                        style="@style/StableShortText.Label"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
@@ -220,6 +224,7 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveRouteButton"
+            style="@style/StableShortText.Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
