@@ -1,16 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/searchRoot"
+<androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/searchSwipeRefresh"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/app_page_background"
-    android:fillViewport="true">
+    android:background="@drawable/app_page_background">
 
-    <LinearLayout
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/searchRoot"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
 
         <TextView
             style="@style/StableShortText.Title"
@@ -41,6 +46,7 @@
                 android:id="@+id/searchOriginInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:minHeight="56dp"
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -90,6 +96,7 @@
                 android:id="@+id/searchDestinationInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:minHeight="56dp"
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -115,13 +122,50 @@
             android:layout_marginTop="20dp"
             android:text="搜尋路線" />
 
-        <TextView
-            android:id="@+id/searchResultSummary"
+        <LinearLayout
+            android:id="@+id/searchResultSummaryContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/searchResultSummary"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:maxLines="2"
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/searchEditButton"
+                style="@style/StableShortText.Button.Text"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="48dp"
+                android:text="編輯" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/searchSaveButton"
+                style="@style/StableShortText.Button.Text"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:minWidth="48dp"
+                android:text="存為常用" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/searchResultUpdatedAt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:textColor="@color/bus_text_secondary"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:visibility="gone" />
 
         <HorizontalScrollView
@@ -178,15 +222,6 @@
             </LinearLayout>
         </HorizontalScrollView>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/searchSaveButton"
-            style="@style/StableShortText.Button.Outlined"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="存為常用"
-            android:visibility="gone" />
-
         <ProgressBar
             android:id="@+id/searchResultLoading"
             android:layout_width="wrap_content"
@@ -204,17 +239,15 @@
             android:textSize="14sp"
             android:visibility="gone" />
 
-        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-            android:id="@+id/searchSwipeRefresh"
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/searchResultList"
             android:layout_width="match_parent"
-            android:layout_height="480dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:visibility="gone">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/searchResultList"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent" />
-        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-    </LinearLayout>
-</androidx.core.widget.NestedScrollView>
+            android:clipToPadding="false"
+            android:nestedScrollingEnabled="false"
+            android:paddingBottom="8dp"
+            android:visibility="gone" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

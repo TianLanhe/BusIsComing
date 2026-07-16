@@ -113,7 +113,7 @@ class LocationFeatureContractTest {
         assertTrue(mainActivityKt.contains("CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L"))
         assertTrue(searchFragmentKt.contains("requestCurrentOrigin(isAuto = true)"))
         assertTrue(searchFragmentKt.contains("RouteQueryGeneration"))
-        assertTrue(searchFragmentKt.contains("queryGeneration.isCurrent(generation)"))
+        assertTrue(searchFragmentKt.contains("interactionGeneration.isCurrent(generation)"))
     }
 
     @Test

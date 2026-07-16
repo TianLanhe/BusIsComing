@@ -14,6 +14,59 @@ class RouteQueryState {
         private set
     var sortDirection: SortDirection = SortDirection.ASC
         private set
+    var updatedAtMillis: Long? = null
+        private set
+    var errorMessage: String? = null
+        private set
+    var isQueryInProgress: Boolean = false
+        private set
+    var isRefreshing: Boolean = false
+        private set
+
+    fun begin(refresh: Boolean) {
+        isQueryInProgress = true
+        isRefreshing = refresh
+        errorMessage = null
+        if (!refresh) {
+            results = emptyList()
+            updatedAtMillis = null
+        }
+    }
+
+    fun complete(
+        routes: List<BusRouteOption>,
+        preserveSort: Boolean,
+        updatedAtMillis: Long
+    ) {
+        replaceInitial(routes, preserveSort)
+        this.updatedAtMillis = updatedAtMillis
+        errorMessage = null
+        isQueryInProgress = false
+        isRefreshing = false
+    }
+
+    fun fail(message: String, preserveResults: Boolean) {
+        if (!preserveResults) {
+            results = emptyList()
+            sortField = null
+            sortDirection = SortDirection.ASC
+            updatedAtMillis = null
+        }
+        errorMessage = message
+        isQueryInProgress = false
+        isRefreshing = false
+    }
+
+    fun cancel() {
+        isQueryInProgress = false
+        isRefreshing = false
+    }
+
+    fun restoreSort(field: SortField?, direction: SortDirection) {
+        sortField = field
+        sortDirection = direction
+        field?.let { results = BusRouteSorter.sort(results, it, direction) }
+    }
 
     fun replaceInitial(routes: List<BusRouteOption>, preserveSort: Boolean) {
         val nextSort = RouteResultsRefreshPolicy.resolveSortField(preserveSort, sortField)
@@ -50,6 +103,10 @@ class RouteQueryState {
         results = emptyList()
         sortField = null
         sortDirection = SortDirection.ASC
+        updatedAtMillis = null
+        errorMessage = null
+        isQueryInProgress = false
+        isRefreshing = false
     }
 
     private fun updateInternal(routeId: String, transform: (BusRouteOption) -> BusRouteOption): Boolean {

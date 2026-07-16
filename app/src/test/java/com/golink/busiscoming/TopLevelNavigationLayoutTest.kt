@@ -17,4 +17,9 @@ class TopLevelNavigationLayoutTest {
         assertTrue(mainActivity.contains("TopLevelDestination.SEARCH"))
         assertTrue(mainActivity.contains("TopLevelDestination.SETTINGS"))
     }
+
+    @Test
+    fun `bottom navigation measures system inset without compressing icon labels`() {
+        assertTrue(activityLayout.contains("android:layout_height=\"wrap_content\""))
+    }
 }

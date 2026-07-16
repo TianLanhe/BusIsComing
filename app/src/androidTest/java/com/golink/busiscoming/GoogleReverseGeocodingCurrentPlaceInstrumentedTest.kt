@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,6 +31,12 @@ class GoogleReverseGeocodingCurrentPlaceInstrumentedTest {
 
     @Test
     fun newRouteCurrentPlaceUsesRealGoogleAddressAndShowsAttribution() {
+        assumeTrue(
+            "真實 Google API 驗收只在 runGoogleApiAcceptance=true 時執行",
+            InstrumentationRegistry.getArguments()
+                .getString(RUN_GOOGLE_API_ACCEPTANCE_ARGUMENT)
+                .toBoolean()
+        )
         assertTrue(
             "缺少 GOOGLE_GEOCODING_API_KEY，無法執行真實 Google API 驗收",
             BuildConfig.GOOGLE_GEOCODING_API_KEY.isNotBlank()
@@ -114,6 +121,8 @@ class GoogleReverseGeocodingCurrentPlaceInstrumentedTest {
     }
 
     private companion object {
+        const val RUN_GOOGLE_API_ACCEPTANCE_ARGUMENT = "runGoogleApiAcceptance"
+
         val PLUS_CODE_PATTERN = Regex(
             pattern = """^[23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,}.*$""",
             option = RegexOption.IGNORE_CASE

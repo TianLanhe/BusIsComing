@@ -50,9 +50,7 @@ import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
-import com.golink.busiscoming.data.repository.BusRouteQueryCallback
 import com.golink.busiscoming.data.repository.BusRouteRepository
-import com.golink.busiscoming.data.repository.BusRouteSorter
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
@@ -67,7 +65,6 @@ import com.golink.busiscoming.ui.edit.RouteEditActivity
 import com.golink.busiscoming.ui.manage.RouteManageActivity
 import com.golink.busiscoming.ui.navigation.TopLevelDestination
 import com.golink.busiscoming.ui.navigation.TopLevelDestinationState
-import com.golink.busiscoming.ui.navigation.RouteQueryGeneration
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
@@ -84,9 +81,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
     private lateinit var placeNameResolver: PlaceNameResolver
     private val busRouteRepository: BusRouteRepository = CitybusBusRouteRepository()
-    private val routeDetailRepository: RouteDetailRepository = CitybusRouteDetailRepository()
+    private val routeDetailRepository: RouteDetailRepository = routeDetailRepositoryFactory()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val routeQueryCoordinator = RouteQueryCoordinator(
+        repository = busRouteRepository,
+        executor = queryExecutor,
+        postToOwner = { runnable -> mainHandler.post(runnable) },
+        isOwnerActive = { !isFinishing && !isDestroyed }
+    )
 
     private lateinit var queryButton: MaterialButton
     private lateinit var normalTopActions: LinearLayout
@@ -131,12 +134,16 @@ class MainActivity : AppCompatActivity() {
 
     private var routeConfigs: List<RouteConfig> = emptyList()
     private var selectedRoute: RouteConfig? = null
-    private var currentResults: List<BusRouteOption> = emptyList()
-    private var sortField: SortField? = null
-    private var sortDirection: SortDirection = SortDirection.ASC
-    private val routeQueryGeneration = RouteQueryGeneration()
+    private val routeQueryState = RouteQueryState()
+    private val currentResults: List<BusRouteOption>
+        get() = routeQueryState.results
+    private val sortField: SortField?
+        get() = routeQueryState.sortField
+    private val sortDirection: SortDirection
+        get() = routeQueryState.sortDirection
     private var currentQueryContext: QueryContext? = null
-    private var isQueryInProgress: Boolean = false
+    private val isQueryInProgress: Boolean
+        get() = routeQueryState.isQueryInProgress
     private var preserveSortOnNextResults: Boolean = false
     private var pendingMonitorStart: PendingMonitorStart? = null
     private val refreshFeedbackState = RouteRefreshFeedbackState()
@@ -559,79 +566,69 @@ class MainActivity : AppCompatActivity() {
             renderRouteShortcuts()
         }
 
-        val queryId = routeQueryGeneration.begin()
         currentQueryContext = queryContext
         preserveSortOnNextResults = preserveSort
+        routeQueryState.begin(refresh = isRefresh)
         renderHomeShell()
-        busRouteRepository.cancelProgressiveQueries()
         if (isRefresh) {
-            showRefreshLoadingState(queryId)
+            resultSwipeRefresh.isRefreshing = false
         } else {
             showLoadingState()
         }
-        queryExecutor.execute {
-            busRouteRepository.searchRoutesProgressively(
-                origin,
-                destination,
-                object : BusRouteQueryCallback {
-                    override fun onInitialRoutes(routes: List<BusRouteOption>) {
-                        mainHandler.post {
-                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
-                            if (isRefresh) {
-                                handleRefreshSuccess(queryId, routes)
-                            } else {
-                                finishQueryLoading()
-                                showInitialRoutes(routes)
-                            }
-                        }
-                    }
-
-                    override fun onRouteWaitTimeUpdated(routeId: String, waitTimeState: WaitTimeState) {
-                        mainHandler.post {
-                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
-                            updateRouteWaitTime(routeId, waitTimeState)
-                        }
-                    }
-
-                    override fun onRouteStopPreviewUpdated(routeId: String, preview: RouteCardStopPreview) {
-                        mainHandler.post {
-                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
-                            updateRouteStopPreview(routeId, preview)
-                        }
-                    }
-
-                    override fun onFailure(error: Throwable) {
-                        Log.e(LOG_TAG, "Bus route query failed", error)
-                        mainHandler.post {
-                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
-                            if (isRefresh) {
-                                handleRefreshFailure(queryId)
-                            } else {
-                                finishQueryLoading()
-                                currentResults = emptyList()
-                                sortField = null
-                                sortDirection = SortDirection.ASC
-                                updateSortControls()
-                                displayFailure()
-                            }
-                        }
+        val queryId = routeQueryCoordinator.query(
+            origin,
+            destination,
+            object : RouteQueryCoordinator.Callback {
+                override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
+                    if (isRefresh) {
+                        handleRefreshSuccess(queryId, routes)
+                    } else {
+                        showInitialRoutes(routes)
+                        finishQueryLoading()
                     }
                 }
-            )
+
+                override fun onRouteWaitTimeUpdated(
+                    queryId: Int,
+                    routeId: String,
+                    waitTimeState: WaitTimeState
+                ) {
+                    updateRouteWaitTime(routeId, waitTimeState)
+                }
+
+                override fun onRouteStopPreviewUpdated(
+                    queryId: Int,
+                    routeId: String,
+                    preview: RouteCardStopPreview
+                ) {
+                    updateRouteStopPreview(routeId, preview)
+                }
+
+                override fun onFailure(queryId: Int, error: Throwable) {
+                    Log.e(LOG_TAG, "Bus route query failed", error)
+                    if (isRefresh) {
+                        handleRefreshFailure(queryId)
+                    } else {
+                        routeQueryState.fail("路線查詢失敗", preserveResults = false)
+                        updateSortControls()
+                        displayFailure()
+                        finishQueryLoading()
+                    }
+                }
+            }
+        )
+        if (isRefresh) {
+            showRefreshLoadingState(queryId)
         }
     }
 
     private fun showInitialRoutes(routes: List<BusRouteOption>) {
-        val nextSortField = RouteResultsRefreshPolicy.resolveSortField(
+        routeQueryState.complete(
+            routes = routes,
             preserveSort = preserveSortOnNextResults,
-            currentSortField = sortField
+            updatedAtMillis = System.currentTimeMillis()
         )
-        if (RouteResultsRefreshPolicy.shouldResetSortDirection(preserveSortOnNextResults, sortField)) {
-            sortDirection = SortDirection.ASC
-        }
-        sortField = nextSortField
         preserveSortOnNextResults = false
-        currentResults = BusRouteSorter.sort(routes, nextSortField, sortDirection)
         updateSortControls()
         updateResultSummary(routes)
         displayResults(currentResults)
@@ -669,6 +666,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleRefreshFailure(queryId: Int) {
         if (!refreshFeedbackState.fail(queryId)) return
+        routeQueryState.fail("刷新失敗，請稍後重試", preserveResults = true)
         refreshFinishRunnable?.let(mainHandler::removeCallbacks)
         refreshFinishRunnable = null
         renderRefreshFeedback()
@@ -678,48 +676,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateRouteWaitTime(routeId: String, waitTimeState: WaitTimeState) {
-        var changed = false
-        currentResults = currentResults.map { route ->
-            if (route.resultId == routeId) {
-                changed = true
-                route.copy(waitTimeState = waitTimeState)
-            } else {
-                route
-            }
-        }
-        if (!changed) return
-
-        if (sortField == SortField.ARRIVAL) {
-            currentResults = BusRouteSorter.sort(currentResults, SortField.ARRIVAL, sortDirection)
-        }
+        if (!routeQueryState.updateWaitTime(routeId, waitTimeState)) return
         currentResults.firstOrNull { it.resultId == routeId }?.let { etaArrivalsBottomSheet.update(it) }
         displayResults(currentResults)
     }
 
     private fun updateRouteStopPreview(routeId: String, preview: RouteCardStopPreview) {
-        var changed = false
-        currentResults = currentResults.map { route ->
-            if (route.resultId == routeId) {
-                changed = true
-                route.copy(stopPreview = preview)
-            } else {
-                route
-            }
-        }
-        if (!changed) return
+        if (!routeQueryState.updateStopPreview(routeId, preview)) return
         displayResults(currentResults)
     }
 
     private fun sortBy(field: SortField) {
         if (currentResults.isEmpty()) return
 
-        sortDirection = if (sortField == field && sortDirection == SortDirection.ASC) {
-            SortDirection.DESC
-        } else {
-            SortDirection.ASC
-        }
-        sortField = field
-        currentResults = BusRouteSorter.sort(currentResults, field, sortDirection)
+        routeQueryState.toggleSort(field)
         updateSortControls()
         displayResults(currentResults)
     }
@@ -762,6 +732,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun showMonitorSettings(route: BusRouteOption, origin: Place?) {
+        monitorSettingsRequestObserver?.invoke(route, origin)
         if (route.firstLegEtaQuery == null || route.waitTimeState !is WaitTimeState.Available) {
             Toast.makeText(this, "此路線暫時無法監控", Toast.LENGTH_SHORT).show()
             return
@@ -1011,7 +982,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
         resultSummaryText.text = RouteResultCardFormatter.resultSummary(routes)
-        resultUpdatedAtText.text = "更新時間：${RESULT_TIME_FORMAT.get()!!.format(Date())}"
+        val updatedAt = routeQueryState.updatedAtMillis ?: System.currentTimeMillis()
+        resultUpdatedAtText.text = "更新時間：${RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))}"
         resultSummaryContainer.visibility = View.VISIBLE
     }
 
@@ -1024,10 +996,8 @@ class MainActivity : AppCompatActivity() {
     private fun clearResults() {
         invalidateActiveQuery()
         currentQueryContext = null
+        routeQueryState.clear()
         setQueryLoading(false)
-        currentResults = emptyList()
-        sortField = null
-        sortDirection = SortDirection.ASC
         preserveSortOnNextResults = false
         updateSortControls()
         busRouteAdapter.submitList(emptyList())
@@ -1040,8 +1010,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun invalidateActiveQuery() {
-        routeQueryGeneration.invalidate()
-        busRouteRepository.cancelProgressiveQueries()
+        routeQueryCoordinator.invalidate()
+        routeQueryState.cancel()
         cancelRefreshFeedback()
         if (::queryButton.isInitialized) {
             setQueryLoading(false)
@@ -1268,7 +1238,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLoadingState() {
         setQueryLoading(true)
-        currentResults = emptyList()
         busRouteAdapter.submitList(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
@@ -1305,7 +1274,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setQueryLoading(isLoading: Boolean) {
-        isQueryInProgress = isLoading
         queryButton.isEnabled = !isLoading
         queryButton.text = if (isLoading) "查詢中..." else "查詢"
         updateSwipeRefreshState()
@@ -1506,6 +1474,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        @Volatile
+        internal var routeDetailRepositoryFactory: () -> RouteDetailRepository =
+            { CitybusRouteDetailRepository() }
+
+        @Volatile
+        internal var monitorSettingsRequestObserver: ((BusRouteOption, Place?) -> Unit)? = null
+
+        internal fun resetTestDependencies() {
+            routeDetailRepositoryFactory = { CitybusRouteDetailRepository() }
+            monitorSettingsRequestObserver = null
+        }
+
         private const val REQUEST_POST_NOTIFICATIONS = 301
         private const val REQUEST_LOCATION_PERMISSION = 302
         private const val REFRESH_LIST_TOP_INSET_DP = 44

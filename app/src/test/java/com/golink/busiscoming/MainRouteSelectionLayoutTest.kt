@@ -10,6 +10,8 @@ class MainRouteSelectionLayoutTest {
     private val searchLayout = File("src/main/res/layout/fragment_search.xml").readText()
     private val mainActivity = File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val searchFragment = File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
+    private val routeQueryCoordinator =
+        File("src/main/java/com/golink/busiscoming/ui/main/RouteQueryCoordinator.kt").readText()
 
     @Test
     fun frequentRoutesKeepsSavedRouteQueryAndResultsSurface() {
@@ -40,6 +42,16 @@ class MainRouteSelectionLayoutTest {
         assertTrue(searchLayout.contains("@+id/searchSaveButton"))
         assertTrue(searchFragment.contains("PlaceInputController"))
         assertTrue(searchFragment.contains("TemporaryRouteSaveDialog.show"))
-        assertTrue(searchFragment.contains("searchRoutesProgressively"))
+        assertTrue(searchFragment.contains("RouteQueryCoordinator"))
+        assertTrue(routeQueryCoordinator.contains("searchRoutesProgressively"))
+    }
+
+    @Test
+    fun searchPlaceFieldsKeepAStableTouchAndTextHeight() {
+        val originInput = searchLayout.substringAfter("@+id/searchOriginInput").substringBefore("/>")
+        val destinationInput = searchLayout.substringAfter("@+id/searchDestinationInput").substringBefore("/>")
+
+        assertTrue(originInput.contains("android:minHeight=\"56dp\""))
+        assertTrue(destinationInput.contains("android:minHeight=\"56dp\""))
     }
 }
