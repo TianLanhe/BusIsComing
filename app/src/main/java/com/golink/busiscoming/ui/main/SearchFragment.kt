@@ -48,9 +48,13 @@ class SearchFragment : Fragment() {
     private val queryGeneration = RouteQueryGeneration()
     private var originController: PlaceInputController? = null
     private var destinationController: PlaceInputController? = null
-    private var currentResults: List<BusRouteOption> = emptyList()
-    private var sortField: SortField? = null
-    private var sortDirection = SortDirection.ASC
+    private val routeQueryState = RouteQueryState()
+    private val currentResults: List<BusRouteOption>
+        get() = routeQueryState.results
+    private val sortField: SortField?
+        get() = routeQueryState.sortField
+    private val sortDirection: SortDirection
+        get() = routeQueryState.sortDirection
     private var restoredOrigin: Place? = null
     private var restoredDestination: Place? = null
     private lateinit var resultAdapter: BusRouteAdapter
@@ -76,13 +80,6 @@ class SearchFragment : Fragment() {
         super.onCreate(savedInstanceState)
         restoredOrigin = savedInstanceState?.placeFor(STATE_ORIGIN)
         restoredDestination = savedInstanceState?.placeFor(STATE_DESTINATION)
-        sortField = savedInstanceState
-            ?.getString(STATE_SORT_FIELD)
-            ?.let { runCatching { SortField.valueOf(it) }.getOrNull() }
-        sortDirection = savedInstanceState
-            ?.getString(STATE_SORT_DIRECTION)
-            ?.let { runCatching { SortDirection.valueOf(it) }.getOrNull() }
-            ?: SortDirection.ASC
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -196,8 +193,6 @@ class SearchFragment : Fragment() {
         super.onSaveInstanceState(outState)
         originController?.selectedPlace?.writeTo(outState, STATE_ORIGIN)
         destinationController?.selectedPlace?.writeTo(outState, STATE_DESTINATION)
-        sortField?.let { outState.putString(STATE_SORT_FIELD, it.name) }
-        outState.putString(STATE_SORT_DIRECTION, sortDirection.name)
     }
 
     override fun onDestroy() {
@@ -244,12 +239,7 @@ class SearchFragment : Fragment() {
         if (!validation.isValid || origin == null || destination == null) return
 
         val generation = queryGeneration.begin()
-        currentResults = emptyList()
-        if (!preserveSort) {
-            sortField = null
-            sortDirection = SortDirection.ASC
-            updateSortControls()
-        }
+        if (!preserveSort) routeQueryState.clear()
         resultAdapter.submitList(emptyList())
         swipeRefresh.visibility = View.GONE
         resultLoading.visibility = View.VISIBLE
@@ -265,9 +255,7 @@ class SearchFragment : Fragment() {
                         if (!isViewActive() || !queryGeneration.isCurrent(generation)) return@post
                         resultLoading.visibility = View.GONE
                         swipeRefresh.isRefreshing = false
-                        currentResults = sortField?.let { field ->
-                            BusRouteSorter.sort(routes, field, sortDirection)
-                        } ?: routes
+                        routeQueryState.replaceInitial(routes, preserveSort)
                         resultAdapter.submitList(currentResults)
                         swipeRefresh.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
                         sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
@@ -289,7 +277,7 @@ class SearchFragment : Fragment() {
                         if (!isViewActive() || !queryGeneration.isCurrent(generation)) return@post
                         resultLoading.visibility = View.GONE
                         swipeRefresh.isRefreshing = false
-                        currentResults = emptyList()
+                        routeQueryState.clear()
                         resultAdapter.submitList(emptyList())
                         swipeRefresh.visibility = View.GONE
                         sortControls.visibility = View.GONE
@@ -303,12 +291,7 @@ class SearchFragment : Fragment() {
     private fun updateRoute(routeId: String, transform: (BusRouteOption) -> BusRouteOption) {
         mainHandler.post {
             if (!isViewActive()) return@post
-            currentResults = currentResults.map { route ->
-                if (route.resultId == routeId) transform(route) else route
-            }
-            if (sortField == SortField.ARRIVAL) {
-                currentResults = BusRouteSorter.sort(currentResults, SortField.ARRIVAL, sortDirection)
-            }
+            if (!routeQueryState.update(routeId, transform)) return@post
             resultAdapter.submitList(currentResults)
             currentResults.firstOrNull { it.resultId == routeId }?.let(etaSheet::update)
         }
@@ -329,13 +312,7 @@ class SearchFragment : Fragment() {
 
     private fun sortBy(field: SortField) {
         if (currentResults.isEmpty()) return
-        sortDirection = if (sortField == field && sortDirection == SortDirection.ASC) {
-            SortDirection.DESC
-        } else {
-            SortDirection.ASC
-        }
-        sortField = field
-        currentResults = BusRouteSorter.sort(currentResults, field, sortDirection)
+        routeQueryState.toggleSort(field)
         resultAdapter.submitList(currentResults)
         updateSortControls()
     }
