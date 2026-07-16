@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.recyclerview)
     implementation(libs.androidx.swiperefreshlayout)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.jsoup)
     implementation(libs.play.services.location)
     testImplementation(libs.junit)

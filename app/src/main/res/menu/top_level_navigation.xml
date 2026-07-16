@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/navigation_frequent_routes"
+        android:contentDescription="常用"
+        android:icon="@drawable/ic_nav_frequent_routes"
+        android:title="常用" />
+    <item
+        android:id="@+id/navigation_search"
+        android:contentDescription="搜尋"
+        android:icon="@drawable/ic_nav_search"
+        android:title="搜尋" />
+    <item
+        android:id="@+id/navigation_settings"
+        android:contentDescription="設定"
+        android:icon="@drawable/ic_nav_settings"
+        android:title="設定" />
+</menu>

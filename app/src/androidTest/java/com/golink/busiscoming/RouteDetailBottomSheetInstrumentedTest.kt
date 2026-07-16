@@ -1,15 +1,17 @@
 package com.golink.busiscoming
 
+import android.view.View
 import androidx.core.widget.NestedScrollView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.action.ViewActions.click
-import androidx.test.espresso.action.ViewActions.swipeDown
-import androidx.test.espresso.action.ViewActions.swipeUp
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.model.BusRouteOption
@@ -23,6 +25,7 @@ import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.RouteDetailBottomSheet
 import org.hamcrest.CoreMatchers.containsString
+import org.hamcrest.Matcher
 import androidx.test.espresso.NoMatchingViewException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -50,7 +53,9 @@ class RouteDetailBottomSheetInstrumentedTest {
 
             waitUntil {
                 try {
-                    onView(withId(R.id.routeDetailScroll)).check(matches(isDisplayed()))
+                    onView(withId(R.id.routeDetailScroll))
+                        .inRoot(isDialog())
+                        .check(matches(isDisplayed()))
                     true
                 } catch (_: NoMatchingViewException) {
                     false
@@ -58,22 +63,25 @@ class RouteDetailBottomSheetInstrumentedTest {
                     false
                 }
             }
-            onView(withText(containsString("途經 40 個站"))).perform(click())
-            onView(withId(R.id.routeDetailScroll)).check(matches(isDisplayed()))
+            onView(withText(containsString("途經 40 個站")))
+                .inRoot(isDialog())
+                .perform(directClick())
+            onView(withText(containsString("收起"))).inRoot(isDialog()).check(matches(isDisplayed()))
+            onView(withId(R.id.routeDetailScroll)).inRoot(isDialog()).check(matches(isDisplayed()))
             saveScreenshot("route-detail-expanded")
-            onView(withId(R.id.routeDetailScroll)).perform(swipeUp(), swipeUp())
+            onView(withId(R.id.routeDetailScroll)).inRoot(isDialog()).perform(scrollToBottom())
 
             var scrolledY = 0
-            onView(withId(R.id.routeDetailScroll)).check { view, _ ->
+            onView(withId(R.id.routeDetailScroll)).inRoot(isDialog()).check { view, _ ->
                 val scroll = view as NestedScrollView
                 scrolledY = scroll.scrollY
                 assertTrue(scroll.canScrollVertically(-1))
             }
             assertTrue(scrolledY > 0)
 
-            onView(withId(R.id.routeDetailScroll)).perform(swipeDown())
-            onView(withId(R.id.routeDetailScroll)).check(matches(isDisplayed()))
-            onView(withId(R.id.routeDetailScroll)).check { view, _ ->
+            onView(withId(R.id.routeDetailScroll)).inRoot(isDialog()).perform(scrollToTop())
+            onView(withId(R.id.routeDetailScroll)).inRoot(isDialog()).check(matches(isDisplayed()))
+            onView(withId(R.id.routeDetailScroll)).inRoot(isDialog()).check { view, _ ->
                 val scroll = view as NestedScrollView
                 assertTrue(scroll.scrollY < scrolledY)
                 scroll.scrollTo(0, 0)
@@ -93,6 +101,39 @@ class RouteDetailBottomSheetInstrumentedTest {
             Thread.sleep(50)
         }
         assertTrue("Timed out waiting for route detail", condition())
+    }
+
+    private fun directClick(): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isDisplayed()
+
+        override fun getDescription(): String = "directly invoke the view click listener"
+
+        override fun perform(uiController: UiController, view: View) {
+            assertTrue(view.performClick())
+            uiController.loopMainThreadUntilIdle()
+        }
+    }
+
+    private fun scrollToBottom(): ViewAction = scrollAction("scroll to bottom") { scroll ->
+        scroll.scrollTo(0, scroll.getChildAt(0).height)
+    }
+
+    private fun scrollToTop(): ViewAction = scrollAction("scroll to top") { scroll ->
+        scroll.scrollTo(0, 0)
+    }
+
+    private fun scrollAction(
+        description: String,
+        operation: (NestedScrollView) -> Unit
+    ): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isAssignableFrom(NestedScrollView::class.java)
+
+        override fun getDescription(): String = description
+
+        override fun perform(uiController: UiController, view: View) {
+            operation(view as NestedScrollView)
+            uiController.loopMainThreadUntilIdle()
+        }
     }
 
     private fun route(): BusRouteOption {

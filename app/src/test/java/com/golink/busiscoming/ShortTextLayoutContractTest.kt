@@ -13,7 +13,6 @@ class ShortTextLayoutContractTest {
     private val stylesV26File = File("src/main/res/values-v26/themes.xml")
 
     private val dynamicShortTextFiles = listOf(
-        "src/main/java/com/golink/busiscoming/ui/main/TemporaryRouteBottomSheet.kt",
         "src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt",
         "src/main/java/com/golink/busiscoming/ui/main/RouteDetailBottomSheet.kt",
         "src/main/java/com/golink/busiscoming/ui/main/EtaArrivalsBottomSheet.kt",
@@ -59,7 +58,7 @@ class ShortTextLayoutContractTest {
         assertStyleDefinesStableShortText("StableShortText.Title")
 
         val expectedStylesByLayout = mapOf(
-            "activity_main.xml" to listOf(
+            "fragment_frequent_routes.xml" to listOf(
                 "@style/StableShortText.Button",
                 "@style/StableShortText.Label",
                 "@style/StableShortText.Title"

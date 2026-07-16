@@ -25,6 +25,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -49,9 +50,7 @@ import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
-import com.golink.busiscoming.data.repository.BusRouteQueryCallback
 import com.golink.busiscoming.data.repository.BusRouteRepository
-import com.golink.busiscoming.data.repository.BusRouteSorter
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
@@ -64,8 +63,10 @@ import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
 import com.golink.busiscoming.ui.edit.RouteEditActivity
 import com.golink.busiscoming.ui.manage.RouteManageActivity
-import com.golink.busiscoming.ui.settings.SettingsActivity
+import com.golink.busiscoming.ui.navigation.TopLevelDestination
+import com.golink.busiscoming.ui.navigation.TopLevelDestinationState
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import java.text.SimpleDateFormat
@@ -80,10 +81,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
     private lateinit var placeNameResolver: PlaceNameResolver
     private val busRouteRepository: BusRouteRepository = CitybusBusRouteRepository()
-    private val routeDetailRepository: RouteDetailRepository = CitybusRouteDetailRepository()
+    private val routeDetailRepository: RouteDetailRepository = routeDetailRepositoryFactory()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val placeSearchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val routeQueryCoordinator = RouteQueryCoordinator(
+        repository = busRouteRepository,
+        executor = queryExecutor,
+        postToOwner = { runnable -> mainHandler.post(runnable) },
+        isOwnerActive = { !isFinishing && !isDestroyed }
+    )
 
     private lateinit var queryButton: MaterialButton
     private lateinit var normalTopActions: LinearLayout
@@ -92,7 +98,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var firstRunTransitCodeButton: MaterialButton
     private lateinit var settingsButton: MaterialButton
     private lateinit var firstRunSettingsButton: MaterialButton
-    private lateinit var emptyTemporaryQueryButton: MaterialButton
+    private lateinit var emptySearchButton: MaterialButton
     private lateinit var emptyRouteState: LinearLayout
     private lateinit var firstRunHeadlineText: TextView
     private lateinit var firstRunSampleLabelText: TextView
@@ -103,10 +109,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routePickerButton: MaterialButton
     private lateinit var routeManageButton: MaterialButton
     private lateinit var resultSection: LinearLayout
-    private lateinit var temporaryQueryContextBar: MaterialCardView
-    private lateinit var temporaryQueryContextPathText: TextView
-    private lateinit var temporaryQueryEditButton: MaterialButton
-    private lateinit var temporaryQuerySaveButton: MaterialButton
     private lateinit var sortControls: LinearLayout
     private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummaryText: TextView
@@ -126,17 +128,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeDetailBottomSheet: RouteDetailBottomSheet
     private lateinit var etaArrivalsBottomSheet: EtaArrivalsBottomSheet
     private lateinit var monitorSettingsBottomSheet: MonitorSettingsBottomSheet
-    private lateinit var temporaryRouteBottomSheet: TemporaryRouteBottomSheet
     private lateinit var transitCodePaymentLauncher: TransitCodePaymentLaunchAction
+    private lateinit var topLevelNav: BottomNavigationView
+    private val destinationState = TopLevelDestinationState()
 
     private var routeConfigs: List<RouteConfig> = emptyList()
     private var selectedRoute: RouteConfig? = null
-    private var currentResults: List<BusRouteOption> = emptyList()
-    private var sortField: SortField? = null
-    private var sortDirection: SortDirection = SortDirection.ASC
-    private var querySequence: Int = 0
+    private val routeQueryState = RouteQueryState()
+    private val currentResults: List<BusRouteOption>
+        get() = routeQueryState.results
+    private val sortField: SortField?
+        get() = routeQueryState.sortField
+    private val sortDirection: SortDirection
+        get() = routeQueryState.sortDirection
     private var currentQueryContext: QueryContext? = null
-    private var isQueryInProgress: Boolean = false
+    private val isQueryInProgress: Boolean
+        get() = routeQueryState.isQueryInProgress
     private var preserveSortOnNextResults: Boolean = false
     private var pendingMonitorStart: PendingMonitorStart? = null
     private val refreshFeedbackState = RouteRefreshFeedbackState()
@@ -152,12 +159,14 @@ class MainActivity : AppCompatActivity() {
     private var pendingLocationPermissionAction: PendingLocationPermissionAction? = null
     private var pendingLocationSettingsCurrentPlaceCallback: ((CurrentPlaceSelectionResult) -> Unit)? = null
     private var hasPlayedFirstRunIntroAnimation: Boolean = false
+    private var frequentRoutesInitialized: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         restoreSavedRouteUsageSession(savedInstanceState)
         setContentView(R.layout.activity_main)
         title = "BusIsComing"
+        findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
 
         routeConfigRepository = RouteConfigRepository(this)
         currentLocationCoordinator = CurrentLocationCoordinator(this)
@@ -175,20 +184,9 @@ class MainActivity : AppCompatActivity() {
                 )?.let { startMonitor(it) }
             }
         )
-        temporaryRouteBottomSheet = TemporaryRouteBottomSheet(
-            context = this,
-            routeConfigRepository = routeConfigRepository,
-            mainHandler = mainHandler,
-            searchExecutor = placeSearchExecutor,
-            onCurrentPlaceRequested = ::requestCurrentPlaceForTemporaryQuery,
-            onQuery = ::queryTemporaryRoute,
-            onSaved = { savedRouteId -> selectSavedRouteAfterCreate(savedRouteId) }
-        )
         transitCodePaymentLauncher = TransitCodePaymentLauncher.forActivity(this)
-        findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
-        bindViews()
-        setupResultList()
-        setupActions()
+        installTopLevelFragments(savedInstanceState)
+        setupTopLevelNavigation(savedInstanceState)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -197,6 +195,7 @@ class MainActivity : AppCompatActivity() {
         savedRouteUsageSession.recordedRouteId
             ?.takeIf { it == selectedRouteId }
             ?.let { outState.putLong(STATE_RECORDED_USAGE_ROUTE_ID, it) }
+        outState.putString(STATE_SELECTED_DESTINATION, destinationState.selected.name)
         super.onSaveInstanceState(outState)
     }
 
@@ -206,55 +205,61 @@ class MainActivity : AppCompatActivity() {
         routeDetailBottomSheet.dispose()
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
-        temporaryRouteBottomSheet.dispose()
         queryExecutor.shutdownNow()
-        placeSearchExecutor.shutdownNow()
         super.onDestroy()
     }
 
     override fun onResume() {
         super.onResume()
-        loadRouteConfigs()
+        if (frequentRoutesInitialized) {
+            loadRouteConfigs()
+        }
         retryCurrentPlaceAfterLocationSettings()
     }
 
+    fun onFrequentRoutesViewReady() {
+        if (frequentRoutesInitialized) return
+        bindViews()
+        setupResultList()
+        setupActions()
+        frequentRoutesInitialized = true
+        loadRouteConfigs()
+    }
+
     private fun bindViews() {
-        queryButton = findViewById(R.id.queryButton)
-        normalTopActions = findViewById(R.id.normalTopActions)
-        firstRunTopActions = findViewById(R.id.firstRunTopActions)
-        transitCodeButton = findViewById(R.id.transitCodeButton)
-        firstRunTransitCodeButton = findViewById(R.id.firstRunTransitCodeButton)
-        settingsButton = findViewById(R.id.settingsButton)
-        firstRunSettingsButton = findViewById(R.id.firstRunSettingsButton)
-        emptyTemporaryQueryButton = findViewById(R.id.emptyTemporaryQueryButton)
-        emptyRouteState = findViewById(R.id.emptyRouteState)
-        firstRunHeadlineText = findViewById(R.id.firstRunHeadlineText)
-        firstRunSampleLabelText = findViewById(R.id.firstRunSampleLabelText)
-        firstRunSampleRouteCard = findViewById(R.id.firstRunSampleRouteCard)
-        firstRunActionGroup = findViewById(R.id.firstRunActionGroup)
-        queryControls = findViewById(R.id.queryControls)
-        routeShortcutCardsContainer = findViewById(R.id.routeShortcutCardsContainer)
-        routePickerButton = findViewById(R.id.routePickerButton)
-        routeManageButton = findViewById(R.id.routeManageButton)
-        resultSection = findViewById(R.id.resultSection)
-        temporaryQueryContextBar = findViewById(R.id.temporaryQueryContextBar)
-        temporaryQueryContextPathText = findViewById(R.id.temporaryQueryContextPathText)
-        temporaryQueryEditButton = findViewById(R.id.temporaryQueryEditButton)
-        temporaryQuerySaveButton = findViewById(R.id.temporaryQuerySaveButton)
-        sortControls = findViewById(R.id.sortControls)
-        resultSummaryContainer = findViewById(R.id.resultSummaryContainer)
-        resultSummaryText = findViewById(R.id.resultSummaryText)
-        resultUpdatedAtText = findViewById(R.id.resultUpdatedAtText)
-        resultStatusCard = findViewById(R.id.resultStatusCard)
-        resultStatusProgress = findViewById(R.id.resultStatusProgress)
-        resultStatusTitle = findViewById(R.id.resultStatusTitle)
-        resultStatusMessage = findViewById(R.id.resultStatusMessage)
-        resultListContainer = findViewById(R.id.resultListContainer)
-        resultSwipeRefresh = findViewById(R.id.resultSwipeRefresh)
-        resultList = findViewById(R.id.busRouteList)
-        resultRefreshOverlay = findViewById(R.id.resultRefreshOverlay)
-        resultRefreshProgress = findViewById(R.id.resultRefreshProgress)
-        resultRefreshSuccess = findViewById(R.id.resultRefreshSuccess)
+        val root = requireTopLevelFragment(TAG_FREQUENT_ROUTES).requireView()
+        queryButton = root.findViewById(R.id.queryButton)
+        normalTopActions = root.findViewById(R.id.normalTopActions)
+        firstRunTopActions = root.findViewById(R.id.firstRunTopActions)
+        transitCodeButton = root.findViewById(R.id.transitCodeButton)
+        firstRunTransitCodeButton = root.findViewById(R.id.firstRunTransitCodeButton)
+        settingsButton = root.findViewById(R.id.settingsButton)
+        firstRunSettingsButton = root.findViewById(R.id.firstRunSettingsButton)
+        emptySearchButton = root.findViewById(R.id.emptySearchButton)
+        emptyRouteState = root.findViewById(R.id.emptyRouteState)
+        firstRunHeadlineText = root.findViewById(R.id.firstRunHeadlineText)
+        firstRunSampleLabelText = root.findViewById(R.id.firstRunSampleLabelText)
+        firstRunSampleRouteCard = root.findViewById(R.id.firstRunSampleRouteCard)
+        firstRunActionGroup = root.findViewById(R.id.firstRunActionGroup)
+        queryControls = root.findViewById(R.id.queryControls)
+        routeShortcutCardsContainer = root.findViewById(R.id.routeShortcutCardsContainer)
+        routePickerButton = root.findViewById(R.id.routePickerButton)
+        routeManageButton = root.findViewById(R.id.routeManageButton)
+        resultSection = root.findViewById(R.id.resultSection)
+        sortControls = root.findViewById(R.id.sortControls)
+        resultSummaryContainer = root.findViewById(R.id.resultSummaryContainer)
+        resultSummaryText = root.findViewById(R.id.resultSummaryText)
+        resultUpdatedAtText = root.findViewById(R.id.resultUpdatedAtText)
+        resultStatusCard = root.findViewById(R.id.resultStatusCard)
+        resultStatusProgress = root.findViewById(R.id.resultStatusProgress)
+        resultStatusTitle = root.findViewById(R.id.resultStatusTitle)
+        resultStatusMessage = root.findViewById(R.id.resultStatusMessage)
+        resultListContainer = root.findViewById(R.id.resultListContainer)
+        resultSwipeRefresh = root.findViewById(R.id.resultSwipeRefresh)
+        resultList = root.findViewById(R.id.busRouteList)
+        resultRefreshOverlay = root.findViewById(R.id.resultRefreshOverlay)
+        resultRefreshProgress = root.findViewById(R.id.resultRefreshProgress)
+        resultRefreshSuccess = root.findViewById(R.id.resultRefreshSuccess)
         resultListBasePadding = ViewPadding(
             left = resultList.paddingLeft,
             top = resultList.paddingTop,
@@ -262,11 +267,11 @@ class MainActivity : AppCompatActivity() {
             bottom = resultList.paddingBottom
         )
         sortButtons = mapOf(
-            SortField.ROUTE to findViewById(R.id.sortRouteButton),
-            SortField.PRICE to findViewById(R.id.sortPriceButton),
-            SortField.DURATION to findViewById(R.id.sortDurationButton),
-            SortField.ARRIVAL to findViewById(R.id.sortArrivalButton),
-            SortField.WALKING_DISTANCE to findViewById(R.id.sortWalkingDistanceButton)
+            SortField.ROUTE to root.findViewById(R.id.sortRouteButton),
+            SortField.PRICE to root.findViewById(R.id.sortPriceButton),
+            SortField.DURATION to root.findViewById(R.id.sortDurationButton),
+            SortField.ARRIVAL to root.findViewById(R.id.sortArrivalButton),
+            SortField.WALKING_DISTANCE to root.findViewById(R.id.sortWalkingDistanceButton)
         )
         BusRouteCardBinder(firstRunSampleRouteCard).bind(FirstRunRoutePreview.route())
     }
@@ -302,20 +307,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupActions() {
-        settingsButton.setOnClickListener { openSettings() }
-        firstRunSettingsButton.setOnClickListener { openSettings() }
+        settingsButton.visibility = View.GONE
+        firstRunSettingsButton.visibility = View.GONE
         routeManageButton.setOnClickListener {
             startActivity(Intent(this, RouteManageActivity::class.java))
         }
         transitCodeButton.setOnClickListener { launchTransitCode() }
         firstRunTransitCodeButton.setOnClickListener { launchTransitCode() }
-        findViewById<MaterialButton>(R.id.emptyAddRouteButton).setOnClickListener {
+        requireTopLevelFragment(TAG_FREQUENT_ROUTES).requireView()
+            .findViewById<MaterialButton>(R.id.emptyAddRouteButton).setOnClickListener {
             startActivity(Intent(this, RouteEditActivity::class.java))
         }
-        emptyTemporaryQueryButton.setOnClickListener { showTemporaryRouteSheet() }
+        emptySearchButton.setOnClickListener {
+            topLevelNav.selectedItemId = R.id.navigation_search
+        }
         routePickerButton.setOnClickListener { showRoutePicker() }
-        temporaryQueryEditButton.setOnClickListener { editCurrentTemporaryQuery() }
-        temporaryQuerySaveButton.setOnClickListener { saveCurrentTemporaryQuery() }
         queryButton.setOnClickListener { querySelectedRoute() }
         resultSwipeRefresh.setOnRefreshListener { refreshCurrentResults() }
         sortButtons.forEach { (field, button) ->
@@ -325,6 +331,71 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun installTopLevelFragments(savedInstanceState: Bundle?) {
+        if (savedInstanceState != null) return
+        val frequentRoutes = FrequentRoutesFragment()
+        val search = SearchFragment()
+        val settings = SettingsFragment()
+        supportFragmentManager.beginTransaction()
+            .add(R.id.topLevelFragmentContainer, frequentRoutes, TAG_FREQUENT_ROUTES)
+            .add(R.id.topLevelFragmentContainer, search, TAG_SEARCH)
+            .hide(search)
+            .add(R.id.topLevelFragmentContainer, settings, TAG_SETTINGS)
+            .hide(settings)
+            .commitNow()
+    }
+
+    private fun setupTopLevelNavigation(savedInstanceState: Bundle?) {
+        topLevelNav = findViewById(R.id.topLevelNav)
+        val restored = savedInstanceState
+            ?.getString(STATE_SELECTED_DESTINATION)
+            ?.let { runCatching { TopLevelDestination.valueOf(it) }.getOrNull() }
+            ?: TopLevelDestination.FREQUENT_ROUTES
+        topLevelNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigation_frequent_routes -> selectDestination(TopLevelDestination.FREQUENT_ROUTES)
+                R.id.navigation_search -> selectDestination(TopLevelDestination.SEARCH)
+                R.id.navigation_settings -> selectDestination(TopLevelDestination.SETTINGS)
+                else -> false
+            }
+        }
+        topLevelNav.selectedItemId = restored.menuItemId()
+    }
+
+    private fun selectDestination(destination: TopLevelDestination): Boolean {
+        if (destinationState.selected == destination) return true
+        val current = requireTopLevelFragment(destinationState.selected.tag)
+        when (current) {
+            is FrequentRoutesFragment -> invalidateActiveQuery()
+            is SearchFragment -> current.onDestinationHidden()
+        }
+        val next = requireTopLevelFragment(destination.tag)
+        supportFragmentManager.beginTransaction()
+            .hide(current)
+            .show(next)
+            .commit()
+        destinationState.select(destination)
+        (next as? SearchFragment)?.onDestinationSelected()
+        return true
+    }
+
+    private fun requireTopLevelFragment(tag: String): Fragment {
+        return requireNotNull(supportFragmentManager.findFragmentByTag(tag))
+    }
+
+    private fun TopLevelDestination.menuItemId(): Int = when (this) {
+        TopLevelDestination.FREQUENT_ROUTES -> R.id.navigation_frequent_routes
+        TopLevelDestination.SEARCH -> R.id.navigation_search
+        TopLevelDestination.SETTINGS -> R.id.navigation_settings
+    }
+
+    private val TopLevelDestination.tag: String
+        get() = when (this) {
+            TopLevelDestination.FREQUENT_ROUTES -> TAG_FREQUENT_ROUTES
+            TopLevelDestination.SEARCH -> TAG_SEARCH
+            TopLevelDestination.SETTINGS -> TAG_SETTINGS
+        }
 
     private fun restoreSavedRouteUsageSession(savedInstanceState: Bundle?) {
         if (savedInstanceState == null) return
@@ -439,11 +510,6 @@ class MainActivity : AppCompatActivity() {
         queryRoute(route.origin, route.destination, route, QueryContext.Saved(route.id))
     }
 
-    private fun queryTemporaryRoute(origin: Place, destination: Place) {
-        savedRouteUsageSession.onTemporaryQuery()
-        queryRoute(origin, destination, null, QueryContext.Temporary(origin, destination))
-    }
-
     private fun refreshCurrentResults() {
         val context = currentQueryContext
         if (context == null || currentResults.isEmpty()) {
@@ -466,17 +532,6 @@ class MainActivity : AppCompatActivity() {
                     destination = route.destination,
                     sourceRoute = route,
                     queryContext = QueryContext.Saved(route.id),
-                    recordUsage = false,
-                    preserveSort = true,
-                    isRefresh = true
-                )
-            }
-            is QueryContext.Temporary -> {
-                queryRoute(
-                    origin = context.origin,
-                    destination = context.destination,
-                    sourceRoute = null,
-                    queryContext = context,
                     recordUsage = false,
                     preserveSort = true,
                     isRefresh = true
@@ -511,80 +566,69 @@ class MainActivity : AppCompatActivity() {
             renderRouteShortcuts()
         }
 
-        val queryId = ++querySequence
         currentQueryContext = queryContext
         preserveSortOnNextResults = preserveSort
-        updateTemporaryQueryContext()
+        routeQueryState.begin(refresh = isRefresh)
         renderHomeShell()
-        busRouteRepository.cancelProgressiveQueries()
         if (isRefresh) {
-            showRefreshLoadingState(queryId)
+            resultSwipeRefresh.isRefreshing = false
         } else {
             showLoadingState()
         }
-        queryExecutor.execute {
-            busRouteRepository.searchRoutesProgressively(
-                origin,
-                destination,
-                object : BusRouteQueryCallback {
-                    override fun onInitialRoutes(routes: List<BusRouteOption>) {
-                        mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
-                            if (isRefresh) {
-                                handleRefreshSuccess(queryId, routes)
-                            } else {
-                                finishQueryLoading()
-                                showInitialRoutes(routes)
-                            }
-                        }
-                    }
-
-                    override fun onRouteWaitTimeUpdated(routeId: String, waitTimeState: WaitTimeState) {
-                        mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
-                            updateRouteWaitTime(routeId, waitTimeState)
-                        }
-                    }
-
-                    override fun onRouteStopPreviewUpdated(routeId: String, preview: RouteCardStopPreview) {
-                        mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
-                            updateRouteStopPreview(routeId, preview)
-                        }
-                    }
-
-                    override fun onFailure(error: Throwable) {
-                        Log.e(LOG_TAG, "Bus route query failed", error)
-                        mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
-                            if (isRefresh) {
-                                handleRefreshFailure(queryId)
-                            } else {
-                                finishQueryLoading()
-                                currentResults = emptyList()
-                                sortField = null
-                                sortDirection = SortDirection.ASC
-                                updateSortControls()
-                                displayFailure()
-                            }
-                        }
+        val queryId = routeQueryCoordinator.query(
+            origin,
+            destination,
+            object : RouteQueryCoordinator.Callback {
+                override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
+                    if (isRefresh) {
+                        handleRefreshSuccess(queryId, routes)
+                    } else {
+                        showInitialRoutes(routes)
+                        finishQueryLoading()
                     }
                 }
-            )
+
+                override fun onRouteWaitTimeUpdated(
+                    queryId: Int,
+                    routeId: String,
+                    waitTimeState: WaitTimeState
+                ) {
+                    updateRouteWaitTime(routeId, waitTimeState)
+                }
+
+                override fun onRouteStopPreviewUpdated(
+                    queryId: Int,
+                    routeId: String,
+                    preview: RouteCardStopPreview
+                ) {
+                    updateRouteStopPreview(routeId, preview)
+                }
+
+                override fun onFailure(queryId: Int, error: Throwable) {
+                    Log.e(LOG_TAG, "Bus route query failed", error)
+                    if (isRefresh) {
+                        handleRefreshFailure(queryId)
+                    } else {
+                        routeQueryState.fail("路線查詢失敗", preserveResults = false)
+                        updateSortControls()
+                        displayFailure()
+                        finishQueryLoading()
+                    }
+                }
+            }
+        )
+        if (isRefresh) {
+            showRefreshLoadingState(queryId)
         }
     }
 
     private fun showInitialRoutes(routes: List<BusRouteOption>) {
-        val nextSortField = RouteResultsRefreshPolicy.resolveSortField(
+        routeQueryState.complete(
+            routes = routes,
             preserveSort = preserveSortOnNextResults,
-            currentSortField = sortField
+            updatedAtMillis = System.currentTimeMillis()
         )
-        if (RouteResultsRefreshPolicy.shouldResetSortDirection(preserveSortOnNextResults, sortField)) {
-            sortDirection = SortDirection.ASC
-        }
-        sortField = nextSortField
         preserveSortOnNextResults = false
-        currentResults = BusRouteSorter.sort(routes, nextSortField, sortDirection)
         updateSortControls()
         updateResultSummary(routes)
         displayResults(currentResults)
@@ -622,6 +666,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleRefreshFailure(queryId: Int) {
         if (!refreshFeedbackState.fail(queryId)) return
+        routeQueryState.fail("刷新失敗，請稍後重試", preserveResults = true)
         refreshFinishRunnable?.let(mainHandler::removeCallbacks)
         refreshFinishRunnable = null
         renderRefreshFeedback()
@@ -631,48 +676,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateRouteWaitTime(routeId: String, waitTimeState: WaitTimeState) {
-        var changed = false
-        currentResults = currentResults.map { route ->
-            if (route.resultId == routeId) {
-                changed = true
-                route.copy(waitTimeState = waitTimeState)
-            } else {
-                route
-            }
-        }
-        if (!changed) return
-
-        if (sortField == SortField.ARRIVAL) {
-            currentResults = BusRouteSorter.sort(currentResults, SortField.ARRIVAL, sortDirection)
-        }
+        if (!routeQueryState.updateWaitTime(routeId, waitTimeState)) return
         currentResults.firstOrNull { it.resultId == routeId }?.let { etaArrivalsBottomSheet.update(it) }
         displayResults(currentResults)
     }
 
     private fun updateRouteStopPreview(routeId: String, preview: RouteCardStopPreview) {
-        var changed = false
-        currentResults = currentResults.map { route ->
-            if (route.resultId == routeId) {
-                changed = true
-                route.copy(stopPreview = preview)
-            } else {
-                route
-            }
-        }
-        if (!changed) return
+        if (!routeQueryState.updateStopPreview(routeId, preview)) return
         displayResults(currentResults)
     }
 
     private fun sortBy(field: SortField) {
         if (currentResults.isEmpty()) return
 
-        sortDirection = if (sortField == field && sortDirection == SortDirection.ASC) {
-            SortDirection.DESC
-        } else {
-            SortDirection.ASC
-        }
-        sortField = field
-        currentResults = BusRouteSorter.sort(currentResults, field, sortDirection)
+        routeQueryState.toggleSort(field)
         updateSortControls()
         displayResults(currentResults)
     }
@@ -711,11 +728,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMonitorSettings(route: BusRouteOption) {
+        showMonitorSettings(route, currentOriginPlace())
+    }
+
+    fun showMonitorSettings(route: BusRouteOption, origin: Place?) {
+        monitorSettingsRequestObserver?.invoke(route, origin)
         if (route.firstLegEtaQuery == null || route.waitTimeState !is WaitTimeState.Available) {
             Toast.makeText(this, "此路線暫時無法監控", Toast.LENGTH_SHORT).show()
             return
         }
-        val origin = currentOriginPlace()
         if (origin == null) {
             Toast.makeText(this, "缺少起點資訊，無法估算步行時間", Toast.LENGTH_SHORT).show()
             return
@@ -751,7 +772,6 @@ class MainActivity : AppCompatActivity() {
     private fun currentOriginPlace(): Place? {
         return when (val context = currentQueryContext) {
             is QueryContext.Saved -> routeConfigRepository.getById(context.routeId)?.origin
-            is QueryContext.Temporary -> context.origin
             null -> selectedRoute?.origin
         }
     }
@@ -846,7 +866,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestCurrentPlaceForTemporaryQuery(
+    fun requestCurrentPlace(
         isAuto: Boolean,
         callback: (CurrentPlaceSelectionResult) -> Unit
     ) {
@@ -867,6 +887,10 @@ class MainActivity : AppCompatActivity() {
             LocationPermissionUtils.permissions,
             REQUEST_LOCATION_PERMISSION
         )
+    }
+
+    fun refreshFrequentRoutes() {
+        loadRouteConfigs()
     }
 
     private fun continueCurrentPlaceWithPermission(
@@ -958,7 +982,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
         resultSummaryText.text = RouteResultCardFormatter.resultSummary(routes)
-        resultUpdatedAtText.text = "更新時間：${RESULT_TIME_FORMAT.get()!!.format(Date())}"
+        val updatedAt = routeQueryState.updatedAtMillis ?: System.currentTimeMillis()
+        resultUpdatedAtText.text = "更新時間：${RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))}"
         resultSummaryContainer.visibility = View.VISIBLE
     }
 
@@ -968,47 +993,11 @@ class MainActivity : AppCompatActivity() {
         resultUpdatedAtText.text = ""
     }
 
-    private fun updateTemporaryQueryContext() {
-        val context = currentQueryContext
-        if (context !is QueryContext.Temporary) {
-            hideTemporaryQueryContext()
-            return
-        }
-        temporaryQueryContextPathText.text = "${context.origin.name} \u2192 ${context.destination.name}"
-        temporaryQueryContextBar.visibility = View.VISIBLE
-    }
-
-    private fun hideTemporaryQueryContext() {
-        temporaryQueryContextBar.visibility = View.GONE
-        temporaryQueryContextPathText.text = ""
-    }
-
-    private fun saveCurrentTemporaryQuery() {
-        val context = currentQueryContext as? QueryContext.Temporary ?: return
-        promptSaveTemporaryRoute(context.origin, context.destination)
-    }
-
-    private fun promptSaveTemporaryRoute(origin: Place, destination: Place) {
-        TemporaryRouteSaveDialog.show(
-            context = this,
-            routeConfigRepository = routeConfigRepository,
-            origin = origin,
-            destination = destination
-        ) { id ->
-            currentQueryContext = QueryContext.Saved(id)
-            hideTemporaryQueryContext()
-            selectSavedRouteAfterCreate(id, clearExistingResults = false)
-        }
-    }
-
     private fun clearResults() {
         invalidateActiveQuery()
         currentQueryContext = null
-        hideTemporaryQueryContext()
+        routeQueryState.clear()
         setQueryLoading(false)
-        currentResults = emptyList()
-        sortField = null
-        sortDirection = SortDirection.ASC
         preserveSortOnNextResults = false
         updateSortControls()
         busRouteAdapter.submitList(emptyList())
@@ -1021,8 +1010,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun invalidateActiveQuery() {
-        querySequence += 1
-        busRouteRepository.cancelProgressiveQueries()
+        routeQueryCoordinator.invalidate()
+        routeQueryState.cancel()
         cancelRefreshFeedback()
         if (::queryButton.isInitialized) {
             setQueryLoading(false)
@@ -1132,10 +1121,6 @@ class MainActivity : AppCompatActivity() {
                 selectRoute(route)
             })
         }
-        content.addView(createTemporaryQueryRow {
-            dialog.dismiss()
-            showTemporaryRouteSheet()
-        })
         dialog.setContentView(content)
         dialog.show()
     }
@@ -1165,30 +1150,6 @@ class MainActivity : AppCompatActivity() {
                 ).apply { topMargin = dp(4) }
             })
         }
-    }
-
-    private fun createTemporaryQueryRow(onClick: () -> Unit): View {
-        return TextView(this).apply {
-            text = "查詢臨時起點和終點"
-            applyStableShortTextLayout(Gravity.CENTER_VERTICAL)
-            minHeight = dp(52)
-            setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
-            textSize = 15f
-            setOnClickListener { onClick() }
-        }
-    }
-
-    private fun showTemporaryRouteSheet(origin: Place? = null, destination: Place? = null) {
-        temporaryRouteBottomSheet.show(origin, destination)
-    }
-
-    private fun openSettings() {
-        startActivity(Intent(this, SettingsActivity::class.java))
-    }
-
-    private fun editCurrentTemporaryQuery() {
-        val context = currentQueryContext as? QueryContext.Temporary ?: return
-        showTemporaryRouteSheet(context.origin, context.destination)
     }
 
     private fun renderHomeShell() {
@@ -1277,7 +1238,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLoadingState() {
         setQueryLoading(true)
-        currentResults = emptyList()
         busRouteAdapter.submitList(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
@@ -1314,7 +1274,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setQueryLoading(isLoading: Boolean) {
-        isQueryInProgress = isLoading
         queryButton.isEnabled = !isLoading
         queryButton.text = if (isLoading) "查詢中..." else "查詢"
         updateSwipeRefreshState()
@@ -1512,10 +1471,21 @@ class MainActivity : AppCompatActivity() {
 
     private sealed class QueryContext {
         data class Saved(val routeId: Long) : QueryContext()
-        data class Temporary(val origin: Place, val destination: Place) : QueryContext()
     }
 
     companion object {
+        @Volatile
+        internal var routeDetailRepositoryFactory: () -> RouteDetailRepository =
+            { CitybusRouteDetailRepository() }
+
+        @Volatile
+        internal var monitorSettingsRequestObserver: ((BusRouteOption, Place?) -> Unit)? = null
+
+        internal fun resetTestDependencies() {
+            routeDetailRepositoryFactory = { CitybusRouteDetailRepository() }
+            monitorSettingsRequestObserver = null
+        }
+
         private const val REQUEST_POST_NOTIFICATIONS = 301
         private const val REQUEST_LOCATION_PERMISSION = 302
         private const val REFRESH_LIST_TOP_INSET_DP = 44
@@ -1525,6 +1495,10 @@ class MainActivity : AppCompatActivity() {
         private const val FIRST_RUN_INTRO_STAGGER_MS = 45L
         private const val STATE_SELECTED_ROUTE_ID = "selected_route_id"
         private const val STATE_RECORDED_USAGE_ROUTE_ID = "recorded_usage_route_id"
+        private const val STATE_SELECTED_DESTINATION = "selected_destination"
+        private const val TAG_FREQUENT_ROUTES = "frequent_routes"
+        private const val TAG_SEARCH = "search"
+        private const val TAG_SETTINGS = "settings"
 
         private val RESULT_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
             override fun initialValue(): SimpleDateFormat {
