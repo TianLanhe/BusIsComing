@@ -8,8 +8,8 @@
 ## 2. 共用查詢狀態與生命週期
 
 - [ ] 2.1 從 `MainActivity` 抽取 owner 無關的路線查詢協調與 `RouteQueryState`，承接基礎結果、ETA／站點預覽增量更新、排序、刷新、更新時間與錯誤狀態，且不改變 repository 的 Citybus／ETA 契約。
-- [ ] 2.2 為每個查詢 owner 建立 generation、取消與生命週期失效規則，確保切換常用路線、編輯搜尋、切換 destination 或銷毀宿主後，遲到回呼不會覆蓋新 state。
-- [ ] 2.3 調整結果卡 Adapter、ETA 彈層、路線詳情彈層與監控入口，使其可由常用與搜尋兩個 Fragment 使用，且不改變可監控路線、票價、耗時、步行距離或 ETA 展示語義。
+- [x] 2.2 為每個查詢 owner 建立 generation、取消與生命週期失效規則，確保切換常用路線、編輯搜尋、切換 destination 或銷毀宿主後，遲到回呼不會覆蓋新 state。
+- [x] 2.3 調整結果卡 Adapter、ETA 彈層、路線詳情彈層與監控入口，使其可由常用與搜尋兩個 Fragment 使用，且不改變可監控路線、票價、耗時、步行距離或 ETA 展示語義。
 - [ ] 2.4 為共用查詢 state、排序、刷新 generation 與過期回呼增加 JVM 單元測試。
 
 ## 3. 遷移常用路線流程
@@ -23,7 +23,7 @@
 - [x] 4.1 建立搜尋 Fragment 與 XML 表單，使用 `PlaceInputController`、既有 Citybus 地點搜尋、候選列表、候選距離、目前位置 attribution、起終點校驗及 48dp 交換圖示，取代 `TemporaryRouteBottomSheet` 的輸入 UI。
 - [x] 4.2 實作搜尋查詢、載入、無結果、失敗與成功狀態；結果區以 `起點 → 終點` 摘要、編輯與 `存為常用` 操作承接上下文，並重用共用結果卡、排序、ETA、詳情、監控與下拉刷新能力。
 - [x] 4.3 將搜尋保存成功後的常用路線資料刷新通知回傳給常用 Fragment，但保持目前搜尋結果、排序和 tab 不變；保留名稱重複與空名稱校驗對話框行為。
-- [ ] 4.4 在所有入口完成遷移後刪除 `TemporaryRouteBottomSheet`、主頁臨時上下文與不再使用的資源、string、view id、回呼與 executor；確認搜尋頁第一階段不顯示任何地圖功能或占位。
+- [x] 4.4 在所有入口完成遷移後刪除 `TemporaryRouteBottomSheet`、主頁臨時上下文與不再使用的資源、string、view id、回呼與 executor；確認搜尋頁第一階段不顯示任何地圖功能或占位。
 
 ## 5. 次級導航、狀態恢復與 UI 回歸
 

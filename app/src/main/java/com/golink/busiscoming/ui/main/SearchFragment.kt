@@ -174,6 +174,12 @@ class SearchFragment : Fragment() {
         }
     }
 
+    fun onDestinationHidden() {
+        queryGeneration.invalidate()
+        busRouteRepository.cancelProgressiveQueries()
+        swipeRefresh.isRefreshing = false
+    }
+
     override fun onDestroyView() {
         queryGeneration.invalidate()
         busRouteRepository.cancelProgressiveQueries()

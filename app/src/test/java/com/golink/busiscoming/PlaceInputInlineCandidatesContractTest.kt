@@ -11,8 +11,8 @@ class PlaceInputInlineCandidatesContractTest {
     private val editActivityKt =
         File("src/main/java/com/golink/busiscoming/ui/edit/RouteEditActivity.kt").readText()
     private val editLayoutXml = File("src/main/res/layout/activity_route_edit.xml").readText()
-    private val temporarySheetKt =
-        File("src/main/java/com/golink/busiscoming/ui/main/TemporaryRouteBottomSheet.kt").readText()
+    private val searchFragmentKt =
+        File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
 
     @Test
     fun routeEditProvidesInlineCandidateLists() {
@@ -34,20 +34,18 @@ class PlaceInputInlineCandidatesContractTest {
     }
 
     @Test
-    fun editAndTemporaryFlowsCoordinateFocusBackAndSheetExpansion() {
+    fun editAndSearchFlowsCoordinateInlineCandidates() {
         assertTrue(editActivityKt.contains("focusUnselectedPeer"))
         assertTrue(editActivityKt.contains("hideCandidateLists"))
-        assertTrue(temporarySheetKt.contains("setCandidateMode"))
-        assertTrue(temporarySheetKt.contains("BottomSheetBehavior.STATE_EXPANDED"))
+        assertTrue(searchFragmentKt.contains("PlaceInputController"))
+        assertTrue(searchFragmentKt.contains("destinationController?.hideCandidates()"))
     }
 
     @Test
-    fun temporarySheetSupportsPrefilledEditWithoutOverwritingCurrentOrigin() {
-        assertTrue(temporarySheetKt.contains("fun show(initialOrigin: Place? = null, initialDestination: Place? = null)"))
-        assertTrue(temporarySheetKt.contains("applyInitialPlaces(initialOrigin, initialDestination)"))
-        assertTrue(temporarySheetKt.contains("originController?.setSelectedPlace(initialOrigin)"))
-        assertTrue(temporarySheetKt.contains("destinationController?.setSelectedPlace(initialDestination)"))
-        assertTrue(temporarySheetKt.contains("if (initialOrigin == null)"))
-        assertTrue(temporarySheetKt.contains("requestCurrentOriginIfNeeded(isAuto = true)"))
+    fun searchKeepsSelectedPlacesAcrossViewRecreation() {
+        assertTrue(searchFragmentKt.contains("restoredOrigin"))
+        assertTrue(searchFragmentKt.contains("restoredDestination"))
+        assertTrue(searchFragmentKt.contains("onSaveInstanceState"))
+        assertTrue(searchFragmentKt.contains("requestCurrentOrigin(isAuto = true)"))
     }
 }

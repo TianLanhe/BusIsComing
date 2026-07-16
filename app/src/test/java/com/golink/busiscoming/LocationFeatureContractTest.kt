@@ -12,8 +12,8 @@ class LocationFeatureContractTest {
         File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val routeEditActivityKt =
         File("src/main/java/com/golink/busiscoming/ui/edit/RouteEditActivity.kt").readText()
-    private val temporarySheetKt =
-        File("src/main/java/com/golink/busiscoming/ui/main/TemporaryRouteBottomSheet.kt").readText()
+    private val searchFragmentKt =
+        File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
     private val placeInputControllerKt =
         File("src/main/java/com/golink/busiscoming/ui/common/PlaceInputController.kt").readText()
     private val systemLocationUtilsKt =
@@ -111,10 +111,9 @@ class LocationFeatureContractTest {
         assertTrue(mainActivityKt.contains("name = nameResult.addressName"))
         assertTrue(mainActivityKt.contains("latitude = result.snapshot.latitude"))
         assertTrue(mainActivityKt.contains("CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L"))
-        assertTrue(temporarySheetKt.contains("originTouchedByUser = false"))
-        assertTrue(temporarySheetKt.contains("requestCurrentOriginIfNeeded(isAuto = true)"))
-        assertTrue(temporarySheetKt.contains("if (isAuto && originTouchedByUser) return"))
-        assertTrue(temporarySheetKt.contains("currentPlaceGeneration != generation"))
+        assertTrue(searchFragmentKt.contains("requestCurrentOrigin(isAuto = true)"))
+        assertTrue(searchFragmentKt.contains("RouteQueryGeneration"))
+        assertTrue(searchFragmentKt.contains("queryGeneration.isCurrent(generation)"))
     }
 
     @Test
@@ -136,9 +135,8 @@ class LocationFeatureContractTest {
         assertTrue(routeEditLayoutXml.contains("@string/google_maps_address_attribution"))
         assertTrue(routeEditActivityKt.contains("showOriginAttribution(nameResult.attribution)"))
         assertTrue(routeEditActivityKt.contains("hideOriginAttribution()"))
-        assertTrue(temporarySheetKt.contains("attributionText()"))
-        assertTrue(temporarySheetKt.contains("showOriginAttribution(result.attribution)"))
-        assertTrue(temporarySheetKt.contains("hideOriginAttribution()"))
+        assertTrue(searchFragmentKt.contains("searchOriginAttribution"))
+        assertTrue(searchFragmentKt.contains("result.attribution == PlaceAttribution.GOOGLE_MAPS"))
     }
 
     @Test

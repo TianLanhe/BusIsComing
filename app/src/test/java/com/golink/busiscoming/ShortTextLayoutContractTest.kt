@@ -13,7 +13,6 @@ class ShortTextLayoutContractTest {
     private val stylesV26File = File("src/main/res/values-v26/themes.xml")
 
     private val dynamicShortTextFiles = listOf(
-        "src/main/java/com/golink/busiscoming/ui/main/TemporaryRouteBottomSheet.kt",
         "src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt",
         "src/main/java/com/golink/busiscoming/ui/main/RouteDetailBottomSheet.kt",
         "src/main/java/com/golink/busiscoming/ui/main/EtaArrivalsBottomSheet.kt",

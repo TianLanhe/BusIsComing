@@ -67,6 +67,7 @@ import com.golink.busiscoming.ui.edit.RouteEditActivity
 import com.golink.busiscoming.ui.manage.RouteManageActivity
 import com.golink.busiscoming.ui.navigation.TopLevelDestination
 import com.golink.busiscoming.ui.navigation.TopLevelDestinationState
+import com.golink.busiscoming.ui.navigation.RouteQueryGeneration
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
@@ -133,7 +134,7 @@ class MainActivity : AppCompatActivity() {
     private var currentResults: List<BusRouteOption> = emptyList()
     private var sortField: SortField? = null
     private var sortDirection: SortDirection = SortDirection.ASC
-    private var querySequence: Int = 0
+    private val routeQueryGeneration = RouteQueryGeneration()
     private var currentQueryContext: QueryContext? = null
     private var isQueryInProgress: Boolean = false
     private var preserveSortOnNextResults: Boolean = false
@@ -357,9 +358,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectDestination(destination: TopLevelDestination): Boolean {
         if (destinationState.selected == destination) return true
+        val current = requireTopLevelFragment(destinationState.selected.tag)
+        when (current) {
+            is FrequentRoutesFragment -> invalidateActiveQuery()
+            is SearchFragment -> current.onDestinationHidden()
+        }
         val next = requireTopLevelFragment(destination.tag)
         supportFragmentManager.beginTransaction()
-            .hide(requireTopLevelFragment(destinationState.selected.tag))
+            .hide(current)
             .show(next)
             .commit()
         destinationState.select(destination)
@@ -553,7 +559,7 @@ class MainActivity : AppCompatActivity() {
             renderRouteShortcuts()
         }
 
-        val queryId = ++querySequence
+        val queryId = routeQueryGeneration.begin()
         currentQueryContext = queryContext
         preserveSortOnNextResults = preserveSort
         renderHomeShell()
@@ -570,7 +576,7 @@ class MainActivity : AppCompatActivity() {
                 object : BusRouteQueryCallback {
                     override fun onInitialRoutes(routes: List<BusRouteOption>) {
                         mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
+                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
                             if (isRefresh) {
                                 handleRefreshSuccess(queryId, routes)
                             } else {
@@ -582,14 +588,14 @@ class MainActivity : AppCompatActivity() {
 
                     override fun onRouteWaitTimeUpdated(routeId: String, waitTimeState: WaitTimeState) {
                         mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
+                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
                             updateRouteWaitTime(routeId, waitTimeState)
                         }
                     }
 
                     override fun onRouteStopPreviewUpdated(routeId: String, preview: RouteCardStopPreview) {
                         mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
+                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
                             updateRouteStopPreview(routeId, preview)
                         }
                     }
@@ -597,7 +603,7 @@ class MainActivity : AppCompatActivity() {
                     override fun onFailure(error: Throwable) {
                         Log.e(LOG_TAG, "Bus route query failed", error)
                         mainHandler.post {
-                            if (querySequence != queryId || isFinishing || isDestroyed) return@post
+                            if (!routeQueryGeneration.isCurrent(queryId) || isFinishing || isDestroyed) return@post
                             if (isRefresh) {
                                 handleRefreshFailure(queryId)
                             } else {
@@ -1034,7 +1040,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun invalidateActiveQuery() {
-        querySequence += 1
+        routeQueryGeneration.invalidate()
         busRouteRepository.cancelProgressiveQueries()
         cancelRefreshFeedback()
         if (::queryButton.isInitialized) {
