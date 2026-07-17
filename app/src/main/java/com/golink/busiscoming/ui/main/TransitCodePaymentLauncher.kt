@@ -87,7 +87,7 @@ class TransitCodePaymentLauncher(
         } catch (error: Throwable) {
             logger.log(
                 "package=$packageName installed=false, " +
-                    "exceptionClass=${error::class.java.name}, exceptionMessage=${error.message ?: "(無)"}"
+                    "exceptionClass=${error::class.java.name}, exceptionMessage=${error.message ?: "(none)"}"
             )
             false
         }
@@ -120,7 +120,7 @@ class TransitCodePaymentLauncher(
         ).also {
             logger.log(
                 "target=${target.title}, uri=${target.uri}, startActivity=false, " +
-                    "exceptionClass=${it.errorClass}, exceptionMessage=${it.errorMessage ?: "(無)"}"
+                    "exceptionClass=${it.errorClass}, exceptionMessage=${it.errorMessage ?: "(none)"}"
             )
         }
     }

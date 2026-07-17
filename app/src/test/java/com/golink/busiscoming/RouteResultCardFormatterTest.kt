@@ -9,6 +9,7 @@ import com.golink.busiscoming.ui.main.FirstRunRoutePreview
 import com.golink.busiscoming.ui.main.RouteResultCardFormatter
 import com.golink.busiscoming.ui.main.TemporaryRouteSaveDialog
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.ui.common.LocalizedText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,9 +18,9 @@ import org.junit.Test
 class RouteResultCardFormatterTest {
     @Test
     fun formatsWaitStatusText() {
-        assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(WaitTimeState.Available(4)))
-        assertEquals("候車查詢中", RouteResultCardFormatter.waitStatus(WaitTimeState.Loading))
-        assertEquals("暫無車輛", RouteResultCardFormatter.waitStatus(WaitTimeState.Unavailable))
+        assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(WaitTimeState.Available(4), text))
+        assertEquals("候車查詢中", RouteResultCardFormatter.waitStatus(WaitTimeState.Loading, text))
+        assertEquals("暫無車輛", RouteResultCardFormatter.waitStatus(WaitTimeState.Unavailable, text))
     }
 
     @Test
@@ -31,8 +32,8 @@ class RouteResultCardFormatterTest {
             )
         )
 
-        assertEquals("即將到站", RouteResultCardFormatter.waitStatus(state))
-        assertEquals("下一班 6 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(state))
+        assertEquals("即將到站", RouteResultCardFormatter.waitStatus(state, text))
+        assertEquals("下一班 6 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(state, text))
     }
 
     @Test
@@ -47,7 +48,7 @@ class RouteResultCardFormatterTest {
             walkingDistanceMeters = 456
         )
 
-        assertEquals("HK$ 20.4 · 耗時 34 分鐘 · 步行 456 米", RouteResultCardFormatter.info(route))
+        assertEquals("HK$ 20.4 · 耗時 34 分鐘 · 步行 456 米", RouteResultCardFormatter.info(route, text))
     }
 
     @Test
@@ -104,7 +105,7 @@ class RouteResultCardFormatterTest {
             route("106", transferCount = 0)
         )
 
-        assertEquals("共 3 條路線，2 條直達", RouteResultCardFormatter.resultSummary(routes))
+        assertEquals("共 3 條路線，2 條直達", RouteResultCardFormatter.resultSummary(routes, text))
     }
 
     @Test
@@ -112,10 +113,10 @@ class RouteResultCardFormatterTest {
         val route = FirstRunRoutePreview.route()
 
         assertEquals("118", route.routeName)
-        assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(route.waitTimeState))
-        assertEquals("下一班 11 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState))
-        assertEquals("柴灣  →  中環", route.stopPreview?.displayText())
-        assertEquals("HK$ 11.8 · 耗時 38 分鐘 · 步行 160 米", RouteResultCardFormatter.info(route))
+        assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(route.waitTimeState, text))
+        assertEquals("下一班 11 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState, text))
+        assertEquals("Chai Wan  →  Central", route.stopPreview?.displayText())
+        assertEquals("HK$ 11.8 · 耗時 38 分鐘 · 步行 160 米", RouteResultCardFormatter.info(route, text))
         assertFalse(RouteCardActionPolicy.canStartMonitor(route))
         assertTrue(RouteCardActionPolicy.canOpenEtaArrivals(route.waitTimeState))
     }
@@ -144,5 +145,21 @@ class RouteResultCardFormatterTest {
             rawInfo = "1|*|CTB||8X-THR-1||6||31||O|*|",
             lang = "0"
         )
+    }
+
+    private val text = LocalizedText { resourceId, args ->
+        when (resourceId) {
+            R.string.price_free -> "免費"
+            R.string.price_hkd -> "HK$ %.1f".format(java.util.Locale.US, args[0])
+            R.string.eta_due -> "即將到站"
+            R.string.eta_wait -> "等候 ${args[0]} 分鐘"
+            R.string.eta_loading -> "候車查詢中"
+            R.string.eta_unavailable -> "暫無車輛"
+            R.string.minutes_count -> "${args[0]} 分鐘"
+            R.string.eta_next -> "下一班 ${args[0]} ›"
+            R.string.route_card_summary -> "${args[0]} · 耗時 ${args[1]} 分鐘 · 步行 ${args[2]} 米"
+            R.string.route_results_summary -> "共 ${args[0]} 條路線，${args[1]} 條直達"
+            else -> error("Unexpected resource $resourceId")
+        }
     }
 }

@@ -20,6 +20,7 @@ import com.golink.busiscoming.R
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.GeoDistanceCalculator
 import com.golink.busiscoming.data.location.PlaceDistanceFormatter
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -99,6 +100,16 @@ class PlaceInputController(
         suppressTextChange = false
         clearMessages()
     }
+
+    fun restoreInputText(text: String) {
+        if (text.isBlank() || selectedPlace != null) return
+        suppressTextChange = true
+        input.setText(text, false)
+        input.setSelection(input.text?.length ?: 0)
+        suppressTextChange = false
+    }
+
+    fun currentInputText(): String = input.text?.toString().orEmpty()
 
     fun setHelperText(message: String?) {
         inputLayout.helperText = message
@@ -185,18 +196,23 @@ class PlaceInputController(
 
         setSearchLoading(true)
         val searchId = searchSequence
+        val languageVersion = AppLanguageRuntime.snapshot().version
         val searchRunnable = Runnable {
-            runPlaceSearch(keyword, searchId)
+            runPlaceSearch(keyword, searchId, languageVersion)
         }
         pendingSearch = searchRunnable
         mainHandler.postDelayed(searchRunnable, SEARCH_DEBOUNCE_MS)
     }
 
-    private fun runPlaceSearch(keyword: String, searchId: Int) {
+    private fun runPlaceSearch(keyword: String, searchId: Int, languageVersion: Long) {
         searchExecutor.execute {
             val result = runCatching { placeSearchRepository.searchPlaces(keyword) }
             mainHandler.post {
-                if (!isActive() || searchSequence != searchId) return@post
+                if (
+                    !isActive() ||
+                    searchSequence != searchId ||
+                    AppLanguageRuntime.snapshot().version != languageVersion
+                ) return@post
 
                 setSearchLoading(false)
                 result
@@ -207,7 +223,7 @@ class PlaceInputController(
                         adapter.submitPlaces(emptyList())
                         hideCandidates()
                         inputLayout.helperText = null
-                        inputLayout.error = "地點搜尋失敗，請稍後重試"
+                        inputLayout.error = input.context.getString(R.string.place_search_failed)
                     }
             }
         }
@@ -218,7 +234,7 @@ class PlaceInputController(
         inputLayout.error = null
         if (places.isEmpty()) {
             hideCandidates()
-            inputLayout.helperText = "沒有匹配地點"
+            inputLayout.helperText = input.context.getString(R.string.place_search_empty)
         } else {
             inputLayout.helperText = null
             if (input.hasFocus()) {
@@ -372,7 +388,15 @@ class PlaceInputController(
             } else {
                 distanceContainer.visibility = View.VISIBLE
                 distanceView.text = PlaceDistanceFormatter.compact(distanceMeters)
-                rowView.contentDescription = "${place.name}，${PlaceDistanceFormatter.accessibility(distanceMeters)}"
+                val distanceDescription = if (distanceMeters < 1000) {
+                    rowView.context.getString(R.string.distance_from_current_meters, distanceMeters)
+                } else {
+                    rowView.context.getString(
+                        R.string.distance_from_current,
+                        PlaceDistanceFormatter.compact(distanceMeters)
+                    )
+                }
+                rowView.contentDescription = listOf(place.name, distanceDescription).joinToString(", ")
             }
             rowView.setOnClickListener { onClick(place) }
         }

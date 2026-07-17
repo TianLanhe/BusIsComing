@@ -52,8 +52,8 @@ class BusMonitorNotificationContractTest {
     fun monitorNotificationUsesFormatterTitleAndOnlyRefreshStopActions() {
         assertTrue(serviceKt.contains("BusMonitorNotificationFormatter.title"))
         assertFalse(serviceKt.contains("\"打開 App\""))
-        assertTrue(serviceKt.contains(".addAction(android.R.drawable.ic_popup_sync, \"刷新\", refreshIntent)"))
-        assertTrue(serviceKt.contains(".addAction(android.R.drawable.ic_menu_close_clear_cancel, \"停止\", stopIntent)"))
+        assertTrue(serviceKt.contains("getString(R.string.notification_refresh)"))
+        assertTrue(serviceKt.contains("getString(R.string.notification_stop)"))
         assertTrue(serviceKt.contains(".setContentIntent(openIntent)"))
     }
 
@@ -108,9 +108,8 @@ class BusMonitorNotificationContractTest {
 
     @Test
     fun monitorStartSheetDisclosesLockscreenNotificationAndSpeechBehavior() {
-        assertTrue(monitorSheetKt.contains("鎖屏會顯示路線與 ETA"))
-        assertTrue(monitorSheetKt.contains("狀態變更可能在鎖屏時播報"))
-        assertTrue(monitorSheetKt.contains("語音播報"))
-        assertTrue(monitorSheetKt.contains("開始監控"))
+        assertTrue(monitorSheetKt.contains("R.string.monitor_explanation"))
+        assertTrue(monitorSheetKt.contains("R.string.monitor_voice"))
+        assertTrue(monitorSheetKt.contains("R.string.monitor_start"))
     }
 }

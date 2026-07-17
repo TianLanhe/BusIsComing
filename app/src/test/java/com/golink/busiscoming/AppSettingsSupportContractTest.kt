@@ -12,19 +12,21 @@ import org.junit.Test
 
 class AppSettingsSupportContractTest {
     private val manifestXml = File("src/main/AndroidManifest.xml").readText()
-    private val settingsLayoutXml = File("src/main/res/layout/activity_settings.xml").readText()
+    private val settingsFragmentLayoutXml =
+        File("src/main/res/layout/fragment_settings.xml").readText()
+    private val settingsFragmentKt =
+        File("src/main/java/com/golink/busiscoming/ui/main/SettingsFragment.kt").readText()
     private val aboutLayoutXml = File("src/main/res/layout/activity_about.xml").readText()
     private val stringsXml = File("src/main/res/values/strings.xml").readText()
-    private val settingsActivityKt =
-        File("src/main/java/com/golink/busiscoming/ui/settings/SettingsActivity.kt").readText()
+    private val valuesV26ThemesXml = File("src/main/res/values-v26/themes.xml").readText()
     private val aboutActivityKt =
         File("src/main/java/com/golink/busiscoming/ui/settings/AboutActivity.kt").readText()
     private val actionsKt =
         File("src/main/java/com/golink/busiscoming/ui/settings/AppSupportActions.kt").readText()
 
     @Test
-    fun manifestDeclaresSettingsAndAboutActivities() {
-        assertTrue(manifestXml.contains(".ui.settings.SettingsActivity"))
+    fun manifestKeepsSettingsTopLevelAndDeclaresOnlyItsSecondaryActivities() {
+        assertFalse(manifestXml.contains(".ui.settings.SettingsActivity"))
         assertTrue(manifestXml.contains(".ui.settings.AboutActivity"))
         assertTrue(manifestXml.contains(".ui.settings.RouteTransferActivity"))
         assertTrue(manifestXml.contains("android:exported=\"false\""))
@@ -35,15 +37,15 @@ class AppSettingsSupportContractTest {
 
     @Test
     fun settingsPageUsesGroupedLowFrequencyEntries() {
-        assertTrue(settingsLayoutXml.contains("android:id=\"@+id/settingsRoot\""))
-        assertTrue(settingsLayoutXml.contains("android:background=\"@drawable/app_page_background\""))
-        assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings\""))
-        assertTrue(settingsLayoutXml.contains("android:text=\"@string/app_name\""))
-        assertTrue(settingsLayoutXml.contains("android:id=\"@+id/settingsVersionText\""))
-        assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_preferences\""))
-        assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_route_data\""))
-        assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_support\""))
-        assertTrue(settingsLayoutXml.contains("android:text=\"@string/settings_group_about\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:id=\"@+id/settingsRoot\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:background=\"@drawable/app_page_background\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/settings\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/app_name\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:id=\"@+id/settingsVersionText\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/settings_group_preferences\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/settings_group_route_data\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/settings_group_support\""))
+        assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/settings_group_about\""))
         assertEntry("settingsLanguageRow", "settings_language")
         assertEntry("settingsRouteTransferRow", "settings_route_transfer")
         assertEntry("settingsShareRow", "settings_share_app")
@@ -52,13 +54,50 @@ class AppSettingsSupportContractTest {
         assertEntry("settingsUpdateRow", "settings_check_update")
         assertEntry("settingsAboutRow", "settings_about_us")
         assertEntry("settingsPrivacyRow", "settings_privacy_policy")
-        assertFalse(settingsLayoutXml.contains("首頁"))
-        val preferencesIndex = settingsLayoutXml.indexOf("@string/settings_group_preferences")
-        val routeDataIndex = settingsLayoutXml.indexOf("@string/settings_group_route_data")
-        val supportIndex = settingsLayoutXml.indexOf("@string/settings_group_support")
+        assertFalse(settingsFragmentLayoutXml.contains("首頁"))
+        val preferencesIndex = settingsFragmentLayoutXml.indexOf("@string/settings_group_preferences")
+        val routeDataIndex = settingsFragmentLayoutXml.indexOf("@string/settings_group_route_data")
+        val supportIndex = settingsFragmentLayoutXml.indexOf("@string/settings_group_support")
         assertTrue(preferencesIndex < routeDataIndex)
         assertTrue(routeDataIndex < supportIndex)
-        assertEquals(1, Regex("@\\+id/settingsRouteTransferRow").findAll(settingsLayoutXml).count())
+        assertEquals(1, Regex("@\\+id/settingsRouteTransferRow").findAll(settingsFragmentLayoutXml).count())
+    }
+
+    @Test
+    fun topLevelSettingsStartsWithAppearanceThenLanguageAndShowsCurrentValues() {
+        val preferencesIndex =
+            settingsFragmentLayoutXml.indexOf("@string/settings_group_preferences")
+        val appearanceIndex = settingsFragmentLayoutXml.indexOf("@+id/settingsAppearanceRow")
+        val languageIndex = settingsFragmentLayoutXml.indexOf("@+id/settingsLanguageRow")
+        val routeDataIndex =
+            settingsFragmentLayoutXml.indexOf("@string/settings_group_route_data")
+        val supportIndex = settingsFragmentLayoutXml.indexOf("@string/settings_group_support")
+        val aboutIndex = settingsFragmentLayoutXml.indexOf("@string/settings_group_about")
+
+        assertTrue(preferencesIndex >= 0)
+        assertTrue(preferencesIndex < appearanceIndex)
+        assertTrue(appearanceIndex < languageIndex)
+        assertTrue(languageIndex < routeDataIndex)
+        assertTrue(routeDataIndex < supportIndex)
+        assertTrue(supportIndex < aboutIndex)
+        assertTrue(settingsFragmentLayoutXml.contains("@+id/settingsAppearanceValue"))
+        assertTrue(settingsFragmentLayoutXml.contains("@+id/settingsLanguageValue"))
+        assertTrue(settingsFragmentLayoutXml.contains("android:minHeight=\"48dp\""))
+        assertTrue(settingsFragmentKt.contains("AppThemeMode.SYSTEM"))
+        assertTrue(settingsFragmentKt.contains("AppThemeMode.LIGHT"))
+        assertTrue(settingsFragmentKt.contains("AppThemeMode.DARK"))
+        assertTrue(settingsFragmentKt.contains("setSingleChoiceItems"))
+    }
+
+    @Test
+    fun api26SettingsTitlesDoNotRetainHorizontalWeightInsideVerticalRows() {
+        val style = valuesV26ThemesXml
+            .substringAfter("<style name=\"SettingsRowText\">")
+            .substringBefore("</style>")
+
+        assertFalse(style.contains("android:layout_width\">0dp"))
+        assertFalse(style.contains("android:layout_weight"))
+        assertTrue(style.contains("android:layout_width\">match_parent"))
     }
 
     @Test
@@ -74,10 +113,11 @@ class AppSettingsSupportContractTest {
     @Test
     fun appSupportActionsCentralizeUrlsCopyAndToasts() {
         assertTrue(actionsKt.contains("https://www.busiscoming.com"))
-        assertTrue(actionsKt.contains("https://www.busiscoming.com/zh-hant/privacy/"))
+        assertTrue(actionsKt.contains("snapshot().websitePath"))
+        assertTrue(actionsKt.contains("snapshot().privacyPath"))
         assertTrue(actionsKt.contains("hezhenyu966@gmail.com"))
-        assertTrue(actionsKt.contains("搭巴士前想快一點知道哪條路線合適？"))
-        assertTrue(stringsXml.contains("暫不支援語言切換"))
+        assertTrue(actionsKt.contains("R.string.share_copy"))
+        assertTrue(actionsKt.contains("R.string.feedback_body"))
         assertTrue(stringsXml.contains("暫不支援應用評分"))
         assertTrue(stringsXml.contains("暫不支援檢查更新"))
         assertTrue(stringsXml.contains("暫時無法分享應用"))
@@ -87,50 +127,43 @@ class AppSettingsSupportContractTest {
     }
 
     @Test
-    fun activitiesWirePlaceholderAndExternalActions() {
-        assertTrue(settingsActivityKt.contains("settingsLanguageRow"))
-        assertTrue(settingsActivityKt.contains("settingsRouteTransferRow"))
-        assertTrue(settingsActivityKt.contains("RouteTransferActivity::class.java"))
-        assertTrue(settingsActivityKt.contains("unsupported_language_switch"))
-        assertTrue(settingsActivityKt.contains("unsupported_rate_app"))
-        assertTrue(settingsActivityKt.contains("unsupported_check_update"))
-        assertTrue(settingsActivityKt.contains("shareApp(this)"))
-        assertTrue(settingsActivityKt.contains("sendFeedback(this)"))
-        assertTrue(settingsActivityKt.contains("openPrivacyPolicy(this)"))
-        assertTrue(settingsActivityKt.contains("AboutActivity::class.java"))
+    fun topLevelSettingsAndSecondaryAboutPageWireTheirActions() {
+        assertTrue(settingsFragmentKt.contains("settingsLanguageRow"))
+        assertTrue(settingsFragmentKt.contains("settingsRouteTransferRow"))
+        assertTrue(settingsFragmentKt.contains("RouteTransferActivity::class.java"))
+        assertTrue(settingsFragmentKt.contains("AppLanguageChoice.FOLLOW_SYSTEM"))
+        assertTrue(settingsFragmentKt.contains("AppLanguageChoice.TRADITIONAL_CHINESE"))
+        assertTrue(settingsFragmentKt.contains("AppLanguageChoice.SIMPLIFIED_CHINESE"))
+        assertTrue(settingsFragmentKt.contains("AppLanguageChoice.ENGLISH"))
+        assertTrue(settingsFragmentKt.contains("unsupported_rate_app"))
+        assertTrue(settingsFragmentKt.contains("unsupported_check_update"))
+        assertTrue(settingsFragmentKt.contains("shareApp(requireContext())"))
+        assertTrue(settingsFragmentKt.contains("sendFeedback(requireContext())"))
+        assertTrue(settingsFragmentKt.contains("openPrivacyPolicy(requireContext())"))
+        assertTrue(settingsFragmentKt.contains("AboutActivity::class.java"))
         assertTrue(aboutActivityKt.contains("openWebsite(this)"))
-        assertTrue(settingsActivityKt.contains("BuildConfig.VERSION_NAME"))
+        assertTrue(settingsFragmentKt.contains("BuildConfig.VERSION_NAME"))
         assertTrue(aboutActivityKt.contains("BuildConfig.VERSION_NAME"))
+        assertFalse(stringsXml.contains("unsupported_language_switch"))
     }
 
     private fun assertEntry(rowId: String, stringName: String) {
         val rowRef = "@+id/$rowId"
         val textRef = "@string/$stringName"
-        assertTrue("Missing row $rowId", settingsLayoutXml.contains(rowRef))
-        assertTrue("Missing text $stringName", settingsLayoutXml.contains(textRef))
+        assertTrue("Missing row $rowId", settingsFragmentLayoutXml.contains(rowRef))
+        assertTrue("Missing text $stringName", settingsFragmentLayoutXml.contains(textRef))
     }
 }
 
 class AppSupportActionsTest {
     @Test
-    fun shareTextUsesChosenCopyAndWebsite() {
-        assertTrue(AppSupportActions.shareText.contains("搭巴士前想快一點知道哪條路線合適？"))
-        assertTrue(AppSupportActions.shareText.contains("BusIsComing"))
-        assertTrue(AppSupportActions.shareText.endsWith(AppSupportActions.websiteUrl))
-    }
-
-    @Test
-    fun feedbackBodyIncludesDiagnosticsAndPrompt() {
-        val body = AppSupportActions.feedbackBody(
-            appVersion = "1.2.3",
-            androidVersion = "36",
-            deviceModel = "Pixel Test"
-        )
-
-        assertTrue(body.contains("App 版本：1.2.3"))
-        assertTrue(body.contains("Android 版本：36"))
-        assertTrue(body.contains("設備型號：Pixel Test"))
-        assertTrue(body.contains("問題描述："))
+    fun supportCopyAndLinksAreResolvedFromCurrentLocale() {
+        val source = File(
+            "src/main/java/com/golink/busiscoming/ui/settings/AppSupportActions.kt"
+        ).readText()
+        assertTrue(source.contains("context.getString(R.string.share_copy"))
+        assertTrue(source.contains("context.getString(\n            R.string.feedback_body"))
+        assertTrue(source.contains("AppLanguageRepository(context).snapshot()"))
     }
 
     @Test

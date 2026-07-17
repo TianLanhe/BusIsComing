@@ -2,39 +2,54 @@ package com.golink.busiscoming.ui.main
 
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.WaitTimeState
-import java.util.Locale
+import com.golink.busiscoming.R
+import com.golink.busiscoming.ui.common.LocalizedText
 
 object RouteResultCardFormatter {
-    fun price(priceHkd: Double): String {
+    fun price(priceHkd: Double, text: LocalizedText): String {
         return if (priceHkd == 0.0) {
-            "免費"
+            text.get(R.string.price_free, emptyArray())
         } else {
-            String.format(Locale.US, "HK$ %.1f", priceHkd)
+            text.get(R.string.price_hkd, arrayOf(priceHkd))
         }
     }
 
-    fun waitStatus(waitTimeState: WaitTimeState): String {
+    fun waitStatus(waitTimeState: WaitTimeState, text: LocalizedText): String {
         return when (waitTimeState) {
             is WaitTimeState.Available -> {
-                if (waitTimeState.minutes <= 0) "即將到站" else "等候 ${waitTimeState.minutes} 分鐘"
+                if (waitTimeState.minutes <= 0) {
+                    text.get(R.string.eta_due, emptyArray())
+                } else {
+                    text.get(R.string.eta_wait, arrayOf(waitTimeState.minutes))
+                }
             }
-            WaitTimeState.Loading -> "候車查詢中"
-            WaitTimeState.Unavailable -> "暫無車輛"
+            WaitTimeState.Loading -> text.get(R.string.eta_loading, emptyArray())
+            WaitTimeState.Unavailable -> text.get(R.string.eta_unavailable, emptyArray())
         }
     }
 
-    fun nextArrivalStatus(waitTimeState: WaitTimeState): String? {
+    fun nextArrivalStatus(waitTimeState: WaitTimeState, text: LocalizedText): String? {
         val nextArrival = (waitTimeState as? WaitTimeState.Available)?.nextArrival ?: return null
-        val minutesText = if (nextArrival.minutes <= 0) "即將到站" else "${nextArrival.minutes} 分鐘"
-        return "下一班 $minutesText ›"
+        val minutesText = if (nextArrival.minutes <= 0) {
+            text.get(R.string.eta_due, emptyArray())
+        } else {
+            text.get(R.string.minutes_count, arrayOf(nextArrival.minutes))
+        }
+        return text.get(R.string.eta_next, arrayOf(minutesText))
     }
 
-    fun info(route: BusRouteOption): String {
-        return "${price(route.priceHkd)} · 耗時 ${route.durationMinutes} 分鐘 · 步行 ${route.walkingDistanceMeters} 米"
+    fun info(route: BusRouteOption, text: LocalizedText): String {
+        return text.get(
+            R.string.route_card_summary,
+            arrayOf<Any>(price(route.priceHkd, text), route.durationMinutes, route.walkingDistanceMeters)
+        )
     }
 
-    fun resultSummary(routes: List<BusRouteOption>): String {
-        return "共 ${routes.size} 條路線，${routes.count { it.transferCount == 0 }} 條直達"
+    fun resultSummary(routes: List<BusRouteOption>, text: LocalizedText): String {
+        return text.get(
+            R.string.route_results_summary,
+            arrayOf(routes.size, routes.count { it.transferCount == 0 })
+        )
     }
 }
 

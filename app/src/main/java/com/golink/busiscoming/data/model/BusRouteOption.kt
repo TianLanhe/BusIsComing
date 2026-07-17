@@ -52,7 +52,9 @@ data class EtaArrival(
     val etaMillis: Long? = null,
     val arrivalTimeText: String = "",
     val destination: String? = null,
+    val destinationLanguage: String? = null,
     val remark: String? = null,
+    val remarkLanguage: String? = null,
     val dataTimestampMillis: Long? = null
 )
 
@@ -254,14 +256,7 @@ object RouteDetailDisplayFormatter {
     }
 
     fun directionLabel(directionText: String?): String? {
-        val normalized = directionText
-            ?.trim()
-            ?.removePrefix("往")
-            ?.removeSuffix("方向")
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?: return null
-        return "往 ${normalized}方向"
+        return directionText?.trim()?.takeIf { it.isNotBlank() }
     }
 }
 

@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfigValidator
+import com.golink.busiscoming.data.model.RouteConfigValidationError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -23,7 +24,7 @@ class RouteConfigValidatorTest {
         val result = RouteConfigValidator.validate("F", null, destination)
 
         assertFalse(result.isValid)
-        assertEquals("請選擇起點地點", result.originError)
+        assertEquals(RouteConfigValidationError.ORIGIN_REQUIRED, result.originError)
     }
 
     @Test
@@ -31,7 +32,7 @@ class RouteConfigValidatorTest {
         val result = RouteConfigValidator.validate("F", origin, null)
 
         assertFalse(result.isValid)
-        assertEquals("請選擇終點地點", result.destinationError)
+        assertEquals(RouteConfigValidationError.DESTINATION_REQUIRED, result.destinationError)
     }
 
     @Test
@@ -39,7 +40,7 @@ class RouteConfigValidatorTest {
         val result = RouteConfigValidator.validate("F", origin, origin.copy())
 
         assertFalse(result.isValid)
-        assertEquals("起點和終點不能相同", result.destinationError)
+        assertEquals(RouteConfigValidationError.SAME_PLACES, result.destinationError)
     }
 
     @Test
@@ -47,6 +48,6 @@ class RouteConfigValidatorTest {
         val result = RouteConfigValidator.validate("", origin, destination)
 
         assertFalse(result.isValid)
-        assertEquals("必填", result.nameError)
+        assertEquals(RouteConfigValidationError.REQUIRED, result.nameError)
     }
 }

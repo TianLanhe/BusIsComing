@@ -15,6 +15,8 @@ import android.util.Log
 import com.golink.busiscoming.data.model.BusMonitorTtsLanguagePolicy
 import com.golink.busiscoming.data.model.BusMonitorTtsLanguageSelection
 import com.golink.busiscoming.data.model.BusMonitorTtsLanguageUnavailableReason
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
+import com.golink.busiscoming.data.localization.TtsLanguageFamily
 import java.util.Locale
 
 sealed class BusMonitorSpeechResult {
@@ -35,8 +37,10 @@ sealed class BusMonitorSpeechResult {
 enum class BusMonitorSpeechFailureReason {
     NO_ENGINE,
     INITIALIZATION_FAILED,
+    INITIALIZATION_TIMEOUT,
     LANGUAGE_MISSING_DATA,
     LANGUAGE_NOT_SUPPORTED,
+    NO_COMPATIBLE_VOICE,
     AUDIO_FOCUS_DENIED,
     SPEAK_REJECTED,
     PLAYBACK_ERROR,
@@ -51,7 +55,11 @@ enum class BusMonitorSpeechAudioMode {
 
 typealias BusMonitorSpeechEventListener = (BusMonitorSpeechResult) -> Unit
 
-class BusMonitorSpeechController(context: Context) {
+class BusMonitorSpeechController(
+    context: Context,
+    private val languageFamily: TtsLanguageFamily = AppLanguageRuntime.snapshot().ttsLanguageFamily,
+    private val readinessListener: ((BusMonitorSpeechResult.Failure) -> Unit)? = null
+) {
     private val appContext = context.applicationContext
     private val audioManager: AudioManager? = appContext.getSystemService(AudioManager::class.java)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -72,18 +80,27 @@ class BusMonitorSpeechController(context: Context) {
     init {
         if (!hasTextToSpeechEngine()) {
             initialized = true
-            readinessFailure = BusMonitorSpeechResult.Failure(BusMonitorSpeechFailureReason.NO_ENGINE)
+            recordReadinessFailure(
+                BusMonitorSpeechResult.Failure(BusMonitorSpeechFailureReason.NO_ENGINE)
+            )
             Log.w(TAG, "No TextToSpeech engine service found")
         } else {
             textToSpeech = TextToSpeech(appContext) { status ->
+                if (initialized && readinessFailure?.reason ==
+                    BusMonitorSpeechFailureReason.INITIALIZATION_TIMEOUT
+                ) {
+                    return@TextToSpeech
+                }
                 initialized = true
                 Log.d(TAG, "TextToSpeech init status=$status engine=${textToSpeech?.defaultEngine}")
                 ready = if (status == TextToSpeech.SUCCESS) {
                     configureLanguage()
                 } else {
-                    readinessFailure = BusMonitorSpeechResult.Failure(
-                        reason = BusMonitorSpeechFailureReason.INITIALIZATION_FAILED,
-                        detail = "status=$status"
+                    recordReadinessFailure(
+                        BusMonitorSpeechResult.Failure(
+                            reason = BusMonitorSpeechFailureReason.INITIALIZATION_FAILED,
+                            detail = "status=$status"
+                        )
                     )
                     false
                 }
@@ -95,6 +112,7 @@ class BusMonitorSpeechController(context: Context) {
                 pendingSpeech = null
             }
             textToSpeech?.setOnUtteranceProgressListener(progressListener())
+            scheduleInitializationTimeout()
         }
     }
 
@@ -171,10 +189,35 @@ class BusMonitorSpeechController(context: Context) {
 
     private fun configureLanguage(): Boolean {
         val engine = textToSpeech ?: return false
-        val selection = BusMonitorTtsLanguagePolicy.selectSupportedLocale { locale ->
-            val result = engine.setLanguage(locale)
-            Log.d(TAG, "TTS language candidate=${locale.toLanguageTag()} result=$result")
-            result
+        val voices = engine.voices.orEmpty().toList()
+        Log.d(
+            TAG,
+            "TTS configure engine=${engine.defaultEngine} requestedFamily=$languageFamily voiceCount=${voices.size}"
+        )
+        val selection = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = languageFamily,
+            availableVoiceLocales = voices.map { it.locale }
+        ) { locale ->
+            val languageResult = engine.setLanguage(locale)
+            val voice = voices.firstOrNull { it.locale.toLanguageTag().equals(locale.toLanguageTag(), true) }
+            val voiceResult = voice?.let { engine.setVoice(it) } ?: TextToSpeech.LANG_NOT_SUPPORTED
+            Log.d(
+                TAG,
+                "TTS candidate locale=${locale.toLanguageTag()} voice=${voice?.name} " +
+                    "networkRequired=${voice?.isNetworkConnectionRequired} " +
+                    "setLanguage=$languageResult setVoice=$voiceResult"
+            )
+            if (BusMonitorTtsLanguagePolicy.isLanguageUsable(languageResult) &&
+                BusMonitorTtsLanguagePolicy.isLanguageUsable(voiceResult)
+            ) {
+                TextToSpeech.LANG_AVAILABLE
+            } else if (languageResult == TextToSpeech.LANG_MISSING_DATA ||
+                voiceResult == TextToSpeech.LANG_MISSING_DATA
+            ) {
+                TextToSpeech.LANG_MISSING_DATA
+            } else {
+                TextToSpeech.LANG_NOT_SUPPORTED
+            }
         }
         return when (selection) {
             is BusMonitorTtsLanguageSelection.Supported -> {
@@ -183,19 +226,47 @@ class BusMonitorSpeechController(context: Context) {
                 true
             }
             is BusMonitorTtsLanguageSelection.Unavailable -> {
-                readinessFailure = BusMonitorSpeechResult.Failure(
+                recordReadinessFailure(BusMonitorSpeechResult.Failure(
                     reason = when (selection.reason) {
                         BusMonitorTtsLanguageUnavailableReason.MISSING_DATA ->
                             BusMonitorSpeechFailureReason.LANGUAGE_MISSING_DATA
                         BusMonitorTtsLanguageUnavailableReason.NOT_SUPPORTED ->
                             BusMonitorSpeechFailureReason.LANGUAGE_NOT_SUPPORTED
+                        BusMonitorTtsLanguageUnavailableReason.NO_COMPATIBLE_VOICE ->
+                            BusMonitorSpeechFailureReason.NO_COMPATIBLE_VOICE
                     },
                     detail = selection.checks.joinToString { "${it.locale.toLanguageTag()}=${it.result}" }
-                )
+                ))
                 Log.w(TAG, "TTS language unavailable: ${readinessFailure?.detail}")
                 false
             }
         }
+    }
+
+    private fun scheduleInitializationTimeout() {
+        mainHandler.postDelayed(
+            {
+                if (!initialized && !released) {
+                    initialized = true
+                    ready = false
+                    val failure = BusMonitorSpeechResult.Failure(
+                        BusMonitorSpeechFailureReason.INITIALIZATION_TIMEOUT
+                    )
+                    recordReadinessFailure(failure)
+                    pendingSpeech?.listener?.invoke(failure)
+                    pendingSpeech = null
+                    textToSpeech?.shutdown()
+                    textToSpeech = null
+                    Log.w(TAG, "TextToSpeech initialization timed out")
+                }
+            },
+            INITIALIZATION_TIMEOUT_MILLIS
+        )
+    }
+
+    private fun recordReadinessFailure(failure: BusMonitorSpeechResult.Failure) {
+        readinessFailure = failure
+        readinessListener?.invoke(failure)
     }
 
     private fun applyAudioAttributes(engine: TextToSpeech, mode: BusMonitorSpeechAudioMode) {
@@ -380,5 +451,6 @@ class BusMonitorSpeechController(context: Context) {
     private companion object {
         const val TAG = "BusMonitorSpeech"
         const val START_TIMEOUT_MILLIS = 4_000L
+        const val INITIALIZATION_TIMEOUT_MILLIS = 8_000L
     }
 }

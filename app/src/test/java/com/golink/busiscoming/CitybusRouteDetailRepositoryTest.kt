@@ -69,7 +69,7 @@ class CitybusRouteDetailRepositoryTest {
         val detail = CitybusRouteDetailParser.parse(DIRECTION_DETAIL_HTML, query(SINGLE_ROUTE_RAW_INFO).plan)
 
         assertEquals("筲箕灣", detail.first().directionText)
-        assertEquals("往 筲箕灣方向", RouteDetailDisplayFormatter.directionLabel(detail.first().directionText))
+        assertEquals("筲箕灣", RouteDetailDisplayFormatter.directionLabel(detail.first().directionText))
     }
 
     @Test
@@ -160,7 +160,7 @@ class CitybusRouteDetailRepositoryTest {
         assertEquals(2, detail.legs.size)
         assertEquals(listOf("N8P", "N969"), detail.legs.map { it.route })
         assertEquals(listOf("小西灣藍灣半島", "天水圍市中心"), detail.legs.map { it.directionText })
-        assertEquals("往 小西灣藍灣半島方向", RouteDetailDisplayFormatter.directionLabel(detail.legs.first().directionText))
+        assertEquals("小西灣藍灣半島", RouteDetailDisplayFormatter.directionLabel(detail.legs.first().directionText))
         assertEquals("樂軒臺", detail.legs.first().boardingStop.displayName)
         assertEquals("灣仔消防局", detail.legs.first().alightingStop.displayName)
         assertEquals("堅拿道東", detail.legs[1].boardingStop.displayName)
@@ -191,7 +191,7 @@ class CitybusRouteDetailRepositoryTest {
         val leg = detail.legs.first()
         assertEquals("N118", leg.route)
         assertEquals("長沙灣(深旺道)", leg.directionText)
-        assertEquals("往 長沙灣(深旺道)方向", RouteDetailDisplayFormatter.directionLabel(leg.directionText))
+        assertEquals("長沙灣(深旺道)", RouteDetailDisplayFormatter.directionLabel(leg.directionText))
         assertEquals("樂軒臺", leg.boardingStop.displayName)
         assertEquals(listOf("環翠商場", "環翠邨澤翠樓", "興華邨卓華樓"), leg.viaStops.map { it.displayName })
         assertEquals("興華邨豐興樓", leg.alightingStop.displayName)

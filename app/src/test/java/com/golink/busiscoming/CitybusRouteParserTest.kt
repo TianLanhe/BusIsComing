@@ -10,6 +10,23 @@ import org.junit.Test
 
 class CitybusRouteParserTest {
     @Test
+    fun parsesLiveThreeLanguageSingleAndTransferFixtures() {
+        listOf(
+            "citybus/ppsearch-p3-tc.html" to "0",
+            "citybus/ppsearch-p3-sc.html" to "2",
+            "citybus/ppsearch-p3-en.html" to "1"
+        ).forEach { (path, lang) ->
+            val routes = CitybusRouteParser.parse(resourceText(path), lang)
+
+            assertEquals(path, listOf("788", "N118 \u2192 N691"), routes.map { it.routeName })
+            assertEquals(path, listOf(8.7, 27.6), routes.map { it.priceHkd })
+            assertEquals(path, listOf(32, 38), routes.map { it.durationMinutes })
+            assertEquals(path, listOf(350, 450), routes.map { it.walkingDistanceMeters })
+            assertEquals(path, listOf(lang, lang), routes.map { it.routeDetailQuery?.lang })
+        }
+    }
+
+    @Test
     fun parsesSampleHtmlResults() {
         val routes = CitybusRouteParser.parse(SAMPLE_HTML)
 
@@ -131,6 +148,60 @@ class CitybusRouteParserTest {
         )
 
         assertEquals(listOf("8X"), routes.map { it.routeName })
+    }
+
+    @Test
+    fun parsesSimplifiedChineseCandidateLabelsWithoutTraditionalFallback() {
+        val routes = CitybusRouteParser.parse(
+            """
+            <div id="routelist2">
+                <table aria-label="8X 港元8.1 至 1 免费 *预计93分钟 步行距离(约)450米"></table>
+            </div>
+            """.trimIndent(),
+            lang = "2"
+        )
+
+        assertEquals(1, routes.size)
+        assertEquals("8X \u2192 1", routes.single().routeName)
+        assertEquals(8.1, routes.single().priceHkd, 0.001)
+        assertEquals(93, routes.single().durationMinutes)
+        assertEquals(450, routes.single().walkingDistanceMeters)
+    }
+
+    @Test
+    fun parsesEnglishCandidateLabelsUsingNaturalUpstreamTerms() {
+        val routes = CitybusRouteParser.parse(
+            """
+            <div id="routelist2">
+                <table aria-label="8X HK${'$'}8.1 to 1 Free Estimated 93 minutes Walking distance (approx.) 450m"></table>
+            </div>
+            """.trimIndent(),
+            lang = "1"
+        )
+
+        assertEquals(1, routes.size)
+        assertEquals("8X \u2192 1", routes.single().routeName)
+        assertEquals(8.1, routes.single().priceHkd, 0.001)
+        assertEquals(93, routes.single().durationMinutes)
+        assertEquals(450, routes.single().walkingDistanceMeters)
+    }
+
+    @Test
+    fun parsesEnglishFareWordingReturnedByLiveCitybusP2p() {
+        val routes = CitybusRouteParser.parse(
+            """
+            <div id="routelist2">
+                <table aria-label="N118 Hong Kong Dollar17.8 To N691 Hong Kong Dollar9.8Estimated37Min Walking distance (approx) 450m"></table>
+            </div>
+            """.trimIndent(),
+            lang = "1"
+        )
+
+        assertEquals(1, routes.size)
+        assertEquals("N118 \u2192 N691", routes.single().routeName)
+        assertEquals(27.6, routes.single().priceHkd, 0.001)
+        assertEquals(37, routes.single().durationMinutes)
+        assertEquals(450, routes.single().walkingDistanceMeters)
     }
 
     @Test
@@ -285,6 +356,12 @@ class CitybusRouteParserTest {
         assertThrows(CitybusRouteParseException::class.java) {
             CitybusRouteParser.parse("<div id=\"other\"></div>")
         }
+    }
+
+    private fun resourceText(path: String): String {
+        return requireNotNull(javaClass.classLoader?.getResource(path)) {
+            "Missing test resource $path"
+        }.readText()
     }
 
     companion object {

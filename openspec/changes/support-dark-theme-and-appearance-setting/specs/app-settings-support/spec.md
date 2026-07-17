@@ -1,19 +1,23 @@
 ## MODIFIED Requirements
 
 ### Requirement: 設定頁按 App 資訊、偏好、支援與關於分組
-系統 SHALL 使用獨立設定頁承載 App 級低頻入口，並以清楚分組避免首頁平鋪功能按鈕。
+系統 SHALL 使用頂層設定 destination 承載 App 級低頻入口，並以清楚分組避免常用與搜尋頁平鋪功能按鈕。
 
 #### Scenario: 顯示設定頁基本結構
 - **WHEN** 用戶打開設定頁
 - **THEN** 系統 SHALL 顯示頁面標題 `設定`
 - **AND** 系統 SHALL 顯示 App 名稱 `BusIsComing`
 - **AND** 系統 SHALL 顯示目前 App 版本
-- **AND** 系統 SHALL 顯示 `偏好`、`支援`、`關於` 分組
+- **AND** 系統 SHALL 顯示 `偏好`、`路線資料`、`支援`、`關於` 分組
 
 #### Scenario: 偏好分組
 - **WHEN** 用戶查看設定頁 `偏好` 分組
 - **THEN** 系統 SHALL 依序顯示 `外觀主題` 與 `語言` 入口
-- **AND** `外觀主題` SHALL 位於目前尚未支援的 `語言` 之前
+- **AND** `外觀主題` SHALL 位於 `語言` 之前
+
+#### Scenario: 路線資料分組
+- **WHEN** 用戶查看設定頁 `路線資料` 分組
+- **THEN** 系統 SHALL 顯示 `匯入與匯出常用路線` 入口
 
 #### Scenario: 支援分組
 - **WHEN** 用戶查看設定頁 `支援` 分組
@@ -23,9 +27,10 @@
 - **WHEN** 用戶查看設定頁 `關於` 分組
 - **THEN** 系統 SHALL 依序顯示 `關於我們`、`隱私政策` 入口
 
-#### Scenario: 返回主頁
-- **WHEN** 用戶在設定頁點擊左上返回入口或按系統返回
-- **THEN** 系統 SHALL 關閉設定頁並回到主頁
+#### Scenario: 設定是頂層 destination
+- **WHEN** 用戶透過底部導航打開設定頁
+- **THEN** 系統 SHALL 保持底部導航可見並標識設定為目前 destination
+- **AND** 系統 SHALL NOT 顯示左上返回入口或把設定呈現為獨立次級頁
 
 ## ADDED Requirements
 
@@ -51,10 +56,10 @@
 - **THEN** 系統 SHALL 保存並立即套用該模式
 - **AND** 對話框 SHALL 關閉
 - **AND** 設定列摘要 SHALL 在 Activity 重建後顯示新模式
+- **AND** 系統 SHALL 保持設定 destination 與已保存 App 語言選擇不變
 - **AND** 系統 SHALL NOT 顯示成功 Toast 或要求額外確認
 
 #### Scenario: 重新選擇目前模式
 - **WHEN** 用戶在對話框點擊目前已保存模式
 - **THEN** 系統 SHALL 關閉對話框並保持目前模式
 - **AND** 系統 SHALL NOT 顯示成功 Toast 或執行可見的無效重載
-

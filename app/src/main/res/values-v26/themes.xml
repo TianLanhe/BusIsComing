@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <style name="Theme.BusIsComing" parent="Theme.BusIsComing.Base">
+        <item name="android:statusBarColor">@color/bus_page_gradient_start</item>
+        <item name="android:navigationBarColor">@color/bus_card_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
     <style name="StableShortText">
         <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
@@ -57,9 +63,8 @@
     </style>
 
     <style name="SettingsRowText">
-        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_weight">1</item>
         <item name="android:justificationMode">none</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>

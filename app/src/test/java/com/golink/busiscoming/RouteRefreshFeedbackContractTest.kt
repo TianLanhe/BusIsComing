@@ -20,6 +20,6 @@ class RouteRefreshFeedbackContractTest {
     fun refreshFailureRestoresPreviousViewportAndKeepsToastOnlyFeedback() {
         assertTrue(mainActivityKt.contains("captureRefreshViewport()"))
         assertTrue(mainActivityKt.contains("restoreRefreshViewport()"))
-        assertTrue(mainActivityKt.contains("刷新失敗，請稍後重試"))
+        assertTrue(mainActivityKt.contains("R.string.refresh_failed"))
     }
 }

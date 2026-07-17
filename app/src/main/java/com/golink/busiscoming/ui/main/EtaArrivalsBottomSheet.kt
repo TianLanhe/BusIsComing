@@ -13,6 +13,8 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
+import com.golink.busiscoming.ui.common.LocalizedText
+import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,6 +24,7 @@ import java.util.TimeZone
 class EtaArrivalsBottomSheet(
     private val context: Context
 ) {
+    private val localizedText = context.localizedText()
     private var dialog: BottomSheetDialog? = null
     private var activeRouteId: String? = null
     private var content: LinearLayout? = null
@@ -72,7 +75,7 @@ class EtaArrivalsBottomSheet(
     private fun render(root: LinearLayout, route: BusRouteOption, arrivals: List<EtaArrival>) {
         root.removeAllViews()
         root.addView(TextView(context).apply {
-            text = EtaArrivalsSheetFormatter.title(route)
+            text = EtaArrivalsSheetFormatter.title(route, localizedText)
             applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
             textSize = 20f
@@ -80,7 +83,7 @@ class EtaArrivalsBottomSheet(
         })
 
         root.addView(TextView(context).apply {
-            text = EtaArrivalsSheetFormatter.subtitle(route, arrivals.firstOrNull())
+            text = EtaArrivalsSheetFormatter.subtitle(route, arrivals.firstOrNull(), localizedText)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 14f
             layoutParams = LinearLayout.LayoutParams(
@@ -88,7 +91,7 @@ class EtaArrivalsBottomSheet(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(6) }
         })
-        EtaArrivalsSheetFormatter.updateTimeText(arrivals.firstOrNull())?.let { text ->
+        EtaArrivalsSheetFormatter.updateTimeText(arrivals.firstOrNull(), localizedText)?.let { text ->
             root.addView(TextView(context).apply {
                 this.text = text
                 applyStableShortTextLayout(Gravity.START)
@@ -118,7 +121,7 @@ class EtaArrivalsBottomSheet(
         }
 
         row.addView(TextView(context).apply {
-            text = "第${arrival.sequence}班"
+            text = context.getString(R.string.eta_arrival_sequence, arrival.sequence)
             applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 14f
@@ -126,7 +129,7 @@ class EtaArrivalsBottomSheet(
         })
 
         row.addView(TextView(context).apply {
-            text = EtaArrivalsSheetFormatter.minuteText(arrival.minutes)
+            text = EtaArrivalsSheetFormatter.minuteText(arrival.minutes, localizedText)
             applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(context, R.color.bus_wait_accent))
             textSize = 18f
@@ -154,7 +157,7 @@ class EtaArrivalsBottomSheet(
                     setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
                     textSize = 12f
                     gravity = Gravity.END
-                    maxLines = 1
+                    maxLines = 3
                 })
             }
         })
@@ -167,28 +170,39 @@ class EtaArrivalsBottomSheet(
 }
 
 object EtaArrivalsSheetFormatter {
-    fun title(route: BusRouteOption): String {
-        return "首程 ${route.routeSegments.firstOrNull() ?: route.routeName} 候車時間"
+    fun title(route: BusRouteOption, text: LocalizedText): String {
+        return text.get(
+            R.string.eta_sheet_title,
+            arrayOf(route.routeSegments.firstOrNull() ?: route.routeName)
+        )
     }
 
-    fun subtitle(route: BusRouteOption, firstArrival: EtaArrival?): String {
+    fun subtitle(route: BusRouteOption, firstArrival: EtaArrival?, text: LocalizedText): String {
         val boarding = route.stopPreview?.boardingStopName
         val destination = firstArrival?.destination
         return when {
-            !boarding.isNullOrBlank() && !destination.isNullOrBlank() -> "$boarding 往 $destination"
+            !boarding.isNullOrBlank() && !destination.isNullOrBlank() ->
+                text.get(R.string.direction_from_to, arrayOf(boarding, destination))
             route.stopPreview != null -> route.stopPreview.displayText()
-            !destination.isNullOrBlank() -> "往 $destination"
+            !destination.isNullOrBlank() -> text.get(R.string.direction_to, arrayOf(destination))
             else -> route.routeSegments.joinToString(" → ")
         }
     }
 
-    fun minuteText(minutes: Int): String {
-        return if (minutes <= 0) "即將到站" else "$minutes 分鐘"
+    fun minuteText(minutes: Int, text: LocalizedText): String {
+        return if (minutes <= 0) {
+            text.get(R.string.eta_due, emptyArray())
+        } else {
+            text.get(R.string.minutes_count, arrayOf(minutes))
+        }
     }
 
-    fun updateTimeText(arrival: EtaArrival?): String? {
+    fun updateTimeText(arrival: EtaArrival?, text: LocalizedText): String? {
         val timestampMillis = arrival?.dataTimestampMillis ?: return null
-        return "更新 ${ARRIVAL_TIME_FORMAT.get()!!.format(Date(timestampMillis))}"
+        return text.get(
+            R.string.eta_updated,
+            arrayOf(ARRIVAL_TIME_FORMAT.get()!!.format(Date(timestampMillis)))
+        )
     }
 
     private val ARRIVAL_TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {

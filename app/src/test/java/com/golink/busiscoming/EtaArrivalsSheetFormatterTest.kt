@@ -4,6 +4,7 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.ui.main.EtaArrivalsSheetFormatter
+import com.golink.busiscoming.ui.common.LocalizedText
 import java.text.SimpleDateFormat
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -27,11 +28,11 @@ class EtaArrivalsSheetFormatterTest {
             dataTimestampMillis = millis("2026-06-04T12:01:00+08:00")
         )
 
-        assertEquals("首程 8X 候車時間", EtaArrivalsSheetFormatter.title(route))
-        assertEquals("樂軒臺 往 筲箕灣", EtaArrivalsSheetFormatter.subtitle(route, arrival))
-        assertEquals("4 分鐘", EtaArrivalsSheetFormatter.minuteText(4))
-        assertEquals("即將到站", EtaArrivalsSheetFormatter.minuteText(0))
-        assertEquals("更新 12:01", EtaArrivalsSheetFormatter.updateTimeText(arrival))
+        assertEquals("首程 8X 候車時間", EtaArrivalsSheetFormatter.title(route, text))
+        assertEquals("樂軒臺 往 筲箕灣", EtaArrivalsSheetFormatter.subtitle(route, arrival, text))
+        assertEquals("4 分鐘", EtaArrivalsSheetFormatter.minuteText(4, text))
+        assertEquals("即將到站", EtaArrivalsSheetFormatter.minuteText(0, text))
+        assertEquals("更新 12:01", EtaArrivalsSheetFormatter.updateTimeText(arrival, text))
     }
 
     @Test
@@ -45,7 +46,11 @@ class EtaArrivalsSheetFormatterTest {
 
         assertEquals(
             "樂軒臺  →  健康村",
-            EtaArrivalsSheetFormatter.subtitle(route, EtaArrival(sequence = 1, minutes = 4))
+            EtaArrivalsSheetFormatter.subtitle(
+                route,
+                EtaArrival(sequence = 1, minutes = 4),
+                text
+            )
         )
     }
 
@@ -63,5 +68,17 @@ class EtaArrivalsSheetFormatterTest {
 
     private fun millis(value: String): Long {
         return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(value)!!.time
+    }
+
+    private val text = LocalizedText { resourceId, args ->
+        when (resourceId) {
+            R.string.eta_sheet_title -> "首程 ${args[0]} 候車時間"
+            R.string.direction_from_to -> "${args[0]} 往 ${args[1]}"
+            R.string.direction_to -> "往 ${args[0]}"
+            R.string.eta_due -> "即將到站"
+            R.string.minutes_count -> "${args[0]} 分鐘"
+            R.string.eta_updated -> "更新 ${args[0]}"
+            else -> error("Unexpected resource $resourceId")
+        }
     }
 }

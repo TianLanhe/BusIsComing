@@ -61,6 +61,7 @@ import com.golink.busiscoming.service.BusMonitorSessionStore
 import com.golink.busiscoming.data.model.BusMonitorSessionPolicy
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
+import com.golink.busiscoming.ui.common.localizedText
 import com.golink.busiscoming.ui.edit.RouteEditActivity
 import com.golink.busiscoming.ui.manage.RouteManageActivity
 import com.golink.busiscoming.ui.navigation.TopLevelDestination
@@ -160,10 +161,15 @@ class MainActivity : AppCompatActivity() {
     private var pendingLocationSettingsCurrentPlaceCallback: ((CurrentPlaceSelectionResult) -> Unit)? = null
     private var hasPlayedFirstRunIntroAnimation: Boolean = false
     private var frequentRoutesInitialized: Boolean = false
+    private var restoredActiveQueryRouteId: Long? = null
+    private var restoredFrequentSortField: SortField? = null
+    private var restoredFrequentSortDirection: SortDirection = SortDirection.ASC
+    private var pendingFrequentViewport: RefreshViewport? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         restoreSavedRouteUsageSession(savedInstanceState)
+        restoreFrequentQueryState(savedInstanceState)
         setContentView(R.layout.activity_main)
         title = "BusIsComing"
         findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
@@ -196,6 +202,22 @@ class MainActivity : AppCompatActivity() {
             ?.takeIf { it == selectedRouteId }
             ?.let { outState.putLong(STATE_RECORDED_USAGE_ROUTE_ID, it) }
         outState.putString(STATE_SELECTED_DESTINATION, destinationState.selected.name)
+        (currentQueryContext as? QueryContext.Saved)?.routeId?.let {
+            outState.putLong(STATE_ACTIVE_QUERY_ROUTE_ID, it)
+        }
+        sortField?.let { outState.putString(STATE_FREQUENT_SORT_FIELD, it.name) }
+        outState.putString(STATE_FREQUENT_SORT_DIRECTION, sortDirection.name)
+        if (::resultList.isInitialized) {
+            val manager = resultList.layoutManager as? LinearLayoutManager
+            val position = manager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+            if (position != RecyclerView.NO_POSITION) {
+                outState.putInt(STATE_FREQUENT_SCROLL_POSITION, position)
+                outState.putInt(
+                    STATE_FREQUENT_SCROLL_OFFSET,
+                    manager?.findViewByPosition(position)?.top ?: 0
+                )
+            }
+        }
         super.onSaveInstanceState(outState)
     }
 
@@ -224,6 +246,7 @@ class MainActivity : AppCompatActivity() {
         setupActions()
         frequentRoutesInitialized = true
         loadRouteConfigs()
+        restoreFrequentQueryIfNeeded()
     }
 
     private fun bindViews() {
@@ -407,6 +430,41 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun restoreFrequentQueryState(savedInstanceState: Bundle?) {
+        if (savedInstanceState == null) return
+        restoredActiveQueryRouteId = savedInstanceState.longOrNull(STATE_ACTIVE_QUERY_ROUTE_ID)
+        restoredFrequentSortField = savedInstanceState.getString(STATE_FREQUENT_SORT_FIELD)
+            ?.let { runCatching { SortField.valueOf(it) }.getOrNull() }
+        restoredFrequentSortDirection = savedInstanceState
+            .getString(STATE_FREQUENT_SORT_DIRECTION)
+            ?.let { runCatching { SortDirection.valueOf(it) }.getOrNull() }
+            ?: SortDirection.ASC
+        if (savedInstanceState.containsKey(STATE_FREQUENT_SCROLL_POSITION)) {
+            pendingFrequentViewport = RefreshViewport(
+                position = savedInstanceState.getInt(STATE_FREQUENT_SCROLL_POSITION),
+                offset = savedInstanceState.getInt(STATE_FREQUENT_SCROLL_OFFSET)
+            )
+        }
+    }
+
+    private fun restoreFrequentQueryIfNeeded() {
+        val routeId = restoredActiveQueryRouteId ?: return
+        restoredActiveQueryRouteId = null
+        val route = routeConfigRepository.getById(routeId) ?: return
+        selectedRoute = routeConfigs.firstOrNull { it.id == routeId } ?: route
+        savedRouteUsageSession.selectSavedRoute(routeId)
+        routeQueryState.restoreSort(restoredFrequentSortField, restoredFrequentSortDirection)
+        renderRouteShortcuts()
+        queryRoute(
+            origin = route.origin,
+            destination = route.destination,
+            sourceRoute = route,
+            queryContext = QueryContext.Saved(routeId),
+            recordUsage = false,
+            preserveSort = true
+        )
+    }
+
     private fun Bundle.longOrNull(key: String): Long? {
         return if (containsKey(key)) getLong(key) else null
     }
@@ -504,7 +562,7 @@ class MainActivity : AppCompatActivity() {
     private fun querySelectedRoute() {
         val route = selectedRoute
         if (route == null) {
-            Toast.makeText(this, "請先選擇路線或查詢臨時起點和終點", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.select_route_first, Toast.LENGTH_SHORT).show()
             return
         }
         queryRoute(route.origin, route.destination, route, QueryContext.Saved(route.id))
@@ -523,7 +581,7 @@ class MainActivity : AppCompatActivity() {
                 val route = routeConfigRepository.getById(context.routeId)
                 if (route == null) {
                     resultSwipeRefresh.isRefreshing = false
-                    Toast.makeText(this, "路線已不存在", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, R.string.route_no_longer_exists, Toast.LENGTH_SHORT).show()
                     clearResults()
                     return
                 }
@@ -609,7 +667,7 @@ class MainActivity : AppCompatActivity() {
                     if (isRefresh) {
                         handleRefreshFailure(queryId)
                     } else {
-                        routeQueryState.fail("路線查詢失敗", preserveResults = false)
+                        routeQueryState.fail(getString(R.string.route_query_failed), preserveResults = false)
                         updateSortControls()
                         displayFailure()
                         finishQueryLoading()
@@ -632,6 +690,18 @@ class MainActivity : AppCompatActivity() {
         updateSortControls()
         updateResultSummary(routes)
         displayResults(currentResults)
+        restorePendingFrequentViewport()
+    }
+
+    private fun restorePendingFrequentViewport() {
+        val viewport = pendingFrequentViewport ?: return
+        if (currentResults.isEmpty()) return
+        pendingFrequentViewport = null
+        (resultList.layoutManager as? LinearLayoutManager)
+            ?.scrollToPositionWithOffset(
+                viewport.position.coerceIn(0, currentResults.lastIndex),
+                viewport.offset
+            )
     }
 
     private fun handleRefreshSuccess(queryId: Int, routes: List<BusRouteOption>) {
@@ -666,13 +736,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleRefreshFailure(queryId: Int) {
         if (!refreshFeedbackState.fail(queryId)) return
-        routeQueryState.fail("刷新失敗，請稍後重試", preserveResults = true)
+        routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
         refreshFinishRunnable?.let(mainHandler::removeCallbacks)
         refreshFinishRunnable = null
         renderRefreshFeedback()
         finishQueryLoading()
         restoreRefreshViewport()
-        Toast.makeText(this, "刷新失敗，請稍後重試", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.refresh_failed, Toast.LENGTH_SHORT).show()
     }
 
     private fun updateRouteWaitTime(routeId: String, waitTimeState: WaitTimeState) {
@@ -701,8 +771,8 @@ class MainActivity : AppCompatActivity() {
             hideResultSummary()
             resultListContainer.visibility = View.GONE
             showStatus(
-                title = "暫無可用巴士路線",
-                message = "可以換一條常用路線，或稍後再試。",
+                title = getString(R.string.no_routes_title),
+                message = getString(R.string.no_routes_message),
                 showProgress = false
             )
         } else {
@@ -734,11 +804,11 @@ class MainActivity : AppCompatActivity() {
     fun showMonitorSettings(route: BusRouteOption, origin: Place?) {
         monitorSettingsRequestObserver?.invoke(route, origin)
         if (route.firstLegEtaQuery == null || route.waitTimeState !is WaitTimeState.Available) {
-            Toast.makeText(this, "此路線暫時無法監控", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.monitor_route_unavailable, Toast.LENGTH_SHORT).show()
             return
         }
         if (origin == null) {
-            Toast.makeText(this, "缺少起點資訊，無法估算步行時間", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.monitor_origin_missing, Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -799,7 +869,7 @@ class MainActivity : AppCompatActivity() {
             )
         )
         pendingMonitorStart = null
-        Toast.makeText(this, "已開始通知欄監控", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.monitor_started, Toast.LENGTH_SHORT).show()
     }
 
     private fun promptHighPriorityMonitorSettingsIfNeeded() {
@@ -807,7 +877,7 @@ class MainActivity : AppCompatActivity() {
         if (!BusMonitorSchedulingCapability.canScheduleExactAlarms(alarmManager)) {
             val intent = BusMonitorSchedulingCapability.exactAlarmSettingsIntent(this)
             if (intent != null && intent.resolveActivity(packageManager) != null) {
-                Toast.makeText(this, "可開啟鬧鐘與提醒，提升候車監控準時性", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, R.string.monitor_alarm_hint, Toast.LENGTH_LONG).show()
                 startActivity(intent)
             }
         }
@@ -831,7 +901,11 @@ class MainActivity : AppCompatActivity() {
                     pendingMonitorStart?.let { startMonitor(it) }
                 } else {
                     pendingMonitorStart = null
-                    Toast.makeText(this, "未允許通知權限，無法啟動通知欄監控", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this,
+                        R.string.monitor_notification_permission_denied,
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
             REQUEST_LOCATION_PERMISSION -> {
@@ -912,7 +986,7 @@ class MainActivity : AppCompatActivity() {
         callback: (CurrentPlaceSelectionResult) -> Unit
     ) {
         pendingLocationSettingsCurrentPlaceCallback = callback
-        Toast.makeText(this, "請開啟系統定位", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.enable_system_location, Toast.LENGTH_SHORT).show()
         try {
             startActivity(SystemLocationUtils.settingsIntent())
         } catch (_: ActivityNotFoundException) {
@@ -981,9 +1055,12 @@ class MainActivity : AppCompatActivity() {
             hideResultSummary()
             return
         }
-        resultSummaryText.text = RouteResultCardFormatter.resultSummary(routes)
+        resultSummaryText.text = RouteResultCardFormatter.resultSummary(routes, localizedText())
         val updatedAt = routeQueryState.updatedAtMillis ?: System.currentTimeMillis()
-        resultUpdatedAtText.text = "更新時間：${RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))}"
+        resultUpdatedAtText.text = getString(
+            R.string.updated_at,
+            RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))
+        )
         resultSummaryContainer.visibility = View.VISIBLE
     }
 
@@ -1067,7 +1144,7 @@ class MainActivity : AppCompatActivity() {
                     })
                     if (isSelected && nearbySelectedRouteId == route.id) {
                         addView(TextView(context).apply {
-                            text = "附近"
+                            text = getString(R.string.nearby)
                             applyStableShortTextLayout(Gravity.CENTER)
                             setTextColor(ContextCompat.getColor(context, R.color.bus_chip_selected))
                             textSize = 11f
@@ -1109,7 +1186,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(20), dp(18), dp(20), dp(20))
         }
         content.addView(TextView(this).apply {
-            text = "常用路線"
+            text = getString(R.string.frequent_routes_label)
             applyStableShortTextLayout(Gravity.START)
             setTextColor(ContextCompat.getColor(this@MainActivity, R.color.bus_text_primary))
             textSize = 20f
@@ -1217,9 +1294,9 @@ class MainActivity : AppCompatActivity() {
     private fun showLocationFallbackToast(type: LocationFallbackToast) {
         if (!shownLocationFallbackToasts.add(type)) return
         val message = when (type) {
-            LocationFallbackToast.PERMISSION_DENIED -> "未允許定位，已按常用排序選擇路線"
-            LocationFallbackToast.UNAVAILABLE -> "暫時無法取得目前位置，已按常用排序選擇路線"
-            LocationFallbackToast.IMPRECISE -> "目前位置不夠精確，已按常用排序選擇路線"
+            LocationFallbackToast.PERMISSION_DENIED -> getString(R.string.location_fallback_permission)
+            LocationFallbackToast.UNAVAILABLE -> getString(R.string.location_fallback_unavailable)
+            LocationFallbackToast.IMPRECISE -> getString(R.string.location_fallback_imprecise)
         }
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -1243,8 +1320,8 @@ class MainActivity : AppCompatActivity() {
         hideResultSummary()
         resultListContainer.visibility = View.GONE
         showStatus(
-            title = "正在查詢路線",
-            message = "正在匹配可用巴士方案和候車時間。",
+            title = getString(R.string.route_query_loading_title),
+            message = getString(R.string.route_query_loading_message),
             showProgress = true
         )
     }
@@ -1267,15 +1344,15 @@ class MainActivity : AppCompatActivity() {
         hideResultSummary()
         resultListContainer.visibility = View.GONE
         showStatus(
-            title = "路線查詢失敗",
-            message = "請稍後重試，或換一條常用路線再查。",
+            title = getString(R.string.route_query_failed),
+            message = getString(R.string.route_query_failure_message),
             showProgress = false
         )
     }
 
     private fun setQueryLoading(isLoading: Boolean) {
         queryButton.isEnabled = !isLoading
-        queryButton.text = if (isLoading) "查詢中..." else "查詢"
+        queryButton.setText(if (isLoading) R.string.action_querying else R.string.action_query)
         updateSwipeRefreshState()
     }
 
@@ -1370,11 +1447,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun sortButtonText(field: SortField): String {
         val label = when (field) {
-            SortField.ROUTE -> "路線"
-            SortField.PRICE -> "價格"
-            SortField.DURATION -> "耗時"
-            SortField.ARRIVAL -> "候車"
-            SortField.WALKING_DISTANCE -> "步行"
+            SortField.ROUTE -> getString(R.string.sort_route)
+            SortField.PRICE -> getString(R.string.sort_price)
+            SortField.DURATION -> getString(R.string.sort_duration)
+            SortField.ARRIVAL -> getString(R.string.sort_arrival)
+            SortField.WALKING_DISTANCE -> getString(R.string.sort_walking)
         }
         if (sortField != field) return label
         return "$label ${if (sortDirection == SortDirection.ASC) "↑" else "↓"}"
@@ -1496,6 +1573,11 @@ class MainActivity : AppCompatActivity() {
         private const val STATE_SELECTED_ROUTE_ID = "selected_route_id"
         private const val STATE_RECORDED_USAGE_ROUTE_ID = "recorded_usage_route_id"
         private const val STATE_SELECTED_DESTINATION = "selected_destination"
+        private const val STATE_ACTIVE_QUERY_ROUTE_ID = "active_query_route_id"
+        private const val STATE_FREQUENT_SORT_FIELD = "frequent_sort_field"
+        private const val STATE_FREQUENT_SORT_DIRECTION = "frequent_sort_direction"
+        private const val STATE_FREQUENT_SCROLL_POSITION = "frequent_scroll_position"
+        private const val STATE_FREQUENT_SCROLL_OFFSET = "frequent_scroll_offset"
         private const val TAG_FREQUENT_ROUTES = "frequent_routes"
         private const val TAG_SEARCH = "search"
         private const val TAG_SETTINGS = "settings"

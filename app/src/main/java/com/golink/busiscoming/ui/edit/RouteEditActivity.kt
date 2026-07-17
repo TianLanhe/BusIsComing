@@ -38,6 +38,7 @@ import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
+import com.golink.busiscoming.ui.common.localizedMessage
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
@@ -346,9 +347,9 @@ class RouteEditActivity : AppCompatActivity() {
     private fun handleCurrentOriginFailure(isAuto: Boolean) {
         hideOriginAttribution()
         if (isAuto) {
-            originController.setHelperText("暫時無法取得目前位置，請手動選擇起點")
+            originController.setHelperText(getString(R.string.current_location_manual_origin))
         } else {
-            Toast.makeText(this, "暫時無法取得目前位置", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.current_location_unavailable, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -374,7 +375,7 @@ class RouteEditActivity : AppCompatActivity() {
 
     private fun promptLocationSettingsForCurrentOrigin(pending: PendingCurrentPlaceRequest) {
         pendingLocationSettingsRetry = pending
-        Toast.makeText(this, "請開啟系統定位", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.enable_system_location, Toast.LENGTH_SHORT).show()
         try {
             startActivity(SystemLocationUtils.settingsIntent())
         } catch (_: ActivityNotFoundException) {
@@ -494,7 +495,9 @@ class RouteEditActivity : AppCompatActivity() {
     private fun setupMode() {
         if (routeId == NO_ROUTE_ID) {
             val isClone = intent.hasExtra(EXTRA_PREFILL_NAME)
-            val pageTitle = if (isClone) "複製路線" else "新增路線"
+            val pageTitle = getString(
+                if (isClone) R.string.route_title_clone else R.string.route_title_add
+            )
             title = pageTitle
             screenTitleText.text = pageTitle
             applyPrefillIfPresent()
@@ -506,11 +509,11 @@ class RouteEditActivity : AppCompatActivity() {
             return
         }
 
-        title = "編輯路線"
-        screenTitleText.text = "編輯路線"
+        title = getString(R.string.route_title_edit)
+        screenTitleText.setText(R.string.route_title_edit)
         val route = repository.getById(routeId)
         if (route == null) {
-            Toast.makeText(this, "路線配置不存在", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.route_config_missing, Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -527,24 +530,24 @@ class RouteEditActivity : AppCompatActivity() {
         val destination = destinationController.selectedPlace
 
         val validation = RouteConfigValidator.validate(name, origin, destination)
-        nameInputLayout.error = validation.nameError
-        originController.setError(validation.originError)
-        destinationController.setError(validation.destinationError)
+        nameInputLayout.error = validation.nameError.localizedMessage(this)
+        originController.setError(validation.originError.localizedMessage(this))
+        destinationController.setError(validation.destinationError.localizedMessage(this))
         if (!validation.isValid || origin == null || destination == null) return
 
         val excludedRouteId = routeId.takeIf { it != NO_ROUTE_ID }
         if (repository.hasDuplicate(name, origin, destination, excludedRouteId)) {
-            nameInputLayout.error = "路線已存在，請修改名稱或起終點"
-            Toast.makeText(this, "路線已存在", Toast.LENGTH_SHORT).show()
+            nameInputLayout.error = getString(R.string.route_duplicate_detail)
+            Toast.makeText(this, R.string.route_duplicate, Toast.LENGTH_SHORT).show()
             return
         }
 
         if (routeId == NO_ROUTE_ID) {
             repository.insert(name, origin, destination)
-            Toast.makeText(this, "已新增路線", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.route_added, Toast.LENGTH_SHORT).show()
         } else {
             repository.update(RouteConfig(routeId, name, origin, destination))
-            Toast.makeText(this, "已儲存修改", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.route_updated, Toast.LENGTH_SHORT).show()
         }
         finish()
     }

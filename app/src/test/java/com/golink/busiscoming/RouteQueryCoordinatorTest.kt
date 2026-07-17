@@ -51,7 +51,7 @@ class RouteQueryCoordinatorTest {
         val repository = CapturingRepository()
         val received = mutableListOf<String>()
         var active = true
-        val coordinator = coordinator(repository) { active }
+        val coordinator = coordinator(repository, isOwnerActive = { active })
 
         coordinator.query(origin, destination, callback(received))
         active = false
@@ -60,14 +60,35 @@ class RouteQueryCoordinatorTest {
         assertTrue(received.isEmpty())
     }
 
+    @Test
+    fun `language version change rejects every late callback from the old query`() {
+        val repository = CapturingRepository()
+        val received = mutableListOf<String>()
+        var languageVersion = 10L
+        val coordinator = coordinator(repository, languageVersion = { languageVersion })
+
+        coordinator.query(origin, destination, callback(received))
+        languageVersion = 11L
+        repository.callbacks.single().onInitialRoutes(listOf(route("old-language")))
+        repository.callbacks.single().onRouteStopPreviewUpdated(
+            "old-language",
+            RouteCardStopPreview("舊", "語言")
+        )
+        repository.callbacks.single().onFailure(IllegalStateException("late"))
+
+        assertTrue(received.isEmpty())
+    }
+
     private fun coordinator(
         repository: CapturingRepository,
-        isOwnerActive: () -> Boolean = { true }
+        isOwnerActive: () -> Boolean = { true },
+        languageVersion: () -> Long = { 1L }
     ) = RouteQueryCoordinator(
         repository = repository,
         executor = Executor { runnable -> runnable.run() },
         postToOwner = { runnable -> runnable.run() },
-        isOwnerActive = isOwnerActive
+        isOwnerActive = isOwnerActive,
+        languageVersion = languageVersion
     )
 
     private fun callback(received: MutableList<String>) = object : RouteQueryCoordinator.Callback {

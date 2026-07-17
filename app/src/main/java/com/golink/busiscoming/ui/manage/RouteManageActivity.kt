@@ -25,7 +25,7 @@ class RouteManageActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_route_manage)
-        title = "路線管理"
+        title = getString(R.string.route_manage_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         findViewById<View>(R.id.routeManageRoot).applyStatusBarPadding()
@@ -77,7 +77,10 @@ class RouteManageActivity : AppCompatActivity() {
 
     private fun openClone(route: RouteConfig) {
         val intent = Intent(this, RouteEditActivity::class.java)
-            .putExtra(RouteEditActivity.EXTRA_PREFILL_NAME, "${route.name}（副本）")
+            .putExtra(
+                RouteEditActivity.EXTRA_PREFILL_NAME,
+                getString(R.string.route_copy_name, route.name)
+            )
             .putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_NAME, route.origin.name)
             .putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LATITUDE, route.origin.latitude)
             .putExtra(RouteEditActivity.EXTRA_PREFILL_ORIGIN_LONGITUDE, route.origin.longitude)
@@ -89,10 +92,10 @@ class RouteManageActivity : AppCompatActivity() {
 
     private fun confirmDelete(route: RouteConfig) {
         AlertDialog.Builder(this)
-            .setTitle("刪除路線")
-            .setMessage("確定刪除“${route.name}”？")
-            .setNegativeButton("取消", null)
-            .setPositiveButton("刪除") { _, _ ->
+            .setTitle(R.string.route_delete_title)
+            .setMessage(getString(R.string.route_delete_message, route.name))
+            .setNegativeButton(R.string.action_cancel, null)
+            .setPositiveButton(R.string.action_delete) { _, _ ->
                 repository.delete(route.id)
                 loadRoutes()
             }

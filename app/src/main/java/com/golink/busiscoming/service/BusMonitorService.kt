@@ -15,14 +15,14 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.golink.busiscoming.R
-import com.golink.busiscoming.data.model.BusMonitorNotificationFormatter
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.model.BusMonitorRefreshPolicy
 import com.golink.busiscoming.data.model.BusMonitorSessionPolicy
 import com.golink.busiscoming.data.model.BusMonitorSessionSnapshot
-import com.golink.busiscoming.data.model.BusMonitorSpeechFormatter
 import com.golink.busiscoming.data.model.BusMonitorSpeechPolicy
 import com.golink.busiscoming.data.model.BusMonitorStateEvaluator
 import com.golink.busiscoming.data.model.BusMonitorStatus
@@ -32,6 +32,7 @@ import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
 import com.golink.busiscoming.ui.main.MainActivity
+import com.golink.busiscoming.ui.common.localizedText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -50,6 +51,8 @@ class BusMonitorService : Service() {
     private var isRefreshing = false
     private var monitorWakeLock: PowerManager.WakeLock? = null
     private val speechRetryAfterByStatus = mutableMapOf<BusMonitorStatus, Long>()
+    private val speechFailureToastPolicy = BusMonitorSpeechFailureToastPolicy()
+    private var languageVersion: Long = -1L
 
     private val refreshRunnable = Runnable { refreshEta() }
 
@@ -57,11 +60,12 @@ class BusMonitorService : Service() {
         super.onCreate()
         sessionStore = BusMonitorSessionStore(this)
         refreshScheduler = BusMonitorRefreshScheduler(this)
-        speechController = BusMonitorSpeechController(applicationContext)
+        resetSpeechController()
         ensureNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        syncLanguageIfNeeded()
         return when (intent?.action) {
             ACTION_STOP -> {
                 stopMonitoring(clearSession = true)
@@ -72,6 +76,7 @@ class BusMonitorService : Service() {
                 START_NOT_STICKY
             }
             ACTION_START -> startNewSession(intent)
+            ACTION_LANGUAGE_CHANGED -> handleLanguageChanged()
             ACTION_REFRESH -> refreshExistingSession()
             else -> refreshExistingSession()
         }
@@ -106,17 +111,34 @@ class BusMonitorService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        speechController.release()
-        speechController = BusMonitorSpeechController(applicationContext)
         val nextSession = intent.toMonitorSessionSnapshot(nowMillis = System.currentTimeMillis())
             ?: return START_NOT_STICKY
-        session = nextSession
-        sessionStore.save(nextSession)
-        acquireWakeLock(nextSession)
+        val snapshot = AppLanguageRuntime.snapshot()
+        val localizedSession = nextSession.copy(query = nextSession.query.copy(lang = snapshot.citybusLanguage))
+        session = localizedSession
+        sessionStore.save(localizedSession)
+        speechFailureToastPolicy.reset()
+        speechRetryAfterByStatus.clear()
+        resetSpeechController()
+        acquireWakeLock(localizedSession)
         startForegroundFor(
-            snapshot = nextSession,
-            text = "正在取得候車時間...",
+            snapshot = localizedSession,
+            text = getString(R.string.notification_loading),
             priorityStatus = null
+        )
+        refreshEta()
+        return START_STICKY
+    }
+
+    private fun handleLanguageChanged(): Int {
+        val currentSession = restoreActiveSessionOrStop() ?: return START_NOT_STICKY
+        syncLanguageIfNeeded(force = true)
+        ensureNotificationChannel()
+        val localizedSession = session ?: currentSession
+        startForegroundFor(
+            snapshot = localizedSession,
+            text = getString(R.string.notification_loading),
+            priorityStatus = localizedSession.lastStatus
         )
         refreshEta()
         return START_STICKY
@@ -132,7 +154,8 @@ class BusMonitorService : Service() {
         scheduleAutoStopIfNeeded(currentSession)
         startForegroundFor(
             snapshot = currentSession,
-            text = currentSession.lastSuccessfulNotificationText ?: "正在取得候車時間...",
+                text = currentSession.lastSuccessfulNotificationText
+                    ?: getString(R.string.notification_loading),
             priorityStatus = currentSession.lastStatus
         )
         refreshEta()
@@ -191,21 +214,26 @@ class BusMonitorService : Service() {
             firstEtaMinutes = firstArrival.minutes,
             nextEtaMinutes = available.nextArrival?.minutes,
             walkingMinutes = activeSession.walkingMinutes,
-            updatedAtText = updatedAtText
+            updatedAtText = updatedAtText,
+            text = localizedText()
         )
         var lastSpokenStatus = activeSession.lastSpokenStatus
         val shouldSpeak = activeSession.voiceEnabled &&
             BusMonitorSpeechPolicy.shouldSpeak(lastSpokenStatus, status)
         Log.d(
             TAG,
-            "Monitor speech decision route=${activeSession.routeName} voiceEnabled=${activeSession.voiceEnabled} " +
+            "Monitor speech decision voiceEnabled=${activeSession.voiceEnabled} " +
                 "firstEtaMinutes=${firstArrival.minutes} walkingMinutes=${activeSession.walkingMinutes} " +
                 "lastStatus=${activeSession.lastStatus} nextStatus=$status lastSpokenStatus=$lastSpokenStatus " +
                 "shouldSpeak=$shouldSpeak"
         )
         if (shouldSpeak && !shouldThrottleSpeech(status)) {
-            val phrase = BusMonitorSpeechFormatter.phrase(firstArrival.minutes, status)
-            Log.d(TAG, "Monitor speech request status=$status text=$phrase")
+            val phrase = BusMonitorSpeechFormatter.phrase(
+                firstArrival.minutes,
+                status,
+                localizedText()
+            )
+            Log.d(TAG, "Monitor speech request status=$status")
             val speechResult = speechController.speak(
                 text = phrase,
                 mode = BusMonitorSpeechAudioMode.MONITOR
@@ -239,7 +267,11 @@ class BusMonitorService : Service() {
         manager.notify(
             NOTIFICATION_ID,
             buildNotification(
-                title = BusMonitorNotificationFormatter.title(updatedSession.routeName, status),
+                title = BusMonitorNotificationFormatter.title(
+                    updatedSession.routeName,
+                    status,
+                    localizedText()
+                ),
                 text = notificationBody,
                 bigText = notificationBody,
                 priorityStatus = status
@@ -263,12 +295,17 @@ class BusMonitorService : Service() {
         scheduleAutoStopIfNeeded(failedSession)
         val fallbackText = BusMonitorNotificationFormatter.failureText(
             lastSuccessfulNotificationText = failedSession.lastSuccessfulNotificationText,
-            failureCount = failedSession.consecutiveFailureCount
+            failureCount = failedSession.consecutiveFailureCount,
+            text = localizedText()
         )
         manager.notify(
             NOTIFICATION_ID,
             buildNotification(
-                title = BusMonitorNotificationFormatter.title(failedSession.routeName, failedSession.lastStatus),
+                title = BusMonitorNotificationFormatter.title(
+                    failedSession.routeName,
+                    failedSession.lastStatus,
+                    localizedText()
+                ),
                 text = fallbackText,
                 bigText = fallbackText,
                 priorityStatus = failedSession.lastStatus
@@ -322,7 +359,11 @@ class BusMonitorService : Service() {
         startForeground(
             NOTIFICATION_ID,
             buildNotification(
-                title = BusMonitorNotificationFormatter.title(snapshot.routeName, priorityStatus),
+                title = BusMonitorNotificationFormatter.title(
+                    snapshot.routeName,
+                    priorityStatus,
+                    localizedText()
+                ),
                 text = text,
                 bigText = text,
                 priorityStatus = priorityStatus
@@ -339,7 +380,41 @@ class BusMonitorService : Service() {
             speechRetryAfterByStatus[status] =
                 System.currentTimeMillis() + BusMonitorRefreshPolicy.REFRESH_INTERVAL_MILLIS
             Log.w(TAG, "Monitor speech failed: reason=${result.reason} detail=${result.detail}")
+            showSpeechFailureOnce(result)
         }
+    }
+
+    private fun showSpeechFailureOnce(failure: BusMonitorSpeechResult.Failure) {
+        if (!speechFailureToastPolicy.shouldShow(session?.voiceEnabled == true, failure.reason)) return
+        val messageRes = BusMonitorSpeechFailureMessage.resourceId(failure.reason)
+        mainHandler.post {
+            Toast.makeText(applicationContext, messageRes, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun resetSpeechController() {
+        if (::speechController.isInitialized) speechController.release()
+        val snapshot = AppLanguageRuntime.snapshot()
+        languageVersion = snapshot.version
+        speechController = BusMonitorSpeechController(
+            context = applicationContext,
+            languageFamily = snapshot.ttsLanguageFamily
+        ) { failure -> showSpeechFailureOnce(failure) }
+    }
+
+    private fun syncLanguageIfNeeded(force: Boolean = false) {
+        val snapshot = AppLanguageRuntime.snapshot()
+        if (!force && snapshot.version == languageVersion) return
+        resetSpeechController()
+        session?.let { current ->
+            val updated = current.copy(
+                query = current.query.copy(lang = snapshot.citybusLanguage),
+                lastSuccessfulNotificationText = null
+            )
+            session = updated
+            sessionStore.save(updated)
+        }
+        ensureNotificationChannel()
     }
 
     private fun shouldThrottleSpeech(status: BusMonitorStatus): Boolean {
@@ -414,8 +489,16 @@ class BusMonitorService : Service() {
             .setVisibility(BusMonitorNotificationContract.COMPAT_LOCKSCREEN_VISIBILITY)
             .setPublicVersion(buildPublicNotification(channelId, title, text, bigText))
             .setPriority(priority)
-            .addAction(android.R.drawable.ic_popup_sync, "刷新", refreshIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止", stopIntent)
+            .addAction(
+                android.R.drawable.ic_popup_sync,
+                getString(R.string.notification_refresh),
+                refreshIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                getString(R.string.notification_stop),
+                stopIntent
+            )
             .build()
     }
 
@@ -445,10 +528,10 @@ class BusMonitorService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val statusChannel = NotificationChannel(
             BusMonitorNotificationContract.STATUS_CHANNEL_ID,
-            "巴士通知欄監控",
+            getString(R.string.notification_channel_monitor),
             BusMonitorNotificationContract.STATUS_CHANNEL_IMPORTANCE
         ).apply {
-            description = "每分鐘嘗試更新候車時間和出門狀態"
+            description = getString(R.string.notification_channel_monitor_description)
             lockscreenVisibility = BusMonitorNotificationContract.LOCKSCREEN_VISIBILITY
             enableVibration(false)
             setSound(null, null)
@@ -456,10 +539,10 @@ class BusMonitorService : Service() {
         }
         val alertChannel = NotificationChannel(
             BusMonitorNotificationContract.ALERT_CHANNEL_ID,
-            "巴士出門提醒",
+            getString(R.string.notification_channel_urgent),
             BusMonitorNotificationContract.ALERT_CHANNEL_IMPORTANCE
         ).apply {
-            description = "立即出門或快遲到時提高提醒權重"
+            description = getString(R.string.notification_channel_urgent_description)
             lockscreenVisibility = BusMonitorNotificationContract.LOCKSCREEN_VISIBILITY
             enableVibration(false)
             setSound(null, null)
@@ -514,6 +597,8 @@ class BusMonitorService : Service() {
         private const val ACTION_REFRESH = "com.golink.busiscoming.action.REFRESH_BUS_MONITOR"
         private const val ACTION_AUTO_STOP = "com.golink.busiscoming.action.AUTO_STOP_BUS_MONITOR"
         private const val ACTION_STOP = "com.golink.busiscoming.action.STOP_BUS_MONITOR"
+        private const val ACTION_LANGUAGE_CHANGED =
+            "com.golink.busiscoming.action.BUS_MONITOR_LANGUAGE_CHANGED"
 
         private const val REQUEST_OPEN = 100
         private const val REQUEST_REFRESH = 101
@@ -571,6 +656,9 @@ class BusMonitorService : Service() {
         fun autoStopIntent(context: Context): Intent {
             return Intent(context, BusMonitorService::class.java).setAction(ACTION_AUTO_STOP)
         }
+
+        fun languageChangedIntent(context: Context): Intent =
+            Intent(context, BusMonitorService::class.java).setAction(ACTION_LANGUAGE_CHANGED)
 
         internal fun pendingIntentFlags(): Int {
             return PendingIntent.FLAG_UPDATE_CURRENT or

@@ -8,6 +8,22 @@ import org.junit.Test
 
 class CitybusPlaceParserTest {
     @Test
+    fun parsesLiveThreeLanguagePlaceFixturesWithoutCrossLanguageFallback() {
+        val expectations = listOf(
+            "citybus/bsearch-p3-tc.txt" to "會展站",
+            "citybus/bsearch-p3-sc.txt" to "会展站",
+            "citybus/bsearch-p3-en.txt" to "Convention Plaza"
+        )
+
+        expectations.forEach { (path, expectedName) ->
+            val places = CitybusPlaceParser.parse(resourceText(path))
+
+            assertEquals(path, 1, places.size)
+            assertEquals(path, expectedName, places.single().name)
+        }
+    }
+
+    @Test
     fun parsesNormalPlaceRows() {
         val response = """
             -- 關鍵字搜尋 --|-- 關鍵字搜尋 --|0|0
@@ -34,6 +50,14 @@ class CitybusPlaceParserTest {
         """.trimIndent()
 
         assertEquals(emptyList<Any>(), CitybusPlaceParser.parse(response))
+    }
+
+    @Test
+    fun liveNoResultFixtureReturnsEmptyList() {
+        assertEquals(
+            emptyList<Any>(),
+            CitybusPlaceParser.parse(resourceText("citybus/bsearch-p3-no-result.txt"))
+        )
     }
 
     @Test
@@ -67,5 +91,18 @@ class CitybusPlaceParserTest {
         assertThrows(CitybusPlaceParseException::class.java) {
             CitybusPlaceParser.parse(response)
         }
+    }
+
+    @Test
+    fun liveMalformedFixtureThrows() {
+        assertThrows(CitybusPlaceParseException::class.java) {
+            CitybusPlaceParser.parse(resourceText("citybus/bsearch-p3-malformed.txt"))
+        }
+    }
+
+    private fun resourceText(path: String): String {
+        return requireNotNull(javaClass.classLoader?.getResource(path)) {
+            "Missing test resource $path"
+        }.readText()
     }
 }

@@ -193,7 +193,8 @@ object CitybusRouteParser {
 
     private fun Element.hasRouteCandidateContent(): Boolean {
         val ariaLabel = attr("aria-label")
-        return ariaLabel.contains(DURATION_KEYWORD) || text().contains(DURATION_KEYWORD)
+        return DURATION_KEYWORD_PATTERN.containsMatchIn(ariaLabel) ||
+            DURATION_KEYWORD_PATTERN.containsMatchIn(text())
     }
 
     private data class RouteSegment(
@@ -210,16 +211,30 @@ object CitybusRouteParser {
     private const val ROUTE_LIST_ID = "routelist2"
     private const val ROUTE_CELL_CLASS = "routenocell"
     private const val ROUTE_JOINER = " \u2192 "
-    private const val DURATION_KEYWORD = "預計"
     private const val DEFAULT_LANG = "0"
     private const val P2P_LEG_SEPARATOR = "|*|"
     private const val P2P_FIELD_SEPARATOR = "||"
     private val SHOW_ROUTE_P2P_PATTERN =
         Regex("""showroutep2p\('([^']*)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'""")
-    private val ROUTE_PRICE_PATTERN =
-        Regex("""(?:^|\s+至\s+)([^\s]+)\s+(?:港元\s*([0-9]+(?:\.[0-9]+)?)|(免費)(?:\s*\*)?)""")
-    private val PRICE_TEXT_PATTERN = Regex("""(?:\$\s*([0-9]+(?:\.[0-9]+)?)|(免費)(?:\s*\*)?)""")
-    private val DURATION_PATTERN = Regex("""預計\s*([0-9]+)\s*分鐘""")
-    private val DURATION_TEXT_PATTERN = Regex("""預計\s*([0-9]+)\s*分鐘""")
-    private val WALKING_DISTANCE_PATTERN = Regex("""步行距離\s*\(約\)\s*([0-9]+)\s*米""")
+    private val ROUTE_PRICE_PATTERN = Regex(
+        """(?:^|\s+(?:至|to)\s+)([^\s]+)\s+(?:(?:港元|Hong\s+Kong\s+Dollar|HK\$?|HKD)\s*([0-9]+(?:\.[0-9]+)?)|((?:免費|免费|Free))(?:\s*\*)?)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val PRICE_TEXT_PATTERN = Regex(
+        """(?:(?:Hong\s+Kong\s+Dollar|HKD|(?:HK)?\$)\s*([0-9]+(?:\.[0-9]+)?)|((?:免費|免费|Free))(?:\s*\*)?)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val DURATION_PATTERN = Regex(
+        """(?:預計|预计|Estimated(?:\s+(?:journey\s+)?time)?)[\s:：]*([0-9]+)\s*(?:分鐘|分钟|mins?|minutes?)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val DURATION_TEXT_PATTERN = DURATION_PATTERN
+    private val WALKING_DISTANCE_PATTERN = Regex(
+        """(?:步行距離\s*\(約\)|步行距离\s*\(约\)|Walking\s+distance\s*\((?:approx\.?|approximately)\.?\))[\s:：]*([0-9]+)\s*(?:米|m|metres?|meters?)""",
+        RegexOption.IGNORE_CASE
+    )
+    private val DURATION_KEYWORD_PATTERN = Regex(
+        """(?:預計|预计|Estimated)""",
+        RegexOption.IGNORE_CASE
+    )
 }

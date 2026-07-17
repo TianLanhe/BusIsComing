@@ -10,8 +10,10 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.ui.common.localizedText
 
 class BusRouteCardBinder(private val itemView: View) {
+    private val localizedText = itemView.context.localizedText()
     private val routeNameText: TextView = itemView.findViewById(R.id.busRouteNameText)
     private val etaTextColumn: LinearLayout = itemView.findViewById(R.id.busEtaTextColumn)
     private val arrivalText: TextView = itemView.findViewById(R.id.busArrivalText)
@@ -22,14 +24,14 @@ class BusRouteCardBinder(private val itemView: View) {
 
     fun bind(route: BusRouteOption, actions: BusRouteCardActions = BusRouteCardActions.Disabled) {
         routeNameText.text = route.routeName
-        arrivalText.text = RouteResultCardFormatter.waitStatus(route.waitTimeState)
+        arrivalText.text = RouteResultCardFormatter.waitStatus(route.waitTimeState, localizedText)
         arrivalText.setTextColor(waitStatusColor(route.waitTimeState))
-        val nextArrival = RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState)
+        val nextArrival = RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState, localizedText)
         nextArrivalText.text = nextArrival.orEmpty()
         val shouldShowNextArrival = nextArrival != null &&
             itemView.resources.configuration.fontScale <= LARGE_FONT_SCALE_THRESHOLD
         nextArrivalText.visibility = if (shouldShowNextArrival) View.VISIBLE else View.GONE
-        routeInfoText.text = RouteResultCardFormatter.info(route)
+        routeInfoText.text = RouteResultCardFormatter.info(route, localizedText)
 
         val preview = route.stopPreview
         if (preview == null) {
@@ -53,7 +55,10 @@ class BusRouteCardBinder(private val itemView: View) {
             RouteCardActionPolicy.canOpenEtaArrivals(route.waitTimeState)
         etaTextColumn.isEnabled = true
         etaTextColumn.contentDescription = if (canOpenEtaArrivals) {
-            listOfNotNull("查看首程候車班次", arrivalText.text, nextArrival).joinToString("，")
+            itemView.context.getString(
+                R.string.eta_arrivals_content_description,
+                listOfNotNull(arrivalText.text, nextArrival).joinToString(", ")
+            )
         } else {
             arrivalText.text.toString()
         }
@@ -122,8 +127,8 @@ object FirstRunRoutePreview {
                 )
             ),
             stopPreview = RouteCardStopPreview(
-                boardingStopName = "柴灣",
-                alightingStopName = "中環"
+                boardingStopName = "Chai Wan",
+                alightingStopName = "Central"
             )
         )
     }

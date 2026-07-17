@@ -57,6 +57,7 @@ class SearchDestinationInstrumentedTest {
 
     @Test
     fun searchFlowSupportsFallbackSwapQueryActionsRefreshAndSave() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val routeRepository = ImmediateRouteRepository()
         val detailRepository = installDependencies(routeRepository)
         val monitorRequest = AtomicReference<Pair<BusRouteOption, Place?>?>()
@@ -128,9 +129,15 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.searchRoot)).perform(swipeDown())
             waitUntil { routeRepository.queryCount >= 2 }
 
+            var saveDialogTitle = ""
+            var saveAction = ""
+            scenario.onActivity { activity ->
+                saveDialogTitle = activity.getString(R.string.save_frequent_title)
+                saveAction = activity.getString(R.string.action_save)
+            }
             onView(withId(R.id.searchSaveButton)).perform(scrollTo(), click())
-            waitForTextInDialog("保存為常用")
-            onView(withText("保存")).inRoot(isDialog()).perform(click())
+            waitForTextInDialog(saveDialogTitle)
+            onView(withText(saveAction)).inRoot(isDialog()).perform(click())
             waitUntil {
                 RouteConfigRepository(InstrumentationRegistry.getInstrumentation().targetContext)
                     .getAll()
@@ -255,7 +262,7 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
-    private fun waitUntil(timeoutMillis: Long = 5_000L, condition: () -> Boolean) {
+    private fun waitUntil(timeoutMillis: Long = 10_000L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMillis
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return

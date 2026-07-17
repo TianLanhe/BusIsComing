@@ -25,15 +25,16 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.RouteConfigDbHelper
-import com.golink.busiscoming.data.model.BusMonitorNotificationFormatter
 import com.golink.busiscoming.data.model.BusMonitorStatus
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.service.BusMonitorNotificationContract
+import com.golink.busiscoming.service.BusMonitorNotificationFormatter
 import com.golink.busiscoming.ui.main.EtaArrivalsBottomSheet
 import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.RouteDetailBottomSheet
+import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import java.io.File
@@ -164,6 +165,14 @@ class DemoScreenshotInstrumentedTest {
 
     private fun captureLockscreenMonitor() {
         postMonitorNotification()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            executeShell("cmd statusbar expand-notifications")
+            SystemClock.sleep(1_000L)
+            saveFullScreenshot(DemoScreenshotFixtures.lockscreenMonitor)
+            executeShell("cmd statusbar collapse")
+            clearMonitorNotification()
+            return
+        }
         executeShell("locksettings set-disabled false")
         executeShell("settings put secure lockscreen.disabled 0")
         executeShell("settings put secure lock_screen_show_notifications 1")
@@ -302,16 +311,15 @@ class DemoScreenshotInstrumentedTest {
     }
 
     private fun writePublicPng(bitmap: Bitmap, name: String) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(
-                    MediaStore.Images.Media.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_PICTURES}/BusIsComingDemoScreenshots"
-                )
-                put(MediaStore.Images.Media.IS_PENDING, 1)
-            }
+            put(
+                MediaStore.Images.Media.RELATIVE_PATH,
+                "${Environment.DIRECTORY_PICTURES}/BusIsComingDemoScreenshots"
+            )
+            put(MediaStore.Images.Media.IS_PENDING, 1)
         }
         val resolver = targetContext.contentResolver
         val uri = requireNotNull(
@@ -322,22 +330,19 @@ class DemoScreenshotInstrumentedTest {
             val written = bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
             assertTrue("Failed to write public $name", written)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.Images.Media.IS_PENDING, 0)
-            resolver.update(uri, values, null, null)
-        }
+        values.clear()
+        values.put(MediaStore.Images.Media.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
     }
 
     private fun clearPublicScreenshots() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            runCatching {
-                targetContext.contentResolver.delete(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    "${MediaStore.Images.Media.RELATIVE_PATH} = ?",
-                    arrayOf("${Environment.DIRECTORY_PICTURES}/BusIsComingDemoScreenshots/")
-                )
-            }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        runCatching {
+            targetContext.contentResolver.delete(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                "${MediaStore.Images.Media.RELATIVE_PATH} = ?",
+                arrayOf("${Environment.DIRECTORY_PICTURES}/BusIsComingDemoScreenshots/")
+            )
         }
         executeShell("rm -rf /sdcard/Pictures/BusIsComingDemoScreenshots")
     }
@@ -358,7 +363,11 @@ class DemoScreenshotInstrumentedTest {
                 }
             )
         }
-        val title = BusMonitorNotificationFormatter.title("28X", BusMonitorStatus.LEAVE_NOW)
+        val title = BusMonitorNotificationFormatter.title(
+            "28X",
+            BusMonitorStatus.LEAVE_NOW,
+            targetContext.localizedText()
+        )
         val body = DemoScreenshotFixtures.lockscreenBodyText()
         val notification = NotificationCompat.Builder(
             targetContext,

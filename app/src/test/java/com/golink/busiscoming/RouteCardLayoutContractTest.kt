@@ -11,15 +11,14 @@ class RouteCardLayoutContractTest {
     private val binderKt = File("src/main/java/com/golink/busiscoming/ui/main/BusRouteCardBinder.kt").readText()
 
     @Test
-    fun routeAndStopPreviewUseLeftColumnWithStableRightWaitBlock() {
-        assertTrue(itemXml.contains("<FrameLayout"))
+    fun routeAndStopPreviewUseFlexibleWeightedColumnBesideWaitBlock() {
+        assertFalse(itemXml.contains("<FrameLayout"))
         assertFalse(itemXml.contains("android:layout_marginEnd=\"180dp\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busRouteTextColumn\""))
-        assertTrue(itemXml.contains("android:layout_marginEnd=\"132dp\""))
+        assertTrue(itemXml.contains("android:layout_weight=\"1\""))
+        assertTrue(itemXml.contains("android:layout_marginEnd=\"8dp\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busWaitArea\""))
-        assertTrue(itemXml.contains("android:layout_width=\"160dp\""))
-        assertTrue(itemXml.contains("android:layout_height=\"56dp\""))
-        assertTrue(itemXml.contains("android:layout_gravity=\"end|center_vertical\""))
+        assertTrue(itemXml.contains("android:minHeight=\"56dp\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busNextArrivalText\""))
         assertTrue(itemXml.contains("android:includeFontPadding=\"false\""))
         assertTrue(itemXml.indexOf("android:id=\"@+id/busRouteNameText\"") < itemXml.indexOf("android:id=\"@+id/busStopPreviewText\""))
@@ -27,36 +26,30 @@ class RouteCardLayoutContractTest {
     }
 
     @Test
-    fun stopPreviewUsesSingleLineInsideFixedLeftColumn() {
+    fun stopPreviewCanWrapWithoutEllipsisInsideFlexibleColumn() {
         val stopStart = itemXml.indexOf("android:id=\"@+id/busStopPreviewText\"")
         assertTrue(stopStart >= 0)
         val stopBlock = itemXml.substring(stopStart, itemXml.indexOf("/>", stopStart))
         val regressionPreview = "興華邨豐興樓 → 海底隧道巴士轉乘站"
 
         assertTrue(regressionPreview.contains("海底隧道巴士轉乘站"))
-        assertTrue(stopBlock.contains("android:maxLines=\"1\""))
-        assertTrue(stopBlock.contains("android:ellipsize=\"end\""))
+        assertTrue(stopBlock.contains("android:maxLines=\"3\""))
+        assertFalse(stopBlock.contains("android:ellipsize=\"end\""))
         val columnStart = itemXml.indexOf("android:id=\"@+id/busRouteTextColumn\"")
         assertTrue(columnStart >= 0)
         val columnBlock = itemXml.substring(columnStart, itemXml.indexOf("</LinearLayout>", columnStart))
-        assertTrue(columnBlock.contains("android:layout_marginEnd=\"132dp\""))
+        assertTrue(columnBlock.contains("android:layout_weight=\"1\""))
         assertFalse(adapterKt.contains("updateStopPreviewEndMargin"))
         assertFalse(adapterKt.contains("STOP_PREVIEW_WITH_NEXT_END_MARGIN_DP"))
         assertFalse(adapterKt.contains("STOP_PREVIEW_WITHOUT_NEXT_END_MARGIN_DP"))
     }
 
     @Test
-    fun topSectionKeepsStableWaitBlockHeightAndWidth() {
-        val topStart = itemXml.indexOf("<FrameLayout")
-        assertTrue(topStart >= 0)
-        val topBlock = itemXml.substring(topStart, itemXml.indexOf("</FrameLayout>", topStart))
-
-        assertTrue(topBlock.contains("android:layout_height=\"56dp\""))
-        assertTrue(topBlock.contains("android:id=\"@+id/busWaitArea\""))
-        assertTrue(topBlock.contains("android:layout_width=\"160dp\""))
-        assertTrue(topBlock.contains("android:layout_height=\"56dp\""))
-        assertTrue(topBlock.contains("android:layout_gravity=\"end|center_vertical\""))
-        assertTrue(topBlock.contains("android:id=\"@+id/busEtaTextColumn\""))
+    fun topSectionUsesMinimumHeightAndContentDrivenWidth() {
+        assertTrue(itemXml.contains("android:minHeight=\"56dp\""))
+        assertTrue(itemXml.contains("android:id=\"@+id/busWaitArea\""))
+        assertTrue(itemXml.contains("android:id=\"@+id/busEtaTextColumn\""))
+        assertFalse(itemXml.contains("android:layout_width=\"160dp\""))
     }
 
     @Test

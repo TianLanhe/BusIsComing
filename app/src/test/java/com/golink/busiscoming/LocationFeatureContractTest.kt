@@ -45,7 +45,7 @@ class LocationFeatureContractTest {
         assertTrue(mainActivityKt.contains("manualRouteSelectionGeneration == generation"))
         assertTrue(mainActivityKt.contains("NearbyRouteSelectionPolicy.selectRoute"))
         assertTrue(mainActivityKt.contains("nearbySelectedRouteId = selectedRoute?.id"))
-        assertTrue(mainActivityKt.contains("text = \"附近\""))
+        assertTrue(mainActivityKt.contains("R.string.nearby"))
         assertTrue(mainActivityKt.contains("nearbySelectedRouteId = null"))
         assertTrue(mainActivityKt.contains("recordUsage: Boolean = true"))
         assertTrue(mainActivityKt.contains("recordUsage = false"))
@@ -82,9 +82,9 @@ class LocationFeatureContractTest {
     @Test
     fun permissionFallbacksAndSystemSettingsRecoveryAreExplicit() {
         assertTrue(mainActivityKt.contains("shownLocationFallbackToasts.add(type)"))
-        assertTrue(mainActivityKt.contains("未允許定位，已按常用排序選擇路線"))
-        assertTrue(mainActivityKt.contains("暫時無法取得目前位置，已按常用排序選擇路線"))
-        assertTrue(mainActivityKt.contains("目前位置不夠精確，已按常用排序選擇路線"))
+        assertTrue(mainActivityKt.contains("R.string.location_fallback_permission"))
+        assertTrue(mainActivityKt.contains("R.string.location_fallback_unavailable"))
+        assertTrue(mainActivityKt.contains("R.string.location_fallback_imprecise"))
         assertTrue(mainActivityKt.contains("locationPermissionStateStore.setAutoRequestDenied(true)"))
         assertTrue(routeEditActivityKt.contains("locationPermissionStateStore.setAutoRequestDenied(true)"))
         assertTrue(mainActivityKt.contains("promptLocationSettingsForCurrentPlace"))
@@ -105,7 +105,7 @@ class LocationFeatureContractTest {
         assertTrue(routeEditActivityKt.contains("if (isClone)"))
         assertTrue(routeEditActivityKt.contains("requestCandidateLocationSnapshotIfPermitted()"))
         assertTrue(routeEditActivityKt.contains("requestCurrentOrigin(isAuto = true)"))
-        assertTrue(routeEditActivityKt.contains("暫時無法取得目前位置，請手動選擇起點"))
+        assertTrue(routeEditActivityKt.contains("R.string.current_location_manual_origin"))
         assertTrue(mainActivityKt.contains("GoogleReverseGeocodingPlaceNameResolver(this)"))
         assertTrue(mainActivityKt.contains("placeNameResolver.resolve(result.snapshot)"))
         assertTrue(mainActivityKt.contains("name = nameResult.addressName"))
@@ -118,8 +118,8 @@ class LocationFeatureContractTest {
 
     @Test
     fun googleReverseGeocodingContractIsScopedAndAttributionIsInputOnly() {
-        assertTrue(googleResolverKt.contains("DEFAULT_LANGUAGE_CODE = \"zh-Hant\""))
-        assertTrue(googleResolverKt.contains("REGION_CODE = \"HK\""))
+        assertTrue(googleResolverKt.contains("languageSnapshot.googleLanguageCode"))
+        assertTrue(googleResolverKt.contains("languageSnapshot.googleRegionCode"))
         assertTrue(googleResolverKt.contains("X-Goog-Api-Key"))
         assertTrue(googleResolverKt.contains("X-Goog-FieldMask"))
         assertTrue(googleResolverKt.contains("X-Android-Package"))
@@ -145,7 +145,7 @@ class LocationFeatureContractTest {
         assertTrue(placeInputControllerKt.contains("notifyDataSetChanged()"))
         assertTrue(placeInputControllerKt.contains("GeoDistanceCalculator.distanceMeters"))
         assertTrue(placeInputControllerKt.contains("PlaceDistanceFormatter.compact"))
-        assertTrue(placeInputControllerKt.contains("PlaceDistanceFormatter.accessibility"))
+        assertTrue(placeInputControllerKt.contains("R.string.distance_from_current"))
         assertTrue(placeInputControllerKt.contains("rowView.contentDescription"))
         assertTrue(placeInputControllerKt.contains("input.setText(place.name, false)"))
         assertFalse(placeInputControllerKt.contains("sortBy"))

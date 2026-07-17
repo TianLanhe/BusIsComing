@@ -5,33 +5,24 @@ import java.util.Locale
 import kotlin.math.ceil
 
 enum class WalkingSpeedPreset(
-    val label: String,
     val speedKmh: Double
 ) {
-    SLOW("慢行", 3.2),
-    CHILD("帶小孩", 3.5),
-    NORMAL("一般", 5.0),
-    FAST("快走", 6.0)
+    SLOW(3.2),
+    CHILD(3.5),
+    NORMAL(5.0),
+    FAST(6.0)
 }
 
 enum class WalkingScenarioModifier(
-    val label: String,
     val speedMultiplier: Double = 1.0,
     val extraMinutes: Int = 0
 ) {
-    RAIN("雨天", speedMultiplier = 0.8),
-    ELEVATOR("等電梯", extraMinutes = 2),
-    CROSSING("天橋/過馬路", extraMinutes = 2)
+    RAIN(speedMultiplier = 0.8),
+    ELEVATOR(extraMinutes = 2),
+    CROSSING(extraMinutes = 2)
 }
 
-enum class BusMonitorStatus(
-    val displayText: String,
-    val speechSuffix: String
-) {
-    PREPARE("準備出門", "請做好出門準備"),
-    LEAVE_NOW("立即出門", "請立即出門"),
-    LATE("快遲到了", "你要遲到了")
-}
+enum class BusMonitorStatus { PREPARE, LEAVE_NOW, LATE }
 
 data class WalkingTimeEstimate(
     val interfaceDistanceMinutes: Int?,
@@ -94,16 +85,6 @@ object BusMonitorStateEvaluator {
     }
 }
 
-object BusMonitorSpeechFormatter {
-    fun phrase(firstEtaMinutes: Int, status: BusMonitorStatus): String {
-        return "當前汽車到站剩餘 ${firstEtaMinutes.coerceAtLeast(0)} 分鐘，${status.speechSuffix}"
-    }
-
-    fun previewPhrase(): String {
-        return phrase(firstEtaMinutes = 7, status = BusMonitorStatus.LEAVE_NOW)
-    }
-}
-
 object BusMonitorSpeechPolicy {
     fun shouldSpeak(lastStatus: BusMonitorStatus?, nextStatus: BusMonitorStatus): Boolean {
         return lastStatus != nextStatus
@@ -114,24 +95,23 @@ object BusMonitorTtsLanguagePolicy {
     const val LANGUAGE_MISSING_DATA = -1
     const val LANGUAGE_NOT_SUPPORTED = -2
 
-    val fallbackLocales: List<Locale> = listOf(
-        Locale.TRADITIONAL_CHINESE,
-        Locale.forLanguageTag("zh-HK"),
-        Locale.forLanguageTag("yue-HK"),
-        Locale.SIMPLIFIED_CHINESE,
-        Locale.CHINESE
-    )
-
-    fun chooseSupportedLocale(languageResult: (Locale) -> Int): Locale? {
-        return when (val selection = selectSupportedLocale(languageResult)) {
-            is BusMonitorTtsLanguageSelection.Supported -> selection.locale
-            is BusMonitorTtsLanguageSelection.Unavailable -> null
+    fun selectSupportedLocale(
+        family: com.golink.busiscoming.data.localization.TtsLanguageFamily,
+        availableVoiceLocales: Collection<Locale>,
+        languageResult: (Locale) -> Int
+    ): BusMonitorTtsLanguageSelection {
+        val compatibleLocales = availableVoiceLocales
+            .filter { isCompatible(family, it) }
+            .distinctBy { it.toLanguageTag().lowercase(Locale.ROOT) }
+            .sortedBy { preferenceRank(family, it) }
+        if (compatibleLocales.isEmpty()) {
+            return BusMonitorTtsLanguageSelection.Unavailable(
+                reason = BusMonitorTtsLanguageUnavailableReason.NO_COMPATIBLE_VOICE,
+                checks = emptyList()
+            )
         }
-    }
-
-    fun selectSupportedLocale(languageResult: (Locale) -> Int): BusMonitorTtsLanguageSelection {
         val checks = mutableListOf<BusMonitorTtsLanguageCheck>()
-        fallbackLocales.forEach { locale ->
+        compatibleLocales.forEach { locale ->
             val result = languageResult(locale)
             checks += BusMonitorTtsLanguageCheck(locale = locale, result = result)
             if (isLanguageUsable(result)) {
@@ -155,6 +135,53 @@ object BusMonitorTtsLanguagePolicy {
     fun isLanguageUsable(languageResult: Int): Boolean {
         return languageResult >= 0
     }
+
+    fun isCompatible(
+        family: com.golink.busiscoming.data.localization.TtsLanguageFamily,
+        locale: Locale
+    ): Boolean {
+        val language = locale.language.lowercase(Locale.ROOT)
+        val script = locale.script.lowercase(Locale.ROOT)
+        val region = locale.country.uppercase(Locale.ROOT)
+        return when (family) {
+            com.golink.busiscoming.data.localization.TtsLanguageFamily.TRADITIONAL_CHINESE ->
+                language == "yue" ||
+                    (language == "zh" && (script == "hant" || region in setOf("HK", "MO", "TW")))
+            com.golink.busiscoming.data.localization.TtsLanguageFamily.SIMPLIFIED_CHINESE ->
+                (language == "cmn" && region !in setOf("HK", "MO", "TW")) ||
+                    (language == "zh" && (script == "hans" || region in setOf("CN", "SG")))
+            com.golink.busiscoming.data.localization.TtsLanguageFamily.ENGLISH -> language == "en"
+        }
+    }
+
+    private fun preferenceRank(
+        family: com.golink.busiscoming.data.localization.TtsLanguageFamily,
+        locale: Locale
+    ): Int {
+        val tag = locale.toLanguageTag().lowercase(Locale.ROOT)
+        return when (family) {
+            com.golink.busiscoming.data.localization.TtsLanguageFamily.TRADITIONAL_CHINESE -> when {
+                tag.startsWith("yue-hk") -> 0
+                tag == "zh-hk" -> 1
+                "hant" in tag && tag.endsWith("-hk") -> 2
+                "hant" in tag -> 3
+                else -> 4
+            }
+            com.golink.busiscoming.data.localization.TtsLanguageFamily.SIMPLIFIED_CHINESE -> when {
+                tag.startsWith("cmn-cn") -> 0
+                "hans" in tag && tag.endsWith("-cn") -> 1
+                tag == "zh-cn" -> 2
+                "hans" in tag -> 3
+                else -> 4
+            }
+            com.golink.busiscoming.data.localization.TtsLanguageFamily.ENGLISH -> when {
+                tag == "en-hk" -> 0
+                tag == "en-gb" -> 1
+                tag == "en-us" -> 2
+                else -> 3
+            }
+        }
+    }
 }
 
 data class BusMonitorTtsLanguageCheck(
@@ -176,71 +203,8 @@ sealed class BusMonitorTtsLanguageSelection {
 
 enum class BusMonitorTtsLanguageUnavailableReason {
     MISSING_DATA,
-    NOT_SUPPORTED
-}
-
-object BusMonitorNotificationFormatter {
-    fun title(routeName: String, status: BusMonitorStatus?): String {
-        return listOf(firstLegRoute(routeName), status?.displayText ?: "監控中")
-            .joinToString(" · ")
-    }
-
-    fun successText(
-        firstEtaMinutes: Int,
-        nextEtaMinutes: Int?,
-        walkingMinutes: Int,
-        updatedAtText: String
-    ): String {
-        return bodyText(
-            firstEtaMinutes = firstEtaMinutes,
-            nextEtaMinutes = nextEtaMinutes,
-            walkingMinutes = walkingMinutes,
-            updatedAtText = updatedAtText
-        )
-    }
-
-    fun bodyText(
-        firstEtaMinutes: Int,
-        nextEtaMinutes: Int?,
-        walkingMinutes: Int,
-        updatedAtText: String
-    ): String {
-        return listOfNotNull(
-            marginText(firstEtaMinutes = firstEtaMinutes, walkingMinutes = walkingMinutes),
-            carText(firstEtaMinutes),
-            "步行 $walkingMinutes 分鐘",
-            nextEtaMinutes?.let { "下一班 ${it.coerceAtLeast(0)} 分鐘" },
-            "$updatedAtText 更新"
-        ).joinToString(" · ")
-    }
-
-    fun failureText(lastSuccessfulNotificationText: String?, failureCount: Int): String {
-        return lastSuccessfulNotificationText?.let { lastText ->
-            "資料延遲 · $lastText · 更新失敗 $failureCount 次"
-        } ?: "資料延遲 · 暫無 ETA，1 分鐘後重試"
-    }
-
-    fun firstLegRoute(routeName: String): String {
-        return routeName
-            .split("→", "->")
-            .firstOrNull()
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: routeName.ifBlank { "巴士" }
-    }
-
-    private fun marginText(firstEtaMinutes: Int, walkingMinutes: Int): String {
-        val waitMarginMinutes = firstEtaMinutes - walkingMinutes
-        return if (waitMarginMinutes >= 0) {
-            "剩餘 $waitMarginMinutes 分鐘"
-        } else {
-            "已過 ${kotlin.math.abs(waitMarginMinutes)} 分鐘"
-        }
-    }
-
-    private fun carText(firstEtaMinutes: Int): String {
-        return "車 ${firstEtaMinutes.coerceAtLeast(0)} 分鐘到"
-    }
+    NOT_SUPPORTED,
+    NO_COMPATIBLE_VOICE
 }
 
 enum class BusMonitorStopTargetSource {

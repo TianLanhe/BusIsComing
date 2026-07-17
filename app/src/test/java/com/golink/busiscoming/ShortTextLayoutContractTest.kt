@@ -73,8 +73,7 @@ class ShortTextLayoutContractTest {
                 "@style/StableShortText.Title"
             ),
             "item_route_config.xml" to listOf("@style/StableShortText.Button"),
-            "activity_settings.xml" to listOf(
-                "@style/StableShortText.Button",
+            "fragment_settings.xml" to listOf(
                 "@style/StableShortText.Title",
                 "@style/SettingsGroupLabel",
                 "@style/SettingsRowText"

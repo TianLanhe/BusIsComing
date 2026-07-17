@@ -21,7 +21,7 @@
 
 ### Requirement: 三種模式遵循明確的系統明暗語義
 
-系統 SHALL 讓跟隨系統模式響應 Android 的日／夜配置，並 SHALL 讓固定淺色或深色模式覆蓋後續系統明暗變更。
+系統 SHALL 讓跟隨系統模式響應 Android 實際提供的日／夜配置，並 SHALL 讓固定淺色或深色模式覆蓋後續系統明暗變更；不提供系統深色配置的舊 Android 版本在跟隨系統時保持系統提供的淺色配置。
 
 #### Scenario: 跟隨系統響應日夜變更
 - **WHEN** 已保存模式為 `跟隨系統`
@@ -47,6 +47,7 @@
 - **THEN** 系統 SHALL 先保存新模式再套用
 - **AND** 當前設定頁及後續打開的 App 畫面 SHALL 使用新模式
 - **AND** 系統 SHALL NOT 要求用戶重新啟動 App 才生效
+- **AND** 系統 SHALL 保持目前 App 語言選擇不變
 
 #### Scenario: 選擇目前模式不做無效切換
 - **WHEN** 用戶再次選擇目前已保存的外觀模式
@@ -57,6 +58,12 @@
 - **WHEN** 外觀模式變更需要 Activity 重建
 - **THEN** 系統 SHALL 使用 Android 與 AppCompat 的標準生命週期
 - **AND** 系統 SHALL NOT 以 Manifest `configChanges` 或逐 View 執行時換色繞過該重建
+
+#### Scenario: 語言與外觀資源共同生效
+- **WHEN** App 已選擇任一支援語言並套用任一外觀模式
+- **THEN** 系統 SHALL 同時解析目前 locale 與日／夜資源限定符
+- **AND** 系統 SHALL NOT 以切換外觀清除語言偏好，或以切換語言清除外觀偏好
+- **AND** 系統 SHALL NOT 以額外手動 `recreate()` 造成重複重建或循環
 
 ### Requirement: 主題重建不得破壞持久資料與背景能力
 
@@ -76,8 +83,13 @@
 - **THEN** 監控 session 與前台服務 SHALL 保持運行
 - **AND** 外觀設定 SHALL NOT 修改通知 channel、刷新排程或語音設定
 
-#### Scenario: 即時結果可重新取得
-- **WHEN** 主頁在顯示即時 ETA 或查詢結果時因外觀模式切換而重建
-- **THEN** 系統 SHALL 保留已保存路線並提供重新查詢能力
-- **AND** 系統 SHALL NOT 將重建前的 ETA 當成持久外觀狀態恢復
+#### Scenario: 三個頂層 destination 安全恢復
+- **WHEN** 主宿主因外觀模式切換而重建
+- **THEN** 系統 SHALL 恢復切換前選中的常用、搜尋或設定 destination
+- **AND** 常用 destination SHALL 保留已選 route id 與排序
+- **AND** 搜尋 destination SHALL 保留起終點、未提交輸入與排序
 
+#### Scenario: 即時結果可重新取得
+- **WHEN** 常用或搜尋 destination 在顯示即時 ETA 或查詢結果時因外觀模式切換而重建
+- **THEN** 系統 SHALL 保留有效起終點上下文並提供重新查詢能力
+- **AND** 系統 SHALL NOT 將重建前的 ETA 當成持久外觀狀態恢復

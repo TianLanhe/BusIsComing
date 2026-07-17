@@ -6,6 +6,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.golink.busiscoming.R
+import com.golink.busiscoming.ui.common.LocalizedText
 
 data class RouteTransferActionState(
     val importEnabled: Boolean,
@@ -38,15 +40,26 @@ object RouteTransferUiPolicy {
             replaceEnabled = !isBusy && hasPreview
         )
 
-    fun exportSummary(routeCount: Int) = "已匯出 $routeCount 條常用路線。"
+    fun exportSummary(routeCount: Int, text: LocalizedText) =
+        text.get(R.string.route_export_success, arrayOf(routeCount))
 
-    fun importSummary(mode: RouteImportMode, result: RouteImportResult): String = when (mode) {
+    fun importSummary(
+        mode: RouteImportMode,
+        result: RouteImportResult,
+        text: LocalizedText
+    ): String = when (mode) {
         RouteImportMode.MERGE -> if (result.addedCount == 0) {
-            "匯入完成：沒有新增路線，${result.skippedCount} 條已存在。"
+            text.get(R.string.route_import_none, arrayOf(result.skippedCount))
         } else {
-            "匯入完成：新增 ${result.addedCount} 條，跳過 ${result.skippedCount} 條已存在路線。"
+            text.get(
+                R.string.route_import_merged,
+                arrayOf(result.addedCount, result.skippedCount)
+            )
         }
         RouteImportMode.REPLACE ->
-            "取代完成：已刪除 ${result.deletedCount} 條並匯入 ${result.addedCount} 條。"
+            text.get(
+                R.string.route_import_replaced,
+                arrayOf(result.deletedCount, result.addedCount)
+            )
     }
 }

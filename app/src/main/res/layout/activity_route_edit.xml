@@ -21,14 +21,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
-            android:text="返回上一頁" />
+            android:text="@string/back" />
 
         <TextView
             android:id="@+id/routeEditTitle"
             style="@style/StableShortText.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="路線資訊"
+            android:text="@string/route_info"
             android:textColor="@color/bus_text_primary"
             android:textSize="24sp"
             android:textStyle="bold" />
@@ -65,7 +65,8 @@
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="輸入路線名稱，如：上學、回家、去公司">
+                    android:hint="@string/route_name_hint"
+                    app:helperText="@string/route_name_helper">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/routeNameInput"
@@ -91,7 +92,8 @@
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="輸入起點關鍵字，並從匹配清單中選擇">
+                    android:hint="@string/origin_search_hint"
+                    app:helperText="@string/place_search_helper">
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/originInput"
@@ -138,7 +140,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="正在匹配地點..."
+                        android:text="@string/place_matching"
                         android:textColor="@color/bus_text_secondary"
                         android:textSize="13sp" />
                 </LinearLayout>
@@ -157,7 +159,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:hint="輸入終點關鍵字，並從匹配清單中選擇">
+                    android:hint="@string/destination_search_hint"
+                    app:helperText="@string/place_search_helper">
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/destinationInput"
@@ -193,7 +196,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="正在匹配地點..."
+                        android:text="@string/place_matching"
                         android:textColor="@color/bus_text_secondary"
                         android:textSize="13sp" />
                 </LinearLayout>
@@ -214,7 +217,7 @@
                         android:layout_gravity="end|top"
                         android:layout_marginTop="52dp"
                         android:background="@drawable/sort_chip_background"
-                        android:contentDescription="交換起點和終點"
+                        android:contentDescription="@string/swap_origin_destination"
                         android:padding="9dp"
                         android:scaleType="center"
                         app:srcCompat="@drawable/ic_swap_curved" />
@@ -228,6 +231,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="儲存" />
+            android:text="@string/action_save" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

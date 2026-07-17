@@ -2,7 +2,7 @@ package com.golink.busiscoming.data.model
 
 enum class TransitCodePaymentProvider(val displayName: String) {
     ALIPAY_HK("AlipayHK"),
-    ALIPAY("支付寶")
+    ALIPAY("Alipay")
 }
 
 enum class TransitCodePaymentLaunchMethod {
@@ -45,13 +45,13 @@ object TransitCodePaymentTargets {
     val alipayScheme = TransitCodePaymentTarget(
         provider = TransitCodePaymentProvider.ALIPAY,
         method = TransitCodePaymentLaunchMethod.SCHEME,
-        title = "支付寶 Scheme",
+        title = "Alipay Scheme",
         uri = ALIPAY_SCHEME_URI
     )
     val alipayHttps = TransitCodePaymentTarget(
         provider = TransitCodePaymentProvider.ALIPAY,
         method = TransitCodePaymentLaunchMethod.HTTPS,
-        title = "支付寶 HTTPS",
+        title = "Alipay HTTPS",
         uri = ALIPAY_RENDER_URL
     )
 

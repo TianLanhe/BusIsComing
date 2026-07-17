@@ -8,7 +8,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import com.golink.busiscoming.ui.edit.RouteEditActivity
+import com.golink.busiscoming.data.location.CurrentLocationSnapshot
+import com.golink.busiscoming.data.location.GoogleReverseGeocodingPlaceNameResolver
+import com.golink.busiscoming.data.location.PlaceNameResolutionResult
+import com.golink.busiscoming.data.localization.AppLanguage
+import com.golink.busiscoming.data.localization.AppLanguageChoice
+import com.golink.busiscoming.data.localization.LanguageSnapshot
 import java.io.FileInputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -30,17 +38,66 @@ class GoogleReverseGeocodingCurrentPlaceInstrumentedTest {
     )
 
     @Test
+    fun realGoogleReturnsLanguageAppropriateAddressesForSameHongKongCoordinate() {
+        requireGoogleAcceptanceEnabled()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val coordinate = CurrentLocationSnapshot(
+            latitude = 22.281936,
+            longitude = 114.158697,
+            accuracyMeters = 5f,
+            elapsedRealtimeMillis = 1_000L
+        )
+        val languages = listOf(
+            AppLanguage.TRADITIONAL_CHINESE,
+            AppLanguage.SIMPLIFIED_CHINESE,
+            AppLanguage.ENGLISH
+        )
+        val addresses = languages.associateWith { language ->
+            val snapshot = LanguageSnapshot.create(
+                choice = when (language) {
+                    AppLanguage.TRADITIONAL_CHINESE -> AppLanguageChoice.TRADITIONAL_CHINESE
+                    AppLanguage.SIMPLIFIED_CHINESE -> AppLanguageChoice.SIMPLIFIED_CHINESE
+                    AppLanguage.ENGLISH -> AppLanguageChoice.ENGLISH
+                },
+                effectiveLanguage = language,
+                version = language.ordinal + 100L
+            )
+            val latch = CountDownLatch(1)
+            var result: PlaceNameResolutionResult? = null
+            GoogleReverseGeocodingPlaceNameResolver(
+                context = context,
+                languageSnapshotProvider = { snapshot }
+            ).resolve(coordinate) {
+                result = it
+                latch.countDown()
+            }
+            assertTrue(
+                "Google ${snapshot.googleLanguageCode} request timed out",
+                latch.await(8, TimeUnit.SECONDS)
+            )
+            val success = result as? PlaceNameResolutionResult.Success
+                ?: throw AssertionError(
+                    "Google ${snapshot.googleLanguageCode} did not return an address"
+                )
+            val address = success.addressName
+            assertFalse("Address must not be a plus code: $address", looksLikePlusCode(address))
+            address
+        }
+
+        val traditional = addresses.getValue(AppLanguage.TRADITIONAL_CHINESE)
+        val simplified = addresses.getValue(AppLanguage.SIMPLIFIED_CHINESE)
+        val english = addresses.getValue(AppLanguage.ENGLISH)
+        // Google 可能為香港街道回傳本地文字或最接近的可用翻譯，因此繁簡結果不必強制互異。
+        assertTrue("Traditional address has no Chinese text: $traditional", HAN_PATTERN.containsMatchIn(traditional))
+        assertTrue("Simplified address has no Chinese text: $simplified", HAN_PATTERN.containsMatchIn(simplified))
+        assertTrue("English address has no Latin text: $english", LATIN_PATTERN.containsMatchIn(english))
+        assertNotEquals(traditional, english)
+        assertNotEquals(simplified, english)
+    }
+
+    @Test
     fun newRouteCurrentPlaceUsesRealGoogleAddressAndShowsAttribution() {
-        assumeTrue(
-            "真實 Google API 驗收只在 runGoogleApiAcceptance=true 時執行",
-            InstrumentationRegistry.getArguments()
-                .getString(RUN_GOOGLE_API_ACCEPTANCE_ARGUMENT)
-                .toBoolean()
-        )
-        assertTrue(
-            "缺少 GOOGLE_GEOCODING_API_KEY，無法執行真實 Google API 驗收",
-            BuildConfig.GOOGLE_GEOCODING_API_KEY.isNotBlank()
-        )
+        requireGoogleAcceptanceEnabled()
         injectCentralLocationOrFail()
 
         ActivityScenario.launch(RouteEditActivity::class.java).use {
@@ -55,6 +112,19 @@ class GoogleReverseGeocodingCurrentPlaceInstrumentedTest {
                 assertEquals(View.VISIBLE, attribution.visibility)
             }
         }
+    }
+
+    private fun requireGoogleAcceptanceEnabled() {
+        assumeTrue(
+            "真實 Google API 驗收只在 runGoogleApiAcceptance=true 時執行",
+            InstrumentationRegistry.getArguments()
+                .getString(RUN_GOOGLE_API_ACCEPTANCE_ARGUMENT)
+                .toBoolean()
+        )
+        assertTrue(
+            "缺少 GOOGLE_GEOCODING_API_KEY，無法執行真實 Google API 驗收",
+            BuildConfig.GOOGLE_GEOCODING_API_KEY.isNotBlank()
+        )
     }
 
     private fun injectCentralLocationOrFail() {
@@ -127,5 +197,7 @@ class GoogleReverseGeocodingCurrentPlaceInstrumentedTest {
             pattern = """^[23456789CFGHJMPQRVWX]{2,8}\+[23456789CFGHJMPQRVWX]{2,}.*$""",
             option = RegexOption.IGNORE_CASE
         )
+        val HAN_PATTERN = Regex("\\p{IsHan}")
+        val LATIN_PATTERN = Regex("[A-Za-z]{3,}")
     }
 }

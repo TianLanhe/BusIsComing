@@ -23,6 +23,7 @@ import com.golink.busiscoming.data.transfer.RouteTransferError
 import com.golink.busiscoming.data.transfer.RouteTransferException
 import com.golink.busiscoming.data.transfer.RouteTransferFileReader
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
+import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -177,7 +178,7 @@ class RouteTransferActivity : AppCompatActivity() {
                 } ?: throw IOException("Unable to open export destination")
                 postIfCurrent(token) {
                     finishOperation()
-                    setSummary(RouteTransferUiPolicy.exportSummary(routes.size))
+                    setSummary(RouteTransferUiPolicy.exportSummary(routes.size, localizedText()))
                 }
             } catch (_: Exception) {
                 runCatching { contentResolver.delete(uri, null, null) }
@@ -246,7 +247,7 @@ class RouteTransferActivity : AppCompatActivity() {
                     currentRouteCount = repositoryCountAfter(result.addedCount, mode)
                     finishOperation()
                     returnToHome(clearSummary = false)
-                    setSummary(RouteTransferUiPolicy.importSummary(mode, result))
+                    setSummary(RouteTransferUiPolicy.importSummary(mode, result, localizedText()))
                     refreshRouteCount()
                 }
             } catch (_: Exception) {

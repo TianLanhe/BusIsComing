@@ -31,10 +31,10 @@ class BusMonitorSpeechControllerContractTest {
 
     @Test
     fun monitorSettingsKeepsVoiceSwitchButRemovesPreviewEntry() {
-        assertTrue(bottomSheetKt.contains("text = \"語音播報\""))
+        assertTrue(bottomSheetKt.contains("R.string.monitor_voice"))
         assertTrue(bottomSheetKt.contains("isChecked = true"))
-        assertFalse(bottomSheetKt.contains("試聽語音"))
-        assertFalse(bottomSheetKt.contains("設定系統語音"))
+        assertFalse(bottomSheetKt.contains("preview"))
+        assertFalse(bottomSheetKt.contains("ACTION_TTS_SETTINGS"))
         assertFalse(bottomSheetKt.contains("ACTION_INSTALL_TTS_DATA"))
     }
 }

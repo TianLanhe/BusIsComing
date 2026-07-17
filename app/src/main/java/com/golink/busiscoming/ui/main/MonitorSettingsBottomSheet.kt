@@ -58,7 +58,7 @@ class MonitorSettingsBottomSheet(
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(18), dp(20), dp(20))
         }
-        content.addView(title("通知欄監控"))
+        content.addView(title(context.getString(R.string.monitor_title)))
         content.addView(subtitle(route))
         content.addView(limitNote())
         content.addView(walkingTimeSection())
@@ -90,8 +90,7 @@ class MonitorSettingsBottomSheet(
 
     private fun limitNote(): TextView {
         return TextView(context).apply {
-            text = "啟動後會每分鐘嘗試更新；省電、鎖屏或網絡限制可能導致延遲。\n" +
-                "鎖屏會顯示路線與 ETA；開啟語音後，狀態變更可能在鎖屏時播報。"
+            text = context.getString(R.string.monitor_explanation)
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
             textSize = 12f
             maxLines = 3
@@ -117,7 +116,7 @@ class MonitorSettingsBottomSheet(
 
     private fun walkingTimeSection(): View {
         val root = sectionContainer(topMargin = 18)
-        root.addView(sectionLabel("步行到站"))
+        root.addView(sectionLabel(context.getString(R.string.monitor_walk_section)))
         root.addView(LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
@@ -151,7 +150,7 @@ class MonitorSettingsBottomSheet(
 
     private fun speedSection(): View {
         val root = sectionContainer(topMargin = 14)
-        root.addView(sectionLabel("行走速度"))
+        root.addView(sectionLabel(context.getString(R.string.monitor_speed_section)))
         val chips = ChipGroup(context).apply {
             isSingleSelection = true
             isSelectionRequired = true
@@ -161,7 +160,18 @@ class MonitorSettingsBottomSheet(
             ).apply { topMargin = dp(8) }
         }
         WalkingSpeedPreset.values().forEach { preset ->
-            chips.addView(chip("${preset.label} ${preset.speedKmh}km/h", checked = preset == selectedSpeedPreset).apply {
+            val label = context.getString(
+                when (preset) {
+                    WalkingSpeedPreset.SLOW -> R.string.monitor_speed_slow
+                    WalkingSpeedPreset.CHILD -> R.string.monitor_speed_child
+                    WalkingSpeedPreset.NORMAL -> R.string.monitor_speed_normal
+                    WalkingSpeedPreset.FAST -> R.string.monitor_speed_fast
+                }
+            )
+            chips.addView(chip(
+                context.getString(R.string.monitor_speed_option, label, preset.speedKmh),
+                checked = preset == selectedSpeedPreset
+            ).apply {
                 setOnCheckedChangeListener { _, isChecked ->
                     if (isChecked) {
                         selectedSpeedPreset = preset
@@ -176,7 +186,7 @@ class MonitorSettingsBottomSheet(
 
     private fun modifierSection(): View {
         val root = sectionContainer(topMargin = 10)
-        root.addView(sectionLabel("常見場景"))
+        root.addView(sectionLabel(context.getString(R.string.monitor_scenario_section)))
         val chips = ChipGroup(context).apply {
             isSingleSelection = false
             layoutParams = LinearLayout.LayoutParams(
@@ -184,9 +194,21 @@ class MonitorSettingsBottomSheet(
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(8) }
         }
-        chips.addView(modifierChip(WalkingScenarioModifier.RAIN, "雨天 ×80%速度"))
-        chips.addView(modifierChip(WalkingScenarioModifier.ELEVATOR, "等電梯 +2"))
-        chips.addView(modifierChip(WalkingScenarioModifier.CROSSING, "天橋/過馬路 +2"))
+        chips.addView(
+            modifierChip(WalkingScenarioModifier.RAIN, context.getString(R.string.monitor_scenario_rain))
+        )
+        chips.addView(
+            modifierChip(
+                WalkingScenarioModifier.ELEVATOR,
+                context.getString(R.string.monitor_scenario_elevator)
+            )
+        )
+        chips.addView(
+            modifierChip(
+                WalkingScenarioModifier.CROSSING,
+                context.getString(R.string.monitor_scenario_crossing)
+            )
+        )
         root.addView(chips)
         return root
     }
@@ -194,7 +216,7 @@ class MonitorSettingsBottomSheet(
     private fun voiceSection(): View {
         val root = sectionContainer(topMargin = 12)
         voiceSwitch = SwitchMaterial(context).apply {
-            text = "語音播報"
+            text = context.getString(R.string.monitor_voice)
             applyStableShortTextLayout(Gravity.CENTER_VERTICAL)
             isChecked = true
             setTextColor(ContextCompat.getColor(context, R.color.bus_text_primary))
@@ -210,7 +232,7 @@ class MonitorSettingsBottomSheet(
 
     private fun startButton(): MaterialButton {
         return MaterialButton(context).apply {
-            text = "開始監控"
+            text = context.getString(R.string.monitor_start)
             applyStableShortTextLayout(Gravity.CENTER)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -286,7 +308,7 @@ class MonitorSettingsBottomSheet(
     private fun refreshEstimate() {
         if (!::walkingMinutesText.isInitialized || !::estimateSourceText.isInitialized) return
         val estimate = currentEstimate()
-        walkingMinutesText.text = "${estimate.finalMinutes} 分鐘"
+        walkingMinutesText.text = context.getString(R.string.minutes_count, estimate.finalMinutes)
         estimateSourceText.text = estimate.sourceText()
     }
 
@@ -302,11 +324,19 @@ class MonitorSettingsBottomSheet(
 
     private fun WalkingTimeEstimate.sourceText(): String {
         val sources = buildList {
-            interfaceDistanceMinutes?.let { add("接口 $it 分鐘") }
-            straightLineMinutes?.let { add("直線 $it 分鐘") }
-            if (manualBaseMinutes != null) add("手動 $userAdjustedMinutes 分鐘")
+            interfaceDistanceMinutes?.let {
+                add(context.getString(R.string.monitor_source_api, it))
+            }
+            straightLineMinutes?.let {
+                add(context.getString(R.string.monitor_source_straight, it))
+            }
+            if (manualBaseMinutes != null) {
+                add(context.getString(R.string.monitor_source_manual, userAdjustedMinutes))
+            }
         }
-        return sources.ifEmpty { listOf("按手動時間估算") }.joinToString(" · ")
+        return sources.ifEmpty {
+            listOf(context.getString(R.string.monitor_source_manual_only))
+        }.joinToString(" · ")
     }
 
     private fun dp(value: Int): Int {

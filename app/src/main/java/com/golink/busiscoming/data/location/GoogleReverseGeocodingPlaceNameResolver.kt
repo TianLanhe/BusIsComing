@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.golink.busiscoming.BuildConfig
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
+import com.golink.busiscoming.data.localization.LanguageSnapshot
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -45,7 +47,8 @@ enum class PlaceAttribution {
 class GoogleReverseGeocodingPlaceNameResolver(
     context: Context? = null,
     private val apiKeyProvider: () -> String = { BuildConfig.GOOGLE_GEOCODING_API_KEY },
-    private val languageCodeProvider: () -> String = { DEFAULT_LANGUAGE_CODE },
+    private val languageSnapshotProvider: () -> LanguageSnapshot = AppLanguageRuntime::snapshot,
+    private val languageCodeProvider: (() -> String)? = null,
     private val identityProvider: () -> AndroidRequestIdentity? = {
         context?.applicationContext?.let(AndroidRequestIdentity::from)
     },
@@ -90,7 +93,9 @@ class GoogleReverseGeocodingPlaceNameResolver(
         val timeout = timeoutExecutor.schedule(
             {
                 val callbacks = cache.completeInFlight(key, requestId)
-                callbacks.forEach { it.postResult(PlaceNameResolutionResult.Failure) }
+                if (isCurrentLanguage(requestContext)) {
+                    callbacks.forEach { it.postResult(PlaceNameResolutionResult.Failure) }
+                }
                 logFailure("timeout")
             },
             NAME_RESOLUTION_TIMEOUT_MS,
@@ -100,7 +105,7 @@ class GoogleReverseGeocodingPlaceNameResolver(
         requestExecutor.execute {
             val result = runGoogleRequest(snapshot, requestContext)
             timeout.cancel(false)
-            if (result is PlaceNameResolutionResult.Success) {
+            if (result is PlaceNameResolutionResult.Success && isCurrentLanguage(requestContext)) {
                 cache.put(
                     key = key,
                     entry = GoogleReverseGeocodingCacheEntry(
@@ -110,7 +115,9 @@ class GoogleReverseGeocodingPlaceNameResolver(
                 )
             }
             val callbacks = cache.completeInFlight(key, requestId)
-            callbacks.forEach { it.postResult(result) }
+            if (isCurrentLanguage(requestContext)) {
+                callbacks.forEach { it.postResult(result) }
+            }
         }
     }
 
@@ -125,12 +132,19 @@ class GoogleReverseGeocodingPlaceNameResolver(
             logFailure("android_identity_missing")
             return null
         }
+        val languageSnapshot = languageSnapshotProvider()
         return GoogleReverseGeocodingRequestContext(
             apiKey = apiKey,
-            languageCode = languageCodeProvider().ifBlank { DEFAULT_LANGUAGE_CODE },
+            languageCode = languageCodeProvider?.invoke()?.ifBlank { DEFAULT_LANGUAGE_CODE }
+                ?: languageSnapshot.googleLanguageCode,
+            regionCode = languageSnapshot.googleRegionCode,
+            languageVersion = languageSnapshot.version,
             identity = identity
         )
     }
+
+    private fun isCurrentLanguage(requestContext: GoogleReverseGeocodingRequestContext): Boolean =
+        languageSnapshotProvider().version == requestContext.languageVersion
 
     private fun runGoogleRequest(
         snapshot: CurrentLocationSnapshot,
@@ -150,7 +164,17 @@ class GoogleReverseGeocodingPlaceNameResolver(
             return PlaceNameResolutionResult.Failure
         }
         if (response.statusCode !in 200..299) {
-            logFailure("http_${response.statusCode}")
+            val safeReason = GoogleReverseGeocodingErrorDiagnostic.safeReason(response.body)
+            logFailure(
+                buildString {
+                    append("http_")
+                    append(response.statusCode)
+                    safeReason?.let {
+                        append('_')
+                        append(it)
+                    }
+                }
+            )
             return PlaceNameResolutionResult.Failure
         }
         return when (val parsed = GoogleReverseGeocodingParser.parse(response.body)) {
@@ -178,13 +202,15 @@ class GoogleReverseGeocodingPlaceNameResolver(
             ?: GoogleReverseGeocodingRequestContext(
                 apiKey = "",
                 languageCode = DEFAULT_LANGUAGE_CODE,
+                regionCode = languageSnapshotProvider().googleRegionCode,
+                languageVersion = languageSnapshotProvider().version,
                 identity = AndroidRequestIdentity("", "")
             )
     ): GoogleReverseGeocodingRequest {
         val lat = coordinate(snapshot.latitude)
         val lng = coordinate(snapshot.longitude)
         val languageCode = encode(requestContext.languageCode)
-        val regionCode = encode(REGION_CODE)
+        val regionCode = encode(requestContext.regionCode)
         val url = URL("$BASE_URL/$lat,$lng?languageCode=$languageCode&regionCode=$regionCode")
         return GoogleReverseGeocodingRequest(
             url = url,
@@ -242,6 +268,8 @@ class GoogleReverseGeocodingPlaceNameResolver(
 data class GoogleReverseGeocodingRequestContext(
     val apiKey: String,
     val languageCode: String,
+    val regionCode: String = GoogleReverseGeocodingPlaceNameResolver.REGION_CODE,
+    val languageVersion: Long = 1L,
     val identity: AndroidRequestIdentity
 )
 
@@ -400,6 +428,27 @@ sealed class GoogleReverseGeocodingParseResult {
     data object ApiError : GoogleReverseGeocodingParseResult()
     data object EmptyResults : GoogleReverseGeocodingParseResult()
     data object MalformedJson : GoogleReverseGeocodingParseResult()
+}
+
+object GoogleReverseGeocodingErrorDiagnostic {
+    private val safeReasonPattern = Regex("^[A-Z][A-Z0-9_]{0,127}$")
+
+    fun safeReason(response: String): String? {
+        val root = try {
+            JSONObject(response)
+        } catch (_: JSONException) {
+            return null
+        }
+        val details = root.optJSONObject("error")?.optJSONArray("details") ?: return null
+        for (index in 0 until details.length()) {
+            val reason = details.optJSONObject(index)
+                ?.optString("reason")
+                ?.trim()
+                ?.takeIf { safeReasonPattern.matches(it) }
+            if (reason != null) return reason
+        }
+        return null
+    }
 }
 
 object GoogleReverseGeocodingParser {

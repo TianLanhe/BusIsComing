@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FF72D3C1</color>
+    <color name="purple_500">#FF72D3C1</color>
+    <color name="purple_700">#FF091816</color>
+    <color name="teal_200">#FFF0B25B</color>
+    <color name="teal_700">#FFF0B25B</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="bus_page_gradient_start">#FF091816</color>
+    <color name="bus_page_gradient_center">#FF0C1A18</color>
+    <color name="bus_page_gradient_end">#FF101715</color>
+    <color name="bus_form_gradient_start">#FF172522</color>
+    <color name="bus_form_gradient_end">#FF20312D</color>
+    <color name="bus_surface">#FF101715</color>
+    <color name="bus_surface_variant">#FF20312D</color>
+    <color name="bus_card_surface">#FF172522</color>
+    <color name="bus_state_surface">#FF172522</color>
+    <color name="bus_chip_surface">#FF20312D</color>
+    <color name="bus_chip_selected">#FF72D3C1</color>
+    <color name="bus_on_accent">#FF08241E</color>
+    <color name="bus_wait_accent">#FF72D3C1</color>
+    <color name="bus_wait_unavailable">#FF80918B</color>
+    <color name="app_icon_background">#FFC8C2F5</color>
+    <color name="bus_text_primary">#FFF1F8F5</color>
+    <color name="bus_text_secondary">#FFA6BBB4</color>
+    <color name="bus_divider">#FF354A44</color>
+    <color name="bus_outline_strong">#FF5A766E</color>
+    <color name="bus_danger">#FFFFB4AB</color>
+    <color name="bus_on_danger">#FF3B0907</color>
+    <color name="bus_action_secondary">#FFF0B25B</color>
+    <color name="bus_on_secondary">#FF2A1700</color>
+    <color name="bus_on_route_badge">#FFFFFFFF</color>
+</resources>

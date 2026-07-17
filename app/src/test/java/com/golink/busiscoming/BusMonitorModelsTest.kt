@@ -1,8 +1,6 @@
 package com.golink.busiscoming
 
-import com.golink.busiscoming.data.model.BusMonitorSpeechFormatter
 import com.golink.busiscoming.data.model.BusMonitorSpeechPolicy
-import com.golink.busiscoming.data.model.BusMonitorNotificationFormatter
 import com.golink.busiscoming.data.model.BusMonitorRefreshPolicy
 import com.golink.busiscoming.data.model.BusMonitorSessionPolicy
 import com.golink.busiscoming.data.model.BusMonitorSessionSnapshotCodec
@@ -13,12 +11,16 @@ import com.golink.busiscoming.data.model.BusMonitorStopTargetSource
 import com.golink.busiscoming.data.model.BusMonitorTtsLanguagePolicy
 import com.golink.busiscoming.data.model.BusMonitorTtsLanguageSelection
 import com.golink.busiscoming.data.model.BusMonitorTtsLanguageUnavailableReason
+import com.golink.busiscoming.data.localization.TtsLanguageFamily
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.WalkingScenarioModifier
 import com.golink.busiscoming.data.model.WalkingSpeedPreset
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
 import com.golink.busiscoming.service.BusMonitorSpeechFailureReason
 import com.golink.busiscoming.service.BusMonitorSpeechResult
+import com.golink.busiscoming.service.BusMonitorSpeechFormatter
+import com.golink.busiscoming.service.BusMonitorNotificationFormatter
+import com.golink.busiscoming.ui.common.LocalizedText
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,6 +28,28 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BusMonitorModelsTest {
+    private val traditionalText = LocalizedText { resourceId, arguments ->
+        when (resourceId) {
+            R.string.tts_monitor_prepare -> "巴士預計 ${arguments[0]} 分鐘後到站，請做好出門準備。"
+            R.string.tts_monitor_leave_now -> "巴士預計 ${arguments[0]} 分鐘後到站，請立即出門。"
+            R.string.tts_monitor_late -> "巴士預計 ${arguments[0]} 分鐘後到站，現在出發仍可能遲到。"
+            R.string.monitor_status_prepare -> "準備出門"
+            R.string.monitor_status_leave_now -> "立即出門"
+            R.string.monitor_status_late -> "可能遲到"
+            R.string.monitor_status_active -> "監控中"
+            R.string.notification_margin_remaining -> "剩餘 ${arguments[0]} 分鐘"
+            R.string.notification_margin_overdue -> "已過 ${arguments[0]} 分鐘"
+            R.string.notification_bus_arrival -> "巴士 ${arguments[0]} 分鐘到站"
+            R.string.notification_walking_time -> "步行 ${arguments[0]} 分鐘"
+            R.string.notification_next_arrival -> "下一班 ${arguments[0]} 分鐘"
+            R.string.notification_updated_at -> "${arguments[0]} 更新"
+            R.string.notification_failure_with_last ->
+                "資料延遲 · ${arguments[0]} · 更新失敗 ${arguments[1]} 次"
+            R.string.notification_failure_no_eta -> "資料延遲 · 暫無 ETA，1 分鐘後重試"
+            R.string.bus_fallback_name -> "巴士"
+            else -> error("Unexpected resource $resourceId")
+        }
+    }
     @Test
     fun walkingEstimateUsesMaxDistanceEstimateAndUserAdjustmentThenAddsModifiers() {
         val estimate = WalkingTimeCalculator.estimate(
@@ -72,12 +96,8 @@ class BusMonitorModelsTest {
     @Test
     fun formatsSpeechForState() {
         assertEquals(
-            "當前汽車到站剩餘 10 分鐘，請立即出門",
-            BusMonitorSpeechFormatter.phrase(10, BusMonitorStatus.LEAVE_NOW)
-        )
-        assertEquals(
-            "當前汽車到站剩餘 7 分鐘，請立即出門",
-            BusMonitorSpeechFormatter.previewPhrase()
+            "巴士預計 10 分鐘後到站，請立即出門。",
+            BusMonitorSpeechFormatter.phrase(10, BusMonitorStatus.LEAVE_NOW, traditionalText)
         )
     }
 
@@ -117,32 +137,34 @@ class BusMonitorModelsTest {
     fun formatsMonitorNotificationSuccessAndFailureStates() {
         assertEquals(
             "82X · 準備出門",
-            BusMonitorNotificationFormatter.title("82X → 102", BusMonitorStatus.PREPARE)
+            BusMonitorNotificationFormatter.title("82X → 102", BusMonitorStatus.PREPARE, traditionalText)
         )
         assertEquals(
             "82X · 立即出門",
-            BusMonitorNotificationFormatter.title("82X", BusMonitorStatus.LEAVE_NOW)
+            BusMonitorNotificationFormatter.title("82X", BusMonitorStatus.LEAVE_NOW, traditionalText)
         )
         assertEquals(
-            "82X · 快遲到了",
-            BusMonitorNotificationFormatter.title("82X", BusMonitorStatus.LATE)
+            "82X · 可能遲到",
+            BusMonitorNotificationFormatter.title("82X", BusMonitorStatus.LATE, traditionalText)
         )
         assertEquals(
-            "剩餘 2 分鐘 · 車 5 分鐘到 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新",
+            "剩餘 2 分鐘 · 巴士 5 分鐘到站 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新",
             BusMonitorNotificationFormatter.bodyText(
                 firstEtaMinutes = 5,
                 nextEtaMinutes = 25,
                 walkingMinutes = 3,
-                updatedAtText = "12:45"
+                updatedAtText = "12:45",
+                text = traditionalText
             )
         )
         assertEquals(
-            "已過 1 分鐘 · 車 2 分鐘到 · 步行 3 分鐘 · 12:45 更新",
+            "已過 1 分鐘 · 巴士 2 分鐘到站 · 步行 3 分鐘 · 12:45 更新",
             BusMonitorNotificationFormatter.bodyText(
                 firstEtaMinutes = 2,
                 nextEtaMinutes = null,
                 walkingMinutes = 3,
-                updatedAtText = "12:45"
+                updatedAtText = "12:45",
+                text = traditionalText
             )
         )
         assertEquals(
@@ -150,27 +172,31 @@ class BusMonitorModelsTest {
                 firstEtaMinutes = 5,
                 nextEtaMinutes = 25,
                 walkingMinutes = 3,
-                updatedAtText = "12:45"
+                updatedAtText = "12:45",
+                text = traditionalText
             ),
             BusMonitorNotificationFormatter.successText(
                 firstEtaMinutes = 5,
                 nextEtaMinutes = 25,
                 walkingMinutes = 3,
-                updatedAtText = "12:45"
+                updatedAtText = "12:45",
+                text = traditionalText
             )
         )
         assertEquals(
-            "資料延遲 · 剩餘 2 分鐘 · 車 5 分鐘到 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新 · 更新失敗 2 次",
+            "資料延遲 · 剩餘 2 分鐘 · 巴士 5 分鐘到站 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新 · 更新失敗 2 次",
             BusMonitorNotificationFormatter.failureText(
-                lastSuccessfulNotificationText = "剩餘 2 分鐘 · 車 5 分鐘到 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新",
-                failureCount = 2
+                lastSuccessfulNotificationText = "剩餘 2 分鐘 · 巴士 5 分鐘到站 · 步行 3 分鐘 · 下一班 25 分鐘 · 12:45 更新",
+                failureCount = 2,
+                text = traditionalText
             )
         )
         assertEquals(
             "資料延遲 · 暫無 ETA，1 分鐘後重試",
             BusMonitorNotificationFormatter.failureText(
                 lastSuccessfulNotificationText = null,
-                failureCount = 1
+                failureCount = 1,
+                text = traditionalText
             )
         )
     }
@@ -335,29 +361,59 @@ class BusMonitorModelsTest {
     }
 
     @Test
-    fun ttsLanguagePolicyFallsBackAcrossChineseLocales() {
-        val chosen = BusMonitorTtsLanguagePolicy.chooseSupportedLocale { locale ->
-            if (locale == Locale.forLanguageTag("zh-HK")) 1 else -2
-        }
+    fun ttsLanguagePolicyUsesOnlyVoicesCompatibleWithRequestedFamily() {
+        val traditional = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = TtsLanguageFamily.TRADITIONAL_CHINESE,
+            availableVoiceLocales = listOf(
+                Locale.forLanguageTag("zh"),
+                Locale.forLanguageTag("zh-CN"),
+                Locale.forLanguageTag("zh-HK")
+            )
+        ) { locale -> if (locale.toLanguageTag() == "zh-HK") 0 else -2 }
+        val simplified = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = TtsLanguageFamily.SIMPLIFIED_CHINESE,
+            availableVoiceLocales = listOf(
+                Locale.forLanguageTag("zh-HK"),
+                Locale.forLanguageTag("zh-Hans-CN")
+            )
+        ) { 0 }
+        val english = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = TtsLanguageFamily.ENGLISH,
+            availableVoiceLocales = listOf(Locale.US, Locale.UK)
+        ) { 0 }
 
-        assertEquals(Locale.forLanguageTag("zh-HK"), chosen)
-        assertEquals(Locale.TRADITIONAL_CHINESE, BusMonitorTtsLanguagePolicy.fallbackLocales.first())
+        assertEquals(Locale.forLanguageTag("zh-HK"), (traditional as BusMonitorTtsLanguageSelection.Supported).locale)
+        assertEquals(Locale.forLanguageTag("zh-Hans-CN"), (simplified as BusMonitorTtsLanguageSelection.Supported).locale)
+        assertEquals(Locale.UK, (english as BusMonitorTtsLanguageSelection.Supported).locale)
+        assertFalse(BusMonitorTtsLanguagePolicy.isCompatible(TtsLanguageFamily.TRADITIONAL_CHINESE, Locale.forLanguageTag("zh")))
+        assertFalse(BusMonitorTtsLanguagePolicy.isCompatible(TtsLanguageFamily.TRADITIONAL_CHINESE, Locale.forLanguageTag("zh-CN")))
+        assertFalse(BusMonitorTtsLanguagePolicy.isCompatible(TtsLanguageFamily.SIMPLIFIED_CHINESE, Locale.forLanguageTag("zh-HK")))
         assertTrue(BusMonitorTtsLanguagePolicy.isLanguageUsable(0))
         assertFalse(BusMonitorTtsLanguagePolicy.isLanguageUsable(-1))
     }
 
     @Test
     fun ttsLanguagePolicyKeepsDiagnosticsForMissingDataAndUnsupportedLanguages() {
-        val missingData = BusMonitorTtsLanguagePolicy.selectSupportedLocale { locale ->
-            if (locale == Locale.TRADITIONAL_CHINESE) {
+        val missingData = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = TtsLanguageFamily.TRADITIONAL_CHINESE,
+            availableVoiceLocales = listOf(Locale.forLanguageTag("zh-Hant-HK"))
+        ) { locale ->
+            if (locale == Locale.forLanguageTag("zh-Hant-HK")) {
                 BusMonitorTtsLanguagePolicy.LANGUAGE_MISSING_DATA
             } else {
                 BusMonitorTtsLanguagePolicy.LANGUAGE_NOT_SUPPORTED
             }
         }
-        val unsupported = BusMonitorTtsLanguagePolicy.selectSupportedLocale {
+        val unsupported = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = TtsLanguageFamily.ENGLISH,
+            availableVoiceLocales = listOf(Locale.UK)
+        ) {
             BusMonitorTtsLanguagePolicy.LANGUAGE_NOT_SUPPORTED
         }
+        val noVoice = BusMonitorTtsLanguagePolicy.selectSupportedLocale(
+            family = TtsLanguageFamily.SIMPLIFIED_CHINESE,
+            availableVoiceLocales = listOf(Locale.forLanguageTag("zh-HK"))
+        ) { 0 }
 
         assertTrue(missingData is BusMonitorTtsLanguageSelection.Unavailable)
         assertEquals(
@@ -369,8 +425,10 @@ class BusMonitorModelsTest {
             BusMonitorTtsLanguageUnavailableReason.NOT_SUPPORTED,
             (unsupported as BusMonitorTtsLanguageSelection.Unavailable).reason
         )
-        assertTrue(BusMonitorTtsLanguagePolicy.fallbackLocales.contains(Locale.SIMPLIFIED_CHINESE))
-        assertTrue(BusMonitorTtsLanguagePolicy.fallbackLocales.contains(Locale.forLanguageTag("yue-HK")))
+        assertEquals(
+            BusMonitorTtsLanguageUnavailableReason.NO_COMPATIBLE_VOICE,
+            (noVoice as BusMonitorTtsLanguageSelection.Unavailable).reason
+        )
     }
 
     @Test

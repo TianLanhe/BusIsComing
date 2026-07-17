@@ -1,6 +1,8 @@
 package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
+import com.golink.busiscoming.data.localization.LanguageSnapshot
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -8,6 +10,7 @@ import java.net.URLEncoder
 
 class CitybusPlaceSearchRepository(
     private val parser: CitybusPlaceParser = CitybusPlaceParser,
+    private val languageSnapshotProvider: () -> LanguageSnapshot = AppLanguageRuntime::snapshot,
     private val clock: () -> Long = { System.currentTimeMillis() }
 ) : PlaceSearchRepository {
     override fun searchPlaces(keyword: String): List<Place> {
@@ -40,10 +43,14 @@ class CitybusPlaceSearchRepository(
         }
     }
 
-    fun buildSearchUrl(keyword: String, timestamp: Long): URL {
+    fun buildSearchUrl(
+        keyword: String,
+        timestamp: Long,
+        language: String = languageSnapshotProvider().citybusLanguage
+    ): URL {
         val encodedKeyword = URLEncoder.encode(keyword, Charsets.UTF_8.name())
         return URL(
-            "$BASE_URL?l=0&q=$encodedKeyword&limit=100&timestamp=$timestamp"
+            "$BASE_URL?l=$language&q=$encodedKeyword&limit=100&timestamp=$timestamp"
         )
     }
 

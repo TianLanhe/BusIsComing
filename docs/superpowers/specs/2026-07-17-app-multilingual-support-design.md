@@ -8,7 +8,7 @@ BusIsComing 目前只有單一繁體中文資源目錄，部分 XML、Kotlin、�
 
 本設計為 App 新增繁體中文、簡體中文及英文三語能力，並提供「跟隨系統」選項。它同時整理長期本地化規則、動態資料語言、TTS 診斷、Citybus 請求參數、版面驗證及專案文件，使後續功能不得再次退回單語或硬編碼模式。
 
-翻譯語氣及審校原則參考 `BusIsComingWebsite`，但 Android 端採用原生資源及 AppCompat 語言架構，不複製網站的 TypeScript 字典實作。Website 及其 Backend 在本變更中只作唯讀參考，不修改其程式或設定。
+翻譯語氣、術語及審校原則在本設計中自足定義；Android 端採用原生資源及 AppCompat 語言架構，不依賴外部字典或本機倉庫路徑。
 
 ## 目標
 
@@ -24,7 +24,7 @@ BusIsComing 目前只有單一繁體中文資源目錄，部分 XML、Kotlin、�
 
 ## 非目標
 
-- 不修改 `BusIsComingWebsite` 或 Website Backend。
+- 不修改任何外部網站或後端。
 - 不翻譯用戶輸入的路線名稱、既有保存地點名稱或匯入檔案內容。
 - 不對 Citybus、DATA.GOV.HK 或 Google 內容進行機器翻譯。
 - 不控制 Android 權限對話框、系統文件選擇器、分享面板、TTS 引擎設定、支付工具或瀏覽器等第三方畫面的語言。
@@ -84,7 +84,7 @@ App 以 Android `strings`、`plurals`、locale resource qualifier、AppCompat pe
 - Google `languageCode` 與 `regionCode`。
 - DATA.GOV.HK 欄位選擇順序。
 - TTS 允許的語音體系與候選順序。
-- Website 首頁、私隱政策等語言路徑。
+- 官方網站首頁、私隱政策等語言路徑。
 - 單調遞增的語言版本號。
 
 每次網絡工作捕獲不可變 `LanguageSnapshot`。回調更新 UI 或快取前必須核對語言版本；切換前發出的舊語言結果即使稍後返回也會被丟棄。
@@ -142,7 +142,7 @@ Activity、Adapter、Service 及 model 不得直接拼接用戶可見文字。�
 
 ## 動態資料語言
 
-| App 實際語言 | Citybus `l` | Google `languageCode` | DATA.GOV.HK 主要欄位 | Website 首頁 | 私隱政策 |
+| App 實際語言 | Citybus `l` | Google `languageCode` | DATA.GOV.HK 主要欄位 | 官方網站首頁 | 私隱政策 |
 | --- | ---: | --- | --- | --- | --- |
 | 繁體中文 | `0` | `zh-Hant` | `name_tc`、`dest_tc`、`rmk_tc` | `/zh-hant/` | `/zh-hant/privacy/` |
 | 簡體中文 | `2` | `zh-Hans` | `name_sc`、`dest_sc`、`rmk_sc` | `/zh-hans/` | `/zh-hans/privacy/` |
@@ -162,7 +162,7 @@ Google 地址快取鍵繼續包含座標與語言。逆向地理編碼失敗時�
 
 ## Citybus 請求參數審核
 
-本變更以「正確結果優先」審核 Android Citybus 請求。Website Backend 只用於理解接口，不是 Android 必須複製的請求模板。
+本變更以「正確結果優先」審核 Android Citybus 請求，不複製瀏覽器或其他服務端的請求模板。
 
 ### 保留參數
 
@@ -180,7 +180,7 @@ Google 地址快取鍵繼續包含座標與語言。逆向地理編碼失敗時�
 ### Header 原則
 
 - Citybus mobile 請求繼續不顯式加入 `Cookie`、`Referer`、`User-Agent`、`X-Requested-With` 或其他瀏覽器模擬 header。
-- 不因 Website Backend 使用某 header 而複製到 Android。
+- 不因其他客戶端或服務端使用某 header 而複製到 Android。
 - 只有真實 A/B 證據證明接口必需時才新增 header。
 - DATA.GOV.HK 的 JSON `Accept` 及 Google 的 API key、Android identity、FieldMask 不屬於 Citybus 精簡範圍。
 
@@ -260,7 +260,7 @@ font scale 2.0 可增加頁面高度、換行及滾動，但不得控件重疊�
 - locale tag、fallback 與語言切換規則。
 - 三語語氣、術語表、品牌與官方名稱。
 - Android resource、placeholder、plural 及不可翻譯值規則。
-- Citybus、DATA.GOV.HK、Google、TTS、Website 路徑映射。
+- Citybus、DATA.GOV.HK、Google、TTS、官方網站路徑映射。
 - 單欄位回退、快取、錯誤與診斷原則。
 - UI 大字體、無障礙及測試清單。
 
@@ -302,7 +302,7 @@ README 翻新列入實作範圍，但只在真正修改時載入並使用用戶�
 - 三語 resource key、placeholder 類型及 plural 結構完全一致。
 - `MissingTranslation`、`HardcodedText`、`SetTextI18n` 等 Lint 通過。
 - 掃描 Toast、Dialog、Notification、無障礙文字及字串拼接；parser、fixture 等例外採窄範圍白名單並記錄原因。
-- Citybus `l`、Google `languageCode`、DATA.GOV.HK 欄位與 Website path mapping。
+- Citybus `l`、Google `languageCode`、DATA.GOV.HK 欄位與官方網站 path mapping。
 - 三語 Citybus 地點、路線、詳情、停站與 ETA fixture/parser。
 - 語言版本過期結果丟棄、cache 隔離及切換後自動重查。
 - DATA.GOV.HK 單欄位 fallback 順序與日誌。

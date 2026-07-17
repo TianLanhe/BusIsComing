@@ -6,6 +6,8 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
+import com.golink.busiscoming.data.localization.LanguageSnapshot
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -22,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class CitybusBusRouteRepository(
     private val parser: CitybusRouteParser = CitybusRouteParser,
+    private val languageSnapshotProvider: () -> LanguageSnapshot = AppLanguageRuntime::snapshot,
     private val clock: () -> Long = { System.currentTimeMillis() },
     private val routeFetcher: (URL, Map<String, String>) -> String = ::fetchRouteHtml,
     private val requestLogger: (String) -> Unit = ::logRouteCurl,
@@ -45,6 +48,7 @@ class CitybusBusRouteRepository(
     private var activeStopPreviewExecutor: ExecutorService? = null
 
     override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> {
+        val languageSnapshot = languageSnapshotProvider()
         val queryTime = formatQueryTime(clock())
         val headers = requestHeaders()
         val executor = Executors.newFixedThreadPool(SEARCH_MODES.size)
@@ -52,9 +56,15 @@ class CitybusBusRouteRepository(
             val futures = executor.invokeAll(
                 SEARCH_MODES.map { mode ->
                     Callable {
-                        val url = buildRouteUrl(origin, destination, queryTime, mode)
+                        val url = buildRouteUrl(
+                            origin,
+                            destination,
+                            queryTime,
+                            mode,
+                            languageSnapshot.citybusLanguage
+                        )
                         requestLogger(buildRouteQueryLogSummary(url, headers))
-                        parser.parse(routeFetcher(url, headers))
+                        parser.parse(routeFetcher(url, headers), languageSnapshot.citybusLanguage)
                     }
                 }
             )
@@ -113,7 +123,8 @@ class CitybusBusRouteRepository(
         origin: Place,
         destination: Place,
         queryTime: String,
-        searchMode: String = DEFAULT_SEARCH_MODE
+        searchMode: String = DEFAULT_SEARCH_MODE,
+        language: String = languageSnapshotProvider().citybusLanguage
     ): URL {
         return URL(
             "$BASE_URL" +
@@ -125,7 +136,7 @@ class CitybusBusRouteRepository(
                 "&ws=$WALKING_SEARCH_RATIO" +
                 "&leg=2" +
                 "&m1=$searchMode" +
-                "&l=0"
+                "&l=$language"
         )
     }
 

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/searchSwipeRefresh"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -21,7 +22,7 @@
             style="@style/StableShortText.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="搜尋"
+            android:text="@string/search_title"
             android:textColor="@color/bus_text_primary"
             android:textSize="24sp"
             android:textStyle="bold" />
@@ -30,7 +31,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="輸入起點與終點，探索可用巴士路線"
+            android:text="@string/search_subtitle"
             android:textColor="@color/bus_text_secondary"
             android:textSize="14sp" />
 
@@ -40,7 +41,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:hint="輸入起點關鍵字，並從匹配清單中選擇">
+            android:hint="@string/origin_search_hint"
+            app:helperText="@string/place_search_helper">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/searchOriginInput"
@@ -55,7 +57,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="目前位置名稱由 Google Maps 提供"
+            android:text="@string/google_current_place_attribution"
             android:textColor="@color/bus_text_secondary"
             android:textSize="12sp"
             android:visibility="gone" />
@@ -81,7 +83,7 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="8dp"
             android:background="@drawable/sort_chip_background"
-            android:contentDescription="交換起點和終點"
+            android:contentDescription="@string/swap_origin_destination"
             android:padding="10dp"
             android:src="@drawable/ic_swap_curved" />
 
@@ -90,7 +92,8 @@
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="輸入終點關鍵字，並從匹配清單中選擇">
+            android:hint="@string/destination_search_hint"
+            app:helperText="@string/place_search_helper">
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/searchDestinationInput"
@@ -120,7 +123,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="搜尋路線" />
+            android:text="@string/search_routes" />
 
         <LinearLayout
             android:id="@+id/searchResultSummaryContainer"
@@ -148,7 +151,7 @@
                 android:layout_height="48dp"
                 android:layout_marginStart="8dp"
                 android:minWidth="48dp"
-                android:text="編輯" />
+                android:text="@string/action_edit" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/searchSaveButton"
@@ -156,7 +159,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:minWidth="48dp"
-                android:text="存為常用" />
+                android:text="@string/save_as_frequent" />
         </LinearLayout>
 
         <TextView
@@ -185,40 +188,45 @@
                     android:id="@+id/searchSortRouteButton"
                     style="@style/StableShortText.Button.Outlined"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:text="路線" />
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:text="@string/sort_route" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/searchSortPriceButton"
                     style="@style/StableShortText.Button.Outlined"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
                     android:layout_marginStart="8dp"
-                    android:text="價格" />
+                    android:text="@string/sort_price" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/searchSortDurationButton"
                     style="@style/StableShortText.Button.Outlined"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
                     android:layout_marginStart="8dp"
-                    android:text="耗時" />
+                    android:text="@string/sort_duration" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/searchSortArrivalButton"
                     style="@style/StableShortText.Button.Outlined"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
                     android:layout_marginStart="8dp"
-                    android:text="候車" />
+                    android:text="@string/sort_arrival" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/searchSortWalkingButton"
                     style="@style/StableShortText.Button.Outlined"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
                     android:layout_marginStart="8dp"
-                    android:text="步行" />
+                    android:text="@string/sort_walking" />
             </LinearLayout>
         </HorizontalScrollView>
 

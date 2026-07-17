@@ -17,6 +17,15 @@
     <string name="settings_group_support">支援</string>
     <string name="settings_group_about">關於</string>
     <string name="settings_language">語言</string>
+    <string name="language_follow_system">跟隨系統</string>
+    <string name="language_follow_system_with_actual">跟隨系統（%1$s）</string>
+    <string name="language_traditional_self">繁體中文</string>
+    <string name="language_simplified_self">简体中文</string>
+    <string name="language_english_self">English</string>
+    <string name="settings_appearance">外觀主題</string>
+    <string name="theme_mode_system">跟隨系統</string>
+    <string name="theme_mode_light">淺色模式</string>
+    <string name="theme_mode_dark">深色模式</string>
     <string name="settings_route_transfer">匯入與匯出常用路線</string>
     <string name="settings_share_app">分享應用</string>
     <string name="settings_feedback">問題反饋</string>
@@ -27,7 +36,6 @@
     <string name="settings_version_prefix">版本</string>
     <string name="about_description">保存常用路線，出門前快速比較巴士方案。</string>
     <string name="website_url">https://www.busiscoming.com</string>
-    <string name="unsupported_language_switch">暫不支援語言切換</string>
     <string name="unsupported_rate_app">暫不支援應用評分</string>
     <string name="unsupported_check_update">暫不支援檢查更新</string>
     <string name="share_app_failed">暫時無法分享應用</string>

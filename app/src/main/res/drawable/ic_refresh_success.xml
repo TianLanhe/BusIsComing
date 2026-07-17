@@ -7,7 +7,7 @@
     <path
         android:fillColor="@android:color/transparent"
         android:pathData="M5,12.5L9.2,16.5L19,6.8"
-        android:strokeColor="#FF145C54"
+        android:strokeColor="@color/bus_wait_accent"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
         android:strokeWidth="2.4" />

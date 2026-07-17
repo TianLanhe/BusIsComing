@@ -33,6 +33,20 @@ class MainRouteSelectionLayoutTest {
     }
 
     @Test
+    fun firstRunContentScrollsAtLargeFontWithoutCappingTheHeadline() {
+        val emptyState = frequentLayout
+            .substringAfter("android:id=\"@+id/emptyRouteState\"")
+            .substringBefore("android:id=\"@+id/queryControls\"")
+        val headline = emptyState
+            .substringAfter("android:id=\"@+id/firstRunHeadlineText\"")
+            .substringBefore("/>")
+
+        assertTrue(emptyState.contains("<androidx.core.widget.NestedScrollView"))
+        assertTrue(emptyState.contains("android:fillViewport=\"true\""))
+        assertFalse(headline.contains("android:maxLines"))
+    }
+
+    @Test
     fun searchProvidesInlinePlaceSelectionAndSavedRouteAction() {
         assertTrue(searchLayout.contains("@+id/searchOriginInput"))
         assertTrue(searchLayout.contains("@+id/searchDestinationInput"))

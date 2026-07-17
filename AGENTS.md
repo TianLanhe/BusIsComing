@@ -47,11 +47,14 @@ BusIsComing 是一個面向香港巴士通勤場景的 Android App。它以「�
 - 路線詳情：點擊路線卡片可查看上下車站點、途經站點與換乘段。
 - 結果排序與刷新：支援按路線、價格、耗時、候車和步行距離排序，並支援結果下拉刷新。
 - 通知欄監控：從可監控路線啟動短時前台服務，定期刷新首程 ETA，提供刷新、停止、語音提醒與出門狀態提示。
+- 多語言：支援跟隨系統、繁體中文、簡體中文與英文，並讓 Citybus、Google 地址、DATA.GOV.HK ETA、通知與 TTS 使用同一實際語言。
+- 外觀主題：支援跟隨系統、淺色與深色模式，與 App 語言獨立保存。
 
 ## 當前技術棧
 
 - 語言：Kotlin
 - UI：XML + AppCompat + Material Components
+- 本地化：Android resource qualifiers + AppCompat per-app locale
 - 清單與刷新：RecyclerView + SwipeRefreshLayout
 - 本機存儲：SQLiteOpenHelper
 - HTML/API 解析：jsoup + 輕量 JSON 欄位解析
@@ -66,10 +69,14 @@ BusIsComing 是一個面向香港巴士通勤場景的 Android App。它以「�
 
 App 主要基於 Citybus mobile 站點與 DATA.GOV.HK 城巴公開 ETA API：
 
+- `bsearch_p3.php`：Citybus 地點搜尋；必須保留 `q`、`limit=100`、`timestamp`。
 - `ppsearch_p3.php`：點到點路線候選結果。
 - `showstops2.php`：基於 P2P rawInfo 取得 route variant 對齊的停站與 stop id，避免公開路線站序與 P2P 結果不一致。
 - `getp2pstopinroute.php`：路線詳情與途經站點。
 - `rt.data.gov.hk/v2/transport/citybus/eta/...`：首程即時到站 ETA。
+- Google Geocoding v4：把目前座標解析為地址；需要 BuildConfig API key、Android package／certificate identity 與 `regionCode=HK`。
+
+動態語言映射集中在 `LanguageSnapshot`：繁體／簡體／英文的 Citybus `l` 分別為 `0/2/1`，Google `languageCode` 為 `zh-Hant/zh-Hans/en`，DATA.GOV.HK 必須依當前語言的官方欄位順序回退。整體請求失敗不得改用另一語言重試。
 
 外部 API 可用性和返回格式會直接影響查詢結果。修改解析器或 API 參數時，應優先保留可復現的原始樣例、fixture 或 cURL 等價資訊，並通過測試覆蓋已知路線案例。
 
@@ -77,6 +84,7 @@ App 主要基於 Citybus mobile 站點與 DATA.GOV.HK 城巴公開 ETA API：
 
 ```text
 data/local        SQLite schema 與本地資料庫 helper
+data/localization 語言選擇、實際 locale、provider mapping 與版本 snapshot
 data/model        路線、地點、ETA、通知監控與排序模型
 data/repository   Citybus 查詢、解析、路線配置和詳情資料存取
 service           通知欄監控、刷新調度、TTS 和 session 持久化
@@ -107,6 +115,8 @@ MainActivity
 - `docs/specification.md`：規格説明。
 - `docs/implementation-plan.md`：實作計劃。
 - `docs/ui-style-guide.md`：UI 風格、視覺層級和互動動效指南。
+- `docs/localization-guidelines.md`：三語語氣、術語、動態資料、TTS、版面與驗證長期規則。
+- `docs/localization-validation-matrix.md`：三語、明暗、字體、畫面及真實外部服務驗收清單。
 - `docs/citybus-eta-from-ppsearch.md`：基於 Citybus P2P 結果推導首程 ETA 的方案記錄。
 - `openspec/changes/`：OpenSpec 變更提案、設計、規格和任務。
 - `openspec/specs/`：已歸檔或當前生效的能力規格。
@@ -127,10 +137,14 @@ MainActivity
 - 如果用戶要求「新開 change」，即使相關文件有重疊，也應建立新的 OpenSpec change，不要默默合併到既有 change。
 - 對需求尚未明確的功能，先和用戶討論到行為、UI、資料來源、錯誤處理和驗證方式明確，再寫 propose。
 
-## 中文文案約定
+## 文件與 App runtime 語言約定
 
-- 後續新增或修改 App 文案、測試期望、文件和 OpenSpec 人類可讀內容時，中文一律使用繁體中文。
-- 外部 API 回傳樣例、Citybus 原始 fixture 或第三方規格原文可保留原始文字，不為繁體化而改寫來源內容。
+- 文件、OpenSpec 人類可讀內容、程式註解及中文測試名稱一律使用繁體中文。
+- App runtime 自有文案不得只有繁體；新增或修改的 UI、Toast、錯誤、通知、TTS、分享與無障礙文字必須同時提供香港繁體、獨立審校的簡體與自然英文。
+- 禁止在 XML 或 Kotlin 硬編碼 App 可見文案。model／repository 回傳結構化狀態，UI／notification 層使用當前 locale resource 格式化。
+- 用戶自定路線名、已保存／匯入地點、路線號與第三方原文保持不變，不機器翻譯或因語言切換改寫資料。
+- 外部 API 樣例、Citybus fixture 與第三方規格原文保留原文；parser 原始標籤是硬編碼掃描的可說明例外。
+- 新增動態資料源時必須定義三語 mapping、單欄位或整體失敗回退、cache key 與舊 callback 作廢策略，並加入真實及自動化驗證。
 
 ## opsx-apply 後提交規則
 
@@ -185,6 +199,7 @@ adb devices
 - 生產路徑應使用真實資料來源；mock、fixture 和測試注入點只用於測試、回歸或明確隔離的驗證場景。
 - 優先維持可測試性：解析、格式化、排序、狀態判斷等邏輯盡量保持純粹且可單測；修復外部資料差異時補充針對性回歸測試。
 - UI 改動遵循 `docs/ui-style-guide.md` 和既有組件風格，注意文字截斷、間距、觸控目標、無障礙和不同螢幕尺寸下的穩定性。
+- 多語言 UI 改動額外遵循 `docs/localization-guidelines.md`，驗證繁體／簡體／英文×淺／深色、360dp 與 font scale 1.0／1.3／2.0；不以縮字或核心文字裁切處理翻譯長度。
 - 涉及耗時查詢、並發刷新或背景任務時，避免阻塞主線程，處理取消、過期結果、失敗狀態和 Android 生命週期限制。
 - 涉及本機資料、通知、背景服務或權限時，優先保護用戶已有資料和可控性，提供清晰的停止、失敗與恢復路徑。
 - 保持改動範圍窄而可審查。除非需求明確要求，避免順手重構、改動無關文案、調整既有資料格式或重排行為。

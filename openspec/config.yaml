@@ -3,11 +3,13 @@ schema: spec-driven
 context: |
   專案背景：
   BusIsComing 是面向香港巴士通勤場景的 Android App，以常用起終點快速查詢為核心。
-  用戶可管理常用路線、進行臨時查詢、比較 Citybus 點到點候選路線、查看票價／耗時／步行距離／首程 ETA／路線詳情，
-  並可啟動短時通知欄監控。生產路徑必須使用真實 Citybus 與 DATA.GOV.HK 資料；fixture 僅用於測試和回歸。
+  用戶可在常用、搜尋、設定三個頂層 destination 管理常用路線、進行臨時查詢、匯入匯出路線、
+  比較 Citybus 候選路線、查看票價／耗時／步行距離／首程 ETA／路線詳情，並可啟動短時通知欄監控。App 支援跟隨系統、繁體、簡體、英文，以及跟隨系統、淺色、深色外觀。
+  生產路徑必須使用真實 Citybus、DATA.GOV.HK 與已配置的 Google 服務；fixture 僅用於測試和回歸。
 
   技術棧：
   - Kotlin，XML + AppCompat + Material Components。
+  - Android resource qualifiers + AppCompat per-app locale；語言與 night mode 為獨立偏好。
   - RecyclerView + SwipeRefreshLayout；SQLiteOpenHelper。
   - jsoup 解析 Citybus HTML，輕量 JSON 欄位解析公開 ETA。
   - Foreground Service + NotificationCompat + AlarmManager + TextToSpeech。
@@ -21,13 +23,18 @@ context: |
   - 內部接口以 Kotlin interface、資料模型及 callback 為主；路線查詢先返回基礎結果，再以 callback 漸進補齊 ETA 和站點預覽。
   - 網路接口為 HTTPS GET：Citybus mobile 返回 HTML，DATA.GOV.HK ETA 返回 JSON；外部格式假設集中在 parser／repository。
   - 耗時工作不得阻塞主線程；並發刷新和背景任務須處理取消、generation 過期、部分失敗及 Android 生命週期限制。
+  - 常用與搜尋是獨立 query owner；recreation 保存上下文但不保存結果，自動重查不增加使用次數。
+  - `LanguageSnapshot` 集中提供實際 locale、provider mapping、TTS 語言體系與版本；網路、cache 與 callback 必須沿用同一 snapshot。
 
   外部資料與典型流程：
-  - `ppsearch_p3.php`：點到點候選路線；查詢關鍵參數包含起終點座標、香港時間、`ws=1.3`、`leg=2`、`m1`、`l=0`。
+  - `bsearch_p3.php`：Citybus 地點搜尋；保留 `q`、`limit=100`、`timestamp`、語言 `l`，且不附加瀏覽器 header。
+  - `ppsearch_p3.php`：點到點候選路線；查詢關鍵參數包含起終點座標、香港時間、`ws=1.3`、`leg=2`、`m1`、語言 `l`。
   - 查詢會聚合不同 `m1` 模式結果；修改去重、排序或參數時須保留可復現的等價 cURL 和回歸樣例。
   - `showstops2.php`：依 P2P rawInfo 對齊 route variant、停站和 stop id，避免公開路線站序與 P2P 結果不一致。
   - `getp2pstopinroute.php`：取得上下車站、途經站點和換乘段。
   - `rt.data.gov.hk/v2/transport/citybus/eta/...`：取得首程即時 ETA。
+  - Google Geocoding v4：以 BuildConfig key、Android package／certificate identity、`regionCode=HK` 及目前語言解析座標。
+  - 繁體／簡體／英文的 Citybus `l` 為 `0/2/1`；Google 為 `zh-Hant/zh-Hans/en`；DATA.GOV.HK 依 `tc→sc→en` / `sc→tc→en` / `en→tc→sc` 選擇單欄位官方原文。
   - 典型流程：`MainActivity -> CitybusBusRouteRepository -> ppsearch_p3.php -> CitybusRouteParser`
     先展示基礎結果，再於背景補齊 `showstops2`／ETA／站點預覽並增量刷新 RecyclerView。
 
@@ -39,6 +46,7 @@ context: |
   │       ├── main/
   │       │   ├── java/.../
   │       │   │   ├── data/local          SQLite schema 與資料庫 helper
+  │       │   │   ├── data/localization   locale policy、provider mapping 與 snapshot
   │       │   │   ├── data/model          路線、地點、ETA、排序、監控等領域模型
   │       │   │   ├── data/repository     HTTP、解析、查詢編排、詳情與本機資料存取
   │       │   │   ├── service             前台監控、調度、通知、TTS、session 持久化
@@ -61,10 +69,12 @@ context: |
 
   專案知識與長期規則：
   - 需求與行為來源依序參考相關 `openspec/specs/`、當前 change、測試、`docs/`、`README.md` 和實際代碼；衝突時須指出並在工件中明確裁決。
-  - 人類可讀的 OpenSpec、文件、App 文案和測試期望使用繁體中文；解析器要求的英文標記、代碼符號、外部 API 原文和 fixture 保持原樣。
+  - 人類可讀的 OpenSpec、文件、註解及中文測試名稱使用繁體；App runtime 自有文案必須同時具有自然繁體、獨立審校簡體與英文，並禁止在 XML／Kotlin 硬編碼。
+  - 用戶路線／地點與第三方原文不翻譯或改寫；解析器英文標記、代碼符號、外部 API 原文和 fixture 保持原樣。
   - 需求未明確時，先確認行為、UI、資料來源、錯誤處理和驗證方式，再建立 change；用戶要求「新開 change」時不得合併到既有 change。
   - 修改外部 API、解析器、站點對齊或 ETA 邏輯時，先區分原始回應與 App 解析／展示，並保留 cURL、fixture、日誌或針對性測試。
   - UI 改動遵循 `docs/ui-style-guide.md`，檢查文字截斷、間距、觸控目標、無障礙、WindowInsets、字體縮放和不同螢幕尺寸。
+  - 三語改動遵循 `docs/localization-guidelines.md` 與驗收矩陣，覆蓋三語×淺／深色、360dp、font scale 1.0／1.3／2.0、動態資料、TTS 與真實外部服務。
   - 保護既有本機資料和用戶可控性；通知、背景服務或權限變更須提供清楚的停止、失敗和恢復路徑。
   - 保持改動窄而可審查，不做無關重構，不任意改動既有資料格式、排序、文案或外部樣例。
   - 實作完成後優先運行 `./gradlew build`；窄改動可先跑相關測試或 `./gradlew testDebugUnitTest`。

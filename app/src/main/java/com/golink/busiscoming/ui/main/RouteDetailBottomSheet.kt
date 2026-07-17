@@ -80,7 +80,7 @@ class RouteDetailBottomSheet(
         requestId: Int = ++activeRequestId
     ) {
         if (route.routeDetailQuery == null) {
-            showFailure(state, "路線詳情暫不可用")
+            showFailure(state, activity.getString(R.string.route_detail_unavailable))
             return
         }
 
@@ -93,7 +93,9 @@ class RouteDetailBottomSheet(
                 }
                 result
                     .onSuccess { showDetail(state, it) }
-                    .onFailure { showFailure(state, "路線詳情暫不可用") }
+                    .onFailure {
+                        showFailure(state, activity.getString(R.string.route_detail_unavailable))
+                    }
             }
         }
     }
@@ -129,7 +131,12 @@ class RouteDetailBottomSheet(
 
     private fun summaryText(detail: RouteDetail): TextView {
         return TextView(activity).apply {
-            text = "耗時 ${detail.durationMinutes} 分鐘 · ${formatPrice(detail.priceHkd)} · 步行 ${detail.walkingDistanceMeters} 米"
+            text = activity.getString(
+                R.string.route_detail_summary,
+                detail.durationMinutes,
+                formatPrice(detail.priceHkd),
+                detail.walkingDistanceMeters
+            )
             setTextColor(ContextCompat.getColor(activity, R.color.bus_text_secondary))
             textSize = 14f
             includeFontPadding = false
@@ -173,7 +180,9 @@ class RouteDetailBottomSheet(
         root.addView(content)
 
         content.addView(legHeader(leg, legColor))
-        content.addView(stationView("上車", leg.boardingStop, isEndpoint = true))
+        content.addView(
+            stationView(activity.getString(R.string.boarding_stop), leg.boardingStop, isEndpoint = true)
+        )
 
         val viaContainer = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -195,7 +204,9 @@ class RouteDetailBottomSheet(
             content.addView(viaContainer)
         }
 
-        content.addView(stationView("下車", leg.alightingStop, isEndpoint = true))
+        content.addView(
+            stationView(activity.getString(R.string.alighting_stop), leg.alightingStop, isEndpoint = true)
+        )
         return root
     }
 
@@ -215,7 +226,7 @@ class RouteDetailBottomSheet(
             text = leg.route
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
+            setTextColor(ContextCompat.getColor(activity, R.color.bus_on_route_badge))
             gravity = Gravity.CENTER
             minWidth = dp(44)
             background = roundedBackground(color, dp(5).toFloat())
@@ -225,10 +236,10 @@ class RouteDetailBottomSheet(
         val directionLabel = RouteDetailDisplayFormatter.directionLabel(leg.directionText)
         if (directionLabel != null) {
             row.addView(TextView(activity).apply {
-                text = directionLabel
+                text = activity.getString(R.string.route_direction_format, directionLabel)
                 textSize = 14f
                 setTextColor(ContextCompat.getColor(activity, R.color.bus_text_secondary))
-                maxLines = 1
+                maxLines = 3
                 layoutParams = LinearLayout.LayoutParams(
                     0,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -295,9 +306,9 @@ class RouteDetailBottomSheet(
 
     private fun viaToggleText(count: Int, expanded: Boolean): String {
         return if (expanded) {
-            "⌃ 途經 $count 個站 · 收起"
+            activity.getString(R.string.via_stops_collapse, count)
         } else {
-            "⌄ 途經 $count 個站 · 展開"
+            activity.getString(R.string.via_stops_expand, count)
         }
     }
 
@@ -319,7 +330,11 @@ class RouteDetailBottomSheet(
     }
 
     private fun formatPrice(priceHkd: Double): String {
-        return if (priceHkd == 0.0) "免費" else String.format(Locale.US, "HK$ %.1f", priceHkd)
+        return if (priceHkd == 0.0) {
+            activity.getString(R.string.price_free)
+        } else {
+            activity.getString(R.string.price_hkd, priceHkd)
+        }
     }
 
     private fun roundedBackground(color: Int, radius: Float): GradientDrawable {
@@ -338,7 +353,10 @@ class RouteDetailBottomSheet(
         val root: LinearLayout = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(10), dp(20), dp(20))
-            background = roundedBackground(Color.WHITE, dp(8).toFloat())
+            background = roundedBackground(
+                ContextCompat.getColor(activity, R.color.bus_card_surface),
+                dp(8).toFloat()
+            )
         }
         val closeButton: MaterialButton
         val loadingRow: LinearLayout
@@ -401,7 +419,7 @@ class RouteDetailBottomSheet(
                 layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
             })
             loadingRow.addView(TextView(activity).apply {
-                text = "正在載入路線詳情"
+                text = activity.getString(R.string.route_detail_loading)
                 applyStableShortTextLayout(Gravity.START)
                 textSize = 15f
                 setTextColor(ContextCompat.getColor(activity, R.color.bus_text_secondary))
@@ -426,7 +444,7 @@ class RouteDetailBottomSheet(
                 setTextColor(ContextCompat.getColor(activity, R.color.bus_text_primary))
             }
             retryButton = MaterialButton(activity).apply {
-                text = "重試"
+                text = activity.getString(R.string.action_retry)
                 applyStableShortTextLayout(Gravity.CENTER)
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -474,7 +492,7 @@ class RouteDetailBottomSheet(
             val x = width / 2f
             paint.color = color
             canvas.drawLine(x, dp(18).toFloat(), x, (height - dp(18)).toFloat(), paint)
-            dotPaint.color = Color.WHITE
+            dotPaint.color = ContextCompat.getColor(activity, R.color.bus_card_surface)
             canvas.drawCircle(x, dp(18).toFloat(), dp(8).toFloat(), dotPaint)
             canvas.drawCircle(x, (height - dp(18)).toFloat(), dp(8).toFloat(), dotPaint)
             dotPaint.color = color

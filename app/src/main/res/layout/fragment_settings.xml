@@ -63,14 +63,36 @@
             android:text="@string/settings_group_preferences" />
 
         <LinearLayout
+            android:id="@+id/settingsAppearanceRow"
+            style="@style/SettingsRow"
+            android:minHeight="48dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_appearance" />
+
+            <TextView
+                android:id="@+id/settingsAppearanceValue"
+                style="@style/SettingsRowValueText" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/settingsLanguageRow"
             style="@style/SettingsRow"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
             android:clickable="true"
             android:focusable="true">
 
             <TextView
                 style="@style/SettingsRowText"
                 android:text="@string/settings_language" />
+
+            <TextView
+                android:id="@+id/settingsLanguageValue"
+                style="@style/SettingsRowValueText" />
         </LinearLayout>
 
         <TextView

@@ -33,6 +33,7 @@ import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
+import com.golink.busiscoming.ui.common.localizedMessage
 import com.golink.busiscoming.ui.navigation.RouteQueryGeneration
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
@@ -66,6 +67,12 @@ class SearchFragment : Fragment() {
         get() = routeQueryState.sortDirection
     private var restoredOrigin: Place? = null
     private var restoredDestination: Place? = null
+    private var restoredOriginInput: String? = null
+    private var restoredDestinationInput: String? = null
+    private var restoredShouldRequery: Boolean = false
+    private var hasSubmittedQuery: Boolean = false
+    private var pendingScrollPosition: Int? = null
+    private var pendingScrollOffset: Int = 0
     private lateinit var resultAdapter: BusRouteAdapter
     private lateinit var detailSheet: RouteDetailBottomSheet
     private lateinit var etaSheet: EtaArrivalsBottomSheet
@@ -91,6 +98,14 @@ class SearchFragment : Fragment() {
         super.onCreate(savedInstanceState)
         restoredOrigin = savedInstanceState?.placeFor(STATE_ORIGIN)
         restoredDestination = savedInstanceState?.placeFor(STATE_DESTINATION)
+        restoredOriginInput = savedInstanceState?.getString(STATE_ORIGIN_INPUT)
+        restoredDestinationInput = savedInstanceState?.getString(STATE_DESTINATION_INPUT)
+        restoredShouldRequery = savedInstanceState?.getBoolean(STATE_HAS_SUBMITTED_QUERY) == true
+        hasSubmittedQuery = restoredShouldRequery
+        pendingScrollPosition = savedInstanceState
+            ?.takeIf { it.containsKey(STATE_SEARCH_SCROLL_POSITION) }
+            ?.getInt(STATE_SEARCH_SCROLL_POSITION)
+        pendingScrollOffset = savedInstanceState?.getInt(STATE_SEARCH_SCROLL_OFFSET) ?: 0
         val restoredSortField = savedInstanceState
             ?.getString(STATE_SORT_FIELD)
             ?.let { runCatching { SortField.valueOf(it) }.getOrNull() }
@@ -124,7 +139,10 @@ class SearchFragment : Fragment() {
                 if (visible) destinationController?.hideCandidates()
                 updateRefreshEnabled()
             },
-            onUserTextEdited = { originAttribution.visibility = View.GONE }
+            onUserTextEdited = {
+                originAttribution.visibility = View.GONE
+                hasSubmittedQuery = false
+            }
         )
         destinationController = PlaceInputController(
             context = context,
@@ -139,7 +157,8 @@ class SearchFragment : Fragment() {
             onCandidateVisibilityChanged = { visible ->
                 if (visible) originController?.hideCandidates()
                 updateRefreshEnabled()
-            }
+            },
+            onUserTextEdited = { hasSubmittedQuery = false }
         )
         originLayout.endIconMode = TextInputLayout.END_ICON_CUSTOM
         originLayout.setEndIconDrawable(R.drawable.ic_location_outline)
@@ -183,7 +202,10 @@ class SearchFragment : Fragment() {
         sortButtons.forEach { (field, button) -> button.setOnClickListener { sortBy(field) } }
         restoredOrigin?.let { originController?.setSelectedPlace(it) }
         restoredDestination?.let { destinationController?.setSelectedPlace(it) }
+        restoredOriginInput?.let { originController?.restoreInputText(it) }
+        restoredDestinationInput?.let { destinationController?.restoreInputText(it) }
         updateSortControls()
+        restoreSubmittedQueryIfNeeded()
 
         view.findViewById<AppCompatImageButton>(R.id.searchSwapButton).setOnClickListener { button ->
             button.animate().rotationBy(180f).setDuration(220L).start()
@@ -228,8 +250,22 @@ class SearchFragment : Fragment() {
         super.onSaveInstanceState(outState)
         originController?.selectedPlace?.writeTo(outState, STATE_ORIGIN)
         destinationController?.selectedPlace?.writeTo(outState, STATE_DESTINATION)
+        outState.putString(STATE_ORIGIN_INPUT, originController?.currentInputText())
+        outState.putString(STATE_DESTINATION_INPUT, destinationController?.currentInputText())
+        outState.putBoolean(STATE_HAS_SUBMITTED_QUERY, hasSubmittedQuery)
         sortField?.let { outState.putString(STATE_SORT_FIELD, it.name) }
         outState.putString(STATE_SORT_DIRECTION, sortDirection.name)
+        if (::resultList.isInitialized) {
+            val manager = resultList.layoutManager as? LinearLayoutManager
+            val position = manager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+            if (position != RecyclerView.NO_POSITION) {
+                outState.putInt(STATE_SEARCH_SCROLL_POSITION, position)
+                outState.putInt(
+                    STATE_SEARCH_SCROLL_OFFSET,
+                    manager?.findViewByPosition(position)?.top ?: 0
+                )
+            }
+        }
     }
 
     override fun onDestroy() {
@@ -257,9 +293,15 @@ class SearchFragment : Fragment() {
                     }
                     CurrentPlaceSelectionResult.Failure -> {
                         if (isAuto) {
-                            originController?.setHelperText("暫時無法取得目前位置，請手動選擇起點")
+                            originController?.setHelperText(
+                                getString(R.string.current_location_manual_origin)
+                            )
                         } else {
-                            Toast.makeText(requireContext(), "暫時無法取得目前位置", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                requireContext(),
+                                R.string.current_location_unavailable,
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     }
                 }
@@ -276,11 +318,12 @@ class SearchFragment : Fragment() {
     private fun query(preserveSort: Boolean = false) {
         val origin = originController?.selectedPlace
         val destination = destinationController?.selectedPlace
-        val validation = RouteConfigValidator.validate("搜尋", origin, destination)
-        originController?.setError(validation.originError)
-        destinationController?.setError(validation.destinationError)
+        val validation = RouteConfigValidator.validate(getString(R.string.search_title), origin, destination)
+        originController?.setError(validation.originError.localizedMessage(requireContext()))
+        destinationController?.setError(validation.destinationError.localizedMessage(requireContext()))
         if (!validation.isValid || origin == null || destination == null) return
 
+        hasSubmittedQuery = true
         interactionGeneration.invalidate()
         val isRefresh = preserveSort && currentResults.isNotEmpty()
         routeQueryState.begin(refresh = isRefresh)
@@ -307,10 +350,14 @@ class SearchFragment : Fragment() {
                 resultAdapter.submitList(currentResults)
                 resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
                 sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
-                resultUpdatedAt.text = "更新時間：${formatUpdatedAt(routeQueryState.updatedAtMillis)}"
+                resultUpdatedAt.text = getString(
+                    R.string.updated_at,
+                    formatUpdatedAt(routeQueryState.updatedAtMillis)
+                )
                 resultUpdatedAt.visibility = View.VISIBLE
                 updateSortControls()
-                showStatus(if (currentResults.isEmpty()) "沒有找到可用路線" else null)
+                restoreSearchViewportIfNeeded()
+                showStatus(if (currentResults.isEmpty()) getString(R.string.search_no_routes) else null)
                 updateRefreshEnabled()
             }
 
@@ -333,21 +380,40 @@ class SearchFragment : Fragment() {
             override fun onFailure(queryId: Int, error: Throwable) {
                 resultLoading.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                routeQueryState.fail("搜尋失敗，請稍後重試", preserveResults = isRefresh)
+                routeQueryState.fail(getString(R.string.search_failed), preserveResults = isRefresh)
                 if (isRefresh) {
                     resultAdapter.submitList(currentResults)
                     resultList.visibility = View.VISIBLE
                     sortControls.visibility = View.VISIBLE
-                    Toast.makeText(requireContext(), "刷新失敗，請稍後重試", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), R.string.refresh_failed, Toast.LENGTH_SHORT).show()
                 } else {
                     resultAdapter.submitList(emptyList())
                     resultList.visibility = View.GONE
                     sortControls.visibility = View.GONE
-                    showStatus("搜尋失敗，請稍後重試")
+                    showStatus(getString(R.string.search_failed))
                 }
                 updateRefreshEnabled()
             }
         })
+    }
+
+    private fun restoreSubmittedQueryIfNeeded() {
+        if (!restoredShouldRequery) return
+        restoredShouldRequery = false
+        if (originController?.selectedPlace != null && destinationController?.selectedPlace != null) {
+            query(preserveSort = true)
+        }
+    }
+
+    private fun restoreSearchViewportIfNeeded() {
+        val position = pendingScrollPosition ?: return
+        if (currentResults.isEmpty()) return
+        pendingScrollPosition = null
+        (resultList.layoutManager as? LinearLayoutManager)
+            ?.scrollToPositionWithOffset(
+                position.coerceIn(0, currentResults.lastIndex),
+                pendingScrollOffset
+            )
     }
 
     private fun updateRoute(routeId: String, transform: (BusRouteOption) -> BusRouteOption) {
@@ -389,11 +455,11 @@ class SearchFragment : Fragment() {
     }
 
     private fun sortLabel(field: SortField): String = when (field) {
-        SortField.ROUTE -> "路線"
-        SortField.PRICE -> "價格"
-        SortField.DURATION -> "耗時"
-        SortField.ARRIVAL -> "候車"
-        SortField.WALKING_DISTANCE -> "步行"
+        SortField.ROUTE -> getString(R.string.sort_route)
+        SortField.PRICE -> getString(R.string.sort_price)
+        SortField.DURATION -> getString(R.string.sort_duration)
+        SortField.ARRIVAL -> getString(R.string.sort_arrival)
+        SortField.WALKING_DISTANCE -> getString(R.string.sort_walking)
     }
 
     private fun showStatus(message: String?) {
@@ -460,5 +526,10 @@ class SearchFragment : Fragment() {
         const val STATE_DESTINATION = "search_destination"
         const val STATE_SORT_FIELD = "search_sort_field"
         const val STATE_SORT_DIRECTION = "search_sort_direction"
+        const val STATE_ORIGIN_INPUT = "search_origin_input"
+        const val STATE_DESTINATION_INPUT = "search_destination_input"
+        const val STATE_HAS_SUBMITTED_QUERY = "search_has_submitted_query"
+        const val STATE_SEARCH_SCROLL_POSITION = "search_scroll_position"
+        const val STATE_SEARCH_SCROLL_OFFSET = "search_scroll_offset"
     }
 }

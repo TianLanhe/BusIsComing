@@ -19,7 +19,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="路線管理"
+            android:text="@string/route_manage_title"
             android:textColor="@color/bus_text_primary"
             android:textSize="24sp"
             android:textStyle="bold" />
@@ -29,7 +29,7 @@
             style="@style/StableShortText.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="新增路線" />
+            android:text="@string/add_route" />
     </LinearLayout>
 
     <TextView
@@ -37,7 +37,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="10dp"
-        android:text="整理常用起點和終點，出門前可以更快查詢。"
+        android:text="@string/route_manage_subtitle"
         android:textColor="@color/bus_text_secondary"
         android:textSize="14sp" />
 
@@ -56,7 +56,7 @@
             style="@style/StableShortText.Title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="還沒有儲存路線"
+            android:text="@string/route_manage_empty_title"
             android:textColor="@color/bus_text_primary"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -66,7 +66,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="先新增一條常用路線，之後查詢會更快。"
+            android:text="@string/route_manage_empty_message"
             android:textColor="@color/bus_text_secondary"
             android:textSize="14sp" />
 
@@ -76,7 +76,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="新增路線" />
+            android:text="@string/add_route" />
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

@@ -17,12 +17,4 @@ object PlaceDistanceFormatter {
         return compact(distanceMeters.roundToInt())
     }
 
-    fun accessibility(distanceMeters: Int): String {
-        val meters = distanceMeters.coerceAtLeast(0)
-        return if (meters < 1000) {
-            "距離目前位置 $meters 米"
-        } else {
-            "距離目前位置 ${compact(meters)}"
-        }
-    }
 }

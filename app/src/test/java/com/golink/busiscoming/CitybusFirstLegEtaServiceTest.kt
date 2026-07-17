@@ -152,6 +152,61 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
+    fun selectsEtaDestinationAndRemarkByLanguageWithDocumentedOfficialFallback() {
+        val response = """
+            {
+              "data": [
+                {
+                  "co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227",
+                  "eta":"2026-06-04T12:04:00+08:00","eta_seq":1,
+                  "dest_tc":"筲箕灣","dest_sc":"筲箕湾","dest_en":"Shau Kei Wan",
+                  "rmk_tc":"原定班次","rmk_sc":"原定班次","rmk_en":"Scheduled departure"
+                }
+              ]
+            }
+        """.trimIndent()
+        val service = etaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            etaFetcher = { response }
+        )
+
+        val traditional = service.resolveWaitTime(query.copy(lang = "0")) as WaitTimeState.Available
+        val simplified = service.resolveWaitTime(query.copy(lang = "2")) as WaitTimeState.Available
+        val english = service.resolveWaitTime(query.copy(lang = "1")) as WaitTimeState.Available
+
+        assertEquals("筲箕灣", traditional.arrivals.single().destination)
+        assertEquals("tc", traditional.arrivals.single().destinationLanguage)
+        assertEquals("筲箕湾", simplified.arrivals.single().destination)
+        assertEquals("sc", simplified.arrivals.single().destinationLanguage)
+        assertEquals("Shau Kei Wan", english.arrivals.single().destination)
+        assertEquals("en", english.arrivals.single().destinationLanguage)
+        assertEquals("Scheduled departure", english.arrivals.single().remark)
+        assertEquals("en", english.arrivals.single().remarkLanguage)
+    }
+
+    @Test
+    fun fallsBackWithinOneOfficialEtaFieldWithoutTranslatingOrChangingTheQueryLanguage() {
+        val service = etaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            etaFetcher = {
+                """
+                {"data":[{
+                  "co":"CTB","route":"8X","dir":"O","seq":6,"stop":"001227",
+                  "eta":"2026-06-04T12:04:00+08:00","eta_seq":1,
+                  "dest_tc":"筲箕灣","dest_sc":"","dest_en":""
+                }]}
+                """.trimIndent()
+            }
+        )
+
+        val arrival = (service.resolveWaitTime(query.copy(lang = "1")) as WaitTimeState.Available)
+            .arrivals.single()
+
+        assertEquals("筲箕灣", arrival.destination)
+        assertEquals("tc", arrival.destinationLanguage)
+    }
+
+    @Test
     fun returnsUnavailableWhenNoStrictOrFallbackEtaIsParsable() {
         val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },

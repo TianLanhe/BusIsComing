@@ -1,0 +1,59 @@
+# 三語與外觀驗收矩陣
+
+## 共用維度
+
+每個核心畫面至少覆蓋：
+
+- 語言：繁體中文、簡體中文、English；另驗證跟隨系統的英文、Hant、Hans、裸 `zh` 與不支援 locale。
+- 外觀：固定淺色、固定深色；另驗證跟隨系統淺／深。
+- 裝置：近期 API 36.1、約 360dp portrait；可用時補 API 37 與 Android 7.1。
+- 字體：全部畫面 1.0；頂層 destination 及高風險頁 1.3；查詢、編輯、詳情、監控、設定語言、匯入匯出 2.0。
+- 狀態：初始、載入、成功、空、失敗、刷新、重建；檢查 TalkBack 名稱、焦點順序及 48dp action。
+
+## 畫面清單
+
+| 區域 | 必查內容 | 高風險 |
+| --- | --- | --- |
+| 常用 | 首次引導、快捷卡、附近標記、查詢、排序、結果、刷新 | 英文 header、路線卡 ETA、font 2.0 |
+| 搜尋 | 起終點、目前位置、候選、交換、摘要、保存、排序、結果 | 未提交文字重建、候選與鍵盤、舊 callback |
+| 設定 | 外觀、語言、路線資料、支援、關於 | 四語言選項自稱、摘要、大字體列高 |
+| 編輯／管理 | 新增、編輯、複製、刪除、空狀態、候選 | 地址與驗證錯誤、輸入不被裁切 |
+| 匯入匯出 | 文件選擇前後、預覽、合併、取代、錯誤、摘要 | 系統 picker 邊界、Dialog action 可達 |
+| 路線卡／詳情 | 站點預覽、ETA、車費、方向、途經站、換乘 | 動態原文、長站名、Bottom Sheet 滾動 |
+| 監控 | 設定、通知 channel／正文／action、三種狀態 | 語言切換保留 session、TTS 具體錯誤 |
+| 對外內容 | 分享、回饋、網站、私隱、關於 | 三語路徑與自然文案、Intent 失敗 |
+
+## 動態資料
+
+| 來源 | 繁體 | 簡體 | English | 失敗／回退 |
+| --- | --- | --- | --- | --- |
+| Citybus place | `l=0` | `l=2` | `l=1` | 無跨語言重試；保留 limit／timestamp |
+| Citybus route | 車費、時間、步行、路線 | 同左 | 同左 | T/F/W、單程／換乘、日／夜間 |
+| showstops／detail | stop id、方向、完整站序 | 同左 | 同左 | cache 依語言隔離；ginfo／lid A/B |
+| DATA.GOV.HK ETA | tc→sc→en | sc→tc→en | en→tc→sc | 記錄實際欄位語言，不改寫資料 |
+| Google 地址 | zh-Hant + HK | zh-Hans + HK | en + HK | 真實 key／identity；逾時不算通過 |
+
+## 重建與並發
+
+- 由常用、搜尋、設定各自切換語言，重建後仍停留原 destination。
+- 常用已查詢、搜尋已查詢及搜尋未提交表單三種情況分別切換語言／外觀。
+- 驗證常用自動重查不增加使用次數；下拉刷新與同一路線重查仍遵守 session 去重。
+- 令舊語言的 route、ETA、站點預覽、地點搜尋、詳情及 Google callback 晚到，確認不更新畫面或 cache。
+- 連續切換語言與外觀，確認兩個偏好互不覆寫且沒有額外手動 `recreate()`。
+
+## 2026-07-17 實網驗收記錄
+
+以下請求均不附加 Cookie、Referer、User-Agent 或 X-Requested-With，記錄只保留端點、語言與語義結果，不保存完整座標、API key 或 rawInfo。
+
+| 來源 | 覆蓋 | 結果 |
+| --- | --- | --- |
+| `bsearch_p3.php` | `l=0/2/1`；「會展／会展／Convention」；保留 `limit=100`、`timestamp` | 三語均 HTTP 200；分別返回「會展站」、「会展站」、「Convention Plaza」及一致的座標語義 |
+| `ppsearch_p3.php` | `l=0/2/1`；日間 12:00、夜間 03:15；單程與轉乘 | 三語均 HTTP 200；日間各 2 個單程、夜間各 7 個候選且含 5 個轉乘；票價、時間、步行距離與 rawInfo 語義一致 |
+| 英文 P2P parser | 真實 `Hong Kong Dollar17.8`、`Estimated38Min`、`Walking distance (approx)` | 原 parser 未接受完整貨幣名稱；已加入真實 fixture、紅燈回歸及相容解析，三語 fixture 通過 |
+| `showstops2.php` | 同一夜間轉乘 rawInfo、`l=0/2/1` | 三語均 HTTP 200 且各 20 個 stop；英文返回英文站名；上游 `l=2` 回應與 `l=0` 完全相同，故簡體流程保留 Citybus 官方繁體原文，不在 App 內轉換 |
+| `getp2pstopinroute.php` | 同一路線三語；完整、移除 `ginfo`、移除 `lid`、同時移除 | 三語均 HTTP 200；移除 `ginfo` 會令全程分鐘及抵達時間缺失，`ginfo` 必須保留；單一樣本移除 `lid` 雖相同，但不足以證明全域無作用，因此 `lid` 亦保留 |
+| DATA.GOV.HK stop／ETA | stop `001227`、夜間路線 `N118` | stop 的 `name_tc/name_sc/name_en` 與 ETA 的 `dest_*`、`rmk_*` 三欄均有語義一致的官方原文；夜間 ETA 時間可為空，formatter 仍按結構化不可用狀態處理 |
+| Google Geocoding v4 | 相同香港座標、`zh-Hant/zh-Hans/en + HK`、真實 Android identity；新增路線的目前位置流程 | 三語真實請求均返回非 plus code 地址；繁簡結果包含中文、英文結果包含拉丁文字，新增路線亦填入真實地址並顯示 Google 歸因。Google 可按本地文字或最接近翻譯回退，故香港座標的繁簡全文相同仍屬有效原文，不在 App 內轉換 |
+
+> [!IMPORTANT]
+> Google 三語真實 instrumentation 已以有效 key、package／certificate identity 通過。任何後續 mock、fixture、timeout 或 403 仍不能代替此硬門檻。

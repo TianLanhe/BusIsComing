@@ -7,19 +7,25 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import com.golink.busiscoming.R
+import com.golink.busiscoming.data.local.AppLanguageRepository
 
 object AppSupportActions {
-    const val websiteUrl = "https://www.busiscoming.com"
-    const val privacyPolicyUrl = "https://www.busiscoming.com/zh-hant/privacy/"
+    const val websiteBaseUrl = "https://www.busiscoming.com"
     const val feedbackEmail = "hezhenyu966@gmail.com"
-    const val feedbackSubject = "BusIsComing 問題反饋"
-    const val shareText =
-        "搭巴士前想快一點知道哪條路線合適？BusIsComing 可以保存常用路線，快速比較候車時間、票價和耗時。https://www.busiscoming.com"
+
+    fun websiteUrl(context: Context): String =
+        websiteBaseUrl + AppLanguageRepository(context).snapshot().websitePath
+
+    fun privacyPolicyUrl(context: Context): String =
+        websiteBaseUrl + AppLanguageRepository(context).snapshot().privacyPath
+
+    fun shareText(context: Context): String =
+        context.getString(R.string.share_copy, websiteUrl(context))
 
     fun shareApp(context: Context) {
         val sendIntent = Intent(Intent.ACTION_SEND)
             .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, shareText)
+            .putExtra(Intent.EXTRA_TEXT, shareText(context))
         val chooser = Intent.createChooser(sendIntent, context.getString(R.string.settings_share_app))
         startOrToast(context, chooser, R.string.share_app_failed)
     }
@@ -28,10 +34,11 @@ object AppSupportActions {
         val intent = Intent(Intent.ACTION_SENDTO)
             .setData(Uri.parse("mailto:"))
             .putExtra(Intent.EXTRA_EMAIL, arrayOf(feedbackEmail))
-            .putExtra(Intent.EXTRA_SUBJECT, feedbackSubject)
+            .putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.feedback_subject))
             .putExtra(
                 Intent.EXTRA_TEXT,
                 feedbackBody(
+                    context = context,
                     appVersion = context.packageManager
                         .getPackageInfo(context.packageName, 0)
                         .versionName
@@ -44,25 +51,25 @@ object AppSupportActions {
     }
 
     fun openPrivacyPolicy(context: Context) {
-        openUrl(context, privacyPolicyUrl, R.string.privacy_policy_failed)
+        openUrl(context, privacyPolicyUrl(context), R.string.privacy_policy_failed)
     }
 
     fun openWebsite(context: Context) {
-        openUrl(context, websiteUrl, R.string.website_failed)
+        openUrl(context, websiteUrl(context), R.string.website_failed)
     }
 
     fun feedbackBody(
+        context: Context,
         appVersion: String,
         androidVersion: String,
         deviceModel: String
     ): String {
-        return """
-            App 版本：$appVersion
-            Android 版本：$androidVersion
-            設備型號：$deviceModel
-
-            問題描述：
-        """.trimIndent()
+        return context.getString(
+            R.string.feedback_body,
+            appVersion,
+            androidVersion,
+            deviceModel
+        )
     }
 
     private fun openUrl(context: Context, url: String, failureMessageRes: Int) {

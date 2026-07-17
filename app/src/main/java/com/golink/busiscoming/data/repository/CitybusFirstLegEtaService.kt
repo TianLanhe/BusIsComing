@@ -76,7 +76,7 @@ class CitybusFirstLegEtaService(
         query: FirstLegEtaQuery,
         stopId: String
     ): List<EtaArrival>? {
-        val records = parseEtaRecords(response)
+        val records = parseEtaRecords(response, query.lang)
         val strictRecords = records
             .filter { it.matchesRouteStopAndDirection(query, stopId) }
             .filter { it.seq == query.boardingSeq }
@@ -100,14 +100,16 @@ class CitybusFirstLegEtaService(
                     etaMillis = record.etaMillis,
                     arrivalTimeText = formatArrivalTime(record.etaMillis),
                     destination = record.destination,
+                    destinationLanguage = record.destinationLanguage,
                     remark = record.remark,
+                    remarkLanguage = record.remarkLanguage,
                     dataTimestampMillis = record.dataTimestampMillis
                 )
             }
             .takeIf { it.isNotEmpty() }
     }
 
-    private fun parseEtaRecords(response: String): List<EtaRecord> {
+    private fun parseEtaRecords(response: String, language: String): List<EtaRecord> {
         val responseTimestampMillis = parseResponseTimestamp(response)
         return parseCitybusJsonObjects(response).mapNotNull { fields ->
             val etaMillis = fields["eta"]
@@ -115,6 +117,8 @@ class CitybusFirstLegEtaService(
                 ?.toHongKongIsoMillis()
                 ?: return@mapNotNull null
 
+            val destination = selectOfficialField(fields, "dest", language)
+            val remark = selectOfficialField(fields, "rmk", language)
             EtaRecord(
                 route = fields["route"].orEmpty(),
                 stop = fields["stop"].orEmpty(),
@@ -122,13 +126,33 @@ class CitybusFirstLegEtaService(
                 seq = fields["seq"]?.toIntOrNull(),
                 etaSequence = fields["eta_seq"]?.toIntOrNull(),
                 etaMillis = etaMillis,
-                destination = fields["dest_tc"]?.trim()?.takeIf { it.isNotBlank() },
-                remark = fields["rmk_tc"]?.trim()?.takeIf { it.isNotBlank() },
+                destination = destination?.value,
+                destinationLanguage = destination?.language,
+                remark = remark?.value,
+                remarkLanguage = remark?.language,
                 dataTimestampMillis = fields["data_timestamp"]
                     ?.takeIf { it.isNotBlank() }
                     ?.toHongKongIsoMillis()
                     ?: responseTimestampMillis
             )
+        }
+    }
+
+    private fun selectOfficialField(
+        fields: Map<String, String>,
+        prefix: String,
+        citybusLanguage: String
+    ): OfficialFieldValue? {
+        val languageOrder = when (citybusLanguage) {
+            "2" -> listOf("sc", "tc", "en")
+            "1" -> listOf("en", "tc", "sc")
+            else -> listOf("tc", "sc", "en")
+        }
+        return languageOrder.firstNotNullOfOrNull { language ->
+            fields["${prefix}_$language"]
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { OfficialFieldValue(it, language) }
         }
     }
 
@@ -162,8 +186,15 @@ class CitybusFirstLegEtaService(
         val etaSequence: Int?,
         val etaMillis: Long,
         val destination: String?,
+        val destinationLanguage: String?,
         val remark: String?,
+        val remarkLanguage: String?,
         val dataTimestampMillis: Long?
+    )
+
+    private data class OfficialFieldValue(
+        val value: String,
+        val language: String
     )
 
     companion object {

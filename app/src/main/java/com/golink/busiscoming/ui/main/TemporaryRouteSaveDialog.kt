@@ -14,6 +14,7 @@ import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfigValidator
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
+import com.golink.busiscoming.ui.common.localizedMessage
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 
@@ -39,7 +40,7 @@ object TemporaryRouteSaveDialog {
             null,
             com.google.android.material.R.attr.textInputOutlinedStyle
         ).apply {
-            hint = "常用路線名稱"
+            hint = context.getString(R.string.frequent_route_name_hint)
             addView(nameInput)
         }
 
@@ -47,7 +48,7 @@ object TemporaryRouteSaveDialog {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 4), 0, dp(context, 4), 0)
             addView(TextView(context).apply {
-                text = "路線預覽"
+                text = context.getString(R.string.route_preview)
                 applyStableShortTextLayout(Gravity.START)
                 setTextColor(ContextCompat.getColor(context, R.color.bus_text_secondary))
                 textSize = 13f
@@ -67,10 +68,10 @@ object TemporaryRouteSaveDialog {
         }
 
         AlertDialog.Builder(context)
-            .setTitle("保存為常用")
+            .setTitle(R.string.save_frequent_title)
             .setView(content)
-            .setNegativeButton("取消", null)
-            .setPositiveButton("保存", null)
+            .setNegativeButton(R.string.action_cancel, null)
+            .setPositiveButton(R.string.action_save, null)
             .create()
             .apply {
                 setOnShowListener {
@@ -81,14 +82,14 @@ object TemporaryRouteSaveDialog {
                     positiveButton.setOnClickListener {
                         val name = nameInput.text?.toString()?.trim().orEmpty()
                         val validation = RouteConfigValidator.validate(name, origin, destination)
-                        nameLayout.error = validation.nameError
+                        nameLayout.error = validation.nameError.localizedMessage(context)
                         if (!validation.isValid) return@setOnClickListener
                         if (routeConfigRepository.hasDuplicate(name, origin, destination)) {
-                            nameLayout.error = "路線已存在，請修改名稱或起終點"
+                            nameLayout.error = context.getString(R.string.route_duplicate_detail)
                             return@setOnClickListener
                         }
                         val id = routeConfigRepository.insert(name, origin, destination)
-                        Toast.makeText(context, "已保存為常用", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, R.string.saved_as_frequent, Toast.LENGTH_SHORT).show()
                         dismiss()
                         onSaved(id)
                     }

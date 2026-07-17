@@ -7,18 +7,21 @@ import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.BusRouteQueryCallback
 import com.golink.busiscoming.data.repository.BusRouteRepository
 import com.golink.busiscoming.ui.navigation.RouteQueryGeneration
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import java.util.concurrent.Executor
 
 class RouteQueryCoordinator(
     private val repository: BusRouteRepository,
     private val executor: Executor,
     private val postToOwner: (Runnable) -> Unit,
-    private val isOwnerActive: () -> Boolean
+    private val isOwnerActive: () -> Boolean,
+    private val languageVersion: () -> Long = { AppLanguageRuntime.snapshot().version }
 ) {
     private val generation = RouteQueryGeneration()
 
     fun query(origin: Place, destination: Place, callback: Callback): Int {
         val queryId = generation.begin()
+        val queryLanguageVersion = languageVersion()
         repository.cancelProgressiveQueries()
         executor.execute {
             repository.searchRoutesProgressively(
@@ -26,14 +29,16 @@ class RouteQueryCoordinator(
                 destination,
                 object : BusRouteQueryCallback {
                     override fun onInitialRoutes(routes: List<BusRouteOption>) {
-                        dispatch(queryId) { callback.onInitialRoutes(queryId, routes) }
+                        dispatch(queryId, queryLanguageVersion) {
+                            callback.onInitialRoutes(queryId, routes)
+                        }
                     }
 
                     override fun onRouteWaitTimeUpdated(
                         routeId: String,
                         waitTimeState: WaitTimeState
                     ) {
-                        dispatch(queryId) {
+                        dispatch(queryId, queryLanguageVersion) {
                             callback.onRouteWaitTimeUpdated(queryId, routeId, waitTimeState)
                         }
                     }
@@ -42,13 +47,15 @@ class RouteQueryCoordinator(
                         routeId: String,
                         preview: RouteCardStopPreview
                     ) {
-                        dispatch(queryId) {
+                        dispatch(queryId, queryLanguageVersion) {
                             callback.onRouteStopPreviewUpdated(queryId, routeId, preview)
                         }
                     }
 
                     override fun onFailure(error: Throwable) {
-                        dispatch(queryId) { callback.onFailure(queryId, error) }
+                        dispatch(queryId, queryLanguageVersion) {
+                            callback.onFailure(queryId, error)
+                        }
                     }
                 }
             )
@@ -61,9 +68,13 @@ class RouteQueryCoordinator(
         repository.cancelProgressiveQueries()
     }
 
-    private fun dispatch(queryId: Int, action: () -> Unit) {
+    private fun dispatch(queryId: Int, queryLanguageVersion: Long, action: () -> Unit) {
         postToOwner(Runnable {
-            if (generation.isCurrent(queryId) && isOwnerActive()) {
+            if (
+                generation.isCurrent(queryId) &&
+                languageVersion() == queryLanguageVersion &&
+                isOwnerActive()
+            ) {
                 action()
             }
         })

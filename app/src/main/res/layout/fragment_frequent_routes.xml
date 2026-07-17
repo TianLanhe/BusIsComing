@@ -19,12 +19,12 @@
             android:id="@+id/transitCodeButton"
             style="@style/StableShortText.Button"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:minHeight="44dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:minWidth="0dp"
             android:paddingHorizontal="16dp"
-            android:text="乘車碼"
-            android:textColor="@color/white"
+            android:text="@string/transit_code"
+            android:textColor="@color/bus_on_accent"
             android:textSize="14sp"
             app:backgroundTint="@color/bus_chip_selected"
             app:cornerRadius="6dp" />
@@ -37,19 +37,19 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/settingsButton"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:contentDescription="@string/settings"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
-            android:minHeight="44dp"
-            android:minWidth="44dp"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
             android:padding="0dp"
-            app:backgroundTint="@color/white"
-            app:cornerRadius="22dp"
+            app:backgroundTint="@color/bus_card_surface"
+            app:cornerRadius="24dp"
             app:icon="@drawable/ic_settings_outline"
             app:iconGravity="textStart"
             app:iconPadding="0dp"
@@ -61,7 +61,8 @@
     <LinearLayout
         android:id="@+id/firstRunTopActions"
         android:layout_width="match_parent"
-        android:layout_height="44dp"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:visibility="gone">
@@ -70,15 +71,15 @@
             android:id="@+id/firstRunTransitCodeButton"
             style="@style/StableShortText.Button.Outlined"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
             android:elevation="0dp"
-            android:minHeight="44dp"
+            android:minHeight="48dp"
             android:minWidth="0dp"
             android:paddingHorizontal="16dp"
-            android:text="乘車碼"
+            android:text="@string/transit_code"
             android:textColor="@color/bus_chip_selected"
             android:textSize="14sp"
-            app:backgroundTint="@color/white"
+            app:backgroundTint="@color/bus_card_surface"
             app:cornerRadius="6dp"
             app:elevation="0dp"
             app:strokeColor="@color/bus_divider"
@@ -92,18 +93,18 @@
         <com.google.android.material.button.MaterialButton
             android:id="@+id/firstRunSettingsButton"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:contentDescription="@string/settings"
             android:insetLeft="0dp"
             android:insetTop="0dp"
             android:insetRight="0dp"
             android:insetBottom="0dp"
-            android:minHeight="44dp"
-            android:minWidth="44dp"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
             android:padding="0dp"
-            app:backgroundTint="@color/white"
-            app:cornerRadius="22dp"
+            app:backgroundTint="@color/bus_card_surface"
+            app:cornerRadius="24dp"
             app:icon="@drawable/ic_settings_outline"
             app:iconGravity="textStart"
             app:iconPadding="0dp"
@@ -118,10 +119,22 @@
         android:layout_height="0dp"
         android:layout_marginTop="0dp"
         android:layout_weight="1"
-        android:gravity="top"
         android:orientation="vertical"
-        android:paddingTop="78dp"
         android:visibility="gone">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:paddingTop="78dp"
+            android:paddingBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top"
+                android:orientation="vertical">
 
         <TextView
             android:id="@+id/firstRunHeadlineText"
@@ -129,7 +142,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="start"
-            android:maxLines="2"
             android:lineSpacingMultiplier="1.18"
             android:text="@string/first_run_home_headline"
             android:textColor="@color/bus_text_primary"
@@ -176,8 +188,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="搜尋路線" />
+                android:text="@string/search_routes" />
         </LinearLayout>
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
     </LinearLayout>
 
     <LinearLayout
@@ -191,29 +205,34 @@
             android:id="@+id/frequentRoutesHeader"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
             <TextView
                 android:id="@+id/frequentRoutesTitle"
                 style="@style/StableShortText.Title"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="常用路線"
+                android:text="@string/frequent_routes_label"
                 android:textColor="@color/bus_text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="end|center_vertical"
+                android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/routePickerButton"
                 style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:minHeight="40dp"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
                 android:minWidth="0dp"
                 android:paddingHorizontal="8dp"
-                android:text="全部"
+                android:text="@string/all_routes"
                 android:textColor="@color/bus_chip_selected"
                 android:textSize="14sp" />
 
@@ -221,15 +240,17 @@
                 android:id="@+id/routeManageButton"
                 style="@style/StableShortText.Button.Text"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
+                android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
                 android:contentDescription="@string/manage_routes"
-                android:minHeight="40dp"
+                android:minHeight="48dp"
                 android:minWidth="48dp"
                 android:paddingHorizontal="8dp"
                 android:text="@string/manage"
                 android:textColor="@color/bus_chip_selected"
                 android:textSize="14sp" />
+
+            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
@@ -253,7 +274,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="查詢" />
+            android:text="@string/action_query" />
     </LinearLayout>
 
     <LinearLayout
@@ -290,10 +311,11 @@
                         android:id="@+id/sortRouteButton"
                         style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
-                        android:layout_height="40dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="路線"
+                        android:text="@string/sort_route"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -301,11 +323,12 @@
                         android:id="@+id/sortPriceButton"
                         style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
-                        android:layout_height="40dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="價格"
+                        android:text="@string/sort_price"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -313,11 +336,12 @@
                         android:id="@+id/sortDurationButton"
                         style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
-                        android:layout_height="40dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="耗時"
+                        android:text="@string/sort_duration"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -325,11 +349,12 @@
                         android:id="@+id/sortArrivalButton"
                         style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
-                        android:layout_height="40dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="候車"
+                        android:text="@string/sort_arrival"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
 
@@ -337,11 +362,12 @@
                         android:id="@+id/sortWalkingDistanceButton"
                         style="@style/StableShortText.Button.Outlined"
                         android:layout_width="wrap_content"
-                        android:layout_height="40dp"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
                         android:minWidth="0dp"
                         android:paddingHorizontal="14dp"
-                        android:text="步行"
+                        android:text="@string/sort_walking"
                         android:textSize="13sp"
                         app:cornerRadius="20dp" />
                 </LinearLayout>

@@ -4,6 +4,7 @@ import com.golink.busiscoming.data.location.AndroidRequestIdentity
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.GoogleReverseGeocodingCache
 import com.golink.busiscoming.data.location.GoogleReverseGeocodingCacheKey
+import com.golink.busiscoming.data.location.GoogleReverseGeocodingErrorDiagnostic
 import com.golink.busiscoming.data.location.GoogleReverseGeocodingHttpResponse
 import com.golink.busiscoming.data.location.GoogleReverseGeocodingParseResult
 import com.golink.busiscoming.data.location.GoogleReverseGeocodingParser
@@ -179,6 +180,61 @@ class GoogleReverseGeocodingPlaceNameResolverTest {
     }
 
     @Test
+    fun errorDiagnosticExtractsOnlySafeGoogleReason() {
+        val response = """
+            {
+              "error": {
+                "message": "Request contains a secret value that must not be logged",
+                "details": [
+                  {
+                    "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                    "reason": "API_KEY_ANDROID_APP_BLOCKED",
+                    "metadata": {"consumer": "projects/123456"}
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        assertEquals(
+            "API_KEY_ANDROID_APP_BLOCKED",
+            GoogleReverseGeocodingErrorDiagnostic.safeReason(response)
+        )
+        assertEquals(
+            null,
+            GoogleReverseGeocodingErrorDiagnostic.safeReason(
+                """{"error":{"details":[{"reason":"unsafe reason: secret"}]}}"""
+            )
+        )
+        assertEquals(null, GoogleReverseGeocodingErrorDiagnostic.safeReason("not json"))
+    }
+
+    @Test
+    fun httpFailureLogsStatusAndSafeReasonWithoutResponseDetails() {
+        val failures = mutableListOf<String>()
+        val resolver = resolver(
+            fetcher = {
+                GoogleReverseGeocodingHttpResponse(
+                    statusCode = 403,
+                    body = """
+                        {
+                          "error": {
+                            "message": "Sensitive diagnostic text",
+                            "details": [{"reason": "API_KEY_ANDROID_APP_BLOCKED"}]
+                          }
+                        }
+                    """.trimIndent()
+                )
+            },
+            failureLogger = failures::add
+        )
+
+        assertEquals(PlaceNameResolutionResult.Failure, resolver.resolveSynchronously(snapshot))
+        assertEquals(listOf("http_403_API_KEY_ANDROID_APP_BLOCKED"), failures)
+        assertFalse(failures.single().contains("Sensitive"))
+    }
+
+    @Test
     fun successfulResultIsCachedByE4AndLanguageUntilTtl() {
         var now = 10_000L
         var fetchCount = 0
@@ -272,7 +328,8 @@ class GoogleReverseGeocodingPlaceNameResolverTest {
         fetcher: (GoogleReverseGeocodingRequest) -> GoogleReverseGeocodingHttpResponse = { ok("中環") },
         nowElapsedMillis: () -> Long = { 1_000L },
         requestExecutor: java.util.concurrent.Executor = java.util.concurrent.Executor { runnable -> runnable.run() },
-        cache: GoogleReverseGeocodingCache = GoogleReverseGeocodingCache()
+        cache: GoogleReverseGeocodingCache = GoogleReverseGeocodingCache(),
+        failureLogger: (String) -> Unit = {}
     ): GoogleReverseGeocodingPlaceNameResolver {
         return GoogleReverseGeocodingPlaceNameResolver(
             apiKeyProvider = apiKeyProvider,
@@ -283,7 +340,7 @@ class GoogleReverseGeocodingPlaceNameResolverTest {
             callbackExecutor = { runnable -> runnable.run() },
             requestExecutor = requestExecutor,
             cache = cache,
-            failureLogger = {}
+            failureLogger = failureLogger
         )
     }
 

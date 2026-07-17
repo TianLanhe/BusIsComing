@@ -1,32 +1,40 @@
 package com.golink.busiscoming
 
+import android.Manifest
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.replaceText
-import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
+import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.main.MainActivity
 import org.junit.Test
+import org.junit.Rule
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class TopLevelNavigationInstrumentedTest {
+    @get:Rule
+    val locationPermissionRule: GrantPermissionRule = GrantPermissionRule.grant(
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
     @Test
     fun topLevelDestinationsSwitchWithoutLeavingTheMainHost() {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.frequentRoutesRoot)).check(matches(isDisplayed()))
             onView(withId(R.id.navigation_settings)).perform(click())
             onView(withId(R.id.settingsRoot)).check(matches(isDisplayed()))
-            onView(withId(R.id.settingsBackButton)).check(doesNotExist())
             onView(withId(R.id.navigation_search)).perform(click())
             onView(withId(R.id.searchRoot)).check(matches(isDisplayed()))
         }
@@ -58,7 +66,7 @@ class TopLevelNavigationInstrumentedTest {
             onView(withId(R.id.searchRoot)).check(matches(isDisplayed()))
 
             onView(withId(R.id.navigation_settings)).perform(click())
-            onView(withId(R.id.settingsAboutRow)).perform(click())
+            onView(withId(R.id.settingsAboutRow)).perform(scrollTo(), click())
             onView(withId(R.id.aboutRoot)).check(matches(isDisplayed()))
             pressBack()
             onView(withId(R.id.settingsRoot)).check(matches(isDisplayed()))

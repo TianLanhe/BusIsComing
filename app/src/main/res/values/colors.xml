@@ -18,12 +18,17 @@
     <color name="bus_state_surface">#FFFFFFFF</color>
     <color name="bus_chip_surface">#FFFFFFFF</color>
     <color name="bus_chip_selected">#FF145C54</color>
+    <color name="bus_on_accent">#FFFFFFFF</color>
     <color name="bus_wait_accent">#FF145C54</color>
     <color name="bus_wait_unavailable">#FF7A8581</color>
     <color name="app_icon_background">#FFC8C2F5</color>
     <color name="bus_text_primary">#FF17211F</color>
     <color name="bus_text_secondary">#FF5D6B66</color>
     <color name="bus_divider">#FFD6DEDA</color>
+    <color name="bus_outline_strong">#FF71817B</color>
     <color name="bus_danger">#FFB3261E</color>
+    <color name="bus_on_danger">#FFFFFFFF</color>
     <color name="bus_action_secondary">#FFF2A541</color>
+    <color name="bus_on_secondary">#FF2A1700</color>
+    <color name="bus_on_route_badge">#FFFFFFFF</color>
 </resources>
