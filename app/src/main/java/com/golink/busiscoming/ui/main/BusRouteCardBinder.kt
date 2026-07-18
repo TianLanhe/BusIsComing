@@ -90,7 +90,8 @@ class BusRouteCardBinder(private val itemView: View) {
         val colorRes = when (waitTimeState) {
             is WaitTimeState.Available -> R.color.bus_wait_accent
             WaitTimeState.Loading -> R.color.bus_text_secondary
-            WaitTimeState.Unavailable -> R.color.bus_wait_unavailable
+            WaitTimeState.NoArrivals,
+            is WaitTimeState.Unavailable -> R.color.bus_wait_unavailable
         }
         return ContextCompat.getColor(itemView.context, colorRes)
     }

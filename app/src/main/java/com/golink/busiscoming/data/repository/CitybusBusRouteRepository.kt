@@ -3,6 +3,7 @@ package com.golink.busiscoming.data.repository
 import android.util.Log
 import com.golink.busiscoming.BuildConfig
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
@@ -342,7 +343,7 @@ class CitybusBusRouteRepository(
 
     private fun resolveEtaRequestGroup(group: EtaRequestGroup): EtaRequestResult {
         val waitTimeState = runCatching { waitTimeResolver(group.query) }
-            .getOrDefault(WaitTimeState.Unavailable)
+            .getOrDefault(WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR))
         return EtaRequestResult(
             routeIds = group.routeIds,
             waitTimeState = waitTimeState

@@ -2,7 +2,9 @@ package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.EtaArrival
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.P2pRouteLeg
+import com.golink.busiscoming.data.model.P2pRoutePlan
 import com.golink.busiscoming.data.model.WaitTimeState
 import java.net.URL
 import java.text.ParseException
@@ -17,17 +19,40 @@ class CitybusFirstLegEtaService(
     private val stopMapResolver: CitybusP2pStopMapResolver = CitybusP2pStopMapResolver(clock = clock)
 ) {
     fun resolveWaitTime(query: FirstLegEtaQuery): WaitTimeState {
-        return runCatching {
-            val stopId = findStopId(query) ?: return WaitTimeState.Unavailable
-            val etaResponse = etaFetcher(buildEtaUrl(query.company, stopId, query.route))
-            val arrivals = parseArrivals(
-                response = etaResponse,
-                query = query,
-                stopId = stopId
-            ) ?: return WaitTimeState.Unavailable
+        if (!query.hasRequiredFirstLegData()) {
+            return WaitTimeState.Unavailable(EtaUnavailableReason.MISSING_FIRST_LEG_DATA)
+        }
+        val leg = query.toRouteLeg()
+        val stopMap = try {
+            stopMapResolver.resolveStopMap(
+                rawInfo = query.rawInfo,
+                lang = query.lang,
+                plan = P2pRoutePlan(query.rawInfo, query.lang, listOf(leg))
+            )
+        } catch (_: Exception) {
+            return WaitTimeState.Unavailable(EtaUnavailableReason.STOP_MAP_REQUEST_FAILED)
+        } ?: return WaitTimeState.Unavailable(EtaUnavailableReason.STOP_MAP_RESPONSE_INVALID)
+
+        val stopId = stopMap.findStop(0, leg.routeVariant, leg.boardingSeq)?.stopId
+            ?: return WaitTimeState.Unavailable(EtaUnavailableReason.BOARDING_STOP_NOT_FOUND)
+        val etaResponse = try {
+            etaFetcher(buildEtaUrl(query.company, stopId, query.route))
+        } catch (_: Exception) {
+            return WaitTimeState.Unavailable(EtaUnavailableReason.ETA_REQUEST_FAILED)
+        }
+        if (!hasValidEtaDataArray(etaResponse)) {
+            return WaitTimeState.Unavailable(EtaUnavailableReason.ETA_RESPONSE_INVALID)
+        }
+
+        val arrivals = parseArrivals(
+            response = etaResponse,
+            query = query,
+            stopId = stopId
+        )
+        return if (arrivals.isEmpty()) {
+            WaitTimeState.NoArrivals
+        } else {
             WaitTimeState.Available(arrivals)
-        }.getOrElse {
-            WaitTimeState.Unavailable
         }
     }
 
@@ -39,24 +64,6 @@ class CitybusFirstLegEtaService(
         val remainingMillis = etaMillis - clock()
         if (remainingMillis <= 0) return 0
         return ((remainingMillis + MILLIS_PER_MINUTE - 1) / MILLIS_PER_MINUTE).toInt()
-    }
-
-    private fun findStopId(query: FirstLegEtaQuery): String? {
-        if (query.rawInfo.isBlank()) return null
-        return stopMapResolver.findStopId(
-            leg = P2pRouteLeg(
-                company = query.company,
-                routeVariant = query.routeVariant,
-                route = query.route,
-                boardingSeq = query.boardingSeq,
-                alightingSeq = query.alightingSeq,
-                bound = query.bound,
-                directionPath = query.directionPath
-            ),
-            rawInfo = query.rawInfo,
-            lang = query.lang,
-            legIndex = 0
-        )
     }
 
     /**
@@ -75,7 +82,7 @@ class CitybusFirstLegEtaService(
         response: String,
         query: FirstLegEtaQuery,
         stopId: String
-    ): List<EtaArrival>? {
+    ): List<EtaArrival> {
         val records = parseEtaRecords(response, query.lang)
         val strictRecords = records
             .filter { it.matchesRouteStopAndDirection(query, stopId) }
@@ -86,7 +93,6 @@ class CitybusFirstLegEtaService(
             .filter { it.matchesRouteStopAndDirection(query, stopId) }
         }
 
-        if (matchedRecords.isEmpty()) return null
         return matchedRecords
             .sortedWith(
                 compareBy<EtaRecord> { it.etaSequence ?: Int.MAX_VALUE }
@@ -106,7 +112,57 @@ class CitybusFirstLegEtaService(
                     dataTimestampMillis = record.dataTimestampMillis
                 )
             }
-            .takeIf { it.isNotEmpty() }
+    }
+
+    private fun FirstLegEtaQuery.hasRequiredFirstLegData(): Boolean {
+        return company.isNotBlank() &&
+            routeVariant.isNotBlank() &&
+            route.isNotBlank() &&
+            boardingSeq > 0 &&
+            bound.isNotBlank() &&
+            rawInfo.isNotBlank() &&
+            lang.isNotBlank()
+    }
+
+    private fun FirstLegEtaQuery.toRouteLeg(): P2pRouteLeg {
+        return P2pRouteLeg(
+            company = company,
+            routeVariant = routeVariant,
+            route = route,
+            boardingSeq = boardingSeq,
+            alightingSeq = alightingSeq,
+            bound = bound,
+            directionPath = directionPath
+        )
+    }
+
+    private fun hasValidEtaDataArray(response: String): Boolean {
+        val trimmed = response.trim()
+        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false
+        val dataArrayStart = DATA_ARRAY_PATTERN.find(trimmed)?.range?.last ?: return false
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (index in dataArrayStart until trimmed.length) {
+            val char = trimmed[index]
+            if (inString) {
+                when {
+                    escaped -> escaped = false
+                    char == '\\' -> escaped = true
+                    char == '"' -> inString = false
+                }
+                continue
+            }
+            when (char) {
+                '"' -> inString = true
+                '[' -> depth += 1
+                ']' -> {
+                    depth -= 1
+                    if (depth == 0) return true
+                }
+            }
+        }
+        return false
     }
 
     private fun parseEtaRecords(response: String, language: String): List<EtaRecord> {
@@ -201,6 +257,7 @@ class CitybusFirstLegEtaService(
         private const val BASE_URL = "https://rt.data.gov.hk/v2/transport/citybus"
         private const val MILLIS_PER_MINUTE = 60_000L
         private const val MAX_ETA_ARRIVALS = 3
+        private val DATA_ARRAY_PATTERN = Regex(""""data"\s*:\s*\[""")
         private val RESPONSE_TIMESTAMP_PATTERN = Regex(
             """"(generated_timestamp|data_timestamp)"\s*:\s*"([^"]+)""""
         )

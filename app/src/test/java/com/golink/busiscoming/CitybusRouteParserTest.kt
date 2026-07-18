@@ -1,5 +1,6 @@
 package com.golink.busiscoming
 
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.repository.CitybusRouteParseException
 import com.golink.busiscoming.data.repository.CitybusRouteParser
 import com.golink.busiscoming.data.model.WaitTimeState
@@ -270,7 +271,10 @@ class CitybusRouteParserTest {
         assertEquals("8X", routes.first().routeName)
         assertEquals(null, routes.first().firstLegEtaQuery)
         assertEquals(null, routes.first().routeDetailQuery)
-        assertEquals(WaitTimeState.Unavailable, routes.first().waitTimeState)
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.MISSING_FIRST_LEG_DATA),
+            routes.first().waitTimeState
+        )
     }
 
     @Test

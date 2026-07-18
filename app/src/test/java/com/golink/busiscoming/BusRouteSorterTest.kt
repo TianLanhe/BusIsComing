@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
@@ -102,7 +103,7 @@ class BusRouteSorterTest {
         val sorted = BusRouteSorter.sort(waitTimeRoutes, SortField.ARRIVAL, SortDirection.ASC)
 
         assertEquals(
-            listOf("available 3", "available 8", "loading", "unavailable"),
+            listOf("available 3", "available 8", "loading", "no arrivals", "technical failure"),
             sorted.map { it.routeName }
         )
     }
@@ -112,7 +113,7 @@ class BusRouteSorterTest {
         val sorted = BusRouteSorter.sort(waitTimeRoutes, SortField.ARRIVAL, SortDirection.DESC)
 
         assertEquals(
-            listOf("available 8", "available 3", "loading", "unavailable"),
+            listOf("available 8", "available 3", "loading", "no arrivals", "technical failure"),
             sorted.map { it.routeName }
         )
     }
@@ -121,7 +122,7 @@ class BusRouteSorterTest {
     fun formatsWaitTimeStatesForDisplay() {
         assertEquals("3", WaitTimeState.Available(3).toDisplayText())
         assertEquals("...", WaitTimeState.Loading.toDisplayText())
-        assertEquals("-", WaitTimeState.Unavailable.toDisplayText())
+        assertEquals("-", WaitTimeState.NoArrivals.toDisplayText())
     }
 
     @Test
@@ -147,7 +148,17 @@ class BusRouteSorterTest {
     private val waitTimeRoutes = listOf(
         BusRouteOption("loading", listOf("1"), 1.0, 10, 10, 0, 100, WaitTimeState.Loading),
         BusRouteOption("available 8", listOf("2"), 1.0, 10, 10, 0, 100, WaitTimeState.Available(8)),
-        BusRouteOption("unavailable", listOf("3"), 1.0, 10, 10, 0, 100, WaitTimeState.Unavailable),
-        BusRouteOption("available 3", listOf("4"), 1.0, 10, 10, 0, 100, WaitTimeState.Available(3))
+        BusRouteOption("no arrivals", listOf("3"), 1.0, 10, 10, 0, 100, WaitTimeState.NoArrivals),
+        BusRouteOption(
+            "technical failure",
+            listOf("4"),
+            1.0,
+            10,
+            10,
+            0,
+            100,
+            WaitTimeState.Unavailable(EtaUnavailableReason.ETA_REQUEST_FAILED)
+        ),
+        BusRouteOption("available 3", listOf("5"), 1.0, 10, 10, 0, 100, WaitTimeState.Available(3))
     )
 }

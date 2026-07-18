@@ -38,6 +38,23 @@ class LocaleResourceContractTest {
         }
     }
 
+    @Test
+    fun etaStatusCopyUsesApprovedThreeLanguageWording() {
+        val traditionalValues = values(traditional)
+        val simplifiedValues = values(simplified)
+        val englishValues = values(english)
+
+        assertEquals("候車查詢中", traditionalValues.getValue("eta_loading"))
+        assertEquals("候车查询中", simplifiedValues.getValue("eta_loading"))
+        assertEquals("Checking arrivals", englishValues.getValue("eta_loading"))
+        assertEquals("暫無車輛", traditionalValues.getValue("eta_unavailable"))
+        assertEquals("暂无车辆", simplifiedValues.getValue("eta_unavailable"))
+        assertEquals("No live arrivals", englishValues.getValue("eta_unavailable"))
+        assertEquals("候車暫不可用", traditionalValues.getValue("eta_temporarily_unavailable"))
+        assertEquals("候车暂不可用", simplifiedValues.getValue("eta_temporarily_unavailable"))
+        assertEquals("Arrivals unavailable", englishValues.getValue("eta_temporarily_unavailable"))
+    }
+
     private fun values(directory: File): Map<String, String> =
         Regex("<string\\s+name=\"([^\"]+)\"(?:\\s+translatable=\"(?:true|false)\")?>(.*?)</string>", setOf(RegexOption.DOT_MATCHES_ALL))
             .findAll(

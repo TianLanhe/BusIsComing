@@ -30,6 +30,7 @@ import com.golink.busiscoming.data.model.BusMonitorStopPolicy
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
 import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.common.localizedText
@@ -182,7 +183,7 @@ class BusMonitorService : Service() {
         isRefreshing = true
         etaExecutor.execute {
             val waitTimeState = runCatching { etaService.resolveWaitTime(currentSession.query) }
-                .getOrDefault(WaitTimeState.Unavailable)
+                .getOrDefault(WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR))
             mainHandler.post {
                 isRefreshing = false
                 val shouldContinue = updateNotification(waitTimeState, currentSession)

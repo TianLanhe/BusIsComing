@@ -24,7 +24,8 @@ object RouteResultCardFormatter {
                 }
             }
             WaitTimeState.Loading -> text.get(R.string.eta_loading, emptyArray())
-            WaitTimeState.Unavailable -> text.get(R.string.eta_unavailable, emptyArray())
+            WaitTimeState.NoArrivals -> text.get(R.string.eta_unavailable, emptyArray())
+            is WaitTimeState.Unavailable -> text.get(R.string.eta_temporarily_unavailable, emptyArray())
         }
     }
 

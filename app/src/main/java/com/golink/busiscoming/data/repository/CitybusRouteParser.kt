@@ -1,6 +1,7 @@
 package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
@@ -35,7 +36,7 @@ object CitybusRouteParser {
             firstLegEtaQuery = firstLegEtaQuery,
             routeDetailQuery = routeDetailQuery,
             waitTimeState = if (firstLegEtaQuery == null) {
-                WaitTimeState.Unavailable
+                WaitTimeState.Unavailable(EtaUnavailableReason.MISSING_FIRST_LEG_DATA)
             } else {
                 WaitTimeState.Loading
             },

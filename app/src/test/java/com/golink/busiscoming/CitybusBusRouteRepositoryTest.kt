@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.BusRouteQueryCallback
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
@@ -560,7 +561,10 @@ class CitybusBusRouteRepositoryTest {
             callback.awaitInitialRoutes().map { it.waitTimeState }
         )
         assertEquals(
-            setOf(WaitTimeState.Unavailable, WaitTimeState.Available(2)),
+            setOf(
+                WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR),
+                WaitTimeState.Available(2)
+            ),
             callback.awaitUpdateCount(2).map { it.second }.toSet()
         )
     }
@@ -580,7 +584,7 @@ class CitybusBusRouteRepositoryTest {
                 }
             },
             requestLogger = {},
-            waitTimeResolver = { WaitTimeState.Unavailable },
+            waitTimeResolver = { WaitTimeState.NoArrivals },
             stopPreviewResolver = previewResolver(
                 stopMapFetcher = {
                     previewStarted.countDown()
@@ -620,7 +624,7 @@ class CitybusBusRouteRepositoryTest {
                 }
             },
             requestLogger = {},
-            waitTimeResolver = { WaitTimeState.Unavailable },
+            waitTimeResolver = { WaitTimeState.NoArrivals },
             stopPreviewResolver = previewResolver(
                 stopMapFetcher = {
                     previewStarted.countDown()

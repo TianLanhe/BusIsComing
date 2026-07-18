@@ -50,6 +50,30 @@ class RouteCardStopPreviewResolverTest {
     }
 
     @Test
+    fun resolvesEnglishPreviewWhenStopNamesContainEscapedApostrophes() {
+        val resolver = previewResolver(
+            stopMapFetcher = {
+                """
+                <iframe onload="
+                    addstoponmap('001265',114.20650947053,22.292090752091,'S','6','6 - Healthy Gardens, King\'s Road','8X-THR-1','O','N','114.20650947053','22.292090752091');
+                    addstoponmap('001364',114.19594569053,22.290176642091,'E','20','20 - St. Paul\'s Hospital, Eastern Hospital Road','8X-THR-1','O','N','114.19594569053','22.290176642091');
+                "></iframe>
+                """.trimIndent()
+            }
+        )
+        val route = parsedRoute(
+            label = "8X 港元8.1預計45分鐘 步行距離(約)438米",
+            rawInfo = "1|*|CTB||8X-THR-1||6||20||O|*|",
+            lang = "1"
+        )
+
+        val preview = resolver.resolvePreview(route)
+
+        assertEquals("Healthy Gardens", preview?.boardingStopName)
+        assertEquals("St. Paul's Hospital", preview?.alightingStopName)
+    }
+
+    @Test
     fun cachesSuccessfulPreviewForOneDay() {
         var now = 1_000L
         var stopMapCalls = 0
@@ -128,12 +152,13 @@ class RouteCardStopPreviewResolverTest {
         )
     }
 
-    private fun parsedRoute(label: String, rawInfo: String) = CitybusRouteParser.parse(
+    private fun parsedRoute(label: String, rawInfo: String, lang: String = "0") = CitybusRouteParser.parse(
         """
         <div id="routelist2">
-            <table aria-label="$label" onclick="showroutep2p('$rawInfo','0','12:00|*|30');"></table>
+            <table aria-label="$label" onclick="showroutep2p('$rawInfo','$lang','12:00|*|30');"></table>
         </div>
-        """.trimIndent()
+        """.trimIndent(),
+        lang = lang
     ).first()
 
     companion object {

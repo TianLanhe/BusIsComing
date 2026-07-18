@@ -79,8 +79,8 @@ class CitybusP2pStopMapResolver(
 
 object CitybusP2pStopMapParser {
     fun parse(response: String, rawInfo: String, lang: String, plan: P2pRoutePlan): P2pStopMap {
-        val stops = ADD_STOP_ON_MAP_PATTERN.findAll(response)
-            .mapNotNull { match -> parseStop(match.groupValues[1], plan) }
+        val stops = extractFunctionArguments(response)
+            .mapNotNull { arguments -> parseStop(arguments, plan) }
             .toList()
         return P2pStopMap(rawInfo = rawInfo, lang = lang, stops = stops)
     }
@@ -120,33 +120,96 @@ object CitybusP2pStopMapParser {
     private fun parseFunctionArgs(argumentList: String): List<String> {
         val args = mutableListOf<String>()
         val current = StringBuilder()
-        var inQuote = false
+        var quote: Char? = null
+        var escaped = false
         var index = 0
         while (index < argumentList.length) {
             val char = argumentList[index]
-            when {
-                char == '\'' -> {
-                    inQuote = !inQuote
+            when (val activeQuote = quote) {
+                null -> when {
+                    char == '\'' || char == '"' -> quote = char
+                    char == ',' -> {
+                        args += current.toString().trim()
+                        current.setLength(0)
+                    }
+                    else -> current.append(char)
                 }
-                char == ',' && !inQuote -> {
-                    args += current.toString().trim()
-                    current.setLength(0)
+                else -> when {
+                    escaped -> {
+                        current.append(decodeJavaScriptEscape(char))
+                        escaped = false
+                    }
+                    char == '\\' -> escaped = true
+                    char == activeQuote -> quote = null
+                    else -> current.append(char)
                 }
-                else -> current.append(char)
             }
             index += 1
         }
+        if (quote != null || escaped) return emptyList()
         if (current.isNotEmpty() || argumentList.endsWith(",")) {
             args += current.toString().trim()
         }
         return args
     }
 
+    private fun extractFunctionArguments(response: String): Sequence<String> = sequence {
+        var searchFrom = 0
+        while (searchFrom < response.length) {
+            val callStart = response.indexOf(ADD_STOP_ON_MAP_PREFIX, searchFrom)
+            if (callStart < 0) break
+
+            val argumentsStart = callStart + ADD_STOP_ON_MAP_PREFIX.length
+            var quote: Char? = null
+            var escaped = false
+            var parenthesisDepth = 1
+            var index = argumentsStart
+            var foundEnd = false
+            while (index < response.length) {
+                val char = response[index]
+                when (val activeQuote = quote) {
+                    null -> when {
+                        char == '\'' || char == '"' -> quote = char
+                        char == '(' -> parenthesisDepth += 1
+                        char == ')' -> {
+                            parenthesisDepth -= 1
+                            if (parenthesisDepth == 0) {
+                                yield(response.substring(argumentsStart, index))
+                                searchFrom = index + 1
+                                foundEnd = true
+                                break
+                            }
+                        }
+                    }
+                    else -> when {
+                        escaped -> escaped = false
+                        char == '\\' -> escaped = true
+                        char == activeQuote -> quote = null
+                    }
+                }
+                index += 1
+            }
+            if (!foundEnd) break
+        }
+    }
+
+    private fun decodeJavaScriptEscape(char: Char): Char {
+        return when (char) {
+            'b' -> '\b'
+            'f' -> '\u000C'
+            'n' -> '\n'
+            'r' -> '\r'
+            't' -> '\t'
+            'v' -> '\u000B'
+            else -> char
+        }
+    }
+
     private fun String.removeStopSequencePrefix(): String {
         return replace(STOP_SEQUENCE_PREFIX_PATTERN, "").trim()
     }
 
-    private val ADD_STOP_ON_MAP_PATTERN = Regex("""addstoponmap\((.*?)\)""", RegexOption.DOT_MATCHES_ALL)
+    private const val ADD_STOP_ON_MAP_PREFIX = "addstoponmap("
     private val STOP_SEQUENCE_PREFIX_PATTERN = Regex("""^\d+\s*-\s*""")
 }
 

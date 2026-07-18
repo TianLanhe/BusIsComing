@@ -117,6 +117,7 @@ MainActivity
 - `docs/ui-style-guide.md`：UI 風格、視覺層級和互動動效指南。
 - `docs/localization-guidelines.md`：三語語氣、術語、動態資料、TTS、版面與驗證長期規則。
 - `docs/localization-validation-matrix.md`：三語、明暗、字體、畫面及真實外部服務驗收清單。
+- `docs/technical-debt.md`：已確認但主動延期的技術遺留、後續方案與關閉條件。
 - `docs/citybus-eta-from-ppsearch.md`：基於 Citybus P2P 結果推導首程 ETA 的方案記錄。
 - `openspec/changes/`：OpenSpec 變更提案、設計、規格和任務。
 - `openspec/specs/`：已歸檔或當前生效的能力規格。

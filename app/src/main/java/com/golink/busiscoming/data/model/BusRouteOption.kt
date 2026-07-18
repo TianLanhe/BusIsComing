@@ -43,7 +43,18 @@ sealed class WaitTimeState {
             return "Available(minutes=$minutes, arrivals=$arrivals)"
         }
     }
-    object Unavailable : WaitTimeState()
+    object NoArrivals : WaitTimeState()
+    data class Unavailable(val reason: EtaUnavailableReason) : WaitTimeState()
+}
+
+enum class EtaUnavailableReason {
+    MISSING_FIRST_LEG_DATA,
+    STOP_MAP_REQUEST_FAILED,
+    STOP_MAP_RESPONSE_INVALID,
+    BOARDING_STOP_NOT_FOUND,
+    ETA_REQUEST_FAILED,
+    ETA_RESPONSE_INVALID,
+    UNEXPECTED_ERROR
 }
 
 data class EtaArrival(
@@ -62,7 +73,8 @@ fun WaitTimeState.toDisplayText(): String {
     return when (this) {
         is WaitTimeState.Available -> minutes.toString()
         WaitTimeState.Loading -> "..."
-        WaitTimeState.Unavailable -> "-"
+        WaitTimeState.NoArrivals,
+        is WaitTimeState.Unavailable -> "-"
     }
 }
 

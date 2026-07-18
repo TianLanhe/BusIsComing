@@ -73,6 +73,7 @@
     <string name="eta_wait">等候 %1$d 分鐘</string>
     <string name="eta_loading">候車查詢中</string>
     <string name="eta_unavailable">暫無車輛</string>
+    <string name="eta_temporarily_unavailable">候車暫不可用</string>
     <string name="eta_next">下一班 %1$s ›</string>
     <string name="route_card_summary">%1$s · 耗時 %2$d 分鐘 · 步行 %3$d 米</string>
     <string name="route_results_summary">共 %1$d 條路線，%2$d 條直達</string>

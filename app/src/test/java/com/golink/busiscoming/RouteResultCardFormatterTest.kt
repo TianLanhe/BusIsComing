@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteCardActionPolicy
@@ -20,7 +21,14 @@ class RouteResultCardFormatterTest {
     fun formatsWaitStatusText() {
         assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(WaitTimeState.Available(4), text))
         assertEquals("候車查詢中", RouteResultCardFormatter.waitStatus(WaitTimeState.Loading, text))
-        assertEquals("暫無車輛", RouteResultCardFormatter.waitStatus(WaitTimeState.Unavailable, text))
+        assertEquals("暫無車輛", RouteResultCardFormatter.waitStatus(WaitTimeState.NoArrivals, text))
+        assertEquals(
+            "候車暫不可用",
+            RouteResultCardFormatter.waitStatus(
+                WaitTimeState.Unavailable(EtaUnavailableReason.ETA_REQUEST_FAILED),
+                text
+            )
+        )
     }
 
     @Test
@@ -55,7 +63,12 @@ class RouteResultCardFormatterTest {
     fun exposesEtaSheetOnlyWhenMultipleArrivalsExist() {
         assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.Available(4)))
         assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.Loading))
-        assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.Unavailable))
+        assertFalse(RouteCardActionPolicy.canOpenEtaArrivals(WaitTimeState.NoArrivals))
+        assertFalse(
+            RouteCardActionPolicy.canOpenEtaArrivals(
+                WaitTimeState.Unavailable(EtaUnavailableReason.ETA_REQUEST_FAILED)
+            )
+        )
         assertTrue(
             RouteCardActionPolicy.canOpenEtaArrivals(
                 WaitTimeState.Available(
@@ -74,7 +87,7 @@ class RouteResultCardFormatterTest {
         assertFalse(
             RouteCardActionPolicy.canStartMonitor(
                 route("8X", transferCount = 0).copy(
-                    waitTimeState = WaitTimeState.Unavailable,
+                    waitTimeState = WaitTimeState.Unavailable(EtaUnavailableReason.ETA_REQUEST_FAILED),
                     firstLegEtaQuery = etaQuery()
                 )
             )
@@ -155,6 +168,7 @@ class RouteResultCardFormatterTest {
             R.string.eta_wait -> "等候 ${args[0]} 分鐘"
             R.string.eta_loading -> "候車查詢中"
             R.string.eta_unavailable -> "暫無車輛"
+            R.string.eta_temporarily_unavailable -> "候車暫不可用"
             R.string.minutes_count -> "${args[0]} 分鐘"
             R.string.eta_next -> "下一班 ${args[0]} ›"
             R.string.route_card_summary -> "${args[0]} · 耗時 ${args[1]} 分鐘 · 步行 ${args[2]} 米"

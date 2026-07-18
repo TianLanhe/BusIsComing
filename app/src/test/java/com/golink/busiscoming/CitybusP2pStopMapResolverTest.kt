@@ -43,6 +43,31 @@ class CitybusP2pStopMapResolverTest {
     }
 
     @Test
+    fun parsesEscapedEnglishStopNameWithoutShiftingFollowingArguments() {
+        val response = """
+            <iframe onload="
+                addstoponmap('001265',114.20650947053,22.292090752091,'S','6','6 - Healthy Gardens, King\'s Road (East)\\Path','8X-THR-1','O','N','114.20650947053','22.292090752091');
+                addstoponmap('001364',114.19594569053,22.290176642091,'E','20','20 - St. Paul\'s Hospital, Eastern Hospital Road','8X-THR-1','O','N','114.19594569053','22.290176642091');
+            "></iframe>
+        """.trimIndent()
+
+        val stopMap = CitybusP2pStopMapParser.parse(
+            response = response,
+            rawInfo = SINGLE_RAW_INFO,
+            lang = "1",
+            plan = singleLegPlan()
+        )
+
+        val boarding = stopMap.findStop(0, "8X-THR-1", 6)
+        val alighting = stopMap.findStop(0, "8X-THR-1", 20)
+        assertEquals("001265", boarding?.stopId)
+        assertEquals("Healthy Gardens, King's Road (East)\\Path", boarding?.rawName)
+        assertEquals("Healthy Gardens", boarding?.displayName)
+        assertEquals("001364", alighting?.stopId)
+        assertEquals("St. Paul's Hospital", alighting?.displayName)
+    }
+
+    @Test
     fun returnsEmptyStopMapForInvalidResponse() {
         val stopMap = CitybusP2pStopMapParser.parse(
             response = "<iframe></iframe>",

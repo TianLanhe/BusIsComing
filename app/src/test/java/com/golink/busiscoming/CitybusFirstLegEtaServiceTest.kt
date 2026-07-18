@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
+import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
 import com.golink.busiscoming.data.repository.CitybusP2pStopMapResolver
@@ -52,6 +53,29 @@ class CitybusFirstLegEtaServiceTest {
         val waitTimeState = service.resolveWaitTime(query)
 
         assertEquals(WaitTimeState.Available(4), waitTimeState)
+    }
+
+    @Test
+    fun resolvesEnglishEtaWhenBoardingStopNameContainsEscapedApostrophe() {
+        var requestedEtaUrl: URL? = null
+        val service = etaService(
+            clock = { millis("2026-06-04T12:00:00+08:00") },
+            stopMapProvider = {
+                stopMapResponse(name = "Healthy Gardens, King\\'s Road")
+            },
+            etaFetcher = { url ->
+                requestedEtaUrl = url
+                etaResponse("2026-06-04T12:03:10+08:00")
+            }
+        )
+
+        val result = service.resolveWaitTime(query.copy(lang = "1"))
+
+        assertEquals(WaitTimeState.Available(4), result)
+        assertEquals(
+            "https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/001227/8X",
+            requestedEtaUrl.toString()
+        )
     }
 
     @Test
@@ -120,7 +144,7 @@ class CitybusFirstLegEtaServiceTest {
             }
         )
 
-        assertEquals(WaitTimeState.Unavailable, service.resolveWaitTime(query))
+        assertEquals(WaitTimeState.NoArrivals, service.resolveWaitTime(query))
     }
 
     @Test
@@ -207,7 +231,7 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
-    fun returnsUnavailableWhenNoStrictOrFallbackEtaIsParsable() {
+    fun returnsNoArrivalsWhenNoStrictOrFallbackEtaIsParsable() {
         val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
             etaFetcher = {
@@ -222,11 +246,11 @@ class CitybusFirstLegEtaServiceTest {
             }
         )
 
-        assertEquals(WaitTimeState.Unavailable, service.resolveWaitTime(query))
+        assertEquals(WaitTimeState.NoArrivals, service.resolveWaitTime(query))
     }
 
     @Test
-    fun returnsUnavailableWhenStopMapOrEtaIsMissing() {
+    fun distinguishesMissingBoardingStopFromValidEmptyEta() {
         val missingStopService = etaService(
             stopMapProvider = { stopMapResponse(stopId = "001999", seq = 7) },
             etaFetcher = { etaResponse("2026-06-04T12:03:10+08:00") }
@@ -235,8 +259,64 @@ class CitybusFirstLegEtaServiceTest {
             etaFetcher = { """{"data":[]}""" }
         )
 
-        assertEquals(WaitTimeState.Unavailable, missingStopService.resolveWaitTime(query))
-        assertEquals(WaitTimeState.Unavailable, missingEtaService.resolveWaitTime(query))
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.BOARDING_STOP_NOT_FOUND),
+            missingStopService.resolveWaitTime(query)
+        )
+        assertEquals(WaitTimeState.NoArrivals, missingEtaService.resolveWaitTime(query))
+    }
+
+    @Test
+    fun distinguishesStopMapRequestAndResponseFailures() {
+        val requestFailure = etaService(
+            stopMapProvider = { throw java.io.IOException("showstops2 failed") },
+            etaFetcher = { error("not called") }
+        )
+        val invalidResponse = etaService(
+            stopMapProvider = { "<html>missing stop map calls</html>" },
+            etaFetcher = { error("not called") }
+        )
+
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.STOP_MAP_REQUEST_FAILED),
+            requestFailure.resolveWaitTime(query)
+        )
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.STOP_MAP_RESPONSE_INVALID),
+            invalidResponse.resolveWaitTime(query)
+        )
+    }
+
+    @Test
+    fun distinguishesEtaRequestAndResponseFailures() {
+        val requestFailure = etaService(
+            etaFetcher = { throw java.io.IOException("ETA failed") }
+        )
+        val invalidResponse = etaService(
+            etaFetcher = { "<html>upstream failure</html>" }
+        )
+
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.ETA_REQUEST_FAILED),
+            requestFailure.resolveWaitTime(query)
+        )
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.ETA_RESPONSE_INVALID),
+            invalidResponse.resolveWaitTime(query)
+        )
+    }
+
+    @Test
+    fun reportsMissingFirstLegDataWithoutMakingNetworkRequests() {
+        val service = etaService(
+            stopMapProvider = { error("not called") },
+            etaFetcher = { error("not called") }
+        )
+
+        assertEquals(
+            WaitTimeState.Unavailable(EtaUnavailableReason.MISSING_FIRST_LEG_DATA),
+            service.resolveWaitTime(query.copy(rawInfo = ""))
+        )
     }
 
     @Test
@@ -277,16 +357,6 @@ class CitybusFirstLegEtaServiceTest {
         service.resolveWaitTime(query)
 
         assertEquals(2, stopMapCalls)
-    }
-
-    @Test
-    fun returnsUnavailableWhenStopMapFetcherFailsWithoutCallingEta() {
-        val service = etaService(
-            stopMapProvider = { throw java.io.IOException("showstops2 failed") },
-            etaFetcher = { error("not called") }
-        )
-
-        assertEquals(WaitTimeState.Unavailable, service.resolveWaitTime(query))
     }
 
     private fun etaService(
