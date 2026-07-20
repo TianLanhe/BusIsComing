@@ -18,6 +18,7 @@
     <color name="bus_state_surface">#FFFFFFFF</color>
     <color name="bus_chip_surface">#FFFFFFFF</color>
     <color name="bus_chip_selected">#FF145C54</color>
+    <color name="bus_navigation_indicator">#FFD9ECE7</color>
     <color name="bus_on_accent">#FFFFFFFF</color>
     <color name="bus_wait_accent">#FF145C54</color>
     <color name="bus_wait_unavailable">#FF7A8581</color>

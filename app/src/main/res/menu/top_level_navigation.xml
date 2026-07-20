@@ -3,16 +3,16 @@
     <item
         android:id="@+id/navigation_frequent_routes"
         android:contentDescription="@string/nav_frequent"
-        android:icon="@drawable/ic_nav_frequent_routes"
+        android:icon="@drawable/ic_nav_frequent_routes_state"
         android:title="@string/nav_frequent" />
     <item
         android:id="@+id/navigation_search"
         android:contentDescription="@string/nav_search"
-        android:icon="@drawable/ic_nav_search"
+        android:icon="@drawable/ic_nav_search_state"
         android:title="@string/nav_search" />
     <item
         android:id="@+id/navigation_settings"
         android:contentDescription="@string/settings"
-        android:icon="@drawable/ic_nav_settings"
+        android:icon="@drawable/ic_nav_settings_state"
         android:title="@string/settings" />
 </menu>

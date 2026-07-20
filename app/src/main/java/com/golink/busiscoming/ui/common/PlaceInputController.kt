@@ -37,6 +37,9 @@ class PlaceInputController(
     private val mainHandler: Handler,
     private val searchExecutor: ExecutorService,
     private val isActive: () -> Boolean,
+    private val maxVisibleRows: Int = PlaceCandidatePresentationPolicy.DEFAULT_MAX_VISIBLE_ROWS,
+    private val idleToolView: View? = null,
+    private val instructionText: CharSequence? = null,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
     private val onPlaceSelected: (Place) -> Unit = {},
     private val onUserTextEdited: () -> Unit = {}
@@ -71,6 +74,13 @@ class PlaceInputController(
         input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
             if (hasFocus && adapter.itemCount > 0) {
                 showCandidates()
+            } else if (
+                hasFocus &&
+                selectedPlace == null &&
+                input.text.isNullOrBlank() &&
+                inputLayout.error == null
+            ) {
+                inputLayout.helperText = instructionText
             } else if (!hasFocus) {
                 hideCandidates()
             }
@@ -260,7 +270,8 @@ class PlaceInputController(
         val height = PlaceCandidatePresentationPolicy.heightPx(
             availableHeightPx = availableHeight,
             rowHeightPx = rowHeightPx,
-            itemCount = adapter.itemCount
+            itemCount = adapter.itemCount,
+            maxVisibleRows = maxVisibleRows
         )
         if (height <= 0) return
         candidateList.layoutParams = candidateList.layoutParams.apply {
@@ -279,6 +290,7 @@ class PlaceInputController(
 
     private fun setSearchLoading(isLoading: Boolean) {
         loadingView.visibility = if (isLoading) View.VISIBLE else View.GONE
+        idleToolView?.visibility = if (isLoading) View.INVISIBLE else View.VISIBLE
     }
 
     private fun candidateTopInRoot(): Int {

@@ -26,8 +26,10 @@ class MainRouteSelectionLayoutTest {
     }
 
     @Test
-    fun firstRunOneTimeQueryMovesToSearchDestination() {
-        assertTrue(frequentLayout.contains("@+id/emptySearchButton"))
+    fun firstRunKeepsOneJourneyActionAndUsesTheSearchDestinationForOneTimeQueries() {
+        assertFalse(frequentLayout.contains("@+id/emptySearchButton"))
+        assertFalse(mainActivity.contains("emptySearchButton"))
+        assertTrue(searchLayout.contains("@+id/searchQueryButton"))
         assertTrue(mainActivity.contains("R.id.navigation_search"))
         assertFalse(mainActivity.contains("SettingsActivity::class.java"))
     }

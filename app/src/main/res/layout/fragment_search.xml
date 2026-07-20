@@ -13,249 +13,342 @@
         android:fillViewport="true">
 
         <LinearLayout
+            android:id="@+id/searchContent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:clickable="true"
+            android:focusable="true"
             android:orientation="vertical"
             android:padding="20dp">
 
-        <TextView
-            style="@style/StableShortText.Title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/search_title"
-            android:textColor="@color/bus_text_primary"
-            android:textSize="24sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="@string/search_subtitle"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="14sp" />
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/searchOriginLayout"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:hint="@string/origin_search_hint"
-            app:helperText="@string/place_search_helper">
-
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                android:id="@+id/searchOriginInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="56dp"
-                android:inputType="text" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <TextView
-            android:id="@+id/searchOriginAttribution"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/google_current_place_attribution"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <ProgressBar
-            android:id="@+id/searchOriginLoading"
-            style="?android:attr/progressBarStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:visibility="gone" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/searchOriginCandidateList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:visibility="gone" />
-
-        <androidx.appcompat.widget.AppCompatImageButton
-            android:id="@+id/searchSwapButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/sort_chip_background"
-            android:contentDescription="@string/swap_origin_destination"
-            android:padding="10dp"
-            android:src="@drawable/ic_swap_curved" />
-
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/searchDestinationLayout"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/destination_search_hint"
-            app:helperText="@string/place_search_helper">
-
-            <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                android:id="@+id/searchDestinationInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="56dp"
-                android:inputType="text" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <ProgressBar
-            android:id="@+id/searchDestinationLoading"
-            style="?android:attr/progressBarStyleSmall"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:visibility="gone" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/searchDestinationCandidateList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:visibility="gone" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/searchQueryButton"
-            style="@style/StableShortText.Button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:text="@string/search_routes" />
-
-        <LinearLayout
-            android:id="@+id/searchResultSummaryContainer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:visibility="gone">
-
             <TextView
-                android:id="@+id/searchResultSummary"
-                android:layout_width="0dp"
+                style="@style/StableShortText.Title"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:maxLines="2"
-                android:textColor="@color/bus_text_secondary"
-                android:textSize="14sp"
+                android:text="@string/search_title"
+                android:textColor="@color/bus_text_primary"
+                android:textSize="24sp"
                 android:textStyle="bold" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/searchEditButton"
-                style="@style/StableShortText.Button.Text"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:layout_marginStart="8dp"
-                android:minWidth="48dp"
-                android:text="@string/action_edit" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/searchSaveButton"
-                style="@style/StableShortText.Button.Text"
-                android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:minWidth="48dp"
-                android:text="@string/save_as_frequent" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/searchResultUpdatedAt"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
-        <HorizontalScrollView
-            android:id="@+id/searchSortControls"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:scrollbars="none"
-            android:visibility="gone">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/search_subtitle"
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="14sp" />
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:id="@+id/searchRouteInputContainer"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="top"
                 android:orientation="horizontal">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/searchSortRouteButton"
-                    style="@style/StableShortText.Button.Outlined"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:id="@+id/searchPlaceColumn"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:text="@string/sort_route" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/searchSortPriceButton"
-                    style="@style/StableShortText.Button.Outlined"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/sort_price" />
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/searchSortDurationButton"
-                    style="@style/StableShortText.Button.Outlined"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/sort_duration" />
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/searchOriginLayout"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/origin_search_hint"
+                            app:boxCornerRadiusBottomEnd="0dp"
+                            app:boxCornerRadiusBottomStart="0dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/searchSortArrivalButton"
-                    style="@style/StableShortText.Button.Outlined"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/sort_arrival" />
+                            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                                android:id="@+id/searchOriginInput"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:minHeight="56dp"
+                                android:paddingEnd="52dp"
+                                android:textSize="16sp" />
+                        </com.google.android.material.textfield.TextInputLayout>
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/searchSortWalkingButton"
-                    style="@style/StableShortText.Button.Outlined"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minHeight="48dp"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/sort_walking" />
+                        <FrameLayout
+                            android:id="@+id/searchOriginToolSlot"
+                            android:layout_width="48dp"
+                            android:layout_height="56dp"
+                            android:layout_gravity="top|end">
+
+                            <androidx.appcompat.widget.AppCompatImageButton
+                                android:id="@+id/searchCurrentLocationButton"
+                                android:layout_width="48dp"
+                                android:layout_height="48dp"
+                                android:layout_gravity="center"
+                                android:background="?attr/selectableItemBackgroundBorderless"
+                                android:contentDescription="@string/use_my_location"
+                                android:padding="13dp"
+                                app:srcCompat="@drawable/ic_location_outline" />
+
+                            <ProgressBar
+                                android:id="@+id/searchOriginLoading"
+                                style="?android:attr/progressBarStyleSmall"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:visibility="gone" />
+                        </FrameLayout>
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/searchOriginAttribution"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/google_current_place_attribution"
+                        android:textColor="@color/bus_text_secondary"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/searchOriginCandidateList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginBottom="4dp"
+                        android:visibility="gone" />
+
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/searchDestinationLayout"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/destination_search_hint"
+                            app:boxCornerRadiusTopEnd="0dp"
+                            app:boxCornerRadiusTopStart="0dp">
+
+                            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                                android:id="@+id/searchDestinationInput"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:inputType="text"
+                                android:maxLines="1"
+                                android:minHeight="56dp"
+                                android:paddingEnd="52dp"
+                                android:textSize="16sp" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <FrameLayout
+                            android:id="@+id/searchDestinationToolSlot"
+                            android:layout_width="48dp"
+                            android:layout_height="56dp"
+                            android:layout_gravity="top|end">
+
+                            <ProgressBar
+                                android:id="@+id/searchDestinationLoading"
+                                style="?android:attr/progressBarStyleSmall"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:visibility="gone" />
+                        </FrameLayout>
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/searchDestinationAttribution"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/google_current_place_attribution"
+                        android:textColor="@color/bus_text_secondary"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/searchDestinationCandidateList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <FrameLayout
+                    android:id="@+id/searchSwapSlot"
+                    android:layout_width="48dp"
+                    android:layout_height="112dp"
+                    android:layout_gravity="top"
+                    android:layout_marginStart="8dp">
+
+                    <androidx.appcompat.widget.AppCompatImageButton
+                        android:id="@+id/searchSwapButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="center"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/swap_origin_destination"
+                        android:padding="11dp"
+                        app:srcCompat="@drawable/ic_swap_curved" />
+                </FrameLayout>
             </LinearLayout>
-        </HorizontalScrollView>
 
-        <ProgressBar
-            android:id="@+id/searchResultLoading"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="20dp"
-            android:visibility="gone" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/searchQueryButton"
+                style="@style/StableShortText.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/search_routes" />
 
-        <TextView
-            android:id="@+id/searchResultStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="14sp"
-            android:visibility="gone" />
+            <LinearLayout
+                android:id="@+id/searchResultSummaryContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="vertical"
+                android:visibility="gone">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/searchResultList"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:clipToPadding="false"
-            android:nestedScrollingEnabled="false"
-            android:paddingBottom="8dp"
-            android:visibility="gone" />
+                <TextView
+                    android:id="@+id/searchResultSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:maxLines="3"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/searchResultActions"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchEditButton"
+                        style="@style/StableShortText.Button.Text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:minWidth="48dp"
+                        android:text="@string/action_edit" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSaveButton"
+                        style="@style/StableShortText.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:minHeight="48dp"
+                        android:minWidth="48dp"
+                        android:text="@string/save_as_frequent" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/searchResultUpdatedAt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <HorizontalScrollView
+                android:id="@+id/searchSortControls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSortRouteButton"
+                        style="@style/RouteResultSortButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="@string/sort_route" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSortPriceButton"
+                        style="@style/RouteResultSortButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:minHeight="48dp"
+                        android:text="@string/sort_price" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSortDurationButton"
+                        style="@style/RouteResultSortButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:minHeight="48dp"
+                        android:text="@string/sort_duration" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSortArrivalButton"
+                        style="@style/RouteResultSortButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:minHeight="48dp"
+                        android:text="@string/sort_arrival" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSortWalkingButton"
+                        style="@style/RouteResultSortButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:minHeight="48dp"
+                        android:text="@string/sort_walking" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
+            <ProgressBar
+                android:id="@+id/searchResultLoading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="20dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/searchResultStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/bus_text_secondary"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/searchResultList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                android:paddingBottom="8dp"
+                android:visibility="gone" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

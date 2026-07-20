@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
-import android.content.res.ColorStateList
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.view.Gravity
@@ -99,7 +98,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var firstRunTransitCodeButton: MaterialButton
     private lateinit var settingsButton: MaterialButton
     private lateinit var firstRunSettingsButton: MaterialButton
-    private lateinit var emptySearchButton: MaterialButton
     private lateinit var emptyRouteState: LinearLayout
     private lateinit var firstRunHeadlineText: TextView
     private lateinit var firstRunSampleLabelText: TextView
@@ -258,7 +256,6 @@ class MainActivity : AppCompatActivity() {
         firstRunTransitCodeButton = root.findViewById(R.id.firstRunTransitCodeButton)
         settingsButton = root.findViewById(R.id.settingsButton)
         firstRunSettingsButton = root.findViewById(R.id.firstRunSettingsButton)
-        emptySearchButton = root.findViewById(R.id.emptySearchButton)
         emptyRouteState = root.findViewById(R.id.emptyRouteState)
         firstRunHeadlineText = root.findViewById(R.id.firstRunHeadlineText)
         firstRunSampleLabelText = root.findViewById(R.id.firstRunSampleLabelText)
@@ -340,9 +337,6 @@ class MainActivity : AppCompatActivity() {
         requireTopLevelFragment(TAG_FREQUENT_ROUTES).requireView()
             .findViewById<MaterialButton>(R.id.emptyAddRouteButton).setOnClickListener {
             startActivity(Intent(this, RouteEditActivity::class.java))
-        }
-        emptySearchButton.setOnClickListener {
-            topLevelNav.selectedItemId = R.id.navigation_search
         }
         routePickerButton.setOnClickListener { showRoutePicker() }
         queryButton.setOnClickListener { querySelectedRoute() }
@@ -1421,27 +1415,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSortControls() {
-        val selectedBackground = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.bus_chip_selected)
-        )
-        val defaultBackground = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.bus_chip_surface)
-        )
-        val selectedTextColor = ContextCompat.getColor(this, R.color.white)
-        val defaultTextColor = ContextCompat.getColor(this, R.color.bus_text_primary)
-        val defaultStroke = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.bus_divider)
-        )
-        val selectedStroke = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.bus_chip_selected)
-        )
-
         sortButtons.forEach { (field, button) ->
             val isSelected = sortField == field
+            button.isChecked = isSelected
             button.text = sortButtonText(field)
-            button.backgroundTintList = if (isSelected) selectedBackground else defaultBackground
-            button.setTextColor(if (isSelected) selectedTextColor else defaultTextColor)
-            button.strokeColor = if (isSelected) selectedStroke else defaultStroke
         }
     }
 

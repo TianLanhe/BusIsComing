@@ -181,14 +181,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/first_run_add_route" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/emptySearchButton"
-                style="@style/StableShortText.Button.Outlined"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="@string/search_routes" />
         </LinearLayout>
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
@@ -309,67 +301,42 @@
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortRouteButton"
-                        style="@style/StableShortText.Button.Outlined"
+                        style="@style/RouteResultSortButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minHeight="48dp"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/sort_route"
-                        android:textSize="13sp"
-                        app:cornerRadius="20dp" />
+                        android:text="@string/sort_route" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortPriceButton"
-                        style="@style/StableShortText.Button.Outlined"
+                        style="@style/RouteResultSortButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/sort_price"
-                        android:textSize="13sp"
-                        app:cornerRadius="20dp" />
+                        android:text="@string/sort_price" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortDurationButton"
-                        style="@style/StableShortText.Button.Outlined"
+                        style="@style/RouteResultSortButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/sort_duration"
-                        android:textSize="13sp"
-                        app:cornerRadius="20dp" />
+                        android:text="@string/sort_duration" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortArrivalButton"
-                        style="@style/StableShortText.Button.Outlined"
+                        style="@style/RouteResultSortButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/sort_arrival"
-                        android:textSize="13sp"
-                        app:cornerRadius="20dp" />
+                        android:text="@string/sort_arrival" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/sortWalkingDistanceButton"
-                        style="@style/StableShortText.Button.Outlined"
+                        style="@style/RouteResultSortButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minHeight="48dp"
                         android:layout_marginStart="8dp"
-                        android:minWidth="0dp"
-                        android:paddingHorizontal="14dp"
-                        android:text="@string/sort_walking"
-                        android:textSize="13sp"
-                        app:cornerRadius="20dp" />
+                        android:text="@string/sort_walking" />
                 </LinearLayout>
             </HorizontalScrollView>
         </LinearLayout>

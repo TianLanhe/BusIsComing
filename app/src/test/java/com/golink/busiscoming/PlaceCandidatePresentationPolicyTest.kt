@@ -37,4 +37,34 @@ class PlaceCandidatePresentationPolicyTest {
             )
         )
     }
+
+    @Test
+    fun searchCandidateHeightUsesAThreeRowMaximumWithoutChangingTheDefault() {
+        assertEquals(
+            144,
+            PlaceCandidatePresentationPolicy.heightPx(
+                availableHeightPx = 1_000,
+                rowHeightPx = 48,
+                itemCount = 20,
+                maxVisibleRows = 3
+            )
+        )
+        assertEquals(
+            96,
+            PlaceCandidatePresentationPolicy.heightPx(
+                availableHeightPx = 100,
+                rowHeightPx = 48,
+                itemCount = 20,
+                maxVisibleRows = 3
+            )
+        )
+        assertEquals(
+            288,
+            PlaceCandidatePresentationPolicy.heightPx(
+                availableHeightPx = 1_000,
+                rowHeightPx = 48,
+                itemCount = 20
+            )
+        )
+    }
 }

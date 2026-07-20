@@ -58,6 +58,55 @@
         <item name="android:gravity">center</item>
     </style>
 
+    <style name="StableShortText.Button.Tonal" parent="Widget.MaterialComponents.Button">
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textAlignment">gravity</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/bus_chip_selected</item>
+        <item name="backgroundTint">@color/bus_surface_variant</item>
+        <item name="cornerRadius">8dp</item>
+        <item name="elevation">0dp</item>
+    </style>
+
+    <style name="RouteResultSortButton" parent="StableShortText.Button.Outlined">
+        <item name="android:checkable">true</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:paddingLeft">14dp</item>
+        <item name="android:paddingRight">14dp</item>
+        <item name="android:textColor">@color/sort_button_text</item>
+        <item name="android:textSize">13sp</item>
+        <item name="backgroundTint">@color/sort_button_background</item>
+        <item name="cornerRadius">20dp</item>
+        <item name="strokeColor">@color/sort_button_stroke</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="TopLevelNavigation.Text.Active" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TopLevelNavigation.Text.Inactive" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="ShapeAppearance.TopLevelNavigation.ActiveIndicator" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <style name="TopLevelNavigation.ActiveIndicator" parent="">
+        <item name="android:width">64dp</item>
+        <item name="android:height">32dp</item>
+        <item name="android:color">@color/bus_navigation_indicator</item>
+        <item name="marginHorizontal">4dp</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.TopLevelNavigation.ActiveIndicator</item>
+    </style>
+
     <style name="SettingsGroupLabel">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
