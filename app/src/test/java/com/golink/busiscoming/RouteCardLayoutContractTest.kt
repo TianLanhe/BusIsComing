@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,20 +22,22 @@ class RouteCardLayoutContractTest {
         assertTrue(itemXml.contains("android:minHeight=\"56dp\""))
         assertTrue(itemXml.contains("android:id=\"@+id/busNextArrivalText\""))
         assertTrue(itemXml.contains("android:includeFontPadding=\"false\""))
-        assertTrue(itemXml.indexOf("android:id=\"@+id/busRouteNameText\"") < itemXml.indexOf("android:id=\"@+id/busStopPreviewText\""))
-        assertTrue(itemXml.indexOf("android:id=\"@+id/busStopPreviewText\"") < itemXml.indexOf("android:id=\"@+id/busWaitArea\""))
+        assertTrue(itemXml.indexOf("android:id=\"@+id/busRouteNameText\"") < itemXml.indexOf("android:id=\"@+id/busStopPreviewLayout\""))
+        assertTrue(itemXml.indexOf("android:id=\"@+id/busStopPreviewLayout\"") < itemXml.indexOf("android:id=\"@+id/busWaitArea\""))
     }
 
     @Test
-    fun stopPreviewCanWrapWithoutEllipsisInsideFlexibleColumn() {
-        val stopStart = itemXml.indexOf("android:id=\"@+id/busStopPreviewText\"")
+    fun stopPreviewUsesAdaptiveSingleLineNamesInsideFlexibleColumn() {
+        val stopStart = itemXml.indexOf("android:id=\"@+id/busStopPreviewLayout\"")
         assertTrue(stopStart >= 0)
-        val stopBlock = itemXml.substring(stopStart, itemXml.indexOf("/>", stopStart))
-        val regressionPreview = "興華邨豐興樓 → 海底隧道巴士轉乘站"
+        val stopBlock = itemXml.substring(stopStart, itemXml.indexOf("</com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout>", stopStart))
 
-        assertTrue(regressionPreview.contains("海底隧道巴士轉乘站"))
-        assertTrue(stopBlock.contains("android:maxLines=\"3\""))
-        assertFalse(stopBlock.contains("android:ellipsize=\"end\""))
+        assertTrue(itemXml.contains("com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout"))
+        assertTrue(stopBlock.contains("android:id=\"@+id/busStopOriginText\""))
+        assertTrue(stopBlock.contains("android:id=\"@+id/busStopDirectionText\""))
+        assertTrue(stopBlock.contains("android:id=\"@+id/busStopDestinationText\""))
+        assertEquals(2, Regex("android:maxLines=\"1\"").findAll(stopBlock).count())
+        assertEquals(2, Regex("android:ellipsize=\"end\"").findAll(stopBlock).count())
         val columnStart = itemXml.indexOf("android:id=\"@+id/busRouteTextColumn\"")
         assertTrue(columnStart >= 0)
         val columnBlock = itemXml.substring(columnStart, itemXml.indexOf("</LinearLayout>", columnStart))
@@ -42,6 +45,7 @@ class RouteCardLayoutContractTest {
         assertFalse(adapterKt.contains("updateStopPreviewEndMargin"))
         assertFalse(adapterKt.contains("STOP_PREVIEW_WITH_NEXT_END_MARGIN_DP"))
         assertFalse(adapterKt.contains("STOP_PREVIEW_WITHOUT_NEXT_END_MARGIN_DP"))
+        assertTrue(binderKt.contains("stopPreviewLayout.contentDescription = preview.displayText()"))
     }
 
     @Test

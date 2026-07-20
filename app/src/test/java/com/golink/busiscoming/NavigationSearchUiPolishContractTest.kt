@@ -19,13 +19,13 @@ class NavigationSearchUiPolishContractTest {
     @Test
     fun `bottom navigation has persistent selected hierarchy without changing its icon slot`() {
         assertTrue(activityLayout.contains("app:itemActiveIndicatorStyle=\"@style/TopLevelNavigation.ActiveIndicator\""))
-        assertTrue(activityLayout.contains("app:itemIconSize=\"28dp\""))
+        assertTrue(activityLayout.contains("app:itemIconSize=\"24dp\""))
         assertTrue(activityLayout.contains("app:itemTextAppearanceActive=\"@style/TopLevelNavigation.Text.Active\""))
         assertTrue(activityLayout.contains("app:itemTextAppearanceInactive=\"@style/TopLevelNavigation.Text.Inactive\""))
 
         val activeText = styleBlock("TopLevelNavigation.Text.Active")
         val inactiveText = styleBlock("TopLevelNavigation.Text.Inactive")
-        assertTrue(activeText.contains("<item name=\"android:textSize\">14sp</item>"))
+        assertTrue(activeText.contains("<item name=\"android:textSize\">13sp</item>"))
         assertTrue(activeText.contains("<item name=\"android:textStyle\">bold</item>"))
         assertTrue(inactiveText.contains("<item name=\"android:textSize\">12sp</item>"))
         assertTrue(inactiveText.contains("<item name=\"android:textStyle\">normal</item>"))
@@ -34,12 +34,13 @@ class NavigationSearchUiPolishContractTest {
             assertTrue(navigationMenu.contains("@drawable/ic_nav_${name}_state"))
             val selector = File("src/main/res/drawable/ic_nav_${name}_state.xml").readText()
             assertTrue(selector.contains("android:state_checked=\"true\""))
-            assertTrue(selector.contains("android:inset=\"2dp\""))
+            assertFalse(selector.contains("android:inset"))
         }
     }
 
     @Test
     fun `search inputs own their tools candidates and attribution beside a fixed swap action`() {
+        assertFalse(searchLayout.contains("android:text=\"@string/search_title\""))
         assertTrue(searchLayout.contains("android:id=\"@+id/searchRouteInputContainer\""))
         assertTrue(searchLayout.contains("android:id=\"@+id/searchPlaceColumn\""))
         assertTrue(searchLayout.contains("android:id=\"@+id/searchSwapSlot\""))
@@ -56,6 +57,15 @@ class NavigationSearchUiPolishContractTest {
         assertTrue(originCandidatesIndex < destinationIndex)
         assertTrue(destinationIndex < destinationCandidatesIndex)
         assertFalse(searchLayout.contains("app:helperText=\"@string/place_search_helper\""))
+
+        listOf("searchOriginInput", "searchDestinationInput").forEach { id ->
+            val input = searchLayout.substringAfter("@+id/$id").substringBefore("/>")
+            assertTrue(input.contains("android:paddingStart=\"16dp\""))
+            assertTrue(input.contains("android:paddingEnd=\"52dp\""))
+            assertTrue(input.contains("android:textCursorDrawable=\"@drawable/search_text_cursor\""))
+        }
+        assertTrue(searchLayout.contains("app:boxStrokeColor=\"@color/search_input_stroke\""))
+        assertTrue(searchLayout.contains("app:boxStrokeWidthFocused=\"2dp\""))
     }
 
     @Test
@@ -78,14 +88,28 @@ class NavigationSearchUiPolishContractTest {
     }
 
     @Test
-    fun `search result summary responds to width and font scale with a tonal save action`() {
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchResultActions\""))
-        assertTrue(searchFragment.contains("screenWidthDp >= 600"))
-        assertTrue(searchFragment.contains("fontScale < 1.3f"))
+    fun `search save belongs to the input column and results use sort then metadata`() {
+        assertFalse(searchLayout.contains("android:id=\"@+id/searchResultSummaryContainer\""))
+        assertFalse(searchLayout.contains("android:id=\"@+id/searchEditButton\""))
+        assertFalse(searchLayout.contains("android:id=\"@+id/searchResultActions\""))
+        assertFalse(searchFragment.contains("configureResultSummaryLayout"))
         val saveButton = searchLayout.substringAfter("@+id/searchSaveButton").substringBefore("/>")
         assertTrue(saveButton.contains("style=\"@style/StableShortText.Button.Tonal\""))
         assertTrue(saveButton.contains("android:layout_height=\"wrap_content\""))
         assertTrue(saveButton.contains("android:minHeight=\"48dp\""))
+        assertTrue(saveButton.contains("android:visibility=\"gone\""))
+
+        val placeColumnStart = searchLayout.indexOf("@+id/searchPlaceColumn")
+        val saveIndex = searchLayout.indexOf("@+id/searchSaveButton")
+        val swapIndex = searchLayout.indexOf("@+id/searchSwapSlot")
+        assertTrue(placeColumnStart < saveIndex)
+        assertTrue(saveIndex < swapIndex)
+        val sortIndex = searchLayout.indexOf("@+id/searchSortControls")
+        val metadataIndex = searchLayout.indexOf("@+id/searchResultMetaContainer")
+        val listIndex = searchLayout.indexOf("@+id/searchResultList")
+        assertTrue(sortIndex < metadataIndex)
+        assertTrue(metadataIndex < listIndex)
+        assertTrue(searchFragment.contains("SearchResultSaveEligibility.isVisible"))
     }
 
     @Test

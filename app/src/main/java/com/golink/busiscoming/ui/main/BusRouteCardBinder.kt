@@ -19,7 +19,9 @@ class BusRouteCardBinder(private val itemView: View) {
     private val arrivalText: TextView = itemView.findViewById(R.id.busArrivalText)
     private val nextArrivalText: TextView = itemView.findViewById(R.id.busNextArrivalText)
     private val monitorButton: ImageButton = itemView.findViewById(R.id.busMonitorButton)
-    private val stopPreviewText: TextView = itemView.findViewById(R.id.busStopPreviewText)
+    private val stopPreviewLayout: View = itemView.findViewById(R.id.busStopPreviewLayout)
+    private val stopOriginText: TextView = itemView.findViewById(R.id.busStopOriginText)
+    private val stopDestinationText: TextView = itemView.findViewById(R.id.busStopDestinationText)
     private val routeInfoText: TextView = itemView.findViewById(R.id.busRouteInfoText)
 
     fun bind(route: BusRouteOption, actions: BusRouteCardActions = BusRouteCardActions.Disabled) {
@@ -35,10 +37,13 @@ class BusRouteCardBinder(private val itemView: View) {
 
         val preview = route.stopPreview
         if (preview == null) {
-            stopPreviewText.visibility = View.GONE
+            stopPreviewLayout.visibility = View.GONE
+            stopPreviewLayout.contentDescription = null
         } else {
-            stopPreviewText.text = preview.displayText()
-            stopPreviewText.visibility = View.VISIBLE
+            stopOriginText.text = preview.boardingStopName
+            stopDestinationText.text = preview.alightingStopName
+            stopPreviewLayout.contentDescription = preview.displayText()
+            stopPreviewLayout.visibility = View.VISIBLE
         }
 
         if (actions.routeClick == null) {

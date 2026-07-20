@@ -49,11 +49,13 @@ class BusMonitorNotificationContractTest {
     }
 
     @Test
-    fun monitorNotificationUsesFormatterTitleAndOnlyRefreshStopActions() {
+    fun monitorNotificationUsesFormatterTitleAndRefreshTransitStopActions() {
         assertTrue(serviceKt.contains("BusMonitorNotificationFormatter.title"))
         assertFalse(serviceKt.contains("\"打開 App\""))
         assertTrue(serviceKt.contains("getString(R.string.notification_refresh)"))
+        assertTrue(serviceKt.contains("getString(R.string.transit_code)"))
         assertTrue(serviceKt.contains("getString(R.string.notification_stop)"))
+        assertTrue(serviceKt.contains("TransitCodeEntryPoint.createIntent(this)"))
         assertTrue(serviceKt.contains(".setContentIntent(openIntent)"))
     }
 

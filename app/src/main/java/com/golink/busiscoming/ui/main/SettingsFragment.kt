@@ -99,6 +99,18 @@ class SettingsFragment : Fragment() {
         view.findViewById<View>(R.id.settingsRouteTransferRow).setOnClickListener {
             startActivity(Intent(requireContext(), RouteTransferActivity::class.java))
         }
+        view.findViewById<View>(R.id.settingsTransitCodeShortcutRow).setOnClickListener {
+            val message = when (TransitCodeShortcutManager.requestPinnedShortcut(requireContext())) {
+                TransitCodeShortcutRequestResult.REQUESTED -> null
+                TransitCodeShortcutRequestResult.UNSUPPORTED ->
+                    R.string.transit_code_shortcut_unsupported
+                TransitCodeShortcutRequestResult.FAILED ->
+                    R.string.transit_code_shortcut_failed
+            }
+            message?.let {
+                Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
+            }
+        }
         view.findViewById<View>(R.id.settingsShareRow).setOnClickListener {
             AppSupportActions.shareApp(requireContext())
         }

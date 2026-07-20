@@ -111,9 +111,11 @@ class LocationFeatureContractTest {
         assertTrue(mainActivityKt.contains("name = nameResult.addressName"))
         assertTrue(mainActivityKt.contains("latitude = result.snapshot.latitude"))
         assertTrue(mainActivityKt.contains("CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L"))
-        assertTrue(searchFragmentKt.contains("requestCurrentOrigin(isAuto = true)"))
-        assertTrue(searchFragmentKt.contains("RouteQueryGeneration"))
-        assertTrue(searchFragmentKt.contains("interactionGeneration.isCurrent(generation)"))
+        assertTrue(searchFragmentKt.contains("beginAutoRequest"))
+        assertTrue(searchFragmentKt.contains("SearchCurrentPlaceRequestState"))
+        assertTrue(searchFragmentKt.contains("currentPlaceRequestState.finish(generation)"))
+        assertTrue(searchFragmentKt.contains("originController?.setExternalLoading(true)"))
+        assertTrue(searchFragmentKt.contains("invalidateCurrentPlaceRequest()"))
     }
 
     @Test

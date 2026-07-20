@@ -19,21 +19,14 @@
             android:clickable="true"
             android:focusable="true"
             android:orientation="vertical"
-            android:padding="20dp">
-
-            <TextView
-                style="@style/StableShortText.Title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/search_title"
-                android:textColor="@color/bus_text_primary"
-                android:textSize="24sp"
-                android:textStyle="bold" />
+            android:paddingStart="16dp"
+            android:paddingTop="12dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
                 android:text="@string/search_subtitle"
                 android:textColor="@color/bus_text_secondary"
                 android:textSize="14sp" />
@@ -42,7 +35,7 @@
                 android:id="@+id/searchRouteInputContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="12dp"
                 android:gravity="top"
                 android:orientation="horizontal">
 
@@ -64,7 +57,10 @@
                             android:layout_height="wrap_content"
                             android:hint="@string/origin_search_hint"
                             app:boxCornerRadiusBottomEnd="0dp"
-                            app:boxCornerRadiusBottomStart="0dp">
+                            app:boxCornerRadiusBottomStart="0dp"
+                            app:boxStrokeColor="@color/search_input_stroke"
+                            app:boxStrokeWidth="1dp"
+                            app:boxStrokeWidthFocused="2dp">
 
                             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/searchOriginInput"
@@ -74,7 +70,9 @@
                                 android:inputType="text"
                                 android:maxLines="1"
                                 android:minHeight="56dp"
+                                android:paddingStart="16dp"
                                 android:paddingEnd="52dp"
+                                android:textCursorDrawable="@drawable/search_text_cursor"
                                 android:textSize="16sp" />
                         </com.google.android.material.textfield.TextInputLayout>
 
@@ -92,7 +90,8 @@
                                 android:background="?attr/selectableItemBackgroundBorderless"
                                 android:contentDescription="@string/use_my_location"
                                 android:padding="13dp"
-                                app:srcCompat="@drawable/ic_location_outline" />
+                                app:srcCompat="@drawable/ic_location_outline"
+                                app:tint="@color/bus_chip_selected" />
 
                             <ProgressBar
                                 android:id="@+id/searchOriginLoading"
@@ -100,6 +99,7 @@
                                 android:layout_width="20dp"
                                 android:layout_height="20dp"
                                 android:layout_gravity="center"
+                                android:indeterminateTint="@color/bus_chip_selected"
                                 android:visibility="gone" />
                         </FrameLayout>
                     </FrameLayout>
@@ -133,7 +133,10 @@
                             android:layout_height="wrap_content"
                             android:hint="@string/destination_search_hint"
                             app:boxCornerRadiusTopEnd="0dp"
-                            app:boxCornerRadiusTopStart="0dp">
+                            app:boxCornerRadiusTopStart="0dp"
+                            app:boxStrokeColor="@color/search_input_stroke"
+                            app:boxStrokeWidth="1dp"
+                            app:boxStrokeWidthFocused="2dp">
 
                             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/searchDestinationInput"
@@ -143,7 +146,9 @@
                                 android:inputType="text"
                                 android:maxLines="1"
                                 android:minHeight="56dp"
+                                android:paddingStart="16dp"
                                 android:paddingEnd="52dp"
+                                android:textCursorDrawable="@drawable/search_text_cursor"
                                 android:textSize="16sp" />
                         </com.google.android.material.textfield.TextInputLayout>
 
@@ -159,6 +164,7 @@
                                 android:layout_width="20dp"
                                 android:layout_height="20dp"
                                 android:layout_gravity="center"
+                                android:indeterminateTint="@color/bus_chip_selected"
                                 android:visibility="gone" />
                         </FrameLayout>
                     </FrameLayout>
@@ -179,6 +185,17 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
                         android:visibility="gone" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/searchSaveButton"
+                        style="@style/StableShortText.Button.Tonal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:minHeight="48dp"
+                        android:minWidth="48dp"
+                        android:text="@string/save_as_frequent"
+                        android:visibility="gone" />
                 </LinearLayout>
 
                 <FrameLayout
@@ -196,7 +213,8 @@
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:contentDescription="@string/swap_origin_destination"
                         android:padding="11dp"
-                        app:srcCompat="@drawable/ic_swap_curved" />
+                        app:srcCompat="@drawable/ic_swap_curved"
+                        app:tint="@color/bus_chip_selected" />
                 </FrameLayout>
             </LinearLayout>
 
@@ -205,70 +223,14 @@
                 style="@style/StableShortText.Button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="12dp"
                 android:text="@string/search_routes" />
-
-            <LinearLayout
-                android:id="@+id/searchResultSummaryContainer"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <TextView
-                    android:id="@+id/searchResultSummary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:maxLines="3"
-                    android:textColor="@color/bus_text_secondary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-
-                <LinearLayout
-                    android:id="@+id/searchResultActions"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="end"
-                    android:layout_marginTop="4dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/searchEditButton"
-                        style="@style/StableShortText.Button.Text"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:minHeight="48dp"
-                        android:minWidth="48dp"
-                        android:text="@string/action_edit" />
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/searchSaveButton"
-                        style="@style/StableShortText.Button.Tonal"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:minHeight="48dp"
-                        android:minWidth="48dp"
-                        android:text="@string/save_as_frequent" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/searchResultUpdatedAt"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="@color/bus_text_secondary"
-                android:textSize="12sp"
-                android:visibility="gone" />
 
             <HorizontalScrollView
                 android:id="@+id/searchSortControls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="12dp"
                 android:scrollbars="none"
                 android:visibility="gone">
 
@@ -282,7 +244,6 @@
                         style="@style/RouteResultSortButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:minHeight="48dp"
                         android:text="@string/sort_route" />
 
                     <com.google.android.material.button.MaterialButton
@@ -291,7 +252,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:minHeight="48dp"
                         android:text="@string/sort_price" />
 
                     <com.google.android.material.button.MaterialButton
@@ -300,7 +260,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:minHeight="48dp"
                         android:text="@string/sort_duration" />
 
                     <com.google.android.material.button.MaterialButton
@@ -309,7 +268,6 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:minHeight="48dp"
                         android:text="@string/sort_arrival" />
 
                     <com.google.android.material.button.MaterialButton
@@ -318,24 +276,51 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:minHeight="48dp"
                         android:text="@string/sort_walking" />
                 </LinearLayout>
             </HorizontalScrollView>
+
+            <LinearLayout
+                android:id="@+id/searchResultMetaContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/searchResultCount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/searchResultUpdatedAt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
 
             <ProgressBar
                 android:id="@+id/searchResultLoading"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
+                android:indeterminateTint="@color/bus_chip_selected"
                 android:visibility="gone" />
 
             <TextView
                 android:id="@+id/searchResultStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                android:layout_marginTop="12dp"
                 android:textColor="@color/bus_text_secondary"
                 android:textSize="14sp"
                 android:visibility="gone" />
@@ -344,7 +329,7 @@
                 android:id="@+id/searchResultList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="6dp"
                 android:clipToPadding="false"
                 android:nestedScrollingEnabled="false"
                 android:paddingBottom="8dp"

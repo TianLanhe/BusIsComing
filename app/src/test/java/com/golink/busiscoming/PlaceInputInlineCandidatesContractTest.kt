@@ -46,6 +46,6 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(searchFragmentKt.contains("restoredOrigin"))
         assertTrue(searchFragmentKt.contains("restoredDestination"))
         assertTrue(searchFragmentKt.contains("onSaveInstanceState"))
-        assertTrue(searchFragmentKt.contains("requestCurrentOrigin(isAuto = true)"))
+        assertTrue(searchFragmentKt.contains("currentPlaceRequestState.beginAutoRequest"))
     }
 }

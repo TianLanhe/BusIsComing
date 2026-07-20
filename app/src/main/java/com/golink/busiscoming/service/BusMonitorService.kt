@@ -33,6 +33,7 @@ import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
 import com.golink.busiscoming.ui.main.MainActivity
+import com.golink.busiscoming.ui.main.TransitCodeEntryPoint
 import com.golink.busiscoming.ui.common.localizedText
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -474,6 +475,12 @@ class BusMonitorService : Service() {
             pendingIntentFlags()
         )
         val refreshIntent = servicePendingIntent(REQUEST_REFRESH, ACTION_REFRESH)
+        val transitCodeIntent = PendingIntent.getActivity(
+            this,
+            REQUEST_TRANSIT_CODE,
+            TransitCodeEntryPoint.createIntent(this),
+            pendingIntentFlags()
+        )
         val stopIntent = servicePendingIntent(REQUEST_STOP, ACTION_STOP)
         val channelId = BusMonitorNotificationContract.channelIdFor(priorityStatus)
         val priority = BusMonitorNotificationContract.priorityFor(priorityStatus)
@@ -494,6 +501,11 @@ class BusMonitorService : Service() {
                 android.R.drawable.ic_popup_sync,
                 getString(R.string.notification_refresh),
                 refreshIntent
+            )
+            .addAction(
+                R.drawable.ic_transit_code,
+                getString(R.string.transit_code),
+                transitCodeIntent
             )
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
@@ -603,7 +615,8 @@ class BusMonitorService : Service() {
 
         private const val REQUEST_OPEN = 100
         private const val REQUEST_REFRESH = 101
-        private const val REQUEST_STOP = 102
+        private const val REQUEST_TRANSIT_CODE = 102
+        private const val REQUEST_STOP = 103
 
         private const val EXTRA_ROUTE_NAME = "route_name"
         private const val EXTRA_WALKING_MINUTES = "walking_minutes"

@@ -1,5 +1,6 @@
 package com.golink.busiscoming
 
+import android.content.Intent
 import android.view.View
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -9,6 +10,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.RouteConfigDbHelper
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.ui.main.MainActivity
+import com.golink.busiscoming.ui.main.TransitCodeEntryPoint
 import com.golink.busiscoming.ui.main.TransitCodePaymentLaunchAction
 import com.golink.busiscoming.ui.main.TransitCodePaymentLaunchOutcome
 import org.junit.Assert.assertEquals
@@ -27,7 +29,7 @@ class TransitCodePaymentLauncherInstrumentedTest {
     }
 
     @Test
-    fun clickingMainTransitCodeUsesFormalLauncherAndKeepsDisplayedRouteResults() {
+    fun explicitTransitCodeActionUsesFormalLauncherAndKeepsDisplayedRouteResults() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val paymentLauncher = RecordingPaymentLaunchAction()
             lateinit var before: ResultSnapshot
@@ -38,7 +40,12 @@ class TransitCodePaymentLauncherInstrumentedTest {
             }
 
             scenario.onActivity { activity ->
-                activity.findViewById<View>(R.id.transitCodeButton).performClick()
+                invoke(
+                    activity,
+                    "consumeTransitCodeIntent",
+                    arrayOf(Intent::class.java),
+                    TransitCodeEntryPoint.createIntent(activity)
+                )
             }
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
@@ -52,7 +59,6 @@ class TransitCodePaymentLauncherInstrumentedTest {
 
     private fun prepareResults(activity: MainActivity, routes: List<BusRouteOption>) {
         activity.findViewById<View>(R.id.emptyRouteState).visibility = View.GONE
-        activity.findViewById<View>(R.id.queryControls).visibility = View.VISIBLE
         activity.findViewById<View>(R.id.resultSection).visibility = View.VISIBLE
         invoke(activity, "showInitialRoutes", arrayOf(List::class.java), routes)
     }
@@ -74,7 +80,6 @@ class TransitCodePaymentLauncherInstrumentedTest {
     private fun snapshot(activity: MainActivity): ResultSnapshot {
         return ResultSnapshot(
             emptyStateVisibility = activity.findViewById<View>(R.id.emptyRouteState).visibility,
-            queryControlsVisibility = activity.findViewById<View>(R.id.queryControls).visibility,
             resultSectionVisibility = activity.findViewById<View>(R.id.resultSection).visibility,
             resultListVisibility = activity.findViewById<View>(R.id.resultListContainer).visibility,
             sortControlsVisibility = activity.findViewById<View>(R.id.sortControls).visibility,
@@ -120,7 +125,6 @@ class TransitCodePaymentLauncherInstrumentedTest {
 
     private data class ResultSnapshot(
         val emptyStateVisibility: Int,
-        val queryControlsVisibility: Int,
         val resultSectionVisibility: Int,
         val resultListVisibility: Int,
         val sortControlsVisibility: Int,

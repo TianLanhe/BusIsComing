@@ -48,6 +48,8 @@ class AppSettingsSupportContractTest {
         assertTrue(settingsFragmentLayoutXml.contains("android:text=\"@string/settings_group_about\""))
         assertEntry("settingsLanguageRow", "settings_language")
         assertEntry("settingsRouteTransferRow", "settings_route_transfer")
+        assertEntry("settingsTransitCodeShortcutRow", "settings_transit_code_shortcut")
+        assertTrue(settingsFragmentLayoutXml.contains("@string/settings_transit_code_shortcut_summary"))
         assertEntry("settingsShareRow", "settings_share_app")
         assertEntry("settingsFeedbackRow", "settings_feedback")
         assertEntry("settingsRatingRow", "settings_rate_app")
@@ -130,6 +132,8 @@ class AppSettingsSupportContractTest {
     fun topLevelSettingsAndSecondaryAboutPageWireTheirActions() {
         assertTrue(settingsFragmentKt.contains("settingsLanguageRow"))
         assertTrue(settingsFragmentKt.contains("settingsRouteTransferRow"))
+        assertTrue(settingsFragmentKt.contains("settingsTransitCodeShortcutRow"))
+        assertTrue(settingsFragmentKt.contains("TransitCodeShortcutManager.requestPinnedShortcut"))
         assertTrue(settingsFragmentKt.contains("RouteTransferActivity::class.java"))
         assertTrue(settingsFragmentKt.contains("AppLanguageChoice.FOLLOW_SYSTEM"))
         assertTrue(settingsFragmentKt.contains("AppLanguageChoice.TRADITIONAL_CHINESE"))
