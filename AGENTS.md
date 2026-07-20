@@ -32,16 +32,16 @@ BusIsComing/
 
 ## App 背景和當前能力
 
-BusIsComing 是一個面向香港巴士通勤場景的 Android App。它以「常用路線快速查詢」為核心，讓用戶保存常用起終點，快速比較 Citybus 點到點路線、候車時間、票價、步行距離與路線詳情，並可在出門前啟動短時通知欄監控。
+BusIsComing 是一個面向香港巴士通勤場景的 Android App。它以「常用行程快速查詢」為核心，讓用戶保存常用行程的起終點，快速比較 Citybus 點到點路線、候車時間、票價、步行距離與路線詳情，並可在出門前啟動短時通知欄監控。
 
 專案已接入真實 Citybus mobile 站點與 DATA.GOV.HK 城巴公開 ETA API。測試中的 fixture 僅用於解析和回歸測試，不應替代正常 App 的 HTTP 呼叫邏輯。
 
 當前主要功能：
 
-- 常用路線管理：新增、編輯、複製與刪除常用起終點配置。
-- Citybus 地點搜尋：新增路線和臨時查詢時，起點與終點都可從 Citybus 候選地點中選擇。
-- 主頁快捷查詢：常用路線以快捷卡展示，支援完整列表與臨時查詢入口。
-- 臨時查詢：不保存路線也能查詢，查詢後可一鍵保存為常用路線。
+- 常用行程管理：新增、編輯、複製與刪除常用起終點配置。
+- Citybus 地點搜尋：新增行程和臨時查詢時，起點與終點都可從 Citybus 候選地點中選擇。
+- 主頁快捷查詢：常用行程以快捷卡展示，支援完整列表與臨時查詢入口。
+- 臨時查詢：不保存行程也能查詢路線，查詢後可一鍵保存為常用行程。
 - 路線結果卡片：展示路線、上落車站預覽、HK$ 票價、耗時、步行距離與候車狀態。
 - 多班 ETA：卡片突出首程「下一班」候車時間，並可查看最多 3 班到站時間。
 - 路線詳情：點擊路線卡片可查看上下車站點、途經站點與換乘段。
@@ -86,11 +86,11 @@ App 主要基於 Citybus mobile 站點與 DATA.GOV.HK 城巴公開 ETA API：
 data/local        SQLite schema 與本地資料庫 helper
 data/localization 語言選擇、實際 locale、provider mapping 與版本 snapshot
 data/model        路線、地點、ETA、通知監控與排序模型
-data/repository   Citybus 查詢、解析、路線配置和詳情資料存取
+data/repository   Citybus 查詢、解析、行程配置和路線詳情資料存取
 service           通知欄監控、刷新調度、TTS 和 session 持久化
 ui/common         共用輸入和 WindowInsets 工具
-ui/edit           路線新增與編輯
-ui/manage         路線管理
+ui/edit           行程新增與編輯
+ui/manage         行程管理
 ui/main           主頁查詢、結果卡片、底部彈層與監控入口
 ```
 
@@ -143,9 +143,18 @@ MainActivity
 - 文件、OpenSpec 人類可讀內容、程式註解及中文測試名稱一律使用繁體中文。
 - App runtime 自有文案不得只有繁體；新增或修改的 UI、Toast、錯誤、通知、TTS、分享與無障礙文字必須同時提供香港繁體、獨立審校的簡體與自然英文。
 - 禁止在 XML 或 Kotlin 硬編碼 App 可見文案。model／repository 回傳結構化狀態，UI／notification 層使用當前 locale resource 格式化。
-- 用戶自定路線名、已保存／匯入地點、路線號與第三方原文保持不變，不機器翻譯或因語言切換改寫資料。
+- 用戶自定行程名、已保存／匯入地點、路線號與第三方原文保持不變，不機器翻譯或因語言切換改寫資料。
 - 外部 API 樣例、Citybus fixture 與第三方規格原文保留原文；parser 原始標籤是硬編碼掃描的可說明例外。
 - 新增動態資料源時必須定義三語 mapping、單欄位或整體失敗回退、cache key 與舊 callback 作廢策略，並加入真實及自動化驗證。
+
+### 行程與路線術語
+
+- **行程**是用戶命名並保存的起點與終點配置，例如「上班」「上學」或「回家」；行程不保存、不鎖定亦不代表某一條 Citybus 查詢結果。
+- **路線**是按一個行程或臨時起終點查詢後返回的乘車方案，例如 `118`、`8X` 或 `85 → 106`。
+- **乘車段**是一條路線中的單段巴士服務；只在路線詳情或換乘結構需要時使用此詞。
+- App runtime、現行文件與新 OpenSpec change 必須依上述邊界使用「常用行程／行程」「路線」「乘車段」，詳細三語 mapping 以 `docs/localization-guidelines.md` 為準。
+- `RouteConfig`、其他 Kotlin 符號、string resource key、SQLite `route_configs` 與 `.bicroutes` 是兼容保留的歷史名稱；不要因內部命名仍為 route 而把已保存配置的 runtime 文案寫成「路線」。
+- 用戶自訂行程名、已保存地點和第三方原文保持原樣；即使內容包含「路線／路线／route」，亦不得自動改寫。
 
 ## opsx-apply 後提交規則
 

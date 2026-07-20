@@ -3,7 +3,7 @@
 
 # BusIsComing
 
-一個為香港巴士通勤而設的 Android App：保存常用起終點、比較 Citybus 點到點路線，並在出門前監控首程巴士 ETA。
+一個為香港巴士通勤而設的 Android App：保存常用行程的起終點、比較 Citybus 點到點路線，並在出門前監控首程巴士 ETA。
 
 [官方網站](https://www.busiscoming.com/)
 
@@ -11,12 +11,12 @@
 
 ## 主要功能
 
-- **常用路線**：新增、編輯、複製、刪除及按目前位置距離排序；同一路線連續查詢或刷新只記錄一次使用。
-- **臨時搜尋**：不保存路線也可選擇起終點、查詢結果及一鍵另存為常用路線。
+- **常用行程**：新增、編輯、複製、刪除及按目前位置距離排序；同一行程連續查詢或刷新只記錄一次使用。
+- **臨時搜尋**：不保存行程也可選擇起終點、查詢路線及一鍵另存為常用行程。
 - **即時結果**：比較路線、HK$ 車費、總耗時、步行距離、首程 ETA 與最多三班到站時間。
 - **路線詳情**：查看上下車站、途經站、方向與換乘段；P2P stop map 用於對齊 route variant 及 stop id。
 - **通知欄監控**：短時前台服務定期刷新 ETA，顯示準備出門／立即出門／可能遲到狀態，並可刷新、停止及語音播報。
-- **路線匯入匯出**：透過 Android 系統文件選擇器匯出全部 `.bicroutes`，或預覽後合併／取代本機路線。
+- **行程匯入匯出**：透過 Android 系統文件選擇器匯出全部 `.bicroutes`，或預覽後合併／取代本機行程。
 - **三語介面**：跟隨系統、繁體中文、簡體中文、English；Citybus、Google 地址、DATA.GOV.HK ETA、通知與 TTS 使用同一實際語言。
 - **外觀主題**：跟隨系統、淺色、深色；外觀與語言偏好互相獨立。
 
@@ -92,8 +92,8 @@ flowchart TD
 | `data/local` | SQLite helper、語言與外觀偏好 |
 | `data/localization` | locale policy、`LanguageSnapshot`、provider／TTS mapping |
 | `data/location` | 目前位置、距離與 Google 地址解析 |
-| `data/model` | 路線、地點、ETA、排序、監控等結構化狀態 |
-| `data/repository` | Citybus／ETA 查詢、parser、route detail、cache 與本機路線 |
+| `data/model` | 行程配置、查詢路線、地點、ETA、排序、監控等結構化狀態 |
+| `data/repository` | Citybus／ETA 查詢、parser、route detail、cache 與本機行程 |
 | `data/transfer` | `.bicroutes` 匯入匯出格式 |
 | `service` | 前台監控、通知、排程、session、TTS 與本地化 formatter |
 | `ui` | 三個頂層 destination、編輯／管理／設定頁及共用 UI |
@@ -115,7 +115,7 @@ Citybus mobile 請求不附加 Cookie、Referer、User-Agent 或 X-Requested-Wit
 
 ## 本機資料與私隱
 
-常用路線保存在 App 的 SQLite 資料庫。`.bicroutes` 是未加密的版本化 UTF-8 JSON，只包含路線名稱、起終點地點名稱與精確座標；不包含使用次數、最近使用時間、查詢結果、ETA、定位狀態或通知監控資料。
+常用行程保存在 App 的 SQLite 資料庫。`.bicroutes` 是為兼容而保留名稱的未加密版本化 UTF-8 JSON，只包含行程名稱、起終點地點名稱與精確座標；不包含使用次數、最近使用時間、查詢結果、ETA、定位狀態或通知監控資料。
 
 > [!WARNING]
 > 匯出檔案包含精確座標，請只交給信任的人。匯入匯出使用系統文件選擇器，不要求外部儲存權限。

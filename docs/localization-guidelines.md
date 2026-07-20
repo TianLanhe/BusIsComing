@@ -19,13 +19,23 @@ BusIsComing 的 App runtime 支援以下選擇：
 - 簡體應獨立審校，不以自動繁簡轉換代替翻譯；使用自然的內地通用介面表達，但保留香港專有名稱原文。
 - 英文優先短句、主動語態與通勤場景常用詞，不照搬中文語序。
 - `BusIsComing`、`Citybus`、`Google Maps`、`ETA`、`HK$`、路線號、email、版本、網址、API 名稱及檔案副檔名不翻譯。
-- 用戶自訂路線名、已保存或匯入的地點名、第三方返回地址、站名、目的地與備註保持原文；不得機器翻譯或因切換語言改寫 SQLite／匯入資料。
+- 用戶自訂行程名、已保存或匯入的地點名、第三方返回地址、路線號、站名、目的地與備註保持原文；不得機器翻譯或因切換語言改寫 SQLite／匯入資料。
+
+行程與路線是兩個不同概念：
+
+- **行程**是用戶命名並保存的起點與終點配置，例如「上班」「上學」或「回家」。行程不保存、不鎖定亦不代表某一條 Citybus 查詢結果。
+- **路線**是按一個行程或臨時起終點查詢後返回的乘車方案，例如 `118`、`8X` 或 `85 → 106`。
+- **乘車段**是一條路線中的單段巴士服務；`85 → 106` 是一條包含兩個乘車段的路線。此詞只在詳情或換乘結構需要時使用。
+- 頁面標題、首次引導及脫離上下文的位置使用「常用行程」，上下文清楚時可使用「行程」；查詢操作、結果、路線卡、ETA、詳情和監控繼續使用「路線」。
+- `RouteConfig`、resource key、SQLite `route_configs` 與 `.bicroutes` 是兼容保留的內部或協議名稱，不得據此把 runtime 的已保存配置直譯為「路線」。
 
 常用術語基線：
 
 | 語義 | 繁體 | 簡體 | English |
 | --- | --- | --- | --- |
-| saved journey | 常用路線 | 常用路线 | Regular journey |
+| saved journey | 常用行程／行程 | 常用行程／行程 | Regular journey / journey |
+| queried route | 路線 | 路线 | Route |
+| route leg | 乘車段 | 乘车段 | Leg |
 | start / destination | 起點／終點 | 起点／终点 | Start / destination |
 | live arrival | 候車時間／到站時間 | 候车时间／到站时间 | Live arrival |
 | notification monitor | 通知欄監控 | 通知栏监控 | Notification monitoring |
@@ -58,8 +68,8 @@ BusIsComing 的 App runtime 支援以下選擇：
 ## 切換生命週期
 
 - 語言與外觀使用獨立偏好，Application 在首個 Activity 前套用兩者。
-- locale recreation 保存目前頂層 destination、常用 route id、搜尋起終點與未提交文字、兩個 owner 的排序／滾動及是否曾提交有效查詢。
-- 舊語言結果不寫入新畫面；曾提交的有效常用／搜尋上下文以原座標自動重查，未提交表單不查詢。自動重查不增加常用路線使用次數。
+- locale recreation 保存目前頂層 destination、常用行程 id（內部仍為 route id）、搜尋起終點與未提交文字、兩個 owner 的排序／滾動及是否曾提交有效查詢。
+- 舊語言結果不寫入新畫面；曾提交的有效常用／搜尋上下文以原座標自動重查，未提交表單不查詢。自動重查不增加常用行程使用次數。
 - 進行中的監控保留 session、排程及 channel id，立即以新語言更新通知、改用新 Citybus 語言並停止舊 utterance。
 
 ## TTS
@@ -68,19 +78,19 @@ BusIsComing 的 App runtime 支援以下選擇：
 - 模糊 `zh` 不可用，繁簡不得互相 fallback。
 - no engine、初始化失敗／逾時、missing data、unsupported locale、無相容 Voice、audio focus、speak rejected、播放錯誤／逾時及 released 都是穩定失敗原因。
 - 能力失敗立即提示；runtime 原因在同一監控 session 最多提示一次。提示必須說明具體原因及「監控會繼續但不播報」，不得只寫「目前語言的語音不可用」。
-- 不提供系統語音設定或試聽入口。日誌可記錄 engine、候選 locale／Voice、setLanguage、focus、speak 與 callback 結果，不記錄 API key、完整用戶路線名或 utterance。
+- 不提供系統語音設定或試聽入口。日誌可記錄 engine、候選 locale／Voice、setLanguage、focus、speak 與 callback 結果，不記錄 API key、完整用戶行程名或 utterance。
 
 ## 版面與無障礙
 
 - 三語均須在淺色／深色、約 360dp portrait 與 font scale 1.0／1.3／2.0 可操作。
 - 長英文與大字體使用 `wrap_content + minHeight`、換行、彈性 weight、水平／垂直滾動；不得靠縮字、核心文字單行裁切或重疊處理。
 - 核心 action 的觸控目標至少 48dp。Dialog 與 Bottom Sheet 的內容和 action 必須可達。
-- 快捷卡可對用戶路線名與站名作有限行數的 compact 展示，但詳情及 `contentDescription` 必須保留完整文字。
+- 快捷卡可對用戶行程名與站名作有限行數的 compact 展示，但詳情及 `contentDescription` 必須保留完整文字。
 - 深色模式使用語意色 token；只有 launcher／品牌圖像與經對比驗證的路線識別色可保持固定色。
 
 ## 驗證門檻
 
-- `LocaleResourceContractTest`、硬編碼掃描、provider mapping、parser、cache／stale callback、TTS Voice policy 與 formatter 測試必須通過。
+- `LocaleResourceContractTest`、`JourneyRouteTerminologyContractTest`、硬編碼掃描、provider mapping、parser、cache／stale callback、TTS Voice policy 與 formatter 測試必須通過。
 - `./gradlew build` 必須通過，包含 unit test、lint 與 debug／release assemble。
 - 模擬器／實機按 `docs/localization-validation-matrix.md` 驗證三語、明暗、字體及無障礙。
 - Citybus、DATA.GOV.HK 及 Google 必須做真實三語驗證；Google mock／fixture 成功或網絡逾時不能替代真實服務硬門檻。

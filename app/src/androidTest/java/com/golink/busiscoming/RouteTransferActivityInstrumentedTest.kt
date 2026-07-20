@@ -83,7 +83,7 @@ class RouteTransferActivityInstrumentedTest {
                 activity.findViewById<View>(R.id.routeTransferMergeButton).performClick()
             }
             waitUntil(scenario) {
-                it.findViewById<TextView>(R.id.routeTransferSummaryText).text.contains("新增 1 條")
+                it.findViewById<TextView>(R.id.routeTransferSummaryText).text.contains("新增 1 個行程")
             }
         }
 
@@ -230,7 +230,7 @@ class RouteTransferActivityInstrumentedTest {
             }
             scenario.onActivity { it.exportToForTesting(Uri.fromFile(exportFile)) }
             waitUntil(scenario) {
-                it.findViewById<TextView>(R.id.routeTransferSummaryText).text.contains("已匯出 1 條")
+                it.findViewById<TextView>(R.id.routeTransferSummaryText).text.contains("已匯出 1 個常用行程")
             }
             assertEquals("匯出測試", RouteTransferCodec.decode(exportFile.readBytes()).routes.single().name)
 

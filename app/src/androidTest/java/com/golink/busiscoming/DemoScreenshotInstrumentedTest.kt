@@ -213,7 +213,7 @@ class DemoScreenshotInstrumentedTest {
             setPadding(dp(20), dp(18), dp(20), dp(12))
         }
         content.addView(TextView(activity).apply {
-            text = "常用路線"
+            text = "常用行程"
             setTextColor(ContextCompat.getColor(activity, R.color.bus_text_primary))
             textSize = 20f
             typeface = Typeface.DEFAULT_BOLD

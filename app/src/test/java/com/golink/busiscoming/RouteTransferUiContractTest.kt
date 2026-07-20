@@ -19,12 +19,12 @@ class RouteTransferUiContractTest {
     ).readText()
     private val text = LocalizedText { resourceId, arguments ->
         when (resourceId) {
-            R.string.route_export_success -> "已匯出 ${arguments[0]} 條常用路線。"
-            R.string.route_import_none -> "匯入完成：沒有新增路線，${arguments[0]} 條已存在。"
+            R.string.route_export_success -> "已匯出 ${arguments[0]} 個常用行程。"
+            R.string.route_import_none -> "匯入完成：沒有新增行程，${arguments[0]} 個已存在。"
             R.string.route_import_merged ->
-                "匯入完成：新增 ${arguments[0]} 條，跳過 ${arguments[1]} 條已存在路線。"
+                "匯入完成：新增 ${arguments[0]} 個行程，跳過 ${arguments[1]} 個已存在行程。"
             R.string.route_import_replaced ->
-                "取代完成：已刪除 ${arguments[0]} 條並匯入 ${arguments[1]} 條。"
+                "取代完成：已刪除 ${arguments[0]} 個行程並匯入 ${arguments[1]} 個行程。"
             else -> error("Unexpected resource: $resourceId")
         }
     }
@@ -51,7 +51,7 @@ class RouteTransferUiContractTest {
         )
         assertTrue(activity.contains("ActivityResultContracts.CreateDocument"))
         assertTrue(activity.contains("ActivityResultContracts.OpenDocument"))
-        assertTrue(strings.contains("包含所有常用路線的地點名稱和精確座標"))
+        assertTrue(strings.contains("包含所有常用行程的地點名稱和精確座標"))
         assertTrue(strings.contains("只與你信任的人分享"))
         assertTrue(strings.contains("<string name=\"route_transfer_cancel\">取消</string>"))
         assertFalse(activity.contains("android.R.string.cancel"))
@@ -77,17 +77,17 @@ class RouteTransferUiContractTest {
 
     @Test
     fun summariesUseActualRepositoryResultIncludingAllDuplicates() {
-        assertEquals("已匯出 3 條常用路線。", RouteTransferUiPolicy.exportSummary(3, text))
+        assertEquals("已匯出 3 個常用行程。", RouteTransferUiPolicy.exportSummary(3, text))
         assertEquals(
-            "匯入完成：沒有新增路線，2 條已存在。",
+            "匯入完成：沒有新增行程，2 個已存在。",
             RouteTransferUiPolicy.importSummary(RouteImportMode.MERGE, RouteImportResult(0, 2, 0), text)
         )
         assertEquals(
-            "匯入完成：新增 3 條，跳過 1 條已存在路線。",
+            "匯入完成：新增 3 個行程，跳過 1 個已存在行程。",
             RouteTransferUiPolicy.importSummary(RouteImportMode.MERGE, RouteImportResult(3, 1, 0), text)
         )
         assertEquals(
-            "取代完成：已刪除 4 條並匯入 2 條。",
+            "取代完成：已刪除 4 個行程並匯入 2 個行程。",
             RouteTransferUiPolicy.importSummary(RouteImportMode.REPLACE, RouteImportResult(2, 0, 4), text)
         )
     }
