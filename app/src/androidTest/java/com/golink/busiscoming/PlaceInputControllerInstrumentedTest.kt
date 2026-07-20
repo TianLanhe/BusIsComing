@@ -125,7 +125,11 @@ class PlaceInputControllerInstrumentedTest {
                 val nameView = row.getChildAt(0) as TextView
                 val distanceContainer = row.getChildAt(1) as LinearLayout
                 assertEquals("新候選1", nameView.text.toString())
-                assertEquals(16f, nameView.textSize / activity.resources.displayMetrics.scaledDensity, 0.1f)
+                assertEquals(
+                    TextView(activity).apply { textSize = 16f }.textSize,
+                    nameView.textSize,
+                    0.1f
+                )
                 assertEquals(View.GONE, distanceContainer.visibility)
 
                 controller.setCurrentLocationSnapshot(
@@ -142,7 +146,11 @@ class PlaceInputControllerInstrumentedTest {
                 assertEquals(View.VISIBLE, distanceContainer.visibility)
                 assertEquals(dp(activity, 14), distanceIcon.layoutParams.width)
                 assertEquals("0m", distanceView.text.toString())
-                assertEquals(13f, distanceView.textSize / activity.resources.displayMetrics.scaledDensity, 0.1f)
+                assertEquals(
+                    TextView(activity).apply { textSize = 13f }.textSize,
+                    distanceView.textSize,
+                    0.1f
+                )
                 assertTrue(row.contentDescription.toString().contains("距離目前位置 0 米"))
                 assertFalse(row.contentDescription.toString().contains("•"))
                 holder.itemView.performClick()

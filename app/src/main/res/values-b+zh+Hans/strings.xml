@@ -5,7 +5,7 @@
     <string name="use_my_location">使用我的位置</string>
     <string name="google_maps_address_attribution">地址由 Google Maps 提供</string>
     <string name="first_run_home_headline">把常用行程放在这里，\n出门前一点即查。</string>
-    <string name="first_run_sample_label">示例预览</string>
+    <string name="first_run_sample_label">路线结果预览</string>
     <string name="first_run_add_route">添加常用行程</string>
     <string name="first_run_temporary_query">直接查询一次</string>
     <string name="route_edit_subtitle">选择常用起点和终点，保存后可在首页快速查询。</string>

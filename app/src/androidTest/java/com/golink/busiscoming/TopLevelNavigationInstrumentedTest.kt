@@ -17,9 +17,13 @@ import androidx.test.rule.GrantPermissionRule
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.main.MainActivity
+import com.google.android.material.bottomnavigation.BottomNavigationView
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Rule
 import org.junit.runner.RunWith
+import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
 class TopLevelNavigationInstrumentedTest {
@@ -56,13 +60,38 @@ class TopLevelNavigationInstrumentedTest {
     }
 
     @Test
-    fun firstRunSearchActionAndSecondaryPagesReturnToTheirOwnerDestination() {
+    fun selectedBottomItemKeepsItsIndicatorAndStableMeasurementAcrossSwitches() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                assertNavigationState(activity, R.id.navigation_frequent_routes)
+            }
+
+            onView(withId(R.id.navigation_search)).perform(click())
+            scenario.onActivity { activity ->
+                assertNavigationState(activity, R.id.navigation_search)
+            }
+
+            onView(withId(R.id.navigation_settings)).perform(click())
+            scenario.onActivity { activity ->
+                assertNavigationState(activity, R.id.navigation_settings)
+            }
+
+            scenario.recreate()
+            scenario.onActivity { activity ->
+                assertNavigationState(activity, R.id.navigation_settings)
+            }
+        }
+    }
+
+    @Test
+    fun firstRunKeepsSearchInBottomNavigationAndSecondaryPagesReturnToTheirOwnerDestination() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val repository = RouteConfigRepository(context)
         repository.getAll().forEach { repository.delete(it.id) }
 
         ActivityScenario.launch(MainActivity::class.java).use {
-            onView(withId(R.id.emptySearchButton)).perform(click())
+            onView(withId(R.id.emptyAddRouteButton)).perform(scrollTo()).check(matches(isDisplayed()))
+            onView(withId(R.id.navigation_search)).perform(click())
             onView(withId(R.id.searchRoot)).check(matches(isDisplayed()))
 
             onView(withId(R.id.navigation_settings)).perform(click())
@@ -86,5 +115,26 @@ class TopLevelNavigationInstrumentedTest {
 
         repository.getAll().forEach { repository.delete(it.id) }
         repository.close()
+    }
+
+    private fun assertNavigationState(activity: MainActivity, selectedItemId: Int) {
+        val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+        assertEquals(selectedItemId, navigation.selectedItemId)
+        assertTrue(navigation.isItemActiveIndicatorEnabled)
+        assertEquals(dp(activity, 28), navigation.itemIconSize)
+        val checkedItems = (0 until navigation.menu.size())
+            .map { navigation.menu.getItem(it) }
+            .filter { it.isChecked }
+        assertEquals(1, checkedItems.size)
+        assertEquals(selectedItemId, checkedItems.single().itemId)
+
+        val menuView = navigation.getChildAt(0) as android.view.ViewGroup
+        val widths = (0 until menuView.childCount).map { menuView.getChildAt(it).measuredWidth }
+        assertEquals(3, widths.size)
+        assertTrue(widths.all { it == widths.first() })
+    }
+
+    private fun dp(activity: MainActivity, value: Int): Int {
+        return (value * activity.resources.displayMetrics.density).roundToInt()
     }
 }

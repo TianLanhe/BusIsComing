@@ -83,18 +83,43 @@ class AppLanguageAndThemeSettingsInstrumentedTest {
             onView(withId(R.id.settingsLanguageRow)).perform(click())
             onView(withText("繁體中文")).inRoot(isDialog()).check(matches(isChecked()))
             onView(withText("简体中文")).inRoot(isDialog()).check(matches(isDisplayed()))
-            onView(withText("English")).inRoot(isDialog()).perform(click())
+            onView(withText("简体中文")).inRoot(isDialog()).perform(click())
 
             waitUntil {
-                AppLanguageRepository(context).getChoice() == AppLanguageChoice.ENGLISH &&
+                AppLanguageRepository(context).getChoice() == AppLanguageChoice.SIMPLIFIED_CHINESE &&
                     AppThemePreferenceStore(context).getMode() == AppThemeMode.DARK
             }
-            waitForSettingsValues("Dark", "English")
+            waitForSettingsValues("深色模式", "简体中文")
             scenario.onActivity { activity ->
                 val nightMode = activity.resources.configuration.uiMode and
                     Configuration.UI_MODE_NIGHT_MASK
                 assertEquals(Configuration.UI_MODE_NIGHT_YES, nightMode)
             }
+
+            onView(withId(R.id.settingsAppearanceRow)).perform(click())
+            onView(withText("深色模式")).inRoot(isDialog()).check(matches(isChecked()))
+            onView(withText("浅色模式")).inRoot(isDialog()).perform(click())
+            waitUntil {
+                AppLanguageRepository(context).getChoice() == AppLanguageChoice.SIMPLIFIED_CHINESE &&
+                    AppThemePreferenceStore(context).getMode() == AppThemeMode.LIGHT
+            }
+            waitForSettingsValues("浅色模式", "简体中文")
+
+            onView(withId(R.id.settingsLanguageRow)).perform(click())
+            onView(withText("English")).inRoot(isDialog()).perform(click())
+            waitUntil {
+                AppLanguageRepository(context).getChoice() == AppLanguageChoice.ENGLISH &&
+                    AppThemePreferenceStore(context).getMode() == AppThemeMode.LIGHT
+            }
+            waitForSettingsValues("Light", "English")
+
+            onView(withId(R.id.settingsAppearanceRow)).perform(click())
+            onView(withText("Dark")).inRoot(isDialog()).perform(click())
+            waitUntil {
+                AppLanguageRepository(context).getChoice() == AppLanguageChoice.ENGLISH &&
+                    AppThemePreferenceStore(context).getMode() == AppThemeMode.DARK
+            }
+            waitForSettingsValues("Dark", "English")
 
             lateinit var activityBeforeReselect: MainActivity
             scenario.onActivity { activityBeforeReselect = it }

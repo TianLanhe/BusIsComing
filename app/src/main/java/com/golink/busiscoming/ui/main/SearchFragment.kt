@@ -3,12 +3,15 @@ package com.golink.busiscoming.ui.main
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
@@ -58,6 +61,7 @@ class SearchFragment : Fragment() {
     )
     private var originController: PlaceInputController? = null
     private var destinationController: PlaceInputController? = null
+    private val attributionState = SearchPlaceAttributionState()
     private val routeQueryState = RouteQueryState()
     private val currentResults: List<BusRouteOption>
         get() = routeQueryState.results
@@ -69,6 +73,8 @@ class SearchFragment : Fragment() {
     private var restoredDestination: Place? = null
     private var restoredOriginInput: String? = null
     private var restoredDestinationInput: String? = null
+    private var restoredOriginGoogleAttribution: Boolean = false
+    private var restoredDestinationGoogleAttribution: Boolean = false
     private var restoredShouldRequery: Boolean = false
     private var hasSubmittedQuery: Boolean = false
     private var pendingScrollPosition: Int? = null
@@ -82,11 +88,14 @@ class SearchFragment : Fragment() {
     private lateinit var sortButtons: Map<SortField, MaterialButton>
     private lateinit var resultLoading: ProgressBar
     private lateinit var resultStatus: TextView
-    private lateinit var resultSummaryContainer: View
+    private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummary: TextView
+    private lateinit var resultActions: LinearLayout
     private lateinit var resultUpdatedAt: TextView
     private lateinit var saveButton: MaterialButton
     private lateinit var originAttribution: TextView
+    private lateinit var destinationAttribution: TextView
+    private var candidateBackCallback: OnBackPressedCallback? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -100,6 +109,12 @@ class SearchFragment : Fragment() {
         restoredDestination = savedInstanceState?.placeFor(STATE_DESTINATION)
         restoredOriginInput = savedInstanceState?.getString(STATE_ORIGIN_INPUT)
         restoredDestinationInput = savedInstanceState?.getString(STATE_DESTINATION_INPUT)
+        restoredOriginGoogleAttribution =
+            savedInstanceState?.getBoolean(STATE_ORIGIN_GOOGLE_ATTRIBUTION) == true
+        restoredDestinationGoogleAttribution =
+            savedInstanceState?.getBoolean(STATE_DESTINATION_GOOGLE_ATTRIBUTION) == true
+        attributionState.setOriginGoogleMaps(restoredOriginGoogleAttribution)
+        attributionState.setDestinationGoogleMaps(restoredDestinationGoogleAttribution)
         restoredShouldRequery = savedInstanceState?.getBoolean(STATE_HAS_SUBMITTED_QUERY) == true
         hasSubmittedQuery = restoredShouldRequery
         pendingScrollPosition = savedInstanceState
@@ -124,6 +139,8 @@ class SearchFragment : Fragment() {
         val originLayout = view.findViewById<TextInputLayout>(R.id.searchOriginLayout)
         val destinationLayout = view.findViewById<TextInputLayout>(R.id.searchDestinationLayout)
         originAttribution = view.findViewById(R.id.searchOriginAttribution)
+        destinationAttribution = view.findViewById(R.id.searchDestinationAttribution)
+        val currentLocationButton = view.findViewById<View>(R.id.searchCurrentLocationButton)
 
         originController = PlaceInputController(
             context = context,
@@ -135,12 +152,20 @@ class SearchFragment : Fragment() {
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
             isActive = ::isViewActive,
+            maxVisibleRows = SEARCH_MAX_VISIBLE_CANDIDATE_ROWS,
+            idleToolView = currentLocationButton,
+            instructionText = getString(R.string.place_search_helper),
             onCandidateVisibilityChanged = { visible ->
                 if (visible) destinationController?.hideCandidates()
                 updateRefreshEnabled()
             },
+            onPlaceSelected = {
+                attributionState.clearOrigin()
+                renderAttribution()
+            },
             onUserTextEdited = {
-                originAttribution.visibility = View.GONE
+                attributionState.clearOrigin()
+                renderAttribution()
                 hasSubmittedQuery = false
             }
         )
@@ -154,16 +179,23 @@ class SearchFragment : Fragment() {
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
             isActive = ::isViewActive,
+            maxVisibleRows = SEARCH_MAX_VISIBLE_CANDIDATE_ROWS,
+            instructionText = getString(R.string.place_search_helper),
             onCandidateVisibilityChanged = { visible ->
                 if (visible) originController?.hideCandidates()
                 updateRefreshEnabled()
             },
-            onUserTextEdited = { hasSubmittedQuery = false }
+            onPlaceSelected = {
+                attributionState.clearDestination()
+                renderAttribution()
+            },
+            onUserTextEdited = {
+                attributionState.clearDestination()
+                renderAttribution()
+                hasSubmittedQuery = false
+            }
         )
-        originLayout.endIconMode = TextInputLayout.END_ICON_CUSTOM
-        originLayout.setEndIconDrawable(R.drawable.ic_location_outline)
-        originLayout.setEndIconContentDescription(getString(R.string.use_my_location))
-        originLayout.setEndIconOnClickListener { requestCurrentOrigin(isAuto = false) }
+        currentLocationButton.setOnClickListener { requestCurrentOrigin(isAuto = false) }
 
         resultList = view.findViewById(R.id.searchResultList)
         swipeRefresh = view.findViewById(R.id.searchSwipeRefresh)
@@ -172,6 +204,7 @@ class SearchFragment : Fragment() {
         resultStatus = view.findViewById(R.id.searchResultStatus)
         resultSummaryContainer = view.findViewById(R.id.searchResultSummaryContainer)
         resultSummary = view.findViewById(R.id.searchResultSummary)
+        resultActions = view.findViewById(R.id.searchResultActions)
         resultUpdatedAt = view.findViewById(R.id.searchResultUpdatedAt)
         saveButton = view.findViewById(R.id.searchSaveButton)
         detailSheet = RouteDetailBottomSheet(
@@ -200,16 +233,25 @@ class SearchFragment : Fragment() {
             SortField.WALKING_DISTANCE to view.findViewById(R.id.searchSortWalkingButton)
         )
         sortButtons.forEach { (field, button) -> button.setOnClickListener { sortBy(field) } }
-        restoredOrigin?.let { originController?.setSelectedPlace(it) }
-        restoredDestination?.let { destinationController?.setSelectedPlace(it) }
-        restoredOriginInput?.let { originController?.restoreInputText(it) }
-        restoredDestinationInput?.let { destinationController?.restoreInputText(it) }
+        configureResultSummaryLayout()
         updateSortControls()
-        restoreSubmittedQueryIfNeeded()
+
+        candidateBackCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                hideCandidateLists()
+            }
+        }.also { callback ->
+            requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
+        }
 
         view.findViewById<AppCompatImageButton>(R.id.searchSwapButton).setOnClickListener { button ->
             button.animate().rotationBy(180f).setDuration(220L).start()
-            originController?.swapWith(destinationController ?: return@setOnClickListener)
+            swapSearchPlaces()
+        }
+        view.findViewById<View>(R.id.searchContent).setOnClickListener {
+            originInput.clearFocus()
+            destinationInput.clearFocus()
+            hideCandidateLists()
         }
         view.findViewById<MaterialButton>(R.id.searchQueryButton).setOnClickListener { query() }
         view.findViewById<MaterialButton>(R.id.searchEditButton).setOnClickListener {
@@ -219,8 +261,20 @@ class SearchFragment : Fragment() {
         saveButton.setOnClickListener { saveCurrentRoute() }
     }
 
+    override fun onViewStateRestored(savedInstanceState: Bundle?) {
+        super.onViewStateRestored(savedInstanceState)
+        restoredOrigin?.let { originController?.setSelectedPlace(it) }
+        restoredDestination?.let { destinationController?.setSelectedPlace(it) }
+        restoredOriginInput?.let { originController?.restoreInputText(it) }
+        restoredDestinationInput?.let { destinationController?.restoreInputText(it) }
+        attributionState.setOriginGoogleMaps(restoredOriginGoogleAttribution)
+        attributionState.setDestinationGoogleMaps(restoredDestinationGoogleAttribution)
+        renderAttribution()
+        restoreSubmittedQueryIfNeeded()
+    }
+
     fun onDestinationSelected() {
-        if (originController?.selectedPlace == null) {
+        if (originController?.selectedPlace == null && restoredOrigin == null) {
             requestCurrentOrigin(isAuto = true)
         }
     }
@@ -241,6 +295,7 @@ class SearchFragment : Fragment() {
         destinationController?.dispose()
         originController = null
         destinationController = null
+        candidateBackCallback = null
         detailSheet.dispose()
         etaSheet.dispose()
         super.onDestroyView()
@@ -248,10 +303,24 @@ class SearchFragment : Fragment() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        restoredOrigin = originController?.selectedPlace
+        restoredDestination = destinationController?.selectedPlace
+        restoredOriginInput = originController?.currentInputText()
+        restoredDestinationInput = destinationController?.currentInputText()
+        restoredOriginGoogleAttribution = attributionState.originUsesGoogleMaps
+        restoredDestinationGoogleAttribution = attributionState.destinationUsesGoogleMaps
         originController?.selectedPlace?.writeTo(outState, STATE_ORIGIN)
         destinationController?.selectedPlace?.writeTo(outState, STATE_DESTINATION)
         outState.putString(STATE_ORIGIN_INPUT, originController?.currentInputText())
         outState.putString(STATE_DESTINATION_INPUT, destinationController?.currentInputText())
+        outState.putBoolean(
+            STATE_ORIGIN_GOOGLE_ATTRIBUTION,
+            restoredOriginGoogleAttribution
+        )
+        outState.putBoolean(
+            STATE_DESTINATION_GOOGLE_ATTRIBUTION,
+            restoredDestinationGoogleAttribution
+        )
         outState.putBoolean(STATE_HAS_SUBMITTED_QUERY, hasSubmittedQuery)
         sortField?.let { outState.putString(STATE_SORT_FIELD, it.name) }
         outState.putString(STATE_SORT_DIRECTION, sortDirection.name)
@@ -285,11 +354,10 @@ class SearchFragment : Fragment() {
                         originController?.setCurrentLocationSnapshot(result.snapshot)
                         destinationController?.setCurrentLocationSnapshot(result.snapshot)
                         originController?.setSelectedPlace(result.place)
-                        originAttribution.visibility = if (result.attribution == PlaceAttribution.GOOGLE_MAPS) {
-                            View.VISIBLE
-                        } else {
-                            View.GONE
-                        }
+                        attributionState.setOriginGoogleMaps(
+                            result.attribution == PlaceAttribution.GOOGLE_MAPS
+                        )
+                        renderAttribution()
                     }
                     CurrentPlaceSelectionResult.Failure -> {
                         if (isAuto) {
@@ -471,6 +539,7 @@ class SearchFragment : Fragment() {
         if (!::swipeRefresh.isInitialized) return
         val candidatesVisible = originController?.isCandidateVisible() == true ||
             destinationController?.isCandidateVisible() == true
+        candidateBackCallback?.isEnabled = candidatesVisible
         swipeRefresh.isEnabled = currentResults.isNotEmpty() &&
             !candidatesVisible &&
             (!routeQueryState.isQueryInProgress || routeQueryState.isRefreshing)
@@ -482,6 +551,61 @@ class SearchFragment : Fragment() {
     }
 
     private fun isViewActive(): Boolean = isAdded && view != null && !isRemoving
+
+    private fun swapSearchPlaces() {
+        val destination = destinationController ?: return
+        originController?.swapWith(destination)
+        attributionState.swap()
+        renderAttribution()
+        hideCandidateLists()
+        hasSubmittedQuery = false
+    }
+
+    private fun hideCandidateLists() {
+        originController?.hideCandidates()
+        destinationController?.hideCandidates()
+        updateRefreshEnabled()
+    }
+
+    private fun renderAttribution() {
+        if (!::originAttribution.isInitialized || !::destinationAttribution.isInitialized) return
+        originAttribution.visibility = if (attributionState.originUsesGoogleMaps) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        destinationAttribution.visibility = if (attributionState.destinationUsesGoogleMaps) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    private fun configureResultSummaryLayout() {
+        val configuration = resources.configuration
+        val useSingleRow = configuration.screenWidthDp >= 600 && configuration.fontScale < 1.3f
+        resultSummaryContainer.orientation = if (useSingleRow) {
+            LinearLayout.HORIZONTAL
+        } else {
+            LinearLayout.VERTICAL
+        }
+        resultSummaryContainer.gravity = if (useSingleRow) Gravity.CENTER_VERTICAL else Gravity.NO_GRAVITY
+        resultSummary.layoutParams = (resultSummary.layoutParams as LinearLayout.LayoutParams).apply {
+            width = if (useSingleRow) 0 else ViewGroup.LayoutParams.MATCH_PARENT
+            weight = if (useSingleRow) 1f else 0f
+            marginEnd = if (useSingleRow) dp(8) else 0
+        }
+        resultActions.layoutParams = (resultActions.layoutParams as LinearLayout.LayoutParams).apply {
+            width = ViewGroup.LayoutParams.WRAP_CONTENT
+            weight = 0f
+            gravity = if (useSingleRow) Gravity.CENTER_VERTICAL else Gravity.END
+            topMargin = if (useSingleRow) 0 else dp(4)
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
+    }
 
     private fun Place.writeTo(bundle: Bundle, prefix: String) {
         bundle.putString("${prefix}_name", name)
@@ -528,8 +652,11 @@ class SearchFragment : Fragment() {
         const val STATE_SORT_DIRECTION = "search_sort_direction"
         const val STATE_ORIGIN_INPUT = "search_origin_input"
         const val STATE_DESTINATION_INPUT = "search_destination_input"
+        const val STATE_ORIGIN_GOOGLE_ATTRIBUTION = "search_origin_google_attribution"
+        const val STATE_DESTINATION_GOOGLE_ATTRIBUTION = "search_destination_google_attribution"
         const val STATE_HAS_SUBMITTED_QUERY = "search_has_submitted_query"
         const val STATE_SEARCH_SCROLL_POSITION = "search_scroll_position"
         const val STATE_SEARCH_SCROLL_OFFSET = "search_scroll_offset"
+        private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 3
     }
 }

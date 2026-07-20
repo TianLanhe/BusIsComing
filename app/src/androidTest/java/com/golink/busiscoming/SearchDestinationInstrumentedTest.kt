@@ -1,6 +1,8 @@
 package com.golink.busiscoming
 
 import android.view.View
+import android.widget.LinearLayout
+import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
@@ -15,12 +17,15 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.matcher.ViewMatchers.isClickable
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
+import com.golink.busiscoming.data.location.CurrentLocationSnapshot
+import com.golink.busiscoming.data.location.PlaceAttribution
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
@@ -42,6 +47,7 @@ import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.SearchFragment
 import org.hamcrest.CoreMatchers.allOf
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -79,9 +85,30 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.searchDestinationInput)).check(matches(withText("測試起點")))
 
             onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
-            waitForText("測試路線")
+            waitForTextAndScroll("測試路線")
             onView(withId(R.id.searchResultSummary)).check(matches(withText("測試終點 → 測試起點")))
             onView(withId(R.id.searchResultUpdatedAt)).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                val configuration = activity.resources.configuration
+                val summaryContainer = activity.findViewById<LinearLayout>(
+                    R.id.searchResultSummaryContainer
+                )
+                val summary = activity.findViewById<View>(R.id.searchResultSummary)
+                val actions = activity.findViewById<View>(R.id.searchResultActions)
+                val save = activity.findViewById<View>(R.id.searchSaveButton)
+                val useSingleRow = configuration.screenWidthDp >= 600 &&
+                    configuration.fontScale < 1.3f
+                assertEquals(
+                    if (useSingleRow) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL,
+                    summaryContainer.orientation
+                )
+                if (useSingleRow) {
+                    assertTrue(summary.right <= actions.left)
+                } else {
+                    assertTrue(summary.bottom <= actions.top)
+                }
+                assertTrue(save.measuredHeight >= dp(activity, 48))
+            }
             onView(withId(R.id.searchSortRouteButton)).perform(scrollTo(), click())
             onView(withId(R.id.searchSortRouteButton)).check(matches(withText("路線 ↑")))
 
@@ -186,6 +213,84 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    @Test
+    fun googleAttributionFollowsSwapAndRecreationThenClearsOnManualEdit() {
+        SearchFragment.placeSearchRepositoryFactory = { FakePlaceRepository() }
+        SearchFragment.busRouteRepositoryFactory = { ImmediateRouteRepository() }
+        SearchFragment.routeDetailRepositoryFactory = { FakeRouteDetailRepository() }
+        SearchFragment.currentPlaceRequestOverride = { _, callback ->
+            callback(
+                CurrentPlaceSelectionResult.Success(
+                    place = Place("Google 測試地址", 22.3, 114.1),
+                    snapshot = CurrentLocationSnapshot(
+                        latitude = 22.3,
+                        longitude = 114.1,
+                        accuracyMeters = 15f,
+                        elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
+                    ),
+                    attribution = PlaceAttribution.GOOGLE_MAPS
+                )
+            )
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitForText("Google 測試地址")
+            onView(withId(R.id.searchOriginAttribution)).check(matches(isDisplayed()))
+
+            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
+            onView(withId(R.id.searchDestinationInput)).check(matches(withText("Google 測試地址")))
+            onView(withId(R.id.searchOriginAttribution)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchDestinationAttribution)).check(matches(isDisplayed()))
+
+            scenario.recreate()
+            onView(withId(R.id.searchDestinationInput)).check(matches(withText("Google 測試地址")))
+            onView(withId(R.id.searchDestinationAttribution)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchDestinationInput)).perform(scrollTo(), replaceText("手動修改"))
+            onView(withId(R.id.searchDestinationAttribution)).check(matches(withEffectiveVisibility(GONE)))
+        }
+    }
+
+    @Test
+    fun swapKeepsUnconfirmedTextUnconfirmedWithoutStartingAQuery() {
+        val routeRepository = ImmediateRouteRepository()
+        installDependencies(routeRepository)
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitForText("暫時無法取得目前位置，請手動選擇起點")
+            onView(withId(R.id.searchOriginInput)).perform(scrollTo(), replaceText("未確認起點"))
+            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
+            onView(withId(R.id.searchOriginInput)).check(matches(withText("")))
+            onView(withId(R.id.searchDestinationInput)).check(matches(withText("未確認起點")))
+            assertTrue(routeRepository.queryCount == 0)
+        }
+    }
+
+    @Test
+    fun recreationRestoresConfirmedPlacesAndRepeatsTheSubmittedQuery() {
+        val routeRepository = ImmediateRouteRepository()
+        installDependencies(routeRepository)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitForText("暫時無法取得目前位置，請手動選擇起點")
+            selectPlace(R.id.searchOriginInput, "o", "測試起點")
+            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
+            waitUntil { routeRepository.queryCount == 1 }
+
+            scenario.recreate()
+
+            waitUntil { routeRepository.queryCount == 2 }
+            onView(withId(R.id.searchOriginInput)).check(matches(withText("測試起點")))
+            onView(withId(R.id.searchDestinationInput)).check(matches(withText("測試終點")))
+            waitForTextAndScroll("測試路線")
+        }
+    }
+
     private fun installDependencies(routeRepository: BusRouteRepository): FakeRouteDetailRepository {
         val detailRepository = FakeRouteDetailRepository()
         SearchFragment.placeSearchRepositoryFactory = { FakePlaceRepository() }
@@ -212,6 +317,17 @@ class SearchDestinationInstrumentedTest {
             } catch (_: NoMatchingViewException) {
                 false
             } catch (_: AssertionError) {
+                false
+            }
+        }
+    }
+
+    private fun waitForTextAndScroll(text: String) {
+        waitUntil {
+            try {
+                onView(withText(text)).perform(scrollTo()).check(matches(isDisplayed()))
+                true
+            } catch (_: Throwable) {
                 false
             }
         }
@@ -269,6 +385,10 @@ class SearchDestinationInstrumentedTest {
             Thread.sleep(50)
         }
         assertTrue("Timed out waiting for condition", condition())
+    }
+
+    private fun dp(context: android.content.Context, value: Int): Int {
+        return (value * context.resources.displayMetrics.density).toInt()
     }
 
     private class FakePlaceRepository : PlaceSearchRepository {

@@ -5,7 +5,7 @@
     <string name="use_my_location">Use my location</string>
     <string name="google_maps_address_attribution">Address provided by Google Maps</string>
     <string name="first_run_home_headline">Keep your regular journeys here\nand check them before you leave.</string>
-    <string name="first_run_sample_label">Sample preview</string>
+    <string name="first_run_sample_label">Route results preview</string>
     <string name="first_run_add_route">Add regular journey</string>
     <string name="first_run_temporary_query">Plan a one-off journey</string>
     <string name="route_edit_subtitle">Choose your usual start and destination for quick access from Home.</string>
