@@ -49,6 +49,11 @@
     <string name="settings_transit_code_shortcut_summary">從桌面一按開啟</string>
     <string name="transit_code_shortcut_unsupported">目前的桌面不支援固定快捷方式</string>
     <string name="transit_code_shortcut_failed">未能添加乘車碼快捷方式</string>
+    <string name="transit_code_shortcut_confirm_system">請在系統視窗確認新增</string>
+    <string name="transit_code_shortcut_added">乘車碼快捷方式已新增至主畫面</string>
+    <string name="transit_code_shortcut_already_added">已新增至主畫面</string>
+    <string name="transit_code_shortcut_unsupported_guide">目前桌面不支援自動新增。請長按 BusIsComing 圖示，將「乘車碼」拖到主畫面。</string>
+    <string name="transit_code_shortcut_failed_retry">未能新增乘車碼快捷方式，請稍後重試</string>
     <string name="route_transfer_title">行程匯入與匯出</string>
     <string name="route_transfer_current_count">目前有 %1$d 個常用行程</string>
     <string name="route_transfer_import_title">匯入常用行程</string>

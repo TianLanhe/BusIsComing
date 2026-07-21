@@ -6,19 +6,20 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.appcompat.widget.AppCompatImageButton
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
+import com.golink.busiscoming.data.location.CurrentLocationSnapshot
+import com.golink.busiscoming.data.location.LocationPermissionUtils
 import com.golink.busiscoming.data.location.PlaceAttribution
+import com.golink.busiscoming.data.location.SystemLocationUtils
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteCardStopPreview
@@ -34,11 +35,11 @@ import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
+import com.golink.busiscoming.ui.common.PlacePairEditorView
+import com.golink.busiscoming.ui.common.RouteResultControlsView
 import com.golink.busiscoming.ui.common.localizedMessage
 import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.MaterialAutoCompleteTextView
-import com.google.android.material.textfield.TextInputLayout
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.text.SimpleDateFormat
@@ -77,6 +78,8 @@ class SearchFragment : Fragment() {
     private var hasSubmittedQuery: Boolean = false
     private var successfulQueryOrigin: Place? = null
     private var successfulQueryDestination: Place? = null
+    private var isViewStateRestored: Boolean = false
+    private var hasPendingDestinationSelection: Boolean = false
     private var pendingScrollPosition: Int? = null
     private var pendingScrollOffset: Int = 0
     private lateinit var resultAdapter: BusRouteAdapter
@@ -84,11 +87,12 @@ class SearchFragment : Fragment() {
     private lateinit var etaSheet: EtaArrivalsBottomSheet
     private lateinit var resultList: RecyclerView
     private lateinit var swipeRefresh: SwipeRefreshLayout
+    private lateinit var routeResultControls: View
     private lateinit var sortControls: View
     private lateinit var sortButtons: Map<SortField, MaterialButton>
     private lateinit var resultLoading: ProgressBar
     private lateinit var resultStatus: TextView
-    private lateinit var resultMetaContainer: LinearLayout
+    private lateinit var resultMetaContainer: View
     private lateinit var resultCount: TextView
     private lateinit var resultUpdatedAt: TextView
     private lateinit var saveButton: MaterialButton
@@ -134,20 +138,23 @@ class SearchFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val context = requireContext()
-        val originInput = view.findViewById<MaterialAutoCompleteTextView>(R.id.searchOriginInput)
-        val destinationInput = view.findViewById<MaterialAutoCompleteTextView>(R.id.searchDestinationInput)
-        val originLayout = view.findViewById<TextInputLayout>(R.id.searchOriginLayout)
-        val destinationLayout = view.findViewById<TextInputLayout>(R.id.searchDestinationLayout)
-        originAttribution = view.findViewById(R.id.searchOriginAttribution)
-        destinationAttribution = view.findViewById(R.id.searchDestinationAttribution)
-        val currentLocationButton = view.findViewById<View>(R.id.searchCurrentLocationButton)
+        val placeEditor = view.findViewById<PlacePairEditorView>(R.id.searchPlacePairEditor)
+        val originInput = placeEditor.originInput
+        val destinationInput = placeEditor.destinationInput
+        originInput.isSaveEnabled = false
+        destinationInput.isSaveEnabled = false
+        val originLayout = placeEditor.originInputLayout
+        val destinationLayout = placeEditor.destinationInputLayout
+        originAttribution = placeEditor.originAttribution
+        destinationAttribution = placeEditor.destinationAttribution
+        val currentLocationButton = placeEditor.currentLocationButton
 
         originController = PlaceInputController(
             context = context,
             input = originInput,
             inputLayout = originLayout,
-            loadingView = view.findViewById(R.id.searchOriginLoading),
-            candidateList = view.findViewById(R.id.searchOriginCandidateList),
+            loadingView = placeEditor.originLoading,
+            candidateList = placeEditor.originCandidateList,
             placeSearchRepository = placeSearchRepositoryFactory(),
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
@@ -176,8 +183,8 @@ class SearchFragment : Fragment() {
             context = context,
             input = destinationInput,
             inputLayout = destinationLayout,
-            loadingView = view.findViewById(R.id.searchDestinationLoading),
-            candidateList = view.findViewById(R.id.searchDestinationCandidateList),
+            loadingView = placeEditor.destinationLoading,
+            candidateList = placeEditor.destinationCandidateList,
             placeSearchRepository = placeSearchRepositoryFactory(),
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
@@ -203,12 +210,16 @@ class SearchFragment : Fragment() {
 
         resultList = view.findViewById(R.id.searchResultList)
         swipeRefresh = view.findViewById(R.id.searchSwipeRefresh)
-        sortControls = view.findViewById(R.id.searchSortControls)
+        val resultControls = view.findViewById<RouteResultControlsView>(
+            R.id.searchRouteResultControls
+        )
+        routeResultControls = resultControls
+        sortControls = resultControls.sortControls
         resultLoading = view.findViewById(R.id.searchResultLoading)
         resultStatus = view.findViewById(R.id.searchResultStatus)
-        resultMetaContainer = view.findViewById(R.id.searchResultMetaContainer)
-        resultCount = view.findViewById(R.id.searchResultCount)
-        resultUpdatedAt = view.findViewById(R.id.searchResultUpdatedAt)
+        resultMetaContainer = resultControls.summaryContainer
+        resultCount = resultControls.summaryText
+        resultUpdatedAt = resultControls.updatedAtText
         saveButton = view.findViewById(R.id.searchSaveButton)
         queryButton = view.findViewById(R.id.searchQueryButton)
         detailSheet = RouteDetailBottomSheet(
@@ -225,17 +236,11 @@ class SearchFragment : Fragment() {
         )
         resultList.layoutManager = LinearLayoutManager(context)
         resultList.adapter = resultAdapter
-        resultList.isNestedScrollingEnabled = false
+        resultList.isNestedScrollingEnabled = true
         swipeRefresh.setColorSchemeResources(R.color.bus_chip_selected)
         swipeRefresh.setOnRefreshListener { query(preserveSort = true) }
         updateRefreshEnabled()
-        sortButtons = mapOf(
-            SortField.ROUTE to view.findViewById(R.id.searchSortRouteButton),
-            SortField.PRICE to view.findViewById(R.id.searchSortPriceButton),
-            SortField.DURATION to view.findViewById(R.id.searchSortDurationButton),
-            SortField.ARRIVAL to view.findViewById(R.id.searchSortArrivalButton),
-            SortField.WALKING_DISTANCE to view.findViewById(R.id.searchSortWalkingButton)
-        )
+        sortButtons = resultControls.sortButtons
         sortButtons.forEach { (field, button) -> button.setOnClickListener { sortBy(field) } }
         updateSortControls()
         renderSearchActions()
@@ -248,7 +253,7 @@ class SearchFragment : Fragment() {
             requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
         }
 
-        view.findViewById<AppCompatImageButton>(R.id.searchSwapButton).setOnClickListener { button ->
+        placeEditor.swapButton.setOnClickListener { button ->
             button.animate().rotationBy(180f).setDuration(220L).start()
             swapSearchPlaces()
         }
@@ -272,9 +277,19 @@ class SearchFragment : Fragment() {
         renderAttribution()
         renderSearchActions()
         restoreSubmittedQueryIfNeeded()
+        requestSilentCandidateLocationSnapshotIfNeeded()
+        isViewStateRestored = true
+        if (hasPendingDestinationSelection) {
+            hasPendingDestinationSelection = false
+            onDestinationSelected()
+        }
     }
 
     fun onDestinationSelected() {
+        if (!isViewStateRestored) {
+            hasPendingDestinationSelection = true
+            return
+        }
         val generation = currentPlaceRequestState.beginAutoRequest(
             hasSelectedOrigin = originController?.selectedPlace != null || restoredOrigin != null,
             originInput = originController?.currentInputText().orEmpty(),
@@ -299,6 +314,8 @@ class SearchFragment : Fragment() {
         destinationController?.dispose()
         originController = null
         destinationController = null
+        isViewStateRestored = false
+        hasPendingDestinationSelection = false
         candidateBackCallback = null
         detailSheet.dispose()
         etaSheet.dispose()
@@ -366,7 +383,7 @@ class SearchFragment : Fragment() {
                             result.attribution == PlaceAttribution.GOOGLE_MAPS
                         )
                         renderAttribution()
-                        renderSearchActions()
+                        onSearchSelectionChanged()
                     }
                     CurrentPlaceSelectionResult.Failure -> {
                         if (isAuto) {
@@ -392,6 +409,32 @@ class SearchFragment : Fragment() {
         }
     }
 
+    private fun requestSilentCandidateLocationSnapshotIfNeeded() {
+        val hasRestoredState = restoredOrigin != null ||
+            restoredDestination != null ||
+            !restoredOriginInput.isNullOrBlank() ||
+            !restoredDestinationInput.isNullOrBlank() ||
+            hasSubmittedQuery
+        val context = context ?: return
+        val canRequest = hasRestoredState &&
+            LocationPermissionUtils.hasForegroundLocationPermission(context) &&
+            SystemLocationUtils.isLocationEnabled(context)
+        val generation = currentPlaceRequestState.beginSilentSnapshotRequest(canRequest) ?: return
+        val handleResult: (CurrentLocationSnapshot?) -> Unit = { snapshot ->
+            mainHandler.post {
+                if (!isViewActive() || !currentPlaceRequestState.finish(generation)) return@post
+                originController?.setCurrentLocationSnapshot(snapshot)
+                destinationController?.setCurrentLocationSnapshot(snapshot)
+            }
+        }
+        val override = currentLocationSnapshotRequestOverride
+        if (override != null) {
+            override(handleResult)
+        } else {
+            (activity as? MainActivity)?.requestCurrentLocationSnapshot(handleResult)
+        }
+    }
+
     private fun query(preserveSort: Boolean = false) {
         val origin = originController?.selectedPlace
         val destination = destinationController?.selectedPlace
@@ -408,6 +451,7 @@ class SearchFragment : Fragment() {
         if (!isRefresh) {
             resultAdapter.submitList(emptyList())
             resultList.visibility = View.GONE
+            routeResultControls.visibility = View.GONE
             sortControls.visibility = View.GONE
             resultMetaContainer.visibility = View.GONE
         }
@@ -425,6 +469,8 @@ class SearchFragment : Fragment() {
                 )
                 resultAdapter.submitList(currentResults)
                 resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+                routeResultControls.visibility =
+                    if (currentResults.isEmpty()) View.GONE else View.VISIBLE
                 sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
                 resultCount.text = RouteResultCardFormatter.resultSummary(
                     currentResults,
@@ -470,11 +516,13 @@ class SearchFragment : Fragment() {
                 if (isRefresh) {
                     resultAdapter.submitList(currentResults)
                     resultList.visibility = View.VISIBLE
+                    routeResultControls.visibility = View.VISIBLE
                     sortControls.visibility = View.VISIBLE
                     Toast.makeText(requireContext(), R.string.refresh_failed, Toast.LENGTH_SHORT).show()
                 } else {
                     resultAdapter.submitList(emptyList())
                     resultList.visibility = View.GONE
+                    routeResultControls.visibility = View.GONE
                     sortControls.visibility = View.GONE
                     showStatus(getString(R.string.search_failed))
                 }
@@ -603,8 +651,19 @@ class SearchFragment : Fragment() {
 
     private fun onSearchSelectionChanged() {
         hasSubmittedQuery = false
+        routeQueryCoordinator.invalidate()
+        routeQueryState.clear()
+        swipeRefresh.isRefreshing = false
+        resultAdapter.submitList(emptyList())
+        resultList.visibility = View.GONE
+        routeResultControls.visibility = View.GONE
+        sortControls.visibility = View.GONE
+        resultMetaContainer.visibility = View.GONE
+        resultLoading.visibility = View.GONE
+        showStatus(null)
         clearSuccessfulQuery()
         renderSearchActions()
+        updateRefreshEnabled()
     }
 
     private fun clearSuccessfulQuery() {
@@ -677,11 +736,16 @@ class SearchFragment : Fragment() {
         internal var currentPlaceRequestOverride:
             ((Boolean, (CurrentPlaceSelectionResult) -> Unit) -> Unit)? = null
 
+        @Volatile
+        internal var currentLocationSnapshotRequestOverride:
+            (((CurrentLocationSnapshot?) -> Unit) -> Unit)? = null
+
         internal fun resetTestDependencies() {
             busRouteRepositoryFactory = { CitybusBusRouteRepository() }
             placeSearchRepositoryFactory = { CitybusPlaceSearchRepository() }
             routeDetailRepositoryFactory = { CitybusRouteDetailRepository() }
             currentPlaceRequestOverride = null
+            currentLocationSnapshotRequestOverride = null
         }
 
         const val STATE_ORIGIN = "search_origin"

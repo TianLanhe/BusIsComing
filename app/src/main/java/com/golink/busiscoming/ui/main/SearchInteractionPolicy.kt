@@ -25,6 +25,7 @@ object SearchResultSaveEligibility {
 class SearchCurrentPlaceRequestState {
     private var generation = 0
     private var autoAttempted = false
+    private var silentSnapshotAttempted = false
 
     var isPending: Boolean = false
         private set
@@ -41,6 +42,12 @@ class SearchCurrentPlaceRequestState {
     }
 
     fun beginManualRequest(): Int = beginRequest()
+
+    fun beginSilentSnapshotRequest(canRequest: Boolean): Int? {
+        if (!canRequest || silentSnapshotAttempted) return null
+        silentSnapshotAttempted = true
+        return beginRequest()
+    }
 
     fun invalidate() {
         generation += 1

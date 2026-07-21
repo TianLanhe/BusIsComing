@@ -34,4 +34,15 @@ class TransitCodeShortcutContractTest {
         assertTrue(mainActivity.contains("consumeTransitCodeIntent(intent)"))
         assertFalse(mainActivity.contains("transitCodeButton.setOnClickListener"))
     }
+
+    @Test
+    fun `pinned shortcut request distinguishes actual and pending states`() {
+        val source = shortcutManager.readText()
+        assertTrue(source.contains("enum class TransitCodeShortcutState"))
+        assertTrue(source.contains("ALREADY_PINNED"))
+        assertTrue(source.contains("ShortcutManagerCompat.getShortcuts"))
+        assertTrue(source.contains("ShortcutManagerCompat.FLAG_MATCH_PINNED"))
+        assertTrue(source.contains("TransitCodeShortcutPinnedReceiver"))
+        assertFalse(source.contains("requestPinShortcut(context, shortcut, null)"))
+    }
 }

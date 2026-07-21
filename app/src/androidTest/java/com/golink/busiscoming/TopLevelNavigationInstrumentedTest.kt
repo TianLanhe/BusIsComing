@@ -23,6 +23,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Rule
 import org.junit.runner.RunWith
+import java.io.FileInputStream
 import kotlin.math.roundToInt
 
 @RunWith(AndroidJUnit4::class)
@@ -48,10 +49,10 @@ class TopLevelNavigationInstrumentedTest {
     fun tabSwitchKeepsSearchDraftAndRecreationKeepsSelectedDestination() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
-            onView(withId(R.id.searchOriginInput)).perform(replaceText("未提交起點"))
+            onView(withId(R.id.placePairOriginInput)).perform(replaceText("未提交起點"))
             onView(withId(R.id.navigation_settings)).perform(click())
             onView(withId(R.id.navigation_search)).perform(click())
-            onView(withId(R.id.searchOriginInput)).check(matches(withText("未提交起點")))
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("未提交起點")))
 
             scenario.recreate()
 
@@ -80,6 +81,22 @@ class TopLevelNavigationInstrumentedTest {
             scenario.onActivity { activity ->
                 assertNavigationState(activity, R.id.navigation_settings)
             }
+        }
+    }
+
+    @Test
+    fun activeIndicatorAndLabelRemainSeparatedAcrossSupportedFontScales() {
+        try {
+            listOf("1.0", "1.3", "2.0").forEach { fontScale ->
+                runShell("settings put system font_scale $fontScale")
+                ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                    scenario.onActivity { activity ->
+                        assertNavigationState(activity, R.id.navigation_frequent_routes)
+                    }
+                }
+            }
+        } finally {
+            runShell("settings put system font_scale 1.0")
         }
     }
 
@@ -132,9 +149,50 @@ class TopLevelNavigationInstrumentedTest {
         val widths = (0 until menuView.childCount).map { menuView.getChildAt(it).measuredWidth }
         assertEquals(3, widths.size)
         assertTrue(widths.all { it == widths.first() })
+
+        val selectedIndex = checkedItems.single().itemId.let { checkedId ->
+            (0 until navigation.menu.size()).first { navigation.menu.getItem(it).itemId == checkedId }
+        }
+        val selectedItem = menuView.getChildAt(selectedIndex)
+        val indicator = selectedItem.findViewById<android.view.View>(
+            com.google.android.material.R.id.navigation_bar_item_active_indicator_view
+        )
+        val labelGroup = selectedItem.findViewById<android.view.View>(
+            com.google.android.material.R.id.navigation_bar_item_labels_group
+        )
+        val indicatorBounds = screenBounds(indicator)
+        val labelBounds = screenBounds(labelGroup)
+        assertTrue(
+            "Selected label must remain visibly below the active indicator",
+            labelBounds.top - indicatorBounds.bottom >= dp(activity, 4)
+        )
+        assertTrue(
+            "Selected label must remain inside the navigation bar",
+            labelBounds.bottom <= screenBounds(navigation).bottom
+        )
+    }
+
+    private fun screenBounds(view: android.view.View): android.graphics.Rect {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        return android.graphics.Rect(
+            location[0],
+            location[1],
+            location[0] + view.width,
+            location[1] + view.height
+        )
     }
 
     private fun dp(activity: MainActivity, value: Int): Int {
         return (value * activity.resources.displayMetrics.density).roundToInt()
+    }
+
+    private fun runShell(command: String): String {
+        val descriptor = InstrumentationRegistry.getInstrumentation()
+            .uiAutomation
+            .executeShellCommand(command)
+        return FileInputStream(descriptor.fileDescriptor).use { input ->
+            input.readBytes().decodeToString()
+        }
     }
 }

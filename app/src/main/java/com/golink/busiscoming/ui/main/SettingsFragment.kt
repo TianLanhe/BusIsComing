@@ -24,6 +24,8 @@ import com.golink.busiscoming.ui.settings.RouteTransferActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class SettingsFragment : Fragment() {
+    private var transitCodeShortcutValue: TextView? = null
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -51,6 +53,8 @@ class SettingsFragment : Fragment() {
             appearanceValue.setText(mode.labelRes())
         }
         renderThemeMode(themeStore.getMode())
+        transitCodeShortcutValue = view.findViewById(R.id.settingsTransitCodeShortcutValue)
+        renderTransitCodeShortcutState()
         view.findViewById<View>(R.id.settingsAppearanceRow).setOnClickListener {
             val modes = arrayOf(AppThemeMode.SYSTEM, AppThemeMode.LIGHT, AppThemeMode.DARK)
             val labels = modes.map { getString(it.labelRes()) }.toTypedArray()
@@ -101,15 +105,17 @@ class SettingsFragment : Fragment() {
         }
         view.findViewById<View>(R.id.settingsTransitCodeShortcutRow).setOnClickListener {
             val message = when (TransitCodeShortcutManager.requestPinnedShortcut(requireContext())) {
-                TransitCodeShortcutRequestResult.REQUESTED -> null
+                TransitCodeShortcutRequestResult.ALREADY_PINNED ->
+                    R.string.transit_code_shortcut_already_added
+                TransitCodeShortcutRequestResult.REQUESTED ->
+                    R.string.transit_code_shortcut_confirm_system
                 TransitCodeShortcutRequestResult.UNSUPPORTED ->
-                    R.string.transit_code_shortcut_unsupported
+                    R.string.transit_code_shortcut_unsupported_guide
                 TransitCodeShortcutRequestResult.FAILED ->
-                    R.string.transit_code_shortcut_failed
+                    R.string.transit_code_shortcut_failed_retry
             }
-            message?.let {
-                Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
-            }
+            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+            renderTransitCodeShortcutState()
         }
         view.findViewById<View>(R.id.settingsShareRow).setOnClickListener {
             AppSupportActions.shareApp(requireContext())
@@ -129,6 +135,29 @@ class SettingsFragment : Fragment() {
         view.findViewById<View>(R.id.settingsPrivacyRow).setOnClickListener {
             AppSupportActions.openPrivacyPolicy(requireContext())
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        renderTransitCodeShortcutState()
+    }
+
+    override fun onDestroyView() {
+        transitCodeShortcutValue = null
+        super.onDestroyView()
+    }
+
+    private fun renderTransitCodeShortcutState() {
+        val value = transitCodeShortcutValue ?: return
+        value.setText(
+            if (TransitCodeShortcutManager.currentState(requireContext()) ==
+                TransitCodeShortcutState.PINNED
+            ) {
+                R.string.transit_code_shortcut_already_added
+            } else {
+                R.string.settings_transit_code_shortcut_summary
+            }
+        )
     }
 
     private fun AppThemeMode.labelRes(): Int = when (this) {

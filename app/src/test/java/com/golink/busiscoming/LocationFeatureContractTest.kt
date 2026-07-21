@@ -22,6 +22,8 @@ class LocationFeatureContractTest {
         File("src/main/java/com/golink/busiscoming/data/location/GoogleReverseGeocodingPlaceNameResolver.kt").readText()
     private val routeEditLayoutXml =
         File("src/main/res/layout/activity_route_edit.xml").readText()
+    private val placePairLayoutXml =
+        File("src/main/res/layout/view_place_pair_editor.xml").readText()
     private val stringsXml =
         File("src/main/res/values/strings.xml").readText()
 
@@ -133,11 +135,12 @@ class LocationFeatureContractTest {
         assertFalse(googleResolverKt.contains("MockPlaceNameResolver"))
 
         assertTrue(stringsXml.contains("地址由 Google Maps 提供"))
-        assertTrue(routeEditLayoutXml.contains("@+id/originAttributionText"))
-        assertTrue(routeEditLayoutXml.contains("@string/google_maps_address_attribution"))
+        assertTrue(routeEditLayoutXml.contains("PlacePairEditorView"))
+        assertTrue(placePairLayoutXml.contains("@+id/placePairOriginAttribution"))
+        assertTrue(placePairLayoutXml.contains("@string/google_maps_address_attribution"))
         assertTrue(routeEditActivityKt.contains("showOriginAttribution(nameResult.attribution)"))
         assertTrue(routeEditActivityKt.contains("hideOriginAttribution()"))
-        assertTrue(searchFragmentKt.contains("searchOriginAttribution"))
+        assertTrue(searchFragmentKt.contains("placeEditor.originAttribution"))
         assertTrue(searchFragmentKt.contains("result.attribution == PlaceAttribution.GOOGLE_MAPS"))
     }
 

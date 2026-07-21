@@ -102,8 +102,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routePickerButton: MaterialButton
     private lateinit var routeManageButton: MaterialButton
     private lateinit var resultSection: LinearLayout
-    private lateinit var stickyResultControls: LinearLayout
-    private lateinit var sortControls: LinearLayout
+    private lateinit var stickyResultControls: View
+    private lateinit var sortControls: View
     private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummaryText: TextView
     private lateinit var resultUpdatedAtText: TextView
@@ -358,6 +358,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupTopLevelNavigation(savedInstanceState: Bundle?) {
         topLevelNav = findViewById(R.id.topLevelNav)
+        topLevelNav.post(::applyTopLevelNavigationLabelSpacing)
         val restored = savedInstanceState
             ?.getString(STATE_SELECTED_DESTINATION)
             ?.let { runCatching { TopLevelDestination.valueOf(it) }.getOrNull() }
@@ -371,6 +372,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
         topLevelNav.selectedItemId = restored.menuItemId()
+    }
+
+    private fun applyTopLevelNavigationLabelSpacing() {
+        val menuView = topLevelNav.getChildAt(0) as? ViewGroup ?: return
+        topLevelNav.clipChildren = false
+        menuView.clipChildren = false
+        repeat(menuView.childCount) { index ->
+            val itemView = menuView.getChildAt(index) as? ViewGroup ?: return@repeat
+            itemView.clipChildren = false
+            itemView.findViewById<View>(
+                com.google.android.material.R.id.navigation_bar_item_labels_group
+            )?.translationY = dp(TOP_LEVEL_LABEL_OFFSET_DP).toFloat()
+        }
     }
 
     private fun selectDestination(destination: TopLevelDestination): Boolean {
@@ -949,6 +963,19 @@ class MainActivity : AppCompatActivity() {
             LocationPermissionUtils.permissions,
             REQUEST_LOCATION_PERMISSION
         )
+    }
+
+    fun requestCurrentLocationSnapshot(callback: (CurrentLocationSnapshot?) -> Unit) {
+        if (
+            !LocationPermissionUtils.hasForegroundLocationPermission(this) ||
+            !SystemLocationUtils.isLocationEnabled(this)
+        ) {
+            callback(null)
+            return
+        }
+        currentLocationCoordinator.getCurrentLocation { result ->
+            callback((result as? CurrentLocationResult.Success)?.snapshot)
+        }
     }
 
     fun refreshFrequentRoutes() {
@@ -1554,6 +1581,7 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_POST_NOTIFICATIONS = 301
         private const val REQUEST_LOCATION_PERMISSION = 302
         private const val REFRESH_LIST_TOP_INSET_DP = 44
+        private const val TOP_LEVEL_LABEL_OFFSET_DP = 5
         private const val REFRESH_SUCCESS_DURATION_MS = 500L
         private const val CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L
         private const val FIRST_RUN_INTRO_DURATION_MS = 180L

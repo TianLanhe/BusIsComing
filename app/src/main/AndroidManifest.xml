@@ -35,6 +35,10 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <receiver
+            android:name=".ui.main.TransitCodeShortcutPinnedReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".ui.edit.RouteEditActivity"
             android:exported="false"
