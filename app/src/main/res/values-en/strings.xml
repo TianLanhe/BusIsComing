@@ -1,4 +1,5 @@
 <resources>
+    <string name="route_direction_arrow">→</string>
     <string name="app_name">BusIsComing</string>
     <string name="route_refreshing">Refreshing</string>
     <string name="route_refresh_complete">Refresh complete</string>
@@ -43,6 +44,11 @@
     <string name="privacy_policy_failed">Unable to open the privacy policy right now</string>
     <string name="website_failed">Unable to open the website right now</string>
     <string name="transit_code_launch_failed">Unable to open a transit code. Check that AlipayHK or Alipay is installed.</string>
+    <string name="transit_code_shortcut_long_label">Open transit code</string>
+    <string name="settings_transit_code_shortcut">Transit code shortcut</string>
+    <string name="settings_transit_code_shortcut_summary">Open from your Home screen</string>
+    <string name="transit_code_shortcut_unsupported">Your Home screen does not support pinned shortcuts</string>
+    <string name="transit_code_shortcut_failed">Unable to add the transit code shortcut</string>
     <string name="route_transfer_title">Import and export journeys</string>
     <string name="route_transfer_current_count">You have %1$d regular journeys</string>
     <string name="route_transfer_import_title">Import regular journeys</string>

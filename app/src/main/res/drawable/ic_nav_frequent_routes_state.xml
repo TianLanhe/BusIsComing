@@ -3,9 +3,5 @@
     <item
         android:drawable="@drawable/ic_nav_frequent_routes"
         android:state_checked="true" />
-    <item>
-        <inset
-            android:drawable="@drawable/ic_nav_frequent_routes"
-            android:inset="2dp" />
-    </item>
+    <item android:drawable="@drawable/ic_nav_frequent_routes" />
 </selector>

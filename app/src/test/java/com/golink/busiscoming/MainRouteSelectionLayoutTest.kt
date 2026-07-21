@@ -17,12 +17,14 @@ class MainRouteSelectionLayoutTest {
     fun frequentRoutesKeepsSavedRouteQueryAndResultsSurface() {
         assertTrue(frequentLayout.contains("@+id/routePickerButton"))
         assertTrue(frequentLayout.contains("@+id/routeManageButton"))
-        assertTrue(frequentLayout.contains("@+id/transitCodeButton"))
+        assertFalse(frequentLayout.contains("@+id/transitCodeButton"))
+        assertFalse(frequentLayout.contains("@+id/firstRunTransitCodeButton"))
+        assertFalse(frequentLayout.contains("@+id/settingsButton"))
         assertTrue(frequentLayout.contains("@+id/resultListContainer"))
         assertTrue(frequentLayout.contains("@+id/resultRefreshOverlay"))
         assertTrue(frequentLayout.contains("@+id/firstRunHeadlineText"))
         assertTrue(mainActivity.contains("RouteManageActivity::class.java"))
-        assertTrue(mainActivity.contains("TransitCodePaymentLauncher.forActivity(this)"))
+        assertFalse(mainActivity.contains("transitCodeButton.setOnClickListener"))
     }
 
     @Test
@@ -49,6 +51,36 @@ class MainRouteSelectionLayoutTest {
     }
 
     @Test
+    fun frequentHeaderIsOneRowAndOnlyResultControlsStayPinned() {
+        assertTrue(frequentLayout.contains("<androidx.coordinatorlayout.widget.CoordinatorLayout"))
+        assertTrue(frequentLayout.contains("<com.google.android.material.appbar.AppBarLayout"))
+        assertTrue(frequentLayout.contains("android:id=\"@+id/collapsingQueryControls\""))
+        assertTrue(frequentLayout.contains("app:layout_scrollFlags=\"scroll\""))
+        assertTrue(frequentLayout.contains("android:id=\"@+id/stickyResultControls\""))
+        assertTrue(frequentLayout.contains("app:layout_behavior=\"@string/appbar_scrolling_view_behavior\""))
+        assertTrue(frequentLayout.contains("android:paddingStart=\"16dp\""))
+        assertTrue(frequentLayout.contains("android:paddingEnd=\"16dp\""))
+
+        val header = frequentLayout
+            .substringAfter("android:id=\"@+id/frequentRoutesHeader\"")
+            .substringBefore("</LinearLayout>")
+        assertTrue(header.contains("android:orientation=\"horizontal\""))
+        val title = header.substringAfter("@+id/frequentRoutesTitle").substringBefore("/>")
+        assertTrue(title.contains("android:layout_width=\"0dp\""))
+        assertTrue(title.contains("android:layout_weight=\"1\""))
+    }
+
+    @Test
+    fun hiddenResultControlsDoNotReserveAStickySpacer() {
+        val sticky = frequentLayout
+            .substringAfter("android:id=\"@+id/stickyResultControls\"")
+            .substringBefore("</LinearLayout>")
+
+        assertTrue(sticky.contains("android:visibility=\"gone\""))
+        assertTrue(mainActivity.contains("updateStickyResultControlsVisibility()"))
+    }
+
+    @Test
     fun searchProvidesInlinePlaceSelectionAndSavedRouteAction() {
         assertTrue(searchLayout.contains("@+id/searchOriginInput"))
         assertTrue(searchLayout.contains("@+id/searchDestinationInput"))
@@ -60,6 +92,16 @@ class MainRouteSelectionLayoutTest {
         assertTrue(searchFragment.contains("TemporaryRouteSaveDialog.show"))
         assertTrue(searchFragment.contains("RouteQueryCoordinator"))
         assertTrue(routeQueryCoordinator.contains("searchRoutesProgressively"))
+    }
+
+    @Test
+    fun leavingSearchInvalidatesLocationWithoutDiscardingSuccessfulSaveEligibility() {
+        val onDestinationHidden = searchFragment
+            .substringAfter("fun onDestinationHidden()")
+            .substringBefore("override fun onDestroyView()")
+
+        assertTrue(onDestinationHidden.contains("invalidateCurrentPlaceRequest()"))
+        assertFalse(onDestinationHidden.contains("clearSuccessfulQuery()"))
     }
 
     @Test

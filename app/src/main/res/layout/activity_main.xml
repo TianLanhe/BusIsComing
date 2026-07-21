@@ -19,7 +19,7 @@
         android:layout_height="wrap_content"
         android:background="@color/bus_card_surface"
         app:itemActiveIndicatorStyle="@style/TopLevelNavigation.ActiveIndicator"
-        app:itemIconSize="28dp"
+        app:itemIconSize="24dp"
         app:itemIconTint="@color/top_level_navigation_item_tint"
         app:itemPaddingBottom="8dp"
         app:itemPaddingTop="8dp"

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="transit_code"
+        android:enabled="true"
+        android:icon="@drawable/ic_transit_code"
+        android:shortcutShortLabel="@string/transit_code"
+        android:shortcutLongLabel="@string/transit_code_shortcut_long_label">
+        <intent
+            android:action="com.golink.busiscoming.action.OPEN_TRANSIT_CODE"
+            android:targetClass="com.golink.busiscoming.ui.main.MainActivity"
+            android:targetPackage="com.golink.busiscoming" />
+    </shortcut>
+</shortcuts>

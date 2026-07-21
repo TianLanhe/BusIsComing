@@ -1,7 +1,6 @@
 package com.golink.busiscoming
 
 import android.view.View
-import android.widget.LinearLayout
 import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.test.core.app.ActivityScenario
@@ -17,6 +16,8 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.matcher.ViewMatchers.isClickable
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.isEnabled
+import androidx.test.espresso.matcher.ViewMatchers.isNotEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
@@ -47,7 +48,6 @@ import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.SearchFragment
 import org.hamcrest.CoreMatchers.allOf
 import org.junit.After
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -75,8 +75,7 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.navigation_search)).perform(click())
             waitForText("暫時無法取得目前位置，請手動選擇起點")
 
-            onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
-            onView(withText("請選擇起點地點")).check(matches(isDisplayed()))
+            onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
 
             selectPlace(R.id.searchOriginInput, "o", "測試起點")
             selectPlace(R.id.searchDestinationInput, "d", "測試終點")
@@ -86,28 +85,15 @@ class SearchDestinationInstrumentedTest {
 
             onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
             waitForTextAndScroll("測試路線")
-            onView(withId(R.id.searchResultSummary)).check(matches(withText("測試終點 → 測試起點")))
+            onView(withId(R.id.searchResultCount)).check(matches(isDisplayed()))
             onView(withId(R.id.searchResultUpdatedAt)).check(matches(isDisplayed()))
             scenario.onActivity { activity ->
-                val configuration = activity.resources.configuration
-                val summaryContainer = activity.findViewById<LinearLayout>(
-                    R.id.searchResultSummaryContainer
-                )
-                val summary = activity.findViewById<View>(R.id.searchResultSummary)
-                val actions = activity.findViewById<View>(R.id.searchResultActions)
                 val save = activity.findViewById<View>(R.id.searchSaveButton)
-                val useSingleRow = configuration.screenWidthDp >= 600 &&
-                    configuration.fontScale < 1.3f
-                assertEquals(
-                    if (useSingleRow) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL,
-                    summaryContainer.orientation
-                )
-                if (useSingleRow) {
-                    assertTrue(summary.right <= actions.left)
-                } else {
-                    assertTrue(summary.bottom <= actions.top)
-                }
+                val placeColumn = activity.findViewById<View>(R.id.searchPlaceColumn)
+                val swapSlot = activity.findViewById<View>(R.id.searchSwapSlot)
                 assertTrue(save.measuredHeight >= dp(activity, 48))
+                assertTrue(save.right <= placeColumn.right)
+                assertTrue(save.right <= swapSlot.left)
             }
             onView(withId(R.id.searchSortRouteButton)).perform(scrollTo(), click())
             onView(withId(R.id.searchSortRouteButton)).check(matches(withText("路線 ↑")))
@@ -149,9 +135,6 @@ class SearchDestinationInstrumentedTest {
             waitForTextInDialog("通知欄監控")
             pressBack()
             waitForAbsent("通知欄監控")
-
-            onView(withId(R.id.searchEditButton)).perform(scrollTo(), click())
-            onView(withId(R.id.searchOriginInput)).check(matches(isDisplayed()))
 
             onView(withId(R.id.searchRoot)).perform(swipeDown())
             waitUntil { routeRepository.queryCount >= 2 }
@@ -291,6 +274,75 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    @Test
+    fun pendingAutoOriginKeepsInputsEnabledAndDestinationSelectionDoesNotCancelIt() {
+        val callback = AtomicReference<((CurrentPlaceSelectionResult) -> Unit)?>(null)
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { isAuto, result ->
+            if (isAuto) callback.set(result)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { callback.get() != null }
+            onView(withId(R.id.searchOriginInput)).check(matches(isEnabled()))
+            onView(withId(R.id.searchDestinationInput)).check(matches(isEnabled()))
+            onView(withId(R.id.searchOriginLoading)).check(matches(isDisplayed()))
+
+            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
+            callback.get()?.invoke(currentPlaceSuccess("Google 自動起點"))
+
+            waitForText("Google 自動起點")
+            onView(withId(R.id.searchDestinationInput)).check(matches(withText("測試終點")))
+            onView(withId(R.id.searchQueryButton)).check(matches(isEnabled()))
+        }
+    }
+
+    @Test
+    fun originEditRejectsLateAutoOriginCallback() {
+        val callback = AtomicReference<((CurrentPlaceSelectionResult) -> Unit)?>(null)
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { isAuto, result ->
+            if (isAuto) callback.set(result)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { callback.get() != null }
+            onView(withId(R.id.searchOriginInput)).perform(
+                scrollTo(),
+                replaceText("手動起點"),
+                closeSoftKeyboard()
+            )
+            callback.get()?.invoke(currentPlaceSuccess("不應覆蓋"))
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            onView(withId(R.id.searchOriginInput)).check(matches(withText("手動起點")))
+            onView(withId(R.id.searchCurrentLocationButton)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun swapRejectsLateAutoOriginCallback() {
+        val callback = AtomicReference<((CurrentPlaceSelectionResult) -> Unit)?>(null)
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { isAuto, result ->
+            if (isAuto) callback.set(result)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { callback.get() != null }
+            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
+            callback.get()?.invoke(currentPlaceSuccess("不應覆蓋"))
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+            onView(withId(R.id.searchOriginInput)).check(matches(withText("測試終點")))
+            onView(withId(R.id.searchDestinationInput)).check(matches(withText("")))
+        }
+    }
+
     private fun installDependencies(routeRepository: BusRouteRepository): FakeRouteDetailRepository {
         val detailRepository = FakeRouteDetailRepository()
         SearchFragment.placeSearchRepositoryFactory = { FakePlaceRepository() }
@@ -389,6 +441,19 @@ class SearchDestinationInstrumentedTest {
 
     private fun dp(context: android.content.Context, value: Int): Int {
         return (value * context.resources.displayMetrics.density).toInt()
+    }
+
+    private fun currentPlaceSuccess(name: String): CurrentPlaceSelectionResult.Success {
+        return CurrentPlaceSelectionResult.Success(
+            place = Place(name, 22.31, 114.17),
+            snapshot = CurrentLocationSnapshot(
+                latitude = 22.31,
+                longitude = 114.17,
+                accuracyMeters = 12f,
+                elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
+            ),
+            attribution = PlaceAttribution.GOOGLE_MAPS
+        )
     }
 
     private class FakePlaceRepository : PlaceSearchRepository {

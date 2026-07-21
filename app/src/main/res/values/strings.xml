@@ -1,4 +1,5 @@
 <resources>
+    <string name="route_direction_arrow">→</string>
     <string name="app_name">BusIsComing</string>
     <string name="route_refreshing">正在刷新</string>
     <string name="route_refresh_complete">刷新完成</string>
@@ -43,6 +44,11 @@
     <string name="privacy_policy_failed">暫時無法開啟隱私政策</string>
     <string name="website_failed">暫時無法開啟網站</string>
     <string name="transit_code_launch_failed">未能開啟乘車碼，請確認已安裝 AlipayHK 或支付寶。</string>
+    <string name="transit_code_shortcut_long_label">開啟乘車碼</string>
+    <string name="settings_transit_code_shortcut">乘車碼快捷方式</string>
+    <string name="settings_transit_code_shortcut_summary">從桌面一按開啟</string>
+    <string name="transit_code_shortcut_unsupported">目前的桌面不支援固定快捷方式</string>
+    <string name="transit_code_shortcut_failed">未能添加乘車碼快捷方式</string>
     <string name="route_transfer_title">行程匯入與匯出</string>
     <string name="route_transfer_current_count">目前有 %1$d 個常用行程</string>
     <string name="route_transfer_import_title">匯入常用行程</string>

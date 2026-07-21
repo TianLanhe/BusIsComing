@@ -53,6 +53,8 @@ class PlaceInputController(
     private var searchSequence = 0
     private var pendingSearch: Runnable? = null
     private var imeTopPx = context.resources.displayMetrics.heightPixels
+    private var searchLoading = false
+    private var externalLoading = false
 
     var selectedPlace: Place? = null
         private set
@@ -176,9 +178,15 @@ class PlaceInputController(
         adapter.setCurrentLocationSnapshot(snapshot)
     }
 
+    fun setExternalLoading(isLoading: Boolean) {
+        externalLoading = isLoading
+        renderLoading()
+    }
+
     fun dispose() {
         pendingSearch?.let { mainHandler.removeCallbacks(it) }
         pendingSearch = null
+        externalLoading = false
         setSearchLoading(false)
         hideCandidates()
         ViewCompat.setOnApplyWindowInsetsListener(candidateList, null)
@@ -289,6 +297,12 @@ class PlaceInputController(
     }
 
     private fun setSearchLoading(isLoading: Boolean) {
+        searchLoading = isLoading
+        renderLoading()
+    }
+
+    private fun renderLoading() {
+        val isLoading = searchLoading || externalLoading
         loadingView.visibility = if (isLoading) View.VISIBLE else View.GONE
         idleToolView?.visibility = if (isLoading) View.INVISIBLE else View.VISIBLE
     }

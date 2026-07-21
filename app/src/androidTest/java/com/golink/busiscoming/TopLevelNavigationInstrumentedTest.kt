@@ -121,7 +121,7 @@ class TopLevelNavigationInstrumentedTest {
         val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
         assertEquals(selectedItemId, navigation.selectedItemId)
         assertTrue(navigation.isItemActiveIndicatorEnabled)
-        assertEquals(dp(activity, 28), navigation.itemIconSize)
+        assertEquals(dp(activity, 24), navigation.itemIconSize)
         val checkedItems = (0 until navigation.menu.size())
             .map { navigation.menu.getItem(it) }
             .filter { it.isChecked }

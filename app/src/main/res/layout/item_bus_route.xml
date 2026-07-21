@@ -45,16 +45,46 @@
                     android:textSize="20sp"
                     android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/busStopPreviewText"
+                <com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout
+                    android:id="@+id/busStopPreviewLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:includeFontPadding="false"
-                    android:maxLines="3"
-                    android:textColor="@color/bus_text_secondary"
-                    android:textSize="14sp"
-                    android:visibility="gone" />
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/busStopOriginText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:importantForAccessibility="no"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/bus_text_secondary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/busStopDirectionText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:importantForAccessibility="no"
+                        android:includeFontPadding="false"
+                        android:paddingHorizontal="4dp"
+                        android:text="@string/route_direction_arrow"
+                        android:textColor="@color/bus_text_secondary"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/busStopDestinationText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:importantForAccessibility="no"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/bus_text_secondary"
+                        android:textSize="14sp" />
+                </com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout>
             </LinearLayout>
 
             <LinearLayout

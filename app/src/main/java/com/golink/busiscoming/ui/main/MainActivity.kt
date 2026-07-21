@@ -92,12 +92,6 @@ class MainActivity : AppCompatActivity() {
     )
 
     private lateinit var queryButton: MaterialButton
-    private lateinit var normalTopActions: LinearLayout
-    private lateinit var firstRunTopActions: LinearLayout
-    private lateinit var transitCodeButton: MaterialButton
-    private lateinit var firstRunTransitCodeButton: MaterialButton
-    private lateinit var settingsButton: MaterialButton
-    private lateinit var firstRunSettingsButton: MaterialButton
     private lateinit var emptyRouteState: LinearLayout
     private lateinit var firstRunHeadlineText: TextView
     private lateinit var firstRunSampleLabelText: TextView
@@ -108,6 +102,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routePickerButton: MaterialButton
     private lateinit var routeManageButton: MaterialButton
     private lateinit var resultSection: LinearLayout
+    private lateinit var stickyResultControls: LinearLayout
     private lateinit var sortControls: LinearLayout
     private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummaryText: TextView
@@ -191,6 +186,13 @@ class MainActivity : AppCompatActivity() {
         transitCodePaymentLauncher = TransitCodePaymentLauncher.forActivity(this)
         installTopLevelFragments(savedInstanceState)
         setupTopLevelNavigation(savedInstanceState)
+        consumeTransitCodeIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeTransitCodeIntent(intent)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -250,12 +252,6 @@ class MainActivity : AppCompatActivity() {
     private fun bindViews() {
         val root = requireTopLevelFragment(TAG_FREQUENT_ROUTES).requireView()
         queryButton = root.findViewById(R.id.queryButton)
-        normalTopActions = root.findViewById(R.id.normalTopActions)
-        firstRunTopActions = root.findViewById(R.id.firstRunTopActions)
-        transitCodeButton = root.findViewById(R.id.transitCodeButton)
-        firstRunTransitCodeButton = root.findViewById(R.id.firstRunTransitCodeButton)
-        settingsButton = root.findViewById(R.id.settingsButton)
-        firstRunSettingsButton = root.findViewById(R.id.firstRunSettingsButton)
         emptyRouteState = root.findViewById(R.id.emptyRouteState)
         firstRunHeadlineText = root.findViewById(R.id.firstRunHeadlineText)
         firstRunSampleLabelText = root.findViewById(R.id.firstRunSampleLabelText)
@@ -266,6 +262,7 @@ class MainActivity : AppCompatActivity() {
         routePickerButton = root.findViewById(R.id.routePickerButton)
         routeManageButton = root.findViewById(R.id.routeManageButton)
         resultSection = root.findViewById(R.id.resultSection)
+        stickyResultControls = root.findViewById(R.id.stickyResultControls)
         sortControls = root.findViewById(R.id.sortControls)
         resultSummaryContainer = root.findViewById(R.id.resultSummaryContainer)
         resultSummaryText = root.findViewById(R.id.resultSummaryText)
@@ -327,13 +324,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupActions() {
-        settingsButton.visibility = View.GONE
-        firstRunSettingsButton.visibility = View.GONE
         routeManageButton.setOnClickListener {
             startActivity(Intent(this, RouteManageActivity::class.java))
         }
-        transitCodeButton.setOnClickListener { launchTransitCode() }
-        firstRunTransitCodeButton.setOnClickListener { launchTransitCode() }
         requireTopLevelFragment(TAG_FREQUENT_ROUTES).requireView()
             .findViewById<MaterialButton>(R.id.emptyAddRouteButton).setOnClickListener {
             startActivity(Intent(this, RouteEditActivity::class.java))
@@ -780,6 +773,7 @@ class MainActivity : AppCompatActivity() {
                 animateIn(resultListContainer)
             }
         }
+        updateStickyResultControlsVisibility()
         updateSwipeRefreshState()
     }
 
@@ -1056,12 +1050,25 @@ class MainActivity : AppCompatActivity() {
             RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))
         )
         resultSummaryContainer.visibility = View.VISIBLE
+        updateStickyResultControlsVisibility()
     }
 
     private fun hideResultSummary() {
         resultSummaryContainer.visibility = View.GONE
         resultSummaryText.text = ""
         resultUpdatedAtText.text = ""
+        updateStickyResultControlsVisibility()
+    }
+
+    private fun updateStickyResultControlsVisibility() {
+        stickyResultControls.visibility = if (
+            sortControls.visibility == View.VISIBLE ||
+            resultSummaryContainer.visibility == View.VISIBLE
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     private fun clearResults() {
@@ -1226,8 +1233,6 @@ class MainActivity : AppCompatActivity() {
     private fun renderHomeShell() {
         if (!::emptyRouteState.isInitialized) return
         val isFirstRun = shouldShowFirstRun()
-        normalTopActions.visibility = if (isFirstRun) View.GONE else View.VISIBLE
-        firstRunTopActions.visibility = if (isFirstRun) View.VISIBLE else View.GONE
         emptyRouteState.visibility = if (isFirstRun) View.VISIBLE else View.GONE
         queryControls.visibility = if (routeConfigs.isEmpty()) View.GONE else View.VISIBLE
         resultSection.visibility = if (routeConfigs.isEmpty() && isFirstRun) View.GONE else View.VISIBLE
@@ -1247,6 +1252,12 @@ class MainActivity : AppCompatActivity() {
         if (outcome.shouldShowFailureToast) {
             Toast.makeText(this, R.string.transit_code_launch_failed, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun consumeTransitCodeIntent(intent: Intent?) {
+        if (!TransitCodeEntryPoint.isLaunchAction(intent?.action)) return
+        intent?.action = null
+        launchTransitCode()
     }
 
     private fun animateFirstRunIntroIfNeeded() {

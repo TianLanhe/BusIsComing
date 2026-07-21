@@ -3,7 +3,6 @@ package com.golink.busiscoming.ui.main
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,7 +12,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.widget.AppCompatImageButton
-import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -37,7 +35,7 @@ import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.localizedMessage
-import com.golink.busiscoming.ui.navigation.RouteQueryGeneration
+import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
@@ -52,7 +50,7 @@ class SearchFragment : Fragment() {
     private val searchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val busRouteRepository: BusRouteRepository = busRouteRepositoryFactory()
-    private val interactionGeneration = RouteQueryGeneration()
+    private val currentPlaceRequestState = SearchCurrentPlaceRequestState()
     private val routeQueryCoordinator = RouteQueryCoordinator(
         repository = busRouteRepository,
         executor = queryExecutor,
@@ -77,6 +75,8 @@ class SearchFragment : Fragment() {
     private var restoredDestinationGoogleAttribution: Boolean = false
     private var restoredShouldRequery: Boolean = false
     private var hasSubmittedQuery: Boolean = false
+    private var successfulQueryOrigin: Place? = null
+    private var successfulQueryDestination: Place? = null
     private var pendingScrollPosition: Int? = null
     private var pendingScrollOffset: Int = 0
     private lateinit var resultAdapter: BusRouteAdapter
@@ -88,11 +88,11 @@ class SearchFragment : Fragment() {
     private lateinit var sortButtons: Map<SortField, MaterialButton>
     private lateinit var resultLoading: ProgressBar
     private lateinit var resultStatus: TextView
-    private lateinit var resultSummaryContainer: LinearLayout
-    private lateinit var resultSummary: TextView
-    private lateinit var resultActions: LinearLayout
+    private lateinit var resultMetaContainer: LinearLayout
+    private lateinit var resultCount: TextView
     private lateinit var resultUpdatedAt: TextView
     private lateinit var saveButton: MaterialButton
+    private lateinit var queryButton: MaterialButton
     private lateinit var originAttribution: TextView
     private lateinit var destinationAttribution: TextView
     private var candidateBackCallback: OnBackPressedCallback? = null
@@ -160,13 +160,16 @@ class SearchFragment : Fragment() {
                 updateRefreshEnabled()
             },
             onPlaceSelected = {
+                invalidateCurrentPlaceRequest()
                 attributionState.clearOrigin()
                 renderAttribution()
+                onSearchSelectionChanged()
             },
             onUserTextEdited = {
+                invalidateCurrentPlaceRequest()
                 attributionState.clearOrigin()
                 renderAttribution()
-                hasSubmittedQuery = false
+                onSearchSelectionChanged()
             }
         )
         destinationController = PlaceInputController(
@@ -188,11 +191,12 @@ class SearchFragment : Fragment() {
             onPlaceSelected = {
                 attributionState.clearDestination()
                 renderAttribution()
+                onSearchSelectionChanged()
             },
             onUserTextEdited = {
                 attributionState.clearDestination()
                 renderAttribution()
-                hasSubmittedQuery = false
+                onSearchSelectionChanged()
             }
         )
         currentLocationButton.setOnClickListener { requestCurrentOrigin(isAuto = false) }
@@ -202,11 +206,11 @@ class SearchFragment : Fragment() {
         sortControls = view.findViewById(R.id.searchSortControls)
         resultLoading = view.findViewById(R.id.searchResultLoading)
         resultStatus = view.findViewById(R.id.searchResultStatus)
-        resultSummaryContainer = view.findViewById(R.id.searchResultSummaryContainer)
-        resultSummary = view.findViewById(R.id.searchResultSummary)
-        resultActions = view.findViewById(R.id.searchResultActions)
+        resultMetaContainer = view.findViewById(R.id.searchResultMetaContainer)
+        resultCount = view.findViewById(R.id.searchResultCount)
         resultUpdatedAt = view.findViewById(R.id.searchResultUpdatedAt)
         saveButton = view.findViewById(R.id.searchSaveButton)
+        queryButton = view.findViewById(R.id.searchQueryButton)
         detailSheet = RouteDetailBottomSheet(
             requireActivity() as androidx.appcompat.app.AppCompatActivity,
             routeDetailRepositoryFactory()
@@ -233,8 +237,8 @@ class SearchFragment : Fragment() {
             SortField.WALKING_DISTANCE to view.findViewById(R.id.searchSortWalkingButton)
         )
         sortButtons.forEach { (field, button) -> button.setOnClickListener { sortBy(field) } }
-        configureResultSummaryLayout()
         updateSortControls()
+        renderSearchActions()
 
         candidateBackCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
@@ -253,11 +257,7 @@ class SearchFragment : Fragment() {
             destinationInput.clearFocus()
             hideCandidateLists()
         }
-        view.findViewById<MaterialButton>(R.id.searchQueryButton).setOnClickListener { query() }
-        view.findViewById<MaterialButton>(R.id.searchEditButton).setOnClickListener {
-            view.findViewById<NestedScrollView>(R.id.searchRoot).smoothScrollTo(0, originLayout.top)
-            originInput.requestFocus()
-        }
+        queryButton.setOnClickListener { query() }
         saveButton.setOnClickListener { saveCurrentRoute() }
     }
 
@@ -270,17 +270,21 @@ class SearchFragment : Fragment() {
         attributionState.setOriginGoogleMaps(restoredOriginGoogleAttribution)
         attributionState.setDestinationGoogleMaps(restoredDestinationGoogleAttribution)
         renderAttribution()
+        renderSearchActions()
         restoreSubmittedQueryIfNeeded()
     }
 
     fun onDestinationSelected() {
-        if (originController?.selectedPlace == null && restoredOrigin == null) {
-            requestCurrentOrigin(isAuto = true)
-        }
+        val generation = currentPlaceRequestState.beginAutoRequest(
+            hasSelectedOrigin = originController?.selectedPlace != null || restoredOrigin != null,
+            originInput = originController?.currentInputText().orEmpty(),
+            hasSubmittedQuery = hasSubmittedQuery
+        ) ?: return
+        requestCurrentOrigin(isAuto = true, generation = generation)
     }
 
     fun onDestinationHidden() {
-        interactionGeneration.invalidate()
+        invalidateCurrentPlaceRequest()
         routeQueryCoordinator.invalidate()
         routeQueryState.cancel()
         swipeRefresh.isRefreshing = false
@@ -288,7 +292,7 @@ class SearchFragment : Fragment() {
     }
 
     override fun onDestroyView() {
-        interactionGeneration.invalidate()
+        invalidateCurrentPlaceRequest()
         routeQueryCoordinator.invalidate()
         routeQueryState.cancel()
         originController?.dispose()
@@ -344,11 +348,15 @@ class SearchFragment : Fragment() {
         super.onDestroy()
     }
 
-    private fun requestCurrentOrigin(isAuto: Boolean) {
-        val generation = interactionGeneration.begin()
+    private fun requestCurrentOrigin(
+        isAuto: Boolean,
+        generation: Int = currentPlaceRequestState.beginManualRequest()
+    ) {
+        originController?.setExternalLoading(true)
         val handleResult: (CurrentPlaceSelectionResult) -> Unit = { result ->
             mainHandler.post {
-                if (!isViewActive() || !interactionGeneration.isCurrent(generation)) return@post
+                if (!isViewActive() || !currentPlaceRequestState.finish(generation)) return@post
+                originController?.setExternalLoading(false)
                 when (result) {
                     is CurrentPlaceSelectionResult.Success -> {
                         originController?.setCurrentLocationSnapshot(result.snapshot)
@@ -358,6 +366,7 @@ class SearchFragment : Fragment() {
                             result.attribution == PlaceAttribution.GOOGLE_MAPS
                         )
                         renderAttribution()
+                        renderSearchActions()
                     }
                     CurrentPlaceSelectionResult.Failure -> {
                         if (isAuto) {
@@ -392,18 +401,17 @@ class SearchFragment : Fragment() {
         if (!validation.isValid || origin == null || destination == null) return
 
         hasSubmittedQuery = true
-        interactionGeneration.invalidate()
+        invalidateCurrentPlaceRequest()
+        clearSuccessfulQuery()
         val isRefresh = preserveSort && currentResults.isNotEmpty()
         routeQueryState.begin(refresh = isRefresh)
         if (!isRefresh) {
             resultAdapter.submitList(emptyList())
             resultList.visibility = View.GONE
             sortControls.visibility = View.GONE
-            resultUpdatedAt.visibility = View.GONE
+            resultMetaContainer.visibility = View.GONE
         }
         resultLoading.visibility = if (isRefresh) View.GONE else View.VISIBLE
-        resultSummaryContainer.visibility = View.VISIBLE
-        resultSummary.text = "${origin.name} → ${destination.name}"
         showStatus(null)
         updateRefreshEnabled()
         routeQueryCoordinator.query(origin, destination, object : RouteQueryCoordinator.Callback {
@@ -418,11 +426,20 @@ class SearchFragment : Fragment() {
                 resultAdapter.submitList(currentResults)
                 resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
                 sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+                resultCount.text = RouteResultCardFormatter.resultSummary(
+                    currentResults,
+                    requireContext().localizedText()
+                )
                 resultUpdatedAt.text = getString(
                     R.string.updated_at,
                     formatUpdatedAt(routeQueryState.updatedAtMillis)
                 )
-                resultUpdatedAt.visibility = View.VISIBLE
+                resultMetaContainer.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+                if (currentResults.isNotEmpty()) {
+                    successfulQueryOrigin = origin
+                    successfulQueryDestination = destination
+                }
+                renderSearchActions()
                 updateSortControls()
                 restoreSearchViewportIfNeeded()
                 showStatus(if (currentResults.isEmpty()) getString(R.string.search_no_routes) else null)
@@ -449,6 +466,7 @@ class SearchFragment : Fragment() {
                 resultLoading.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
                 routeQueryState.fail(getString(R.string.search_failed), preserveResults = isRefresh)
+                clearSuccessfulQuery()
                 if (isRefresh) {
                     resultAdapter.submitList(currentResults)
                     resultList.visibility = View.VISIBLE
@@ -491,6 +509,7 @@ class SearchFragment : Fragment() {
     }
 
     private fun saveCurrentRoute() {
+        if (saveButton.visibility != View.VISIBLE) return
         val origin = originController?.selectedPlace ?: return
         val destination = destinationController?.selectedPlace ?: return
         TemporaryRouteSaveDialog.show(
@@ -553,12 +572,13 @@ class SearchFragment : Fragment() {
     private fun isViewActive(): Boolean = isAdded && view != null && !isRemoving
 
     private fun swapSearchPlaces() {
+        invalidateCurrentPlaceRequest()
         val destination = destinationController ?: return
         originController?.swapWith(destination)
         attributionState.swap()
         renderAttribution()
         hideCandidateLists()
-        hasSubmittedQuery = false
+        onSearchSelectionChanged()
     }
 
     private fun hideCandidateLists() {
@@ -581,30 +601,48 @@ class SearchFragment : Fragment() {
         }
     }
 
-    private fun configureResultSummaryLayout() {
-        val configuration = resources.configuration
-        val useSingleRow = configuration.screenWidthDp >= 600 && configuration.fontScale < 1.3f
-        resultSummaryContainer.orientation = if (useSingleRow) {
-            LinearLayout.HORIZONTAL
+    private fun onSearchSelectionChanged() {
+        hasSubmittedQuery = false
+        clearSuccessfulQuery()
+        renderSearchActions()
+    }
+
+    private fun clearSuccessfulQuery() {
+        successfulQueryOrigin = null
+        successfulQueryDestination = null
+        renderSaveAction()
+    }
+
+    private fun renderSearchActions() {
+        if (::queryButton.isInitialized) {
+            queryButton.isEnabled = originController?.selectedPlace != null &&
+                destinationController?.selectedPlace != null
+        }
+        renderSaveAction()
+    }
+
+    private fun renderSaveAction() {
+        if (!::saveButton.isInitialized) return
+        saveButton.visibility = if (
+            SearchResultSaveEligibility.isVisible(
+                queryOrigin = successfulQueryOrigin,
+                queryDestination = successfulQueryDestination,
+                currentOrigin = originController?.selectedPlace,
+                currentDestination = destinationController?.selectedPlace,
+                resultCount = currentResults.size,
+                queryInProgress = routeQueryState.isQueryInProgress,
+                queryFailed = routeQueryState.errorMessage != null
+            )
+        ) {
+            View.VISIBLE
         } else {
-            LinearLayout.VERTICAL
-        }
-        resultSummaryContainer.gravity = if (useSingleRow) Gravity.CENTER_VERTICAL else Gravity.NO_GRAVITY
-        resultSummary.layoutParams = (resultSummary.layoutParams as LinearLayout.LayoutParams).apply {
-            width = if (useSingleRow) 0 else ViewGroup.LayoutParams.MATCH_PARENT
-            weight = if (useSingleRow) 1f else 0f
-            marginEnd = if (useSingleRow) dp(8) else 0
-        }
-        resultActions.layoutParams = (resultActions.layoutParams as LinearLayout.LayoutParams).apply {
-            width = ViewGroup.LayoutParams.WRAP_CONTENT
-            weight = 0f
-            gravity = if (useSingleRow) Gravity.CENTER_VERTICAL else Gravity.END
-            topMargin = if (useSingleRow) 0 else dp(4)
+            View.GONE
         }
     }
 
-    private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
+    private fun invalidateCurrentPlaceRequest() {
+        currentPlaceRequestState.invalidate()
+        originController?.setExternalLoading(false)
     }
 
     private fun Place.writeTo(bundle: Bundle, prefix: String) {
