@@ -8,6 +8,7 @@
 - **THEN** 選中膠囊 SHALL 保持約 `64×32dp`
 - **AND** 圖示 SHALL 保持約 `24dp`
 - **AND** 膠囊底緣與標籤頂緣 SHALL 保留約 `5dp` 的可見空隙
+- **AND** 標籤字形底緣與所屬 item 底緣 SHALL 保留至少 `2dp` 的可見安全空間
 - **AND** 選中標籤 SHALL 使用 `13sp` 粗體，未選中標籤 SHALL 使用 `12sp` 正常字重
 - **AND** 選中狀態 SHALL NOT 改變三個 Tab 的寬度或導覽總高度
 

@@ -25,9 +25,10 @@ class NavigationSearchUiPolishContractTest {
         assertTrue(indicator.contains("<item name=\"android:width\">64dp</item>"))
         assertTrue(indicator.contains("<item name=\"android:height\">32dp</item>"))
         assertTrue(activityLayout.contains("app:itemIconSize=\"24dp\""))
+        assertTrue(activityLayout.contains("android:minHeight=\"64dp\""))
         assertTrue(activityLayout.contains("app:itemPaddingTop=\"6dp\""))
-        assertTrue(activityLayout.contains("app:itemPaddingBottom=\"3dp\""))
-        assertTrue(mainActivity.contains("TOP_LEVEL_LABEL_OFFSET_DP = 5"))
+        assertTrue(activityLayout.contains("app:itemPaddingBottom=\"6dp\""))
+        assertFalse(mainActivity.contains("applyTopLevelNavigationLabelSpacing"))
         assertTrue(activityLayout.contains("android:layout_height=\"wrap_content\""))
     }
 

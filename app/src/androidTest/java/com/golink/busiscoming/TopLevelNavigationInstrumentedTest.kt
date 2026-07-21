@@ -166,6 +166,23 @@ class TopLevelNavigationInstrumentedTest {
             "Selected label must remain visibly below the active indicator",
             labelBounds.top - indicatorBounds.bottom >= dp(activity, 4)
         )
+        (0 until menuView.childCount).forEach { index ->
+            val item = menuView.getChildAt(index)
+            val visibleLabelId = if (item.isSelected) {
+                com.google.android.material.R.id.navigation_bar_item_large_label_view
+            } else {
+                com.google.android.material.R.id.navigation_bar_item_small_label_view
+            }
+            val visibleLabel = item.findViewById<android.widget.TextView>(visibleLabelId)
+            val itemBounds = screenBounds(item)
+            val visibleLabelBounds = screenBounds(visibleLabel)
+            assertTrue(
+                "Navigation label glyphs must retain bottom safety space inside their item: " +
+                    "item=$itemBounds label=$visibleLabelBounds height=${visibleLabel.height} " +
+                    "baseline=${visibleLabel.baseline} metrics=${visibleLabel.paint.fontMetricsInt}",
+                visibleLabelBounds.bottom <= itemBounds.bottom - dp(activity, 2)
+            )
+        }
         assertTrue(
             "Selected label must remain inside the navigation bar",
             labelBounds.bottom <= screenBounds(navigation).bottom

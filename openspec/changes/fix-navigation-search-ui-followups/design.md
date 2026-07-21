@@ -28,7 +28,7 @@
 
 ### 1. 以 Material BottomNavigationView 的 item 幾何修正重疊
 
-保留 `64×32dp` active indicator、`24dp` icon、選中 `13sp Bold` 與未選中 `12sp Regular`，調整 item 內容的上下配置，讓 indicator 底緣與標籤頂緣保留約 `5dp` 的視覺空隙。一般字體不增加導覽總高度；大字體允許量測高度增加，避免裁切或重疊。
+保留 `64×32dp` active indicator、`24dp` icon、選中 `13sp Bold` 與未選中 `12sp Regular`。item 內容最小高度使用 `64dp`，標籤底部 padding 使用 `6dp`，讓 indicator 底緣與標籤頂緣保留約 `5dp` 的視覺空隙，並讓字形在 item 底緣內保留至少 `2dp` 安全空間。此處使用真實量測空間而非 `translationY` 越界平移；大字體仍允許量測高度增加，避免裁切或重疊。
 
 選擇沿用 Material indicator，而不是自行繪製背景或把 icon 與文字拆成自訂導覽列，原因是現有 destination、狀態恢復、Ripple、無障礙和 WindowInsets 均由 `BottomNavigationView` 穩定處理。否決縮小 indicator，因為使用者已確認保留 Google Play 式膠囊尺寸。
 
