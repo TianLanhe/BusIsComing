@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change add-route-card-stop-preview. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: 解析路線卡片站點預覽元數據
 系統 SHALL 從 Citybus 點到點候選路線的 `showroutep2p(...)` 中解析完整 P2P bus legs，用於推導路線卡片的上車站與下車站預覽。
 
@@ -119,13 +120,18 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **AND** 系統 SHALL NOT 用其中一條路線的站點預覽覆蓋另一條路線
 
 ### Requirement: 使用 P2P stop map 推導預覽站點名稱
-系統 SHALL 使用 Citybus P2P stop map 推導卡片預覽所需的上車站與下車站名稱。
+系統 SHALL 使用 Citybus P2P stop map 推導卡片預覽所需的上車站與下車站名稱，並 SHALL 保留當前語言回應中的合法站名字符。
 
 #### Scenario: 通過 P2P stop map 推導首末站
 - **WHEN** 系統成功取得某條路線 `rawInfo + lang` 對應的 P2P stop map
 - **THEN** 系統 SHALL 使用第一段 bus leg 的 `routeVariant + boardingSeq` 查找上車站
 - **AND** 系統 SHALL 使用最後一段 bus leg 的 `routeVariant + alightingSeq` 查找下車站
 - **AND** 系統 SHALL 使用兩個站點的展示名生成站點預覽
+
+#### Scenario: 英文站名包含撇號
+- **WHEN** 英文 P2P stop map 的上車站或下車站包含由 JavaScript 轉義表示的英文撇號
+- **THEN** 系統 SHALL 顯示包含還原撇號的上車站及下車站預覽
+- **AND** 系統 SHALL NOT 因該字符隱藏整行站點預覽
 
 #### Scenario: 預覽站點對齊 route variant
 - **WHEN** P2P route variant 與公開 route-stop 站序不一致
@@ -137,3 +143,32 @@ TBD - created by archiving change add-route-card-stop-preview. Update Purpose af
 - **THEN** 系統 SHALL 將該路線站點預覽視為不可用
 - **AND** 系統 SHALL NOT 影響該路線的主卡片結果展示
 
+### Requirement: 站點預覽在既有文字列內自適應單行展示
+系統 SHALL 在路線名稱下方既有左側文字列內，以單行起點、固定箭頭和單行終點展示站點預覽，且 SHALL NOT 改變右側 ETA／通知區或把預覽延伸至整張卡片。
+
+#### Scenario: 兩端短站名使用自然寬度
+- **WHEN** 起點、箭頭與終點的自然寬度不超過站名區可用寬度
+- **THEN** 起點與終點 SHALL 按內容自然寬度完整展示
+- **AND** 箭頭 SHALL 緊接兩端文字且保持可見
+
+#### Scenario: 一短一長優先保留短端
+- **WHEN** 站名總寬超出可用寬度且其中一端可在約 32% 寬度內完整展示
+- **THEN** 短端 SHALL 完整展示
+- **AND** 長端 SHALL 使用扣除短端與固定箭頭後的剩餘寬度並在必要時尾部省略
+
+#### Scenario: 兩端都長時公平分配
+- **WHEN** 起點與終點都無法在約 32% 可用文字寬度內完整展示
+- **THEN** 系統 SHALL 按自然文字寬度分配空間
+- **AND** 任一端 SHALL 至少取得約 32% 且最多取得約 68% 的可用文字寬度
+- **AND** 箭頭 SHALL 保持固定寬度且不得被省略
+
+#### Scenario: 三語與大字體保持單行
+- **WHEN** 站點名稱為繁體中文、簡體中文、英文或系統 font scale 為 2.0
+- **THEN** 起點與終點 SHALL 各自保持單行
+- **AND** 系統 SHALL NOT 使用跑馬燈、橫向捲動或自動縮小字體
+- **AND** 同一字體比例下站名 SHALL NOT 因非同步補齊而改變卡片行數
+
+#### Scenario: 完整站名可由輔助途徑取得
+- **WHEN** 卡片因寬度限制省略任一站名
+- **THEN** 路線詳情 SHALL 繼續展示完整站名
+- **AND** 站點預覽的無障礙描述 SHALL 包含完整起點與終點

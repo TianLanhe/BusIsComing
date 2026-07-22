@@ -1,17 +1,24 @@
 package com.golink.busiscoming
 
+import android.Manifest
+import android.graphics.Rect
 import android.view.View
+import android.view.ViewGroup
 import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.NoMatchingViewException
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.CoordinatesProvider
+import androidx.test.espresso.action.GeneralSwipeAction
+import androidx.test.espresso.action.Press
+import androidx.test.espresso.action.Swipe
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.replaceText
-import androidx.test.espresso.action.ViewActions.scrollTo
-import androidx.test.espresso.action.ViewActions.swipeDown
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.matcher.ViewMatchers.isClickable
@@ -24,6 +31,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.PlaceAttribution
@@ -47,14 +55,24 @@ import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.SearchFragment
 import org.hamcrest.CoreMatchers.allOf
+import org.hamcrest.Matcher
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class SearchDestinationInstrumentedTest {
+    @get:Rule
+    val locationPermissionRule: GrantPermissionRule = GrantPermissionRule.grant(
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
+
     @After
     fun resetDependencies() {
         SearchFragment.resetTestDependencies()
@@ -77,29 +95,29 @@ class SearchDestinationInstrumentedTest {
 
             onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
 
-            selectPlace(R.id.searchOriginInput, "o", "測試起點")
-            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
-            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
-            onView(withId(R.id.searchOriginInput)).check(matches(withText("測試終點")))
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("測試起點")))
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.placePairSwapButton)).perform(click())
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("測試終點")))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("測試起點")))
 
-            onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
+            onView(withId(R.id.searchQueryButton)).perform(click())
             waitForTextAndScroll("測試路線")
-            onView(withId(R.id.searchResultCount)).check(matches(isDisplayed()))
-            onView(withId(R.id.searchResultUpdatedAt)).check(matches(isDisplayed()))
+            onView(allOf(withId(R.id.resultSummaryText), isDisplayed())).check(matches(isDisplayed()))
+            onView(allOf(withId(R.id.resultUpdatedAtText), isDisplayed())).check(matches(isDisplayed()))
             scenario.onActivity { activity ->
                 val save = activity.findViewById<View>(R.id.searchSaveButton)
-                val placeColumn = activity.findViewById<View>(R.id.searchPlaceColumn)
-                val swapSlot = activity.findViewById<View>(R.id.searchSwapSlot)
+                val placeColumn = activity.findViewById<View>(R.id.placePairInputColumn)
+                val swapSlot = activity.findViewById<View>(R.id.placePairSwapSlot)
                 assertTrue(save.measuredHeight >= dp(activity, 48))
                 assertTrue(save.right <= placeColumn.right)
                 assertTrue(save.right <= swapSlot.left)
             }
-            onView(withId(R.id.searchSortRouteButton)).perform(scrollTo(), click())
-            onView(withId(R.id.searchSortRouteButton)).check(matches(withText("路線 ↑")))
+            onView(allOf(withId(R.id.sortRouteButton), isDisplayed())).perform(click())
+            onView(allOf(withId(R.id.sortRouteButton), isDisplayed())).check(matches(withText("路線 ↑")))
 
             onView(allOf(withId(R.id.busEtaTextColumn), isDisplayed(), isClickable()))
-                .perform(scrollTo(), click())
+                .perform(click())
             waitForTextInDialog("第2班")
             pressBack()
             waitForAbsent("第2班")
@@ -136,7 +154,7 @@ class SearchDestinationInstrumentedTest {
             pressBack()
             waitForAbsent("通知欄監控")
 
-            onView(withId(R.id.searchRoot)).perform(swipeDown())
+            onView(withId(R.id.searchResultList)).perform(swipeDownVisibleArea())
             waitUntil { routeRepository.queryCount >= 2 }
 
             var saveDialogTitle = ""
@@ -145,7 +163,7 @@ class SearchDestinationInstrumentedTest {
                 saveDialogTitle = activity.getString(R.string.save_frequent_title)
                 saveAction = activity.getString(R.string.action_save)
             }
-            onView(withId(R.id.searchSaveButton)).perform(scrollTo(), click())
+            onView(withId(R.id.searchSaveButton)).perform(click())
             waitForTextInDialog(saveDialogTitle)
             onView(withText(saveAction)).inRoot(isDialog()).perform(click())
             waitUntil {
@@ -179,13 +197,13 @@ class SearchDestinationInstrumentedTest {
 
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.navigation_search)).perform(click())
-            selectPlace(R.id.searchOriginInput, "o", "測試起點")
-            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
-            onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
             waitUntil { routeRepository.callbacks.size == 1 }
 
-            selectPlace(R.id.searchDestinationInput, "d2", "第二終點")
-            onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
+            selectPlace(R.id.placePairDestinationInput, "d2", "第二終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
             waitUntil { routeRepository.callbacks.size == 2 }
 
             routeRepository.callbacks[0].onInitialRoutes(listOf(route("過期路線")))
@@ -219,20 +237,20 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
             waitForText("Google 測試地址")
-            onView(withId(R.id.searchOriginAttribution)).check(matches(isDisplayed()))
+            onView(withId(R.id.placePairOriginAttribution)).check(matches(isDisplayed()))
 
-            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
-            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("Google 測試地址")))
-            onView(withId(R.id.searchOriginAttribution)).check(matches(withEffectiveVisibility(GONE)))
-            onView(withId(R.id.searchDestinationAttribution)).check(matches(isDisplayed()))
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.placePairSwapButton)).perform(click())
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("Google 測試地址")))
+            onView(withId(R.id.placePairOriginAttribution)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.placePairDestinationAttribution)).check(matches(isDisplayed()))
 
             scenario.recreate()
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("Google 測試地址")))
-            onView(withId(R.id.searchDestinationAttribution)).check(matches(isDisplayed()))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("Google 測試地址")))
+            onView(withId(R.id.placePairDestinationAttribution)).check(matches(isDisplayed()))
 
-            onView(withId(R.id.searchDestinationInput)).perform(scrollTo(), replaceText("手動修改"))
-            onView(withId(R.id.searchDestinationAttribution)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.placePairDestinationInput)).perform(replaceText("手動修改"))
+            onView(withId(R.id.placePairDestinationAttribution)).check(matches(withEffectiveVisibility(GONE)))
         }
     }
 
@@ -244,10 +262,10 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.navigation_search)).perform(click())
             waitForText("暫時無法取得目前位置，請手動選擇起點")
-            onView(withId(R.id.searchOriginInput)).perform(scrollTo(), replaceText("未確認起點"))
-            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
-            onView(withId(R.id.searchOriginInput)).check(matches(withText("")))
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("未確認起點")))
+            onView(withId(R.id.placePairOriginInput)).perform(replaceText("未確認起點"))
+            onView(withId(R.id.placePairSwapButton)).perform(click())
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("")))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("未確認起點")))
             assertTrue(routeRepository.queryCount == 0)
         }
     }
@@ -260,16 +278,16 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
             waitForText("暫時無法取得目前位置，請手動選擇起點")
-            selectPlace(R.id.searchOriginInput, "o", "測試起點")
-            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
-            onView(withId(R.id.searchQueryButton)).perform(scrollTo(), click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
             waitUntil { routeRepository.queryCount == 1 }
 
             scenario.recreate()
 
             waitUntil { routeRepository.queryCount == 2 }
-            onView(withId(R.id.searchOriginInput)).check(matches(withText("測試起點")))
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("測試終點")))
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("測試起點")))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("測試終點")))
             waitForTextAndScroll("測試路線")
         }
     }
@@ -285,15 +303,15 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.navigation_search)).perform(click())
             waitUntil { callback.get() != null }
-            onView(withId(R.id.searchOriginInput)).check(matches(isEnabled()))
-            onView(withId(R.id.searchDestinationInput)).check(matches(isEnabled()))
-            onView(withId(R.id.searchOriginLoading)).check(matches(isDisplayed()))
+            onView(withId(R.id.placePairOriginInput)).check(matches(isEnabled()))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(isEnabled()))
+            onView(withId(R.id.placePairOriginLoading)).check(matches(isDisplayed()))
 
-            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
             callback.get()?.invoke(currentPlaceSuccess("Google 自動起點"))
 
             waitForText("Google 自動起點")
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("測試終點")))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("測試終點")))
             onView(withId(R.id.searchQueryButton)).check(matches(isEnabled()))
         }
     }
@@ -309,16 +327,15 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.navigation_search)).perform(click())
             waitUntil { callback.get() != null }
-            onView(withId(R.id.searchOriginInput)).perform(
-                scrollTo(),
+            onView(withId(R.id.placePairOriginInput)).perform(
                 replaceText("手動起點"),
                 closeSoftKeyboard()
             )
             callback.get()?.invoke(currentPlaceSuccess("不應覆蓋"))
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
-            onView(withId(R.id.searchOriginInput)).check(matches(withText("手動起點")))
-            onView(withId(R.id.searchCurrentLocationButton)).check(matches(isDisplayed()))
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("手動起點")))
+            onView(withId(R.id.placePairCurrentLocationButton)).check(matches(isDisplayed()))
         }
     }
 
@@ -333,13 +350,75 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.navigation_search)).perform(click())
             waitUntil { callback.get() != null }
-            selectPlace(R.id.searchDestinationInput, "d", "測試終點")
-            onView(withId(R.id.searchSwapButton)).perform(scrollTo(), click())
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.placePairSwapButton)).perform(click())
             callback.get()?.invoke(currentPlaceSuccess("不應覆蓋"))
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
-            onView(withId(R.id.searchOriginInput)).check(matches(withText("測試終點")))
-            onView(withId(R.id.searchDestinationInput)).check(matches(withText("")))
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("測試終點")))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("")))
+        }
+    }
+
+    @Test
+    fun recreationSilentlyRestoresCandidateDistancesWithoutBlockingOrReplacingDraft() {
+        installDependencies(ImmediateRouteRepository())
+        val currentPlaceRequests = AtomicInteger(0)
+        val snapshotCallback = AtomicReference<((CurrentLocationSnapshot?) -> Unit)?>(null)
+        SearchFragment.currentPlaceRequestOverride = { _, callback ->
+            currentPlaceRequests.incrementAndGet()
+            callback(CurrentPlaceSelectionResult.Failure)
+        }
+        SearchFragment.currentLocationSnapshotRequestOverride = { callback ->
+            snapshotCallback.set(callback)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { currentPlaceRequests.get() == 1 }
+            onView(withId(R.id.placePairOriginInput)).perform(
+                replaceText("保留的起點草稿"),
+                closeSoftKeyboard()
+            )
+            assertTrue(snapshotCallback.get() == null)
+            val requestsBeforeRecreation = currentPlaceRequests.get()
+
+            scenario.recreate()
+
+            waitUntil { snapshotCallback.get() != null }
+            assertEquals(requestsBeforeRecreation, currentPlaceRequests.get())
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("保留的起點草稿")))
+            onView(withId(R.id.placePairOriginInput)).check(matches(isEnabled()))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(isEnabled()))
+            onView(withId(R.id.placePairOriginLoading)).check(matches(withEffectiveVisibility(GONE)))
+
+            snapshotCallback.get()?.invoke(
+                CurrentLocationSnapshot(
+                    latitude = 22.31,
+                    longitude = 114.17,
+                    accuracyMeters = 10f,
+                    elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
+                )
+            )
+            onView(withId(R.id.placePairDestinationInput)).perform(
+                click(),
+                replaceText("d"),
+                closeSoftKeyboard()
+            )
+            waitForText("測試終點")
+            waitUntil {
+                var distanceVisible = false
+                scenario.onActivity { activity ->
+                    val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(
+                        R.id.placePairDestinationCandidateList
+                    )
+                    val row = list.findViewHolderForAdapterPosition(0)?.itemView as? ViewGroup
+                    distanceVisible = row?.getChildAt(1)?.visibility == View.VISIBLE
+                }
+                distanceVisible
+            }
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("保留的起點草稿")))
+            assertEquals(requestsBeforeRecreation, currentPlaceRequests.get())
         }
     }
 
@@ -356,7 +435,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     private fun selectPlace(inputId: Int, keyword: String, expected: String) {
-        onView(withId(inputId)).perform(scrollTo(), click(), replaceText(keyword), closeSoftKeyboard())
+        onView(withId(inputId)).perform(click(), replaceText(keyword), closeSoftKeyboard())
         waitForText(expected)
         onView(withText(expected)).perform(click())
     }
@@ -377,7 +456,7 @@ class SearchDestinationInstrumentedTest {
     private fun waitForTextAndScroll(text: String) {
         waitUntil {
             try {
-                onView(withText(text)).perform(scrollTo()).check(matches(isDisplayed()))
+                onView(withText(text)).check(matches(isDisplayed()))
                 true
             } catch (_: Throwable) {
                 false
@@ -438,6 +517,31 @@ class SearchDestinationInstrumentedTest {
         }
         assertTrue("Timed out waiting for condition", condition())
     }
+
+    private fun swipeDownVisibleArea(): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isDisplayed()
+
+        override fun getDescription(): String = "swipe down within the visible result area"
+
+        override fun perform(uiController: UiController, view: View) {
+            GeneralSwipeAction(
+                Swipe.FAST,
+                visibleCoordinates(verticalFraction = 0.2f),
+                visibleCoordinates(verticalFraction = 0.8f),
+                Press.FINGER
+            ).perform(uiController, view)
+        }
+    }
+
+    private fun visibleCoordinates(verticalFraction: Float): CoordinatesProvider =
+        CoordinatesProvider { view ->
+            val visibleBounds = Rect()
+            check(view.getGlobalVisibleRect(visibleBounds))
+            floatArrayOf(
+                visibleBounds.exactCenterX(),
+                visibleBounds.top + visibleBounds.height() * verticalFraction
+            )
+        }
 
     private fun dp(context: android.content.Context, value: Int): Int {
         return (value * context.resources.displayMetrics.density).toInt()

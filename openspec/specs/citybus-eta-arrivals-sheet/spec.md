@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change show-multiple-citybus-eta-arrivals. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: 首程 ETA 班次底部面板
 系統 SHALL 允許用戶從路線結果卡片的候車區打開首程 ETA 班次底部面板，以查看最多 3 班車的到站資訊。
 
@@ -24,18 +25,18 @@ TBD - created by archiving change show-multiple-citybus-eta-arrivals. Update Pur
 - **THEN** 系統 SHALL NOT 打開首程 ETA 班次底部面板
 
 ### Requirement: ETA 班次面板內容
-系統 SHALL 在首程 ETA 班次底部面板中展示與該路線首程相關的班次、方向、更新時間和備註資訊。
+系統 SHALL 在首程 ETA 班次底部面板中以目前 App 語言展示與該路線首程相關的班次、方向、更新時間和備註資訊。
 
 #### Scenario: 展示面板標題和方向
 - **WHEN** 系統打開首程 ETA 班次底部面板
-- **THEN** 面板標題 SHALL 顯示為 `首程 <路線> 候車時間`
-- **AND** 面板副標題 SHALL 優先顯示為 `<上車站> 往 <dest_tc>`
-- **AND** 若 ETA 缺少 `dest_tc`，面板副標題 SHALL 使用卡片站點預覽中的下車站名作為方向
+- **THEN** 面板標題 SHALL 以目前 App 語言表達首程路線候車時間
+- **AND** 面板副標題 SHALL 優先使用目前語言選中的上車站與 ETA 目的地表達行車方向
+- **AND** 若 ETA 沒有任何可用目的地欄位，面板副標題 SHALL 使用卡片站點預覽中的下車站原文作為方向
 
 #### Scenario: 展示最多三班 ETA
 - **WHEN** 首程 ETA 響應包含 1 到 3 筆可展示班次
 - **THEN** 面板 SHALL 按班次順序展示這些班次
-- **AND** 每個班次 SHALL 包含 `第N班`、候車分鐘數和具體到達時刻
+- **AND** 每個班次的班序、候車分鐘及具體到達時刻文案 SHALL 使用目前 App 語言
 
 #### Scenario: ETA 超過三班時限制展示
 - **WHEN** 首程 ETA 響應包含超過 3 筆可展示班次
@@ -43,19 +44,24 @@ TBD - created by archiving change show-multiple-citybus-eta-arrivals. Update Pur
 
 #### Scenario: 即將到站文案
 - **WHEN** 某筆 ETA 的候車分鐘數為 0
-- **THEN** 面板中該班次的候車文案 SHALL 顯示為 `即將到站`
-- **AND** 系統 SHALL NOT 顯示 `0 分鐘`
+- **THEN** 面板 SHALL 使用目前 App 語言顯示即將到站語義
+- **AND** 系統 SHALL NOT 顯示本地化後的 `0 分鐘` 等價文字
 
 #### Scenario: 展示非空備註
-- **WHEN** 某筆 ETA 包含非空 `rmk_tc`
-- **THEN** 面板 SHALL 在該班次下方以次級文字展示該備註
+- **WHEN** 某筆 ETA 具有按目前語言及官方 fallback 選出的非空備註
+- **THEN** 面板 SHALL 在該班次下方以次級文字展示備註原文
 - **AND** 卡片 SHALL NOT 因該備註額外增加文字
 
 #### Scenario: 展示更新時間
 - **WHEN** 面板展示 ETA 班次
-- **THEN** 面板 SHALL 展示 `更新 HH:mm`
+- **THEN** 面板 SHALL 以目前 App 語言展示更新時間標籤及 `HH:mm`
 - **AND** 更新時間 SHALL 優先使用 ETA response 的 `generated_timestamp`
 - **AND** 若 `generated_timestamp` 缺失，系統 SHALL 使用 ETA record 的 `data_timestamp`
+
+#### Scenario: 英文或大字體內容較長
+- **WHEN** 方向、備註或更新時間在目前寬度無法單行完整展示
+- **THEN** 面板 SHALL 允許換行、增加行高或垂直滾動
+- **AND** 系統 SHALL NOT 以固定寬度裁去核心方向或備註語義
 
 ### Requirement: ETA 班次面板更新行為
 系統 SHALL 在不新增自動輪詢的前提下，讓已打開的 ETA 班次面板反映當前查詢結果的有效後台 ETA 更新。
@@ -75,4 +81,3 @@ TBD - created by archiving change show-multiple-citybus-eta-arrivals. Update Pur
 - **AND** 舊查詢 generation 的 ETA 更新晚於新查詢返回
 - **THEN** 系統 SHALL 忽略該舊 ETA 更新
 - **AND** 系統 SHALL NOT 用舊資料覆蓋面板內容
-

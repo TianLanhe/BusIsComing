@@ -8,6 +8,7 @@ import org.junit.Test
 class MainRouteSelectionLayoutTest {
     private val frequentLayout = File("src/main/res/layout/fragment_frequent_routes.xml").readText()
     private val searchLayout = File("src/main/res/layout/fragment_search.xml").readText()
+    private val placePairLayout = File("src/main/res/layout/view_place_pair_editor.xml").readText()
     private val mainActivity = File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val searchFragment = File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
     private val routeQueryCoordinator =
@@ -82,11 +83,12 @@ class MainRouteSelectionLayoutTest {
 
     @Test
     fun searchProvidesInlinePlaceSelectionAndSavedRouteAction() {
-        assertTrue(searchLayout.contains("@+id/searchOriginInput"))
-        assertTrue(searchLayout.contains("@+id/searchDestinationInput"))
-        assertTrue(searchLayout.contains("@+id/searchOriginCandidateList"))
-        assertTrue(searchLayout.contains("@+id/searchDestinationCandidateList"))
-        assertTrue(searchLayout.contains("@+id/searchSwapButton"))
+        assertTrue(searchLayout.contains("PlacePairEditorView"))
+        assertTrue(placePairLayout.contains("@+id/placePairOriginInput"))
+        assertTrue(placePairLayout.contains("@+id/placePairDestinationInput"))
+        assertTrue(placePairLayout.contains("@+id/placePairOriginCandidateList"))
+        assertTrue(placePairLayout.contains("@+id/placePairDestinationCandidateList"))
+        assertTrue(placePairLayout.contains("@+id/placePairSwapButton"))
         assertTrue(searchLayout.contains("@+id/searchSaveButton"))
         assertTrue(searchFragment.contains("PlaceInputController"))
         assertTrue(searchFragment.contains("TemporaryRouteSaveDialog.show"))
@@ -106,8 +108,8 @@ class MainRouteSelectionLayoutTest {
 
     @Test
     fun searchPlaceFieldsKeepAStableTouchAndTextHeight() {
-        val originInput = searchLayout.substringAfter("@+id/searchOriginInput").substringBefore("/>")
-        val destinationInput = searchLayout.substringAfter("@+id/searchDestinationInput").substringBefore("/>")
+        val originInput = placePairLayout.substringAfter("@+id/placePairOriginInput").substringBefore("/>")
+        val destinationInput = placePairLayout.substringAfter("@+id/placePairDestinationInput").substringBefore("/>")
 
         assertTrue(originInput.contains("android:minHeight=\"56dp\""))
         assertTrue(destinationInput.contains("android:minHeight=\"56dp\""))

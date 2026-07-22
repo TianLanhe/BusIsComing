@@ -37,6 +37,7 @@ import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
+import com.golink.busiscoming.ui.common.PlacePairEditorView
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
 import com.golink.busiscoming.ui.common.localizedMessage
 import com.google.android.material.button.MaterialButton
@@ -54,6 +55,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var placeNameResolver: PlaceNameResolver
     private lateinit var routeEditScroll: NestedScrollView
     private lateinit var routeEditContent: View
+    private lateinit var placePairEditor: PlacePairEditorView
     private lateinit var nameInputLayout: TextInputLayout
     private lateinit var originInputLayout: TextInputLayout
     private lateinit var destinationInputLayout: TextInputLayout
@@ -128,20 +130,21 @@ class RouteEditActivity : AppCompatActivity() {
             isNestedScrollingEnabled = true
         }
         routeEditContent = findViewById(R.id.routeEditContent)
+        placePairEditor = findViewById(R.id.routePlacePairEditor)
         nameInputLayout = findViewById(R.id.routeNameInputLayout)
-        originInputLayout = findViewById(R.id.originInputLayout)
-        destinationInputLayout = findViewById(R.id.destinationInputLayout)
+        originInputLayout = placePairEditor.originInputLayout
+        destinationInputLayout = placePairEditor.destinationInputLayout
         screenTitleText = findViewById(R.id.routeEditTitle)
         nameInput = findViewById(R.id.routeNameInput)
-        originInput = findViewById(R.id.originInput)
-        destinationInput = findViewById(R.id.destinationInput)
-        originSearchLoading = findViewById(R.id.originSearchLoading)
-        originAttributionText = findViewById(R.id.originAttributionText)
-        destinationSearchLoading = findViewById(R.id.destinationSearchLoading)
-        originCandidateList = findViewById(R.id.originCandidateList)
-        destinationCandidateList = findViewById(R.id.destinationCandidateList)
+        originInput = placePairEditor.originInput
+        destinationInput = placePairEditor.destinationInput
+        originSearchLoading = placePairEditor.originLoading
+        originAttributionText = placePairEditor.originAttribution
+        destinationSearchLoading = placePairEditor.destinationLoading
+        originCandidateList = placePairEditor.originCandidateList
+        destinationCandidateList = placePairEditor.destinationCandidateList
         findViewById<MaterialButton>(R.id.backRouteButton).setOnClickListener { handleBack() }
-        swapPlacesButton = findViewById(R.id.swapPlacesButton)
+        swapPlacesButton = placePairEditor.swapButton
         swapPlacesButton.setOnClickListener { view ->
             animateSwap(view)
             swapPlaces()
@@ -161,12 +164,13 @@ class RouteEditActivity : AppCompatActivity() {
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
             isActive = { !isFinishing && !isDestroyed },
+            idleToolView = placePairEditor.currentLocationButton,
+            instructionText = getString(R.string.place_search_helper),
             onCandidateVisibilityChanged = { visible ->
                 if (visible) {
                     destinationController.hideCandidates()
                     ensureCandidateVisible(originInputLayout, originCandidateList)
                 }
-                syncSwapButtonVisibility()
                 syncCandidateBackPriority()
             },
             onUserTextEdited = {
@@ -193,12 +197,12 @@ class RouteEditActivity : AppCompatActivity() {
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
             isActive = { !isFinishing && !isDestroyed },
+            instructionText = getString(R.string.place_search_helper),
             onCandidateVisibilityChanged = { visible ->
                 if (visible) {
                     originController.hideCandidates()
                     ensureCandidateVisible(destinationInputLayout, destinationCandidateList)
                 }
-                syncSwapButtonVisibility()
                 syncCandidateBackPriority()
             },
             onPlaceSelected = {
@@ -216,10 +220,7 @@ class RouteEditActivity : AppCompatActivity() {
     }
 
     private fun configureLocationEndIcon() {
-        originInputLayout.endIconMode = TextInputLayout.END_ICON_CUSTOM
-        originInputLayout.setEndIconDrawable(R.drawable.ic_location_outline)
-        originInputLayout.setEndIconContentDescription(getString(R.string.use_my_location))
-        originInputLayout.setEndIconOnClickListener {
+        placePairEditor.currentLocationButton.setOnClickListener {
             requestCurrentOrigin(isAuto = false)
         }
     }
@@ -412,17 +413,6 @@ class RouteEditActivity : AppCompatActivity() {
             originController.isCandidateVisible() ||
                 destinationController.isCandidateVisible()
         )
-    }
-
-    private fun syncSwapButtonVisibility() {
-        swapPlacesButton.visibility = if (
-            originController.isCandidateVisible() ||
-            destinationController.isCandidateVisible()
-        ) {
-            View.GONE
-        } else {
-            View.VISIBLE
-        }
     }
 
     private fun updateCandidateBackPriority(enabled: Boolean) {

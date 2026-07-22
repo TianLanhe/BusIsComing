@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change build-bus-query-mvp. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: 创建路线配置
 
 系统 SHALL 允许用户创建本地路线配置，字段包含路线名称、起点地址和终点地址。
@@ -66,12 +67,3 @@ TBD - created by archiving change build-bus-query-mvp. Update Purpose after arch
 #### Scenario: 路线配置在重启后保留
 - **WHEN** 用户创建路线配置并随后重启 App
 - **THEN** 系统从本地存储重新加载已保存路线配置
-
-### Requirement: 允许重复路线配置
-
-系统 SHALL 在 MVP 阶段允许重复路线名称以及重复起点/终点组合。
-
-#### Scenario: 保存重复路线配置
-- **WHEN** 用户保存一条与已有配置路线名称、起点地址和终点地址完全相同的路线配置
-- **THEN** 系统将其作为一条独立的本地路线配置保存
-

@@ -102,8 +102,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routePickerButton: MaterialButton
     private lateinit var routeManageButton: MaterialButton
     private lateinit var resultSection: LinearLayout
-    private lateinit var stickyResultControls: LinearLayout
-    private lateinit var sortControls: LinearLayout
+    private lateinit var stickyResultControls: View
+    private lateinit var sortControls: View
     private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummaryText: TextView
     private lateinit var resultUpdatedAtText: TextView
@@ -949,6 +949,19 @@ class MainActivity : AppCompatActivity() {
             LocationPermissionUtils.permissions,
             REQUEST_LOCATION_PERMISSION
         )
+    }
+
+    fun requestCurrentLocationSnapshot(callback: (CurrentLocationSnapshot?) -> Unit) {
+        if (
+            !LocationPermissionUtils.hasForegroundLocationPermission(this) ||
+            !SystemLocationUtils.isLocationEnabled(this)
+        ) {
+            callback(null)
+            return
+        }
+        currentLocationCoordinator.getCurrentLocation { result ->
+            callback((result as? CurrentLocationResult.Success)?.snapshot)
+        }
     }
 
     fun refreshFrequentRoutes() {

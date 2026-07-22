@@ -151,6 +151,18 @@ class AppSettingsSupportContractTest {
         assertFalse(stringsXml.contains("unsupported_language_switch"))
     }
 
+    @Test
+    fun transitCodeShortcutShowsRequestAndPinnedFeedbackWithoutPermissionCopy() {
+        assertTrue(settingsFragmentLayoutXml.contains("@+id/settingsTransitCodeShortcutValue"))
+        assertTrue(settingsFragmentKt.contains("override fun onResume()"))
+        assertTrue(settingsFragmentKt.contains("TransitCodeShortcutManager.currentState"))
+        assertTrue(settingsFragmentKt.contains("transit_code_shortcut_confirm_system"))
+        assertTrue(settingsFragmentKt.contains("transit_code_shortcut_already_added"))
+        assertTrue(stringsXml.contains("name=\"transit_code_shortcut_added\""))
+        assertTrue(stringsXml.contains("name=\"transit_code_shortcut_unsupported_guide\""))
+        assertFalse(stringsXml.contains("快捷方式權限"))
+    }
+
     private fun assertEntry(rowId: String, stringName: String) {
         val rowRef = "@+id/$rowId"
         val textRef = "@string/$stringName"

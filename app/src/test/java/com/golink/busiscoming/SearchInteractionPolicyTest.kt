@@ -60,6 +60,28 @@ class SearchInteractionPolicyTest {
     }
 
     @Test
+    fun `restored search starts at most one silent candidate snapshot request`() {
+        val state = SearchCurrentPlaceRequestState()
+
+        assertNull(state.beginSilentSnapshotRequest(canRequest = false))
+        val token = state.beginSilentSnapshotRequest(canRequest = true)
+
+        assertNotNull(token)
+        assertNull(state.beginSilentSnapshotRequest(canRequest = true))
+        assertTrue(state.finish(token!!))
+    }
+
+    @Test
+    fun `a newer request invalidates a silent candidate snapshot callback`() {
+        val state = SearchCurrentPlaceRequestState()
+        val stale = state.beginSilentSnapshotRequest(canRequest = true)!!
+
+        state.beginManualRequest()
+
+        assertFalse(state.finish(stale))
+    }
+
+    @Test
     fun `invalidated location callback cannot finish or overwrite a newer state`() {
         val state = SearchCurrentPlaceRequestState()
         val stale = state.beginManualRequest()

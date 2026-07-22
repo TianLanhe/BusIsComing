@@ -122,6 +122,7 @@
                 android:text="@string/settings_transit_code_shortcut" />
 
             <TextView
+                android:id="@+id/settingsTransitCodeShortcutValue"
                 style="@style/SettingsRowValueText"
                 android:text="@string/settings_transit_code_shortcut_summary" />
         </LinearLayout>

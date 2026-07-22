@@ -9,12 +9,43 @@ class NavigationSearchUiPolishContractTest {
     private val activityLayout = File("src/main/res/layout/activity_main.xml").readText()
     private val frequentLayout = File("src/main/res/layout/fragment_frequent_routes.xml").readText()
     private val searchLayout = File("src/main/res/layout/fragment_search.xml").readText()
+    private val placePairLayout = File("src/main/res/layout/view_place_pair_editor.xml").readText()
+    private val resultControlsLayout =
+        File("src/main/res/layout/view_route_result_controls.xml").readText()
     private val themes = File("src/main/res/values/themes.xml").readText()
     private val navigationMenu = File("src/main/res/menu/top_level_navigation.xml").readText()
     private val mainActivity =
         File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val searchFragment =
         File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
+
+    @Test
+    fun `bottom navigation preserves indicator size with a dedicated label gap`() {
+        val indicator = styleBlock("TopLevelNavigation.ActiveIndicator")
+        assertTrue(indicator.contains("<item name=\"android:width\">64dp</item>"))
+        assertTrue(indicator.contains("<item name=\"android:height\">32dp</item>"))
+        assertTrue(activityLayout.contains("app:itemIconSize=\"24dp\""))
+        assertTrue(activityLayout.contains("android:minHeight=\"64dp\""))
+        assertTrue(activityLayout.contains("app:itemPaddingTop=\"6dp\""))
+        assertTrue(activityLayout.contains("app:itemPaddingBottom=\"6dp\""))
+        assertFalse(mainActivity.contains("applyTopLevelNavigationLabelSpacing"))
+        assertTrue(activityLayout.contains("android:layout_height=\"wrap_content\""))
+    }
+
+    @Test
+    fun `frequent and search use one transparent compact result controls view`() {
+        val sharedFile = File("src/main/res/layout/view_route_result_controls.xml")
+        assertTrue("Missing shared result controls layout", sharedFile.isFile)
+        val shared = sharedFile.readText()
+        assertTrue(shared.contains("android:background=\"@android:color/transparent\""))
+        assertTrue(shared.contains("android:paddingTop=\"2dp\""))
+        assertTrue(shared.contains("android:paddingBottom=\"2dp\""))
+        assertTrue(shared.contains("android:layout_marginTop=\"4dp\""))
+        assertTrue(shared.contains("android:minHeight=\"48dp\""))
+        assertTrue(frequentLayout.contains("RouteResultControlsView"))
+        assertTrue(searchLayout.contains("RouteResultControlsView"))
+        assertFalse(frequentLayout.contains("android:background=\"@color/bus_surface\""))
+    }
 
     @Test
     fun `bottom navigation has persistent selected hierarchy without changing its icon slot`() {
@@ -41,31 +72,31 @@ class NavigationSearchUiPolishContractTest {
     @Test
     fun `search inputs own their tools candidates and attribution beside a fixed swap action`() {
         assertFalse(searchLayout.contains("android:text=\"@string/search_title\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchRouteInputContainer\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchPlaceColumn\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchSwapSlot\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchOriginToolSlot\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchDestinationToolSlot\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchCurrentLocationButton\""))
-        assertTrue(searchLayout.contains("android:id=\"@+id/searchDestinationAttribution\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchPlacePairEditor\""))
+        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairInputColumn\""))
+        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairSwapSlot\""))
+        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairOriginToolSlot\""))
+        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairDestinationToolSlot\""))
+        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairCurrentLocationButton\""))
+        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairDestinationAttribution\""))
 
-        val originIndex = searchLayout.indexOf("@+id/searchOriginLayout")
-        val originCandidatesIndex = searchLayout.indexOf("@+id/searchOriginCandidateList")
-        val destinationIndex = searchLayout.indexOf("@+id/searchDestinationLayout")
-        val destinationCandidatesIndex = searchLayout.indexOf("@+id/searchDestinationCandidateList")
+        val originIndex = placePairLayout.indexOf("@+id/placePairOriginLayout")
+        val originCandidatesIndex = placePairLayout.indexOf("@+id/placePairOriginCandidateList")
+        val destinationIndex = placePairLayout.indexOf("@+id/placePairDestinationLayout")
+        val destinationCandidatesIndex = placePairLayout.indexOf("@+id/placePairDestinationCandidateList")
         assertTrue(originIndex < originCandidatesIndex)
         assertTrue(originCandidatesIndex < destinationIndex)
         assertTrue(destinationIndex < destinationCandidatesIndex)
-        assertFalse(searchLayout.contains("app:helperText=\"@string/place_search_helper\""))
+        assertFalse(placePairLayout.contains("app:helperText=\"@string/place_search_helper\""))
 
-        listOf("searchOriginInput", "searchDestinationInput").forEach { id ->
-            val input = searchLayout.substringAfter("@+id/$id").substringBefore("/>")
+        listOf("placePairOriginInput", "placePairDestinationInput").forEach { id ->
+            val input = placePairLayout.substringAfter("@+id/$id").substringBefore("/>")
             assertTrue(input.contains("android:paddingStart=\"16dp\""))
             assertTrue(input.contains("android:paddingEnd=\"52dp\""))
             assertTrue(input.contains("android:textCursorDrawable=\"@drawable/search_text_cursor\""))
         }
-        assertTrue(searchLayout.contains("app:boxStrokeColor=\"@color/search_input_stroke\""))
-        assertTrue(searchLayout.contains("app:boxStrokeWidthFocused=\"2dp\""))
+        assertTrue(placePairLayout.contains("app:boxStrokeColor=\"@color/search_input_stroke\""))
+        assertTrue(placePairLayout.contains("app:boxStrokeWidthFocused=\"2dp\""))
     }
 
     @Test
@@ -75,8 +106,9 @@ class NavigationSearchUiPolishContractTest {
         assertTrue(sortStyle.contains("<item name=\"android:paddingLeft\">14dp</item>"))
         assertTrue(sortStyle.contains("<item name=\"android:paddingRight\">14dp</item>"))
         assertTrue(sortStyle.contains("<item name=\"android:textSize\">13sp</item>"))
-        assertTrue(frequentLayout.contains("style=\"@style/RouteResultSortButton\""))
-        assertTrue(searchLayout.contains("style=\"@style/RouteResultSortButton\""))
+        assertTrue(resultControlsLayout.contains("style=\"@style/RouteResultSortButton\""))
+        assertTrue(frequentLayout.contains("RouteResultControlsView"))
+        assertTrue(searchLayout.contains("RouteResultControlsView"))
         assertTrue(mainActivity.contains("button.isChecked = isSelected"))
         assertFalse(mainActivity.contains("button.backgroundTintList ="))
         assertTrue(searchFragment.contains("button.isChecked = active"))
@@ -99,17 +131,29 @@ class NavigationSearchUiPolishContractTest {
         assertTrue(saveButton.contains("android:minHeight=\"48dp\""))
         assertTrue(saveButton.contains("android:visibility=\"gone\""))
 
-        val placeColumnStart = searchLayout.indexOf("@+id/searchPlaceColumn")
+        val placeColumnStart = searchLayout.indexOf("@+id/searchPlacePairEditor")
         val saveIndex = searchLayout.indexOf("@+id/searchSaveButton")
-        val swapIndex = searchLayout.indexOf("@+id/searchSwapSlot")
         assertTrue(placeColumnStart < saveIndex)
-        assertTrue(saveIndex < swapIndex)
-        val sortIndex = searchLayout.indexOf("@+id/searchSortControls")
-        val metadataIndex = searchLayout.indexOf("@+id/searchResultMetaContainer")
+        val sortIndex = searchLayout.indexOf("@+id/searchRouteResultControls")
         val listIndex = searchLayout.indexOf("@+id/searchResultList")
-        assertTrue(sortIndex < metadataIndex)
-        assertTrue(metadataIndex < listIndex)
+        assertTrue(sortIndex < listIndex)
+        assertTrue(resultControlsLayout.indexOf("@+id/sortControls") <
+            resultControlsLayout.indexOf("@+id/resultSummaryContainer"))
         assertTrue(searchFragment.contains("SearchResultSaveEligibility.isVisible"))
+    }
+
+    @Test
+    fun `search uses coordinator scrolling and invalidates stale results after editing`() {
+        assertTrue(searchLayout.contains("<androidx.coordinatorlayout.widget.CoordinatorLayout"))
+        assertTrue(searchLayout.contains("<com.google.android.material.appbar.AppBarLayout"))
+        assertTrue(searchLayout.contains("app:layout_scrollFlags=\"scroll\""))
+        assertTrue(searchLayout.contains("app:layout_behavior=\"@string/appbar_scrolling_view_behavior\""))
+        val changedBlock = searchFragment
+            .substringAfter("private fun onSearchSelectionChanged()")
+            .substringBefore("private fun clearSuccessfulQuery()")
+        assertTrue(changedBlock.contains("routeQueryCoordinator.invalidate()"))
+        assertTrue(changedBlock.contains("routeQueryState.clear()"))
+        assertTrue(changedBlock.contains("routeResultControls.visibility = View.GONE"))
     }
 
     @Test

@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change fix-p2p-stop-sequence-alignment. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: 查詢 Citybus P2P stop map
 系統 SHALL 使用 Citybus P2P `rawInfo` 和語言參數查詢與點到點 route variant 對齊的停站資料，且 SHALL NOT 為該請求設置靜態瀏覽器 header。
 
@@ -29,7 +30,7 @@ TBD - created by archiving change fix-p2p-stop-sequence-alignment. Update Purpos
 - **AND** 業務簽名或 body hash SHALL 一致
 
 ### Requirement: 解析 P2P stop map
-系統 SHALL 從 `showstops2.php` 響應中的 `addstoponmap(...)` 調用解析結構化停站資料。
+系統 SHALL 從 `showstops2.php` 響應中的 `addstoponmap(...)` 調用解析結構化停站資料，並 SHALL 按 JavaScript 字串邊界及轉義語義解析調用範圍與參數。
 
 #### Scenario: 解析單程 stop map
 - **WHEN** `showstops2.php` 響應包含單段路線的 `addstoponmap(...)` 調用
@@ -41,6 +42,17 @@ TBD - created by archiving change fix-p2p-stop-sequence-alignment. Update Purpos
 - **WHEN** `showstops2.php` 響應包含兩段或更多 route variant 的站點
 - **THEN** 系統 SHALL 按 `rawInfo` 的 bus leg 順序為站點分配 leg index
 - **AND** 同名、同 seq 或同 stop id 的站點 SHALL 依據 leg index 和 route variant 分開保存
+
+#### Scenario: 解析包含轉義英文撇號的站名
+- **WHEN** `addstoponmap(...)` 的站名參數包含 `King\'s Road` 一類轉義單引號
+- **THEN** 系統 SHALL 將該單引號視為字串內容而非參數結束
+- **AND** 系統 SHALL 還原並保留展示名中的英文撇號
+- **AND** 系統 SHALL 繼續解析該站點的完整 route variant、站序和 stop id
+
+#### Scenario: 解析字串內逗號括號及反斜線
+- **WHEN** `addstoponmap(...)` 的字串參數包含轉義反斜線、逗號或左右括號
+- **THEN** 系統 SHALL 只在字串外切分參數和判斷函式調用結束
+- **AND** 字串內容 SHALL NOT 導致後續欄位錯位或站點被捨棄
 
 #### Scenario: 解析 8X 錯位樣例
 - **WHEN** 系統解析 `8X-THR-1` 且 `showstops2.php` 響應包含 `seq=20` 的站點

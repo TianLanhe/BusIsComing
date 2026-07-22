@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/placePairInputColumn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingEnd="56dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/placePairOriginLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/origin_search_hint"
+                app:boxStrokeColor="@color/search_input_stroke"
+                app:boxStrokeWidth="1dp"
+                app:boxStrokeWidthFocused="2dp">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/placePairOriginInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="56dp"
+                    android:ellipsize="end"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="52dp"
+                    android:singleLine="true"
+                    android:textCursorDrawable="@drawable/search_text_cursor"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <FrameLayout
+                android:id="@+id/placePairOriginToolSlot"
+                android:layout_width="48dp"
+                android:layout_height="56dp"
+                android:layout_gravity="top|end">
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/placePairCurrentLocationButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/use_my_location"
+                    android:padding="13dp"
+                    app:srcCompat="@drawable/ic_location_outline"
+                    app:tint="@color/bus_chip_selected" />
+
+                <ProgressBar
+                    android:id="@+id/placePairOriginLoading"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:indeterminateTint="@color/bus_chip_selected"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/placePairOriginAttribution"
+            style="@style/StableShortText.Label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/google_maps_address_attribution"
+            android:textColor="@color/bus_text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/placePairOriginCandidateList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="4dp"
+            android:nestedScrollingEnabled="true"
+            android:visibility="gone" />
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/placePairDestinationLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/destination_search_hint"
+                app:boxStrokeColor="@color/search_input_stroke"
+                app:boxStrokeWidth="1dp"
+                app:boxStrokeWidthFocused="2dp">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/placePairDestinationInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="56dp"
+                    android:ellipsize="end"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="52dp"
+                    android:singleLine="true"
+                    android:textCursorDrawable="@drawable/search_text_cursor"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <FrameLayout
+                android:id="@+id/placePairDestinationToolSlot"
+                android:layout_width="48dp"
+                android:layout_height="56dp"
+                android:layout_gravity="top|end">
+
+                <ProgressBar
+                    android:id="@+id/placePairDestinationLoading"
+                    style="?android:attr/progressBarStyleSmall"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:indeterminateTint="@color/bus_chip_selected"
+                    android:visibility="gone" />
+            </FrameLayout>
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/placePairDestinationAttribution"
+            style="@style/StableShortText.Label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/google_maps_address_attribution"
+            android:textColor="@color/bus_text_secondary"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/placePairDestinationCandidateList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:nestedScrollingEnabled="true"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/placePairSwapSlot"
+        android:layout_width="48dp"
+        android:layout_height="120dp"
+        android:layout_gravity="top|end">
+
+        <androidx.appcompat.widget.AppCompatImageButton
+            android:id="@+id/placePairSwapButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/swap_origin_destination"
+            android:padding="11dp"
+            app:srcCompat="@drawable/ic_swap_curved"
+            app:tint="@color/bus_chip_selected" />
+    </FrameLayout>
+</FrameLayout>

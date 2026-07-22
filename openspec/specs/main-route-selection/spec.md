@@ -3,22 +3,53 @@
 ## Purpose
 TBD - created by archiving change improve-main-route-selection. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: 主頁以常用路線區塊作為查詢入口
-系統 SHALL 在主頁使用單一「常用路線」區塊作為路線選擇與路線整理入口，不同時展示獨立的已選路線大卡與快捷路線小卡；當沒有保存路線且沒有臨時查詢上下文時，系統 SHALL 展示首次引導頁作為建立常用路線的入口。
+系統 SHALL 在「常用」destination 使用單一「常用行程」區塊作為行程選擇入口，不同時展示獨立的已選行程大卡與快捷行程小卡；當沒有已保存行程時，系統 SHALL 展示首次引導頁並以建立常用行程作為唯一頁內主操作。
+
+#### Scenario: 展示少於三個常用行程
+- **WHEN** 用戶打開常用頁且已保存常用行程數量為 1 到 2 個
+- **THEN** 系統 SHALL 在「常用行程」區塊中展示所有常用行程卡片
+- **AND** 常用行程卡片 SHALL 自適應擴展寬度並佔滿可用屏幕寬度
+- **AND** 系統 SHALL 在「常用行程」標題行右側展示 `全部` 文字入口
+
+#### Scenario: 展示三個或更多常用行程
+- **WHEN** 用戶打開常用頁且已保存常用行程數量大於或等於 3 個
+- **THEN** 系統 SHALL 在「常用行程」區塊中展示 3 個快捷行程卡片
+- **AND** 系統 SHALL 在「常用行程」標題行右側展示 `全部` 文字入口
+- **AND** 系統 SHALL NOT 在常用行程卡片右側展示獨立展開箭頭按鈕
+
+#### Scenario: 不展示使用統計
+- **WHEN** 常用頁展示常用行程卡片
+- **THEN** 系統 SHALL NOT 在卡片中展示使用次數、最近使用時間、排序規則或排名
+
+#### Scenario: 沒有常用行程
+- **WHEN** 用戶打開常用頁且沒有任何已保存常用行程
+- **THEN** 系統 SHALL 展示首次引導頁
+- **AND** 首次引導頁 SHALL 顯示靜態「路線結果預覽」
+- **AND** 首次引導頁 SHALL 只提供「新增常用行程」頁內主入口
+- **AND** 系統 SHALL NOT 在首次引導頁顯示「搜尋路線」或其他一次性查詢次按鈕
+- **AND** 底部「搜尋」Tab SHALL 保持可見並作為一次性查詢入口
+- **AND** 系統 SHALL 隱藏常用行程選擇區塊和常規結果區
 
 #### Scenario: 展示少於三條常用路線
-- **WHEN** 用戶打開主頁且已保存常用路線數量為 1 到 2 條
+- **WHEN** 用戶打開常用頁且已保存常用路線數量為 1 到 2 條
 - **THEN** 系統 SHALL 在「常用路線」區塊中展示所有常用路線卡片
 - **AND** 常用路線卡片 SHALL 自適應擴展寬度並佔滿可用屏幕寬度
 - **AND** 系統 SHALL 在「常用路線」標題行右側展示 `全部` 文字入口
-- **AND** 系統 SHALL 在 `全部` 入口旁展示獨立的 `管理` 文字入口
 
 #### Scenario: 展示三條或更多常用路線
-- **WHEN** 用戶打開主頁且已保存常用路線數量大於或等於 3 條
+- **WHEN** 用戶打開常用頁且已保存常用路線數量大於或等於 3 條
 - **THEN** 系統 SHALL 在「常用路線」區塊中展示 3 條快捷路線卡片
 - **AND** 系統 SHALL 在「常用路線」標題行右側展示 `全部` 文字入口
-- **AND** 系統 SHALL 在 `全部` 入口旁展示獨立的 `管理` 文字入口
 - **AND** 系統 SHALL NOT 在常用路線卡片右側展示獨立展開箭頭按鈕
+
+#### Scenario: 沒有常用路線
+- **WHEN** 用戶打開常用頁且沒有任何已保存常用路線
+- **THEN** 系統 SHALL 展示首次引導頁
+- **AND** 首次引導頁 SHALL 提供 `新增常用路線` 主入口
+- **AND** 首次引導頁 SHALL 提供切換至搜尋頁的一次性查詢入口
+- **AND** 系統 SHALL 隱藏常用路線選擇區塊和常規結果區
 
 #### Scenario: 常用路線標題行入口保持緊湊可點擊
 - **WHEN** 主頁展示「常用路線」標題行
@@ -32,10 +63,6 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 用戶點擊「常用路線」標題行的 `管理` 入口
 - **THEN** 系統 SHALL 打開既有路線管理頁
 - **AND** 該操作 SHALL NOT 觸發完整常用路線列表、乘車碼拉起流程、路線查詢或設定頁
-
-#### Scenario: 不展示使用統計
-- **WHEN** 主頁展示常用路線卡片
-- **THEN** 系統 SHALL NOT 在卡片中展示使用次數、最近使用時間、排序規則或排名
 
 #### Scenario: 沒有常用路線且沒有臨時查詢上下文
 - **WHEN** 用戶打開主頁且沒有任何已保存常用路線
@@ -80,6 +107,24 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 用戶沒有選中有效常用路線且未建立有效臨時查詢
 - **THEN** 系統 SHALL 阻止查詢並提示用戶先選擇路線或查詢臨時起點和終點
 
+#### Scenario: 選中路線位於基準 Top 3
+- **WHEN** 當前選中的常用路線位於目前基準排序得到的 Top 3 中
+- **THEN** 系統 SHALL 保持基準 Top 3 展示順序
+- **AND** 系統 SHALL 僅高亮該選中路線卡片
+
+#### Scenario: 選中路線不位於基準 Top 3
+- **WHEN** 當前選中的常用路線不位於目前基準排序得到的 Top 3 中
+- **THEN** 系統 SHALL 將該選中路線臨時展示為首頁第一張快捷卡
+- **AND** 系統 SHALL 使用基準 Top 3 中未被選中的路線補齊剩餘快捷卡位置
+- **AND** 系統 SHALL NOT 修改完整常用路線列表的真實排序
+- **AND** 系統 SHALL NOT 因此修改該路線的使用次數、最近使用時間或持久化排序欄位
+
+#### Scenario: 重新選中另一條非基準 Top 3 路線
+- **WHEN** 用戶已選中一條非基準 Top 3 路線且該路線被臨時展示為第一張快捷卡
+- **AND** 用戶再從完整常用路線列表選中另一條非基準 Top 3 路線
+- **THEN** 系統 SHALL 讓上一條臨時提升路線回到其基準排序位置
+- **AND** 系統 SHALL 將新選中的路線臨時展示為第一張快捷卡
+
 #### Scenario: 選中路線位於原始 Top 3
 - **WHEN** 當前選中的常用路線位於按使用排序得到的原始 Top 3 中
 - **THEN** 系統 SHALL 保持原始 Top 3 展示順序
@@ -87,7 +132,7 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 
 #### Scenario: 選中路線不位於原始 Top 3
 - **WHEN** 當前選中的常用路線不位於按使用排序得到的原始 Top 3 中
-- **THEN** 系統 SHALL 將該選中路線臨時展示為首頁第一張快捷卡
+- **THEN** 系統 SHALL 將該選中路線臨時展示為常用頁第一張快捷卡
 - **AND** 系統 SHALL 使用原始 Top 3 中未被選中的路線補齊剩餘快捷卡位置
 - **AND** 系統 SHALL NOT 修改完整常用路線列表的真實排序
 - **AND** 系統 SHALL NOT 修改該路線的使用次數、最近使用時間或持久化排序欄位
@@ -97,81 +142,6 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **AND** 用戶再從完整常用路線列表選中另一條非原始 Top 3 路線
 - **THEN** 系統 SHALL 讓上一條臨時提升路線回到其原始排序位置
 - **AND** 系統 SHALL 將新選中的路線臨時展示為第一張快捷卡
-
-### Requirement: 完整常用路線列表包含臨時查詢入口
-系統 SHALL 在用戶展開常用路線列表時展示所有常用路線，並在列表最後提供臨時查詢入口。
-
-#### Scenario: 展開完整常用路線列表
-- **WHEN** 用戶點擊主頁「常用路線」標題行右側的 `全部`
-- **THEN** 系統 SHALL 打開完整常用路線列表
-- **AND** 列表 SHALL 展示所有已保存常用路線的名稱與 `起點 -> 終點`
-- **AND** 列表 SHALL 按真實使用排序展示路線，不受首頁臨時提升展示影響
-
-#### Scenario: 從完整列表選擇常用路線
-- **WHEN** 用戶在完整常用路線列表中選擇一條路線
-- **THEN** 系統 SHALL 關閉列表
-- **AND** 系統 SHALL 將該路線設為當前選中路線
-- **AND** 主頁常用路線區塊 SHALL 反映新的選中狀態
-
-#### Scenario: 臨時查詢入口位於最後
-- **WHEN** 系統展示完整常用路線列表
-- **THEN** `查詢臨時起點和終點` 入口 SHALL 顯示在所有常用路線項目之後
-- **AND** 該入口 SHALL 使用次要視覺樣式，不得比常用路線項目更突出
-
-### Requirement: 臨時查詢使用底部彈層
-系統 SHALL 以底部彈層承載臨時起點和終點查詢流程，避免臨時查詢輸入框常駐主頁。
-
-#### Scenario: 從首次引導頁打開臨時查詢彈層
-- **WHEN** 用戶在首次引導頁點擊 `直接查詢一次`
-- **THEN** 系統 SHALL 打開標題為 `臨時查詢` 的底部彈層
-- **AND** 主頁背景 SHALL 保持可識別但不可直接操作
-
-#### Scenario: 從完整列表打開臨時查詢彈層
-- **WHEN** 用戶點擊完整常用路線列表中的 `查詢臨時起點和終點`
-- **THEN** 系統 SHALL 打開標題為 `臨時查詢` 的底部彈層
-- **AND** 主頁背景 SHALL 保持可識別但不可直接操作
-
-#### Scenario: 使用臨時路線查詢
-- **WHEN** 用戶在臨時查詢彈層中選擇有效起點和終點並點擊 `使用此路線查詢`
-- **THEN** 系統 SHALL 關閉彈層
-- **AND** 系統 SHALL 使用臨時起點和終點發起巴士路線查詢
-- **AND** 系統 SHALL NOT 將該臨時查詢自動保存為常用路線
-
-#### Scenario: 保存臨時查詢為常用
-- **WHEN** 用戶在臨時查詢彈層中選擇有效起點和終點並點擊 `保存為常用`
-- **THEN** 系統 SHALL 要求用戶提供路線名稱
-- **AND** 系統 SHALL 在保存成功後將新路線加入常用路線列表
-
-#### Scenario: 臨時查詢不佔用主頁默認空間
-- **WHEN** 用戶處於主頁默認狀態
-- **THEN** 系統 SHALL NOT 在主頁常駐展示臨時查詢的起點和終點輸入框
-
-### Requirement: 臨時查詢結果保留輕量上下文
-系統 SHALL 在臨時起點和終點查詢完成後，於結果區使用極輕量單行上下文條展示該次查詢依據。
-
-#### Scenario: 顯示臨時查詢結果上下文
-- **WHEN** 用戶使用有效臨時起點和終點發起查詢
-- **THEN** 系統 SHALL 在結果區上方顯示單行緊湊上下文條
-- **AND** 上下文條 SHALL 包含 `臨時` 標識、`起點 -> 終點` 文本和 `保存` 操作
-- **AND** 起點和終點文本過長時 SHALL 單行省略
-- **AND** 上下文條 SHALL NOT 換行或佔用多行高度
-
-#### Scenario: 臨時查詢狀態變化時保留上下文
-- **WHEN** 臨時查詢處於查詢中、成功、失敗或暫無結果狀態
-- **THEN** 系統 SHALL 保持顯示該次臨時查詢上下文條
-- **AND** 上下文條 SHALL 顯示發起查詢時的起點和終點快照
-
-#### Scenario: 常用路線查詢不顯示臨時上下文
-- **WHEN** 用戶使用已保存常用路線發起查詢
-- **THEN** 系統 SHALL 隱藏臨時查詢上下文條
-- **AND** 系統 SHALL NOT 在結果區上方新增 `目前查詢` 摘要
-
-#### Scenario: 從臨時上下文保存為常用
-- **WHEN** 用戶點擊臨時查詢上下文條中的 `保存`
-- **THEN** 系統 SHALL 要求用戶提供路線名稱
-- **AND** 系統 SHALL 使用該次臨時查詢的起點和終點快照保存常用路線
-- **AND** 系統 SHALL 執行與臨時查詢彈層保存流程一致的重複校驗
-- **AND** 保存成功後系統 SHALL 刷新常用路線列表並選中新保存的路線
 
 ### Requirement: 主頁頂部間距保持緊湊舒適
 系統 SHALL 在主頁標題列與常用路線區塊之間使用緊湊但可辨識的垂直間距，讓第一屏保留更多空間給查詢結果。
@@ -188,7 +158,23 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **AND** 空狀態新增入口和臨時查詢入口 SHALL NOT 因間距調整被擠壓或重疊
 
 ### Requirement: 臨時路線保存輸入框不重疊
-系統 SHALL 在臨時路線保存為常用的對話框中清楚展示路線名稱輸入框，避免 hint、預填名稱、外框或底線、錯誤提示和操作按鈕互相重疊。
+系統 SHALL 在搜尋起終點保存為常用的對話框中清楚展示路線名稱輸入框，避免 hint、預填名稱、外框或底線、錯誤提示和操作按鈕互相重疊。
+
+#### Scenario: 從搜尋摘要保存路線
+- **WHEN** 用戶在搜尋摘要點擊 `存為常用`
+- **THEN** 系統 SHALL 顯示 `保存為常用` 對話框
+- **AND** 對話框 SHALL 使用清楚的路線名稱輸入框承載預填名稱
+- **AND** 輸入框 hint、預填路線名稱和輸入框邊界 SHALL NOT 發生視覺重疊
+
+#### Scenario: 保存校驗錯誤展示
+- **WHEN** 用戶提交空名稱、重複路線或其他無效路線名稱
+- **THEN** 系統 SHALL 在路線名稱輸入框下方展示錯誤提示
+- **AND** 錯誤提示 SHALL NOT 與輸入文字、輸入框邊界、`取消` 或 `保存` 按鈕重疊
+
+#### Scenario: 字體縮放和窄屏展示
+- **WHEN** 用戶在常見窄屏手機或系統字體放大後打開保存對話框
+- **THEN** 對話框內容 SHALL 通過適當內距、單行滾動、省略或換行保持可理解
+- **AND** 用戶 SHALL 能完整看見輸入框、錯誤提示和對話框操作
 
 #### Scenario: 從結果上下文保存臨時路線
 - **WHEN** 用戶在臨時查詢結果上下文條點擊 `保存`
@@ -201,18 +187,8 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **THEN** 系統 SHALL 使用與結果上下文保存入口一致的路線名稱輸入框樣式
 - **AND** 預填名稱較長時 SHALL 保持可讀，且 SHALL NOT 覆蓋 hint、外框、底線或對話框按鈕
 
-#### Scenario: 保存校驗錯誤展示
-- **WHEN** 用戶提交空名稱、重複路線或其他無效路線名稱
-- **THEN** 系統 SHALL 在路線名稱輸入框下方展示錯誤提示
-- **AND** 錯誤提示 SHALL NOT 與輸入文字、輸入框邊界、`取消` 或 `保存` 按鈕重疊
-
-#### Scenario: 字體縮放和窄屏展示
-- **WHEN** 用戶在常見窄屏手機或系統字體放大後打開保存對話框
-- **THEN** 對話框內容 SHALL 通過適當內距、單行滾動、省略或換行保持可理解
-- **AND** 用戶 SHALL 能完整看見輸入框、錯誤提示和對話框操作
-
 ### Requirement: 主頁自動依目前位置選擇最近起點
-系統 SHALL 在主頁建立後，對至少 2 條已保存常用路線自動嘗試一次前台定位，並在定位結果可用且可信時選中起點距離目前位置最近的常用路線。
+系統 SHALL 在主頁建立後，對至少 2 條已保存常用路線自動嘗試一次前台定位；只要定位結果可用，系統 SHALL 依該位置重新排列常用路線，並在定位結果可信時選中起點距離目前位置最近的常用路線。
 
 #### Scenario: 少於兩條常用路線不觸發定位
 - **WHEN** 用戶打開主頁且已保存常用路線數量少於 2 條
@@ -225,13 +201,13 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 用戶打開主頁且已保存常用路線數量大於或等於 2 條
 - **AND** 系統已具備前台定位權限
 - **THEN** 系統 SHALL 在本次 `MainActivity` 建立後自動嘗試一次取得目前位置
-- **AND** 定位進行中系統 SHALL 先按既有常用排序選中預設路線
+- **AND** 定位進行中系統 SHALL 先按既有使用統計排序選中預設路線
 - **AND** 定位進行中系統 SHALL NOT 顯示額外 `定位中` 狀態
 
 #### Scenario: 主頁復用最近位置快照
 - **WHEN** 主頁需要取得目前位置
 - **AND** 系統已有最近 30 秒內成功取得的位置快照
-- **THEN** 系統 SHALL 直接復用該位置快照進行最近起點判斷
+- **THEN** 系統 SHALL 直接復用該位置快照進行最近起點判斷及常用路線排列
 - **AND** 系統 SHALL NOT 為本次主頁自動選路發起另一個底層定位請求
 
 #### Scenario: 主頁沒有可用的最近位置快照
@@ -240,6 +216,51 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **THEN** 系統 SHALL 嘗試取得一次新位置
 - **AND** 該次定位 SHALL 在 3 秒後超時
 - **AND** 若同時有其他畫面需要位置，系統 SHALL 共用同一個進行中的底層定位請求
+
+#### Scenario: 定位成功後重排並選中最近起點
+- **WHEN** 系統取得目前位置且該位置通過精度判定
+- **THEN** 系統 SHALL 計算目前位置到每條常用路線起點座標的直線距離
+- **AND** 系統 SHALL 以該距離重新排列主頁快捷卡和完整常用路線列表
+- **AND** 系統 SHALL 將距離最近的常用路線設為目前選中路線
+- **AND** 系統 SHALL 在該路線的主頁快捷卡上顯示 `附近` 標籤
+
+#### Scenario: 低精度位置仍重排路線
+- **WHEN** 系統取得目前位置但該位置未通過自動選中精度判定
+- **THEN** 系統 SHALL 仍以該位置重新排列主頁快捷卡和完整常用路線列表
+- **AND** 系統 SHALL 保持既有使用統計預設選中路線
+- **AND** 系統 SHALL NOT 顯示 `附近` 標籤
+
+#### Scenario: 最近路線不在位置基準 Top 3
+- **WHEN** 定位自動選中的常用路線不位於按位置基準排序得到的 Top 3 中
+- **THEN** 系統 SHALL 將該路線臨時展示為首頁第一張快捷卡
+- **AND** 系統 SHALL 使用位置基準 Top 3 中未被選中的路線補齊剩餘快捷卡位置
+- **AND** 系統 SHALL NOT 修改完整常用路線列表的真實排序
+- **AND** 系統 SHALL NOT 修改任何常用路線的使用次數、最近使用時間或持久化排序欄位
+
+#### Scenario: 自動選中不自動查詢
+- **WHEN** 系統依目前位置自動選中一條常用路線
+- **THEN** 系統 SHALL NOT 自動發起巴士路線查詢
+- **AND** 系統 SHALL 保持 `查詢` 按鈕由用戶手動觸發
+- **AND** 系統 SHALL NOT 因自動選中增加該路線的使用次數或更新最近使用時間
+
+#### Scenario: 從管理頁返回使用會話位置重排
+- **WHEN** 用戶從主頁進入管理路線頁後返回同一個主頁 Activity
+- **AND** 本次首頁會話已成功取得目前位置
+- **THEN** 系統 SHALL 使用該會話位置重新排列最新的已保存路線資料
+- **AND** 系統 SHALL NOT 因該次 `onResume` 重新發起自動定位
+
+#### Scenario: 從管理頁返回且沒有會話位置
+- **WHEN** 用戶從主頁進入管理路線頁後返回同一個主頁 Activity
+- **AND** 本次首頁會話未成功取得目前位置
+- **THEN** 系統 SHALL 以既有使用統計排序最新的已保存路線資料
+- **AND** 系統 SHALL NOT 因該次 `onResume` 重新發起自動定位
+
+#### Scenario: 手動選擇優先於延遲定位結果
+- **WHEN** 系統已發起自動定位但尚未收到定位結果
+- **AND** 用戶手動選擇任一常用路線
+- **THEN** 系統 SHALL 以後續成功返回的位置重新排列常用路線
+- **AND** 系統 SHALL NOT 用該定位結果覆蓋用戶手動選擇的路線
+- **AND** 系統 SHALL NOT 因該定位結果顯示 `附近` 標籤
 
 #### Scenario: 定位成功後選中最近起點
 - **WHEN** 系統取得目前位置且該位置通過精度判定
@@ -254,26 +275,13 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **AND** 系統 SHALL NOT 修改完整常用路線列表的真實排序
 - **AND** 系統 SHALL NOT 修改任何常用路線的使用次數、最近使用時間或持久化排序欄位
 
-#### Scenario: 自動選中不自動查詢
-- **WHEN** 系統依目前位置自動選中一條常用路線
-- **THEN** 系統 SHALL NOT 自動發起巴士路線查詢
-- **AND** 系統 SHALL 保持 `查詢` 按鈕由用戶手動觸發
-- **AND** 系統 SHALL NOT 因自動選中增加該路線的使用次數或更新最近使用時間
-
 #### Scenario: 從管理頁返回不重新定位
 - **WHEN** 用戶從主頁進入管理路線頁後返回同一個主頁 Activity
 - **THEN** 系統 SHALL NOT 因該次 `onResume` 重新發起自動定位
 - **AND** 系統 SHALL 保持本次主頁 Activity 已完成或已放棄的自動定位狀態
 
-#### Scenario: 手動選擇優先於延遲定位結果
-- **WHEN** 系統已發起自動定位但尚未收到定位結果
-- **AND** 用戶手動選擇任一常用路線
-- **THEN** 系統 SHALL 將後續返回的該次定位結果視為過期
-- **AND** 系統 SHALL NOT 用該定位結果覆蓋用戶手動選擇的路線
-- **AND** 系統 SHALL NOT 因該定位結果顯示 `附近` 標籤
-
 ### Requirement: 自動定位使用前台定位權限並提供可控降級
-系統 SHALL 使用前台定位權限取得目前位置，並在未授權、定位失敗、定位超時或定位能力不可用時回退到既有常用排序預設路線。
+系統 SHALL 使用前台定位權限取得目前位置，並在未授權、定位失敗、定位超時或定位能力不可用時回退到既有使用統計排序預設路線。
 
 #### Scenario: 首次缺少定位權限時請求授權
 - **WHEN** 用戶打開主頁且已保存常用路線數量大於或等於 2 條
@@ -285,12 +293,13 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 #### Scenario: 用戶授權粗略位置
 - **WHEN** 用戶只授權粗略位置
 - **THEN** 系統 SHALL 接受系統返回的近似位置
+- **AND** 系統 SHALL 以該位置排列常用路線
 - **AND** 系統 SHALL 依位置精度規則決定是否自動選中最近起點
 
 #### Scenario: 用戶拒絕定位權限
 - **WHEN** 用戶拒絕系統定位權限請求
 - **THEN** 系統 SHALL 持久化記錄後續自動定位入口不再自動彈出定位權限請求
-- **AND** 系統 SHALL 保持既有常用排序預設路線
+- **AND** 系統 SHALL 保持既有使用統計排序預設路線
 - **AND** 系統 SHALL NOT 顯示 `附近` 標籤
 - **AND** 系統 SHALL 依限頻規則提示 `未允許定位，已按常用排序選擇路線`
 
@@ -298,7 +307,7 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 用戶先前已拒絕自動定位權限請求
 - **AND** 用戶再次打開主頁且系統仍沒有前台定位權限
 - **THEN** 系統 SHALL NOT 自動彈出定位權限請求
-- **AND** 系統 SHALL 保持既有常用排序預設路線
+- **AND** 系統 SHALL 保持既有使用統計排序預設路線
 - **AND** 系統 SHALL 依限頻規則提示 `未允許定位，已按常用排序選擇路線`
 
 #### Scenario: 用戶在系統設定重新授權
@@ -317,7 +326,7 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 系統無法在 3 秒內取得目前位置
 - **OR** Google Play Services Location 不可用
 - **OR** 定位結果為空
-- **THEN** 系統 SHALL 保持既有常用排序預設路線
+- **THEN** 系統 SHALL 保持既有使用統計排序預設路線
 - **AND** 系統 SHALL NOT 回退使用 `LocationManager` 再次定位
 - **AND** 系統 SHALL NOT 顯示 `附近` 標籤
 - **AND** 系統 SHALL 依限頻規則提示 `暫時無法取得目前位置，已按常用排序選擇路線`
@@ -328,7 +337,7 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **AND** 權限拒絕、定位失敗、精度不足 SHALL 分別計算限頻
 
 ### Requirement: 最近起點判定遵循位置精度規則
-系統 SHALL 依目前位置到常用路線起點的直線距離和定位精度判斷是否可自動選中最近起點。
+系統 SHALL 依目前位置到常用路線起點的直線距離和定位精度判斷是否可自動選中最近起點；無論是否通過自動選中精度規則，只要位置可用，系統 SHALL 以該距離排列常用路線。
 
 #### Scenario: 精度小於或等於 500 米
 - **WHEN** 系統取得目前位置
@@ -345,14 +354,15 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 系統取得目前位置
 - **AND** 位置水平精度大於 500 米
 - **AND** 最近起點未比第二近起點至少近該位置水平精度的米數
-- **THEN** 系統 SHALL 保持既有常用排序預設路線
+- **THEN** 系統 SHALL 保持既有使用統計排序預設選中路線
+- **AND** 系統 SHALL 不因精度不足改變已選中路線
 - **AND** 系統 SHALL NOT 顯示 `附近` 標籤
 - **AND** 系統 SHALL 依限頻規則提示 `目前位置不夠精確，已按常用排序選擇路線`
 
-#### Scenario: 距離相同時使用常用排序作為兜底
+#### Scenario: 距離相同時使用使用統計作為兜底
 - **WHEN** 多條常用路線的起點距離目前位置相同或無法明確區分
 - **AND** 該定位結果仍符合自動選中條件
-- **THEN** 系統 SHALL 按既有常用排序選中排序最靠前的路線
+- **THEN** 系統 SHALL 按使用統計兜底順序選中排序最靠前的路線
 - **AND** 系統 SHALL NOT 彈出額外選擇對話框
 
 #### Scenario: 不使用步行距離判定最近起點
@@ -360,6 +370,12 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **THEN** 系統 SHALL 使用目前位置到常用路線起點座標的直線距離
 - **AND** 系統 SHALL NOT 使用 Citybus 查詢結果中的步行距離
 - **AND** 系統 SHALL NOT 調用額外步行路線 API
+
+#### Scenario: 距離相同時使用常用排序作為兜底
+- **WHEN** 多條常用路線的起點距離目前位置相同或無法明確區分
+- **AND** 該定位結果仍符合自動選中條件
+- **THEN** 系統 SHALL 按既有常用排序選中排序最靠前的路線
+- **AND** 系統 SHALL NOT 彈出額外選擇對話框
 
 ### Requirement: 主頁快捷卡顯示附近標籤
 系統 SHALL 僅在主頁快捷卡上用 `附近` 標籤標識本次自動定位選中的目前路線。
@@ -389,54 +405,29 @@ TBD - created by archiving change improve-main-route-selection. Update Purpose a
 - **WHEN** 自動定位未能選中最近起點
 - **THEN** 系統 SHALL NOT 在任何主頁快捷卡上顯示 `附近` 標籤
 
-### Requirement: 主頁頂部提供乘車碼與管理路線入口
-系統 SHALL 在主頁頂部提供正式 `乘車碼` 入口與 App `設定` 入口，並 SHALL NOT 在主頁頂部顯示原有 `巴士查詢` 標題文案或頂部 `管理路線` 文字按鈕。
+### Requirement: 常用頁以緊湊標題列與單一捲動體系優先展示結果
+系統 SHALL 讓常用行程標題、快捷卡、查詢控制、排序、結果摘要和路線列表形成單一垂直捲動體系，並只固定與目前結果直接相關的排序及摘要。
 
-#### Scenario: 無保存路線首次引導頁顯示乘車碼與設定入口
-- **WHEN** 用戶打開主頁且系統顯示首次引導頁
-- **THEN** 系統 SHALL 在主頁頂部左側顯示 `乘車碼` 入口
-- **AND** `乘車碼` 入口 SHALL 使用低於主要按鈕的 tonal 或等效低權重按鈕樣式
-- **AND** `乘車碼` 入口 SHALL 保持接近預覽方向的 34dp 高度和緊湊文字尺寸
-- **AND** 系統 SHALL 在主頁頂部右側顯示 `設定` 圖示入口
-- **AND** `設定` 入口 SHALL 使用白底描邊圓形或等效克制樣式
-- **AND** 系統 SHALL NOT 顯示 `管理路線` 入口
-- **AND** 系統 SHALL NOT 在主頁頂部顯示 `巴士查詢` 文案
+#### Scenario: 常用行程標題與操作同列
+- **WHEN** 常用頁存在已保存行程
+- **THEN** 「常用行程」、「全部」與「管理」SHALL 位於同一水平列並沿同一基線排列
+- **AND** 系統 SHALL NOT 新增獨立的「常用」頁面大標題
+- **AND** 「全部」與「管理」SHALL 各自保留至少 48dp 觸控範圍
 
-#### Scenario: 有保存路線時主頁頂部顯示乘車碼與設定入口
-- **WHEN** 用戶打開主頁且存在一條或多條已保存常用路線
-- **THEN** 系統 SHALL 在主頁頂部左側顯示 `乘車碼` 按鈕
-- **AND** 系統 SHALL 在主頁頂部右側顯示 `設定` 圖示入口
-- **AND** `設定` 入口 SHALL 使用白底描邊圓形或等效克制樣式
-- **AND** 系統 SHALL NOT 在主頁頂部顯示 `管理路線` 文字按鈕
-- **AND** 系統 SHALL NOT 在主頁頂部顯示 `巴士查詢` 文案
+#### Scenario: 非結果控制隨內容捲走
+- **WHEN** 用戶在已有路線結果的常用頁向下捲動
+- **THEN** 常用行程標題、快捷卡和查詢按鈕 SHALL 隨頁面移出畫面
+- **AND** 只有排序項及路線數量／更新時間摘要 SHALL 吸頂
+- **AND** 吸頂內容 SHALL NOT 遮擋 Insets 或第一張結果卡
 
-#### Scenario: 無保存路線但顯示臨時查詢結果時頂部入口
-- **WHEN** 用戶沒有任何已保存常用路線
-- **AND** 系統正在顯示臨時查詢上下文、查詢狀態或查詢結果
-- **THEN** 系統 SHALL 顯示 `乘車碼` 入口
-- **AND** 系統 SHALL 顯示 `設定` 圖示入口
-- **AND** 系統 SHALL NOT 因沒有已保存路線而要求用戶先打開 `管理路線`
+#### Scenario: 常用頁收緊非結果間距
+- **WHEN** 常用頁顯示一般查詢狀態或結果
+- **THEN** 主要內容水平邊距 SHALL 為 16dp
+- **AND** 相鄰功能區 SHALL 使用約 8 至 12dp 的垂直節奏
+- **AND** 視覺收緊 SHALL NOT 把操作觸控高度降至 48dp 以下
 
-#### Scenario: 頂部入口使用清楚但不同層級
-- **WHEN** 用戶查看主頁頂部
-- **THEN** `乘車碼` SHALL 保持主頁高頻入口的文字按鈕樣式
-- **AND** `設定` SHALL 使用低於 `乘車碼` 的圖示入口樣式
-- **AND** 兩個入口 SHALL 保持可辨識間距
-- **AND** 兩個入口 SHALL 在常見窄屏和系統字體放大時避免文字重疊或互相遮擋
-
-#### Scenario: 點擊乘車碼入口
-- **WHEN** 用戶點擊主頁頂部 `乘車碼`
-- **THEN** 系統 SHALL 啟動正式乘車碼拉起流程
-- **AND** 系統 SHALL NOT 打開實驗性乘車碼底部彈層
-- **AND** 系統 SHALL NOT 改變當前已選路線、臨時查詢上下文、排序狀態或查詢結果
-
-#### Scenario: 點擊設定入口
-- **WHEN** 用戶點擊主頁頂部 `設定` 圖示入口
-- **THEN** 系統 SHALL 打開設定頁
-- **AND** 該操作 SHALL NOT 觸發乘車碼拉起流程、路線管理頁、完整常用路線列表或路線查詢
-
-#### Scenario: 頂部入口與主頁內容保持清楚分隔
-- **WHEN** 用戶打開主頁且常用路線區塊、首次引導頁或臨時查詢結果區可見
-- **THEN** 頂部入口與下方內容 SHALL 保持緊湊但可辨識的垂直間距
-- **AND** `常用路線` 標題、快捷卡、`全部` 入口、`管理` 入口、首次引導主文案、示例預覽、主要操作入口和臨時查詢結果區 SHALL NOT 與頂部按鈕重疊
-
+#### Scenario: 首次空狀態突出保存常用行程
+- **WHEN** App 沒有任何已保存常用行程且常用頁沒有查詢上下文
+- **THEN** 首次狀態 SHALL 以「新增常用行程」作為主要行動
+- **AND** 系統 SHALL NOT 在首次狀態顯示「搜尋路線」次要行動
+- **AND** 系統 SHALL NOT 在常用頁顯示乘車碼入口

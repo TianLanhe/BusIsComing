@@ -3,6 +3,7 @@
 ## Purpose
 定义路线新增和编辑页面中的地点选择交互，确保起点和终点必须来自 Citybus 候选地点，用户修改文本后必须重新选择，并在保存前完成必填与相同地点校验。
 ## Requirements
+
 ### Requirement: 起点和终点通过候选地点选择
 
 系統 SHALL 在路線新增、編輯和複製頁面中，透過可輸入控件和表單內嵌候選列表選擇起點和終點地點。
@@ -116,7 +117,55 @@
 - **THEN** 系统提示用户输入终点关键词并从匹配列表中选择
 
 ### Requirement: 臨時查詢起點和終點通過候選地點選擇
-系統 SHALL 在臨時查詢底部彈層中，透過可輸入控件和表單內嵌候選列表選擇起點和終點地點。
+系統 SHALL 在搜尋 destination 的連體路線輸入器中，透過可輸入控件和欄位級內嵌候選列表選擇一次性查詢的起點和終點地點。
+
+#### Scenario: 搜尋輸入器建立起終點關係
+- **WHEN** 用戶打開搜尋頁
+- **THEN** 起點和終點 SHALL 以上下排列、具有分隔與順序提示的連體輸入區展示
+- **AND** 交換圖示 SHALL 位於兩個輸入欄位右側的固定操作區
+- **AND** 起點及終點輸入欄位 SHALL 各自保持 `56dp` 基礎高度
+
+#### Scenario: 搜尋輸入關鍵字觸發搜尋
+- **WHEN** 用戶在搜尋頁的起點或終點輸入框輸入至少 1 個字符
+- **THEN** 系統 SHALL 在 debounce 後發起 Citybus 地點搜尋
+- **AND** 新輸入 SHALL 取消該欄位舊的 loading、無結果、失敗和過期候選回饋
+
+#### Scenario: 搜尋展示欄位級候選地點
+- **WHEN** 搜尋頁地點搜尋返回候選結果
+- **THEN** 系統 SHALL 在對應輸入框正下方展示 Citybus 候選地點
+- **AND** 起點候選 SHALL 位於起點與終點輸入框之間
+- **AND** 終點候選 SHALL 位於終點輸入框下方
+- **AND** 候選列表寬度 SHALL 與左側輸入欄對齊，且 SHALL NOT 延伸至交換操作區下方
+- **AND** 系統 SHALL NOT 以 bottom sheet 或 overlay 展開狀態作為候選列表可見的前提
+
+#### Scenario: 搜尋只展示目前欄位候選
+- **WHEN** 一個搜尋欄位的候選列表展開
+- **THEN** 另一個搜尋欄位的候選列表 SHALL 關閉
+- **AND** 同一時間 SHALL NOT 顯示兩個候選列表
+
+#### Scenario: 搜尋選擇候選地點
+- **WHEN** 用戶從搜尋頁內嵌候選列表中選擇一個地點
+- **THEN** 系統 SHALL 將該地點設為對應已選 Place
+- **AND** 系統 SHALL 在輸入框顯示該地點名稱
+- **AND** 系統 SHALL 關閉該欄位候選並清除不再適用的 helper 或錯誤
+
+#### Scenario: 搜尋修改已選地點文本
+- **WHEN** 用戶已在搜尋頁選擇候選地點後又手動修改輸入框文本
+- **THEN** 系統 SHALL 清除該輸入框對應的已選 Place
+- **AND** 系統 SHALL 要求用戶重新從候選列表確認地點
+- **AND** 系統 SHALL 清除該欄位的 Google attribution 歸屬
+
+#### Scenario: 搜尋欄位顯示載入與錯誤
+- **WHEN** 起點或終點地點搜尋正在進行、沒有結果或失敗
+- **THEN** 載入、無結果或錯誤狀態 SHALL 只歸屬目前欄位
+- **AND** 載入狀態 SHALL 使用欄位尾端固定工具槽，不得另佔整行或壓縮輸入文字
+- **AND** 無結果與錯誤 SHALL 顯示於對應輸入框下方，不得移到整個輸入器底部
+- **AND** 另一個欄位的已選 Place、文字和狀態 SHALL 保持不變
+
+#### Scenario: 搜尋展示候選地點
+- **WHEN** 搜尋頁地點搜尋返回候選結果
+- **THEN** 系統 SHALL 在對應輸入框下方展示 Citybus 候選地點
+- **AND** 系統 SHALL 不以 bottom sheet 展開狀態作為候選列表可見的前提
 
 #### Scenario: 臨時查詢輸入關鍵字觸發搜尋
 - **WHEN** 用戶在臨時查詢的起點或終點輸入框輸入至少 1 個字符
@@ -141,7 +190,22 @@
 - **AND** 系統 SHALL 要求用戶重新從候選列表選擇有效地點後才能查詢或保存
 
 ### Requirement: 臨時查詢校驗起點和終點
-系統 SHALL 在臨時查詢發起查詢或保存為常用路線前校驗起點和終點均有效。
+系統 SHALL 在搜尋頁發起一次性查詢或保存為常用路線前校驗起點和終點均有效。
+
+#### Scenario: 未選擇起點
+- **WHEN** 用戶未從候選列表選擇搜尋起點並嘗試查詢或保存
+- **THEN** 系統 SHALL 在起點輸入框顯示校驗錯誤
+- **AND** 系統 SHALL 不發起查詢或保存
+
+#### Scenario: 未選擇終點
+- **WHEN** 用戶未從候選列表選擇搜尋終點並嘗試查詢或保存
+- **THEN** 系統 SHALL 在終點輸入框顯示校驗錯誤
+- **AND** 系統 SHALL 不發起查詢或保存
+
+#### Scenario: 起點終點相同
+- **WHEN** 用戶在搜尋頁選擇的起點和終點名稱、緯度、經度均完全相同
+- **THEN** 系統 SHALL 顯示既有起終點不可相同的校驗錯誤
+- **AND** 系統 SHALL 不發起查詢或保存
 
 #### Scenario: 臨時查詢未選擇起點
 - **WHEN** 用戶未從候選列表選擇臨時起點並嘗試查詢或保存
@@ -157,7 +221,35 @@
 - **AND** 系統 SHALL 提示起點和終點不能相同
 
 ### Requirement: 臨時查詢支持交換起點和終點
-系統 SHALL 在臨時查詢底部彈層中提供圖示按鈕交換起點和終點。
+系統 SHALL 在搜尋頁右側提供固定圖示按鈕，交換一次性查詢的起點、終點及其欄位級狀態。
+
+#### Scenario: 交換已選地點
+- **WHEN** 用戶在搜尋頁已確認一個或兩個欄位的 Place 並點擊交換控件
+- **THEN** 系統 SHALL 交換兩個欄位的已選 Place 與輸入文本
+- **AND** 系統 SHALL 不發起新的 Citybus 地點搜尋或路線查詢
+- **AND** 交換後的已選 Place SHALL 保持有效
+
+#### Scenario: 交換未確認輸入文本
+- **WHEN** 搜尋起點或終點存在未從候選列表確認的輸入文本，且用戶點擊交換控件
+- **THEN** 系統 SHALL 交換兩個欄位目前顯示的文本
+- **AND** 未確認文本在交換後 SHALL 繼續保持未確認狀態
+- **AND** 系統 SHALL NOT 把未確認文本視為有效 Place
+
+#### Scenario: 交換欄位級狀態
+- **WHEN** 用戶點擊交換控件
+- **THEN** 系統 SHALL 關閉兩個候選列表
+- **AND** 系統 SHALL 交換對應的 Google attribution 歸屬
+- **AND** 系統 SHALL 清除已不適用的 loading、helper 和錯誤回饋
+
+#### Scenario: 交換按鈕保持固定
+- **WHEN** 起點或終點候選列表展開或關閉
+- **THEN** 搜尋交換控件 SHALL 保持在輸入欄位右側的固定位置
+- **AND** 控件 SHALL NOT 因候選高度改變而上下跳動或被隱藏
+
+#### Scenario: 交換控件可觸達
+- **WHEN** 用戶查看或通過無障礙服務訪問搜尋交換控件
+- **THEN** 控件 SHALL 提供對應 locale 的「交換起點和終點」無障礙描述
+- **AND** 控件 SHALL 具有不小於 `48dp` 的可觸控區域
 
 #### Scenario: 交換臨時查詢已選地點
 - **WHEN** 臨時查詢起點和終點都已從候選列表中選擇地點，且用戶點擊交換控件
@@ -174,13 +266,13 @@
 - **AND** 交換控件 SHALL 提供 `交換起點和終點` 的無障礙說明
 
 ### Requirement: 地點候選列表避開輸入法並保持可操作
-系統 SHALL 在新增、編輯、複製路線及臨時查詢中，將目前輸入框的地點候選限制於輸入法上方可視區，並保持列表可滾動和可點選。
+系統 SHALL 在新增、編輯、複製行程及搜尋頁中，將目前輸入框的地點候選限制於輸入法上方可視區，並保持列表可滾動和可點選。
 
 #### Scenario: 輸入框保持可讀與可操作尺寸
-- **WHEN** 系統展示新增、編輯、複製路線或臨時查詢的起點和終點輸入框
-- **THEN** 輸入框 SHALL 保持 56dp 最小觸控高度、16sp 單行尾端省略文字、內邊距、浮動標籤和文字基線
+- **WHEN** 系統展示新增、編輯、複製行程或搜尋頁的起點和終點輸入框
+- **THEN** 輸入框 SHALL 保持 `56dp` 最小觸控高度、`16sp` 單行尾端省略文字、內邊距、浮動標籤和文字基線
 - **AND** 輸入框 SHALL NOT 顯示會誤導為固定選項下拉菜單的箭頭
-- **AND** 路線編輯頁 SHALL 保持既有橫向寬度及交換按鈕預留區
+- **AND** 輸入欄 SHALL 保持既有橫向寬度及交換按鈕預留區
 
 #### Scenario: 只展示目前聚焦欄位的候選
 - **WHEN** 起點或終點輸入框取得焦點並返回候選結果
@@ -191,42 +283,45 @@
 - **WHEN** 輸入法顯示且地點候選列表需要展示
 - **THEN** 系統 SHALL 根據候選列表實際頂部至輸入法頂部的剩餘空間動態限制候選列表高度
 - **AND** 系統 SHALL 在必要時以最小幅度滾動外層表單後再計算剩餘空間
-- **AND** 在 1080 × 2400、字體縮放 1.0 的主驗收配置 SHALL 展示 4 至 6 個完整候選項目
-- **AND** 在 1080 × 1920、字體縮放 1.15 的替代驗收配置 SHALL 至少展示 3 個完整候選項目
-- **AND** 系統 SHALL NOT 展示超過 6 個完整候選項目
+- **AND** 新增、編輯及複製行程在 `1080×2400`、字體縮放 1.0 的主驗收配置 SHALL 展示 4 至 6 個完整候選項目
+- **AND** 新增、編輯及複製行程在 `1080×1920`、字體縮放 1.15 的替代驗收配置 SHALL 至少展示 3 個完整候選項目
+- **AND** 新增、編輯及複製行程 SHALL NOT 展示超過 6 個完整候選項目
+- **AND** 搜尋頁 SHALL NOT 展示超過 3 個完整候選項目
 
 #### Scenario: 候選列表使用專案一致的卡片樣式
 - **WHEN** 系統展示有結果的地點候選列表
-- **THEN** 候選列表 SHALL 使用與輸入框同寬的白色圓角卡片、淺色描邊、2dp elevation 及項目分隔
-- **AND** 每個候選項目 SHALL 約為 52dp 高並提供按壓反饋
-- **AND** 候選項目 SHALL 只顯示 16sp 單行省略的地點名稱
-- **AND** 候選項目 SHALL NOT 顯示圓點、圖標或額外描述
+- **THEN** 候選列表 SHALL 使用與輸入框同寬的主題 surface 圓角卡片、淺色描邊、2dp elevation 及項目分隔
+- **AND** 每個候選項目 SHALL 約為 `52dp` 高並提供按壓反饋
+- **AND** 候選項目 SHALL 在左側顯示 `16sp` 單行省略的地點名稱
+- **AND** 目前位置快照可用時，候選項目 SHALL 在右側顯示定位圖示與格式化距離
+- **AND** 目前位置快照不可用時，候選項目 SHALL 靜默省略距離區域
 
 #### Scenario: 候選緊跟目前輸入框
 - **WHEN** 起點或終點候選列表顯示
 - **THEN** 候選列表 SHALL 緊跟目前聚焦輸入框下方
 - **AND** 位於其後的另一個輸入框 SHALL 自然向下移動
-- **AND** 交換按鈕 SHALL 在候選顯示期間隱藏
-- **AND** 候選關閉或地點選定後交換按鈕 SHALL 恢復
+- **AND** 交換按鈕 SHALL 保持可見及可操作
+- **AND** 交換按鈕 SHALL 維持在兩個收合輸入框的固定垂直中線，不因候選展開而移動或與候選重疊
 
 #### Scenario: 候選超出可視高度
 - **WHEN** 候選數量超出候選列表可視高度
 - **THEN** 用戶 SHALL 能夠在候選列表內獨立滾動
-- **AND** 外層頁面或底部彈層 SHALL NOT 因候選列表內滾動而意外關閉
+- **AND** 外層頁面 SHALL NOT 因候選列表內滾動而意外關閉
 
-#### Scenario: 路線編輯表單協調巢狀滾動
-- **WHEN** 新增、編輯或複製路線頁面的候選列表到達滾動邊界
+#### Scenario: 行程編輯表單協調巢狀滾動
+- **WHEN** 新增、編輯或複製行程頁面的候選列表到達滾動邊界
 - **THEN** 剩餘縱向手勢 SHALL 能夠自然傳遞給外層 `NestedScrollView`
 - **AND** 外層表單 SHALL NOT 在候選仍可滾動時搶占手勢
 
 #### Scenario: 一般表單自動帶入可視區
-- **WHEN** 新增、編輯或複製路線頁面的目前輸入框與至少 3 個候選項目無法同時顯示
+- **WHEN** 新增、編輯或複製行程頁面的目前輸入框與至少 3 個候選項目無法同時顯示
 - **THEN** 系統 SHALL 以最小必要幅度滾動外層表單，將目前輸入框及至少 3 個候選項目帶入輸入法上方可視區
 - **AND** 候選列表關閉後系統 SHALL NOT 強制恢復先前的表單滾動位置
 
-#### Scenario: 臨時查詢關閉候選後恢復自然高度
-- **WHEN** 臨時查詢底部彈層的候選列表被關閉
-- **THEN** 底部彈層 SHALL 恢復由既有內容決定的自然高度
+#### Scenario: 搜尋頁關閉候選後恢復自然高度
+- **WHEN** 搜尋頁的候選列表被關閉
+- **THEN** 起終點編輯器 SHALL 恢復由既有內容決定的自然高度
+- **AND** 結果列表的滾動位置 SHALL NOT 被重設
 
 #### Scenario: 點擊空白處關閉候選
 - **WHEN** 候選列表顯示且用戶點擊表單空白處
@@ -236,16 +331,51 @@
 #### Scenario: 第一次返回只關閉候選
 - **WHEN** 候選列表顯示且用戶第一次按系統返回
 - **THEN** 系統 SHALL 關閉候選列表並保留目前輸入文字
-- **AND** 系統 SHALL NOT 關閉目前 Activity 或底部彈層
+- **AND** 系統 SHALL NOT 關閉目前 Activity 或搜尋 destination
 
 #### Scenario: 候選已關閉時沿用返回行為
 - **WHEN** 候選列表已關閉且用戶按系統返回
-- **THEN** 系統 SHALL 沿用目前頁面或底部彈層既有的返回行為
+- **THEN** 系統 SHALL 沿用目前頁面的既有返回行為
 
 #### Scenario: 保持既有搜尋狀態與文案
 - **WHEN** 地點搜尋正在進行、沒有結果或失敗
-- **THEN** 系統 SHALL 保持既有 loading、無結果及失敗文案和顯示位置
+- **THEN** 系統 SHALL 保持既有 loading、無結果及失敗文案和欄位級顯示位置
 - **AND** 系統 SHALL 保持既有 debounce、過期結果忽略、選擇校驗、交換、保存及查詢行為
+
+#### Scenario: 行程表單候選高度依輸入法可視區調整
+- **WHEN** 新增、編輯或複製行程頁的輸入法顯示且地點候選列表需要展示
+- **THEN** 系統 SHALL 根據候選列表實際頂部至輸入法頂部的剩餘空間動態限制候選列表高度
+- **AND** 系統 SHALL 在必要時以最小幅度滾動外層表單後再計算剩餘空間
+- **AND** 在 1080 × 2400、字體縮放 1.0 的主驗收配置 SHALL 展示 4 至 6 個完整候選項目
+- **AND** 在 1080 × 1920、字體縮放 1.15 的替代驗收配置 SHALL 至少展示 3 個完整候選項目
+- **AND** 系統 SHALL NOT 展示超過 6 個完整候選項目
+
+#### Scenario: 搜尋頁最多展示三項候選
+- **WHEN** 搜尋頁地點候選列表需要展示
+- **THEN** 系統 SHALL 將可見高度限制為最多 3 個完整候選項目
+- **AND** 候選數量超過 3 個時列表 SHALL 在自身範圍內滾動
+- **AND** IME 上沿和安全距離不足時系統 SHALL 容許少於 3 個完整項目
+- **AND** 搜尋頁上限 SHALL NOT 改變新增、編輯或複製行程頁的候選高度策略
+
+#### Scenario: 候選列表使用專案一致的表面樣式
+- **WHEN** 系統展示有結果的地點候選列表
+- **THEN** 候選列表 SHALL 使用與輸入欄同寬的實體圓角表面、淺色描邊、`2dp` elevation 及項目分隔
+- **AND** 每個候選項目 SHALL 使用 `52dp` 基礎高度並提供按壓反饋
+- **AND** 候選地點名稱和既有距離資訊 SHALL 保持單行、省略及既有可讀層級
+
+#### Scenario: 保持既有搜尋狀態與請求行為
+- **WHEN** 地點搜尋正在進行、沒有結果或失敗
+- **THEN** 系統 SHALL 保持既有 debounce、過期結果忽略、選擇校驗、保存及查詢行為
+- **AND** 本 change SHALL NOT 修改 `bsearch_p3.php` 的參數、語言 mapping、repository 或解析結果
+
+#### Scenario: 路線編輯表單協調巢狀滾動
+- **WHEN** 新增、編輯或複製路線頁面的候選列表到達滾動邊界
+- **THEN** 剩餘縱向手勢 SHALL 能夠自然傳遞給外層 `NestedScrollView`
+- **AND** 外層表單 SHALL NOT 在候選仍可滾動時搶占手勢
+
+#### Scenario: 臨時查詢關閉候選後恢復自然高度
+- **WHEN** 臨時查詢底部彈層的候選列表被關閉
+- **THEN** 底部彈層 SHALL 恢復由既有內容決定的自然高度
 
 ### Requirement: 目前位置可作為起點
 系統 SHALL 允許純新增路線與臨時查詢使用目前位置自動填入起點，並允許用戶透過起點輸入框內的定位按鈕手動改用目前位置。
@@ -510,7 +640,47 @@
 - **AND** 系統 SHALL 顯示 Google Maps attribution
 
 ### Requirement: Google 地址 attribution 僅在起點輸入上下文顯示
-系統 SHALL 在 Google reverse geocoding 地址實際顯示於起點輸入框時，於該輸入上下文顯示來源小字，且 SHALL NOT 將來源寫入地點名稱或持久化資料。
+系統 SHALL 在 Google reverse geocoding 地址實際顯示於輸入框時，於對應輸入上下文顯示來源小字；行程新增／編輯／複製頁仍只在起點顯示，搜尋頁則 SHALL 讓 attribution 跟隨 Google 地址所在欄位交換及恢復，且 SHALL NOT 將來源寫入地點名稱或持久化資料。
+
+#### Scenario: Google 地址成功填入起點後顯示 attribution
+- **WHEN** Google reverse geocoding 解析成功或 Google 地址名稱 cache 命中
+- **AND** 系統將目前位置 Place 填入起點輸入框
+- **THEN** 起點輸入框下方 SHALL 顯示對應 locale 的 Google Maps attribution
+- **AND** 該小字 SHALL 使用獨立 view，而非 `TextInputLayout.helperText`
+- **AND** 該小字 SHALL NOT 加入 `Place.name`
+
+#### Scenario: 搜尋交換後 attribution 跟隨至終點
+- **WHEN** 搜尋頁起點顯示 Google 地址及 attribution
+- **AND** 用戶交換起點和終點
+- **THEN** Google 地址 SHALL 移至終點輸入框
+- **AND** attribution SHALL 顯示於終點輸入框下方
+- **AND** 起點 SHALL 不再顯示該 attribution
+
+#### Scenario: 搜尋重建後恢復 attribution 歸屬
+- **WHEN** 搜尋頁包含 Google 地址並因旋轉、語言、主題或系統回收而重建
+- **THEN** 系統 SHALL 將 attribution 恢復至 Google 地址實際所在欄位
+- **AND** 系統 SHALL NOT 因重建把 attribution 固定恢復到起點
+
+#### Scenario: 靜默預熱不顯示 attribution
+- **WHEN** 複製或編輯頁正在靜默預熱 Google 地址名稱 cache
+- **THEN** 系統 SHALL NOT 顯示 Google Maps attribution
+- **AND** 系統 SHALL NOT 改變起點輸入框內容
+
+#### Scenario: 用戶改變欄位後隱藏 attribution
+- **WHEN** 一個搜尋欄位目前顯示 Google attribution
+- **AND** 用戶手動編輯、清空該欄位或選擇 Citybus 候選地
+- **THEN** 系統 SHALL 隱藏該欄位 attribution
+- **AND** 另一個欄位的值和 attribution 狀態 SHALL 保持不變
+
+#### Scenario: Google 解析失敗不顯示 attribution
+- **WHEN** 目前位置取得或 Google reverse geocoding 名稱解析失敗
+- **THEN** 系統 SHALL NOT 顯示 Google attribution
+- **AND** 系統 SHALL 使用既有欄位 helper 或手動 Toast 表示目前位置失敗
+
+#### Scenario: 非輸入上下文不展示地點來源
+- **WHEN** 系統在行程管理、常用卡片、路線結果、保存行程對話框或其他非地點輸入上下文展示地點名稱
+- **THEN** 系統 SHALL NOT 顯示 Google attribution
+- **AND** 系統 SHALL NOT 因 Google 地址來源改變行程預設名稱或保存資料
 
 #### Scenario: Google 地址成功填入後顯示 attribution
 - **WHEN** Google reverse geocoding 解析成功或 Google 地址名稱 cache 命中
@@ -519,26 +689,11 @@
 - **AND** 該小字 SHALL 位於起點候選 loading 和候選列表上方
 - **AND** 該小字 SHALL NOT 使用 `TextInputLayout.helperText` 承載
 
-#### Scenario: 靜默預熱不顯示 attribution
-- **WHEN** 複製或編輯頁正在靜默預熱 Google 地址名稱 cache
-- **THEN** 系統 SHALL NOT 顯示 `地址由 Google Maps 提供`
-- **AND** 系統 SHALL NOT 改變起點輸入框內容
-
 #### Scenario: 用戶改變起點後隱藏 attribution
 - **WHEN** 起點輸入框目前顯示 Google 地址 attribution
 - **AND** 用戶手動編輯、清空起點或選擇 Citybus 候選地
 - **THEN** 系統 SHALL 隱藏 Google 地址 attribution
 - **AND** 系統 SHALL NOT 將 attribution 文字加入 `Place.name`
-
-#### Scenario: Google 解析失敗不顯示 attribution
-- **WHEN** 目前位置取得或 Google reverse geocoding 名稱解析失敗
-- **THEN** 系統 SHALL NOT 顯示 Google 地址 attribution
-- **AND** 系統 SHALL 使用既有自動 helper 或手動 Toast 表示目前位置失敗
-
-#### Scenario: 非輸入上下文不展示地點來源
-- **WHEN** 系統在管理路線、主頁卡片、路線結果、保存臨時查詢彈窗或其他非起點輸入上下文展示地點名稱
-- **THEN** 系統 SHALL NOT 顯示 `地址由 Google Maps 提供`
-- **AND** 系統 SHALL NOT 因 Google 地址來源改變路線預設名稱或保存資料
 
 ### Requirement: 臨時查詢支持從結果上下文預填編輯
 系統 SHALL 允許用戶從臨時查詢結果上下文進入臨時查詢底部彈層，並以目前臨時查詢起點和終點預填，讓用戶修改後繼續發起臨時查詢。
@@ -584,3 +739,126 @@
 - **THEN** 系統 SHALL NOT 使用自動目前位置流程覆蓋預填起點
 - **AND** 用戶仍可透過起點輸入框內的定位按鈕手動改用目前位置
 
+### Requirement: 搜尋頁輸入器提供清晰欄位焦點與輔助狀態
+系統 SHALL 在搜尋頁移除頁面大標題，保留短功能說明，並讓起終點輸入、欄位級輔助文案與右側交換控制保持清晰而互不重疊。
+
+#### Scenario: 搜尋頁頂部保持精簡
+- **WHEN** 用戶打開搜尋頁
+- **THEN** 系統 SHALL NOT 顯示「搜尋／搜索／Search」頁面大標題
+- **AND** 系統 SHALL 在輸入器上方保留簡短功能說明
+
+#### Scenario: 輸入文字與工具保持間距
+- **WHEN** 用戶在起點或終點輸入框輸入
+- **THEN** 文字 SHALL 使用 16sp 及 16dp 起始內距
+- **AND** 欄位末端 SHALL 保留 52dp 工具空間
+- **AND** 文字、光標、定位／清除工具 SHALL NOT 互相重疊
+
+#### Scenario: 焦點與光標在深淺色可辨識
+- **WHEN** 任一搜尋輸入框獲得焦點
+- **THEN** 約 2dp 光標與焦點外框 SHALL 使用高對比主題強調色
+- **AND** 淺色與深色模式 SHALL 均可清楚辨識目前輸入欄位
+
+#### Scenario: 輔助文案歸屬目前欄位
+- **WHEN** 欄位為空並取得焦點、正在輸入、沒有候選或發生錯誤
+- **THEN** 對應輔助文案 SHALL 顯示在該輸入框下方
+- **AND** 另一欄位 SHALL NOT 顯示該狀態文案
+- **AND** 有效地點被選中後 SHALL 隱藏一般操作提示
+
+#### Scenario: 交換控制保持獨立可用
+- **WHEN** 搜尋頁顯示兩個輸入框
+- **THEN** 交換按鈕 SHALL 位於兩個輸入框右側並垂直置中
+- **AND** 交換按鈕 SHALL 保持至少 48dp 觸控範圍
+
+### Requirement: 搜尋頁首次非阻塞填入目前位置地址
+系統 SHALL 在每個主畫面實例首次進入搜尋頁且沒有可恢復起點時，非阻塞執行定位與 Google Reverse Geocoding，並只在整個流程成功後以具體地址名稱和原始經緯度建立起點。
+
+#### Scenario: 符合條件時自動填入具體地址
+- **WHEN** 用戶在一個主畫面實例首次進入搜尋頁
+- **AND** 搜尋頁沒有已選起點、使用者起點文字或已提交查詢
+- **THEN** 系統 SHALL 在背景取得手機位置並使用目前語言執行 Google Reverse Geocoding
+- **AND** 成功後 SHALL 填入具體地址名稱、原始經緯度及必要 attribution
+- **AND** 系統 SHALL NOT 使用「我的位置」特殊占位值
+
+#### Scenario: 定位期間輸入保持可用
+- **WHEN** 自動定位或 Geocoding 正在進行
+- **THEN** 起點與終點輸入 SHALL 保持可編輯
+- **AND** 只有起點定位工具 SHALL 以小型進度表示等待
+- **AND** 搜尋按鈕可用性 SHALL 只由兩端是否為有效選中地點決定
+
+#### Scenario: 終點操作不取消起點定位
+- **WHEN** 自動定位進行中且用戶輸入或選擇終點
+- **THEN** 起點自動定位 SHALL 繼續
+- **AND** 有效成功回調 SHALL 可填入起點而不改變已選終點
+
+#### Scenario: 起點操作使舊回調失效
+- **WHEN** 自動定位進行中且用戶輸入或選擇起點，或交換起終點
+- **THEN** 系統 SHALL 立即停止顯示起點等待狀態
+- **AND** 已發出的舊定位或 Geocoding 回調 SHALL NOT 覆蓋目前輸入與選擇
+
+#### Scenario: 頁面或語言狀態使舊回調失效
+- **WHEN** 自動定位進行中且搜尋頁離開可見狀態或 App 實際語言改變
+- **THEN** 舊回調 SHALL NOT 更新搜尋頁
+- **AND** 後續新請求 SHALL 使用新的語言 snapshot
+
+#### Scenario: 自動流程失敗不建立半完成地點
+- **WHEN** 權限、定位服務、逾時、定位或 Reverse Geocoding 任一步失敗
+- **THEN** 起點 SHALL 保持空白或保留使用者目前內容且可編輯
+- **AND** 系統 SHALL NOT 建立只有座標或沒有具體名稱的選中起點
+- **AND** 起點輔助文案 SHALL 提示手動選擇或點擊定位工具重試
+- **AND** 系統 SHALL NOT 因自動失敗彈出 Toast 或強制跳轉設定
+
+#### Scenario: 手動重試沿用既有恢復流程
+- **WHEN** 用戶點擊起點定位工具手動重試
+- **THEN** 系統 SHALL 沿用新增行程既有權限、定位設定、timeout、cache、Geocoding 與失敗提示流程
+
+#### Scenario: 恢復狀態不被再次覆蓋
+- **WHEN** 搜尋頁因畫面重建恢復了起點、使用者文字或已提交查詢
+- **THEN** 系統 SHALL NOT 再次自動定位並覆蓋該狀態
+
+### Requirement: 行程與搜尋頁共用起終點編輯器結構
+系統 SHALL 在新增、編輯、複製行程及搜尋頁共用同一起終點編輯器結構，讓輸入框、定位工具、交換按鈕、候選、helper、error 與 attribution 使用一致幾何及狀態位置。
+
+#### Scenario: 顯示收合的起終點編輯器
+- **WHEN** 頁面沒有展開地點候選
+- **THEN** 起點與終點輸入框 SHALL 各保持至少 `56dp` 高
+- **AND** 兩個輸入框之間 SHALL 保持約 `8dp` 基礎間距
+- **AND** 起點定位圖示或進度 SHALL 使用同一個 `48dp` 尾端工具槽並保持置中
+- **AND** 交換按鈕 SHALL 使用右側獨立 `48dp` 觸控區並保持置中
+
+#### Scenario: 顯示欄位級輔助狀態
+- **WHEN** 起點或終點顯示 helper、錯誤、無結果或 Google attribution
+- **THEN** 該狀態 SHALL 緊跟所屬欄位或候選容器
+- **AND** 狀態 SHALL NOT 被放置在整個起終點編輯器下方而失去欄位歸屬
+- **AND** 另一欄位的輸入與已選地點 SHALL 不受影響
+
+#### Scenario: 保留頁面專屬操作
+- **WHEN** 系統在行程頁或搜尋頁使用共用編輯器
+- **THEN** 行程名稱 SHALL 只在新增、編輯及複製頁顯示
+- **AND** `儲存為常用行程` SHALL 只在搜尋頁顯示於左側輸入欄下方
+- **AND** 這些頁面專屬操作 SHALL NOT 改變共用交換工具區寬度
+
+### Requirement: 搜尋恢復流程靜默補取候選距離快照
+系統 SHALL 在搜尋頁恢復已有起點、使用者文字或已提交上下文而不應自動覆寫起點時，於既有前台定位權限及定位能力可用的前提下靜默取得候選距離位置快照。
+
+#### Scenario: 恢復已有搜尋內容
+- **WHEN** 搜尋頁恢復已有起點、終點文字或已提交查詢上下文
+- **AND** App 已有粗略或精確前台定位權限且系統定位可用
+- **THEN** 系統 SHALL 非阻塞請求一次目前位置快照
+- **AND** 系統 SHALL NOT 改寫已恢復的起點或終點
+- **AND** 系統 SHALL NOT 因該請求呼叫 Geocoding、顯示欄位 loading 或阻止輸入、交換、保存或搜尋
+
+#### Scenario: 靜默快照成功
+- **WHEN** 搜尋恢復流程取得有效位置快照
+- **THEN** 起點與終點候選 SHALL 在可見時原位補充距離
+- **AND** 系統 SHALL NOT 改變候選順序、滾動位置、目前焦點或已選地點
+
+#### Scenario: 靜默快照失敗
+- **WHEN** 靜默位置請求失敗、逾時或返回空值
+- **THEN** 候選 SHALL 繼續顯示地點名稱並允許選擇
+- **AND** 系統 SHALL 靜默省略距離
+- **AND** 系統 SHALL NOT 顯示 Toast、helper 或錯誤卡
+
+#### Scenario: 過期快照返回
+- **WHEN** 搜尋頁 View 已銷毀、重新建立或目前 generation 已改變後舊位置請求才返回
+- **THEN** 系統 SHALL 忽略舊 callback
+- **AND** 舊 callback SHALL NOT 更新新編輯器、重新打開候選或改寫任何輸入

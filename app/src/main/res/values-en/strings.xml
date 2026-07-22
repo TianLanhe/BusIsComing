@@ -49,6 +49,11 @@
     <string name="settings_transit_code_shortcut_summary">Open from your Home screen</string>
     <string name="transit_code_shortcut_unsupported">Your Home screen does not support pinned shortcuts</string>
     <string name="transit_code_shortcut_failed">Unable to add the transit code shortcut</string>
+    <string name="transit_code_shortcut_confirm_system">Confirm the shortcut in the system dialog</string>
+    <string name="transit_code_shortcut_added">Transit code shortcut added to your Home screen</string>
+    <string name="transit_code_shortcut_already_added">Already on your Home screen</string>
+    <string name="transit_code_shortcut_unsupported_guide">This Home screen cannot add the shortcut automatically. Touch and hold the BusIsComing icon, then drag Transit code to your Home screen.</string>
+    <string name="transit_code_shortcut_failed_retry">Unable to add the transit code shortcut. Try again later.</string>
     <string name="route_transfer_title">Import and export journeys</string>
     <string name="route_transfer_current_count">You have %1$d regular journeys</string>
     <string name="route_transfer_import_title">Import regular journeys</string>
