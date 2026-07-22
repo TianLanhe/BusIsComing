@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="nav_frequent">常用</string>
-    <string name="nav_search">搜尋</string>
+    <string name="nav_journeys">行程</string>
+    <string name="nav_routes">路線</string>
+    <string name="nav_journeys_content_description">已儲存行程</string>
+    <string name="nav_routes_content_description">搜尋巴士路線</string>
     <string name="back">返回上一頁</string>
     <string name="action_edit">編輯</string>
     <string name="action_copy">複製</string>

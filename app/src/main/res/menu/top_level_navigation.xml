@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android">
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/navigation_frequent_routes"
-        android:contentDescription="@string/nav_frequent"
         android:icon="@drawable/ic_nav_frequent_routes_state"
-        android:title="@string/nav_frequent" />
+        android:title="@string/nav_journeys"
+        app:contentDescription="@string/nav_journeys_content_description" />
     <item
         android:id="@+id/navigation_search"
-        android:contentDescription="@string/nav_search"
         android:icon="@drawable/ic_nav_search_state"
-        android:title="@string/nav_search" />
+        android:title="@string/nav_routes"
+        app:contentDescription="@string/nav_routes_content_description" />
     <item
         android:id="@+id/navigation_settings"
-        android:contentDescription="@string/settings"
         android:icon="@drawable/ic_nav_settings_state"
-        android:title="@string/settings" />
+        android:title="@string/settings"
+        app:contentDescription="@string/settings" />
 </menu>

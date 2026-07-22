@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="nav_frequent">常用</string><string name="nav_search">搜索</string><string name="back">返回上一页</string>
+    <string name="nav_journeys">行程</string><string name="nav_routes">路线</string><string name="nav_journeys_content_description">已保存行程</string><string name="nav_routes_content_description">搜索公交路线</string><string name="back">返回上一页</string>
     <string name="action_edit">编辑</string><string name="action_copy">复制</string><string name="action_delete">删除</string><string name="action_cancel">取消</string><string name="action_save">保存</string><string name="action_retry">重试</string><string name="action_query">查询</string><string name="action_querying">查询中…</string>
     <string name="transit_code">乘车码</string><string name="route_info">行程信息</string><string name="route_name_hint">行程名称</string><string name="route_name_helper">例如：上学、回家或上班</string><string name="origin_search_hint">起点</string><string name="destination_search_hint">终点</string><string name="place_search_helper">输入关键词后，请从匹配列表中选择</string><string name="place_matching">正在匹配地点…</string><string name="swap_origin_destination">交换起点和终点</string>
     <string name="route_manage_title">行程管理</string><string name="add_route">添加行程</string><string name="route_manage_subtitle">整理常用起点和终点，出门前可以更快查询。</string><string name="route_manage_empty_title">还没有保存行程</string><string name="route_manage_empty_message">先添加常用行程，以后查询会更快。</string>
