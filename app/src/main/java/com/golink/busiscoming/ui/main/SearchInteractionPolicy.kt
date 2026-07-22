@@ -25,7 +25,6 @@ object SearchResultSaveEligibility {
 class SearchCurrentPlaceRequestState {
     private var generation = 0
     private var autoAttempted = false
-    private var silentSnapshotAttempted = false
 
     var isPending: Boolean = false
         private set
@@ -42,12 +41,6 @@ class SearchCurrentPlaceRequestState {
     }
 
     fun beginManualRequest(): Int = beginRequest()
-
-    fun beginSilentSnapshotRequest(canRequest: Boolean): Int? {
-        if (!canRequest || silentSnapshotAttempted) return null
-        silentSnapshotAttempted = true
-        return beginRequest()
-    }
 
     fun invalidate() {
         generation += 1
@@ -66,5 +59,28 @@ class SearchCurrentPlaceRequestState {
         generation += 1
         isPending = true
         return generation
+    }
+}
+
+class SearchCandidateLocationSnapshotRequestState {
+    private var generation = 0
+    private var attempted = false
+
+    fun beginRequest(canRequest: Boolean): Int? {
+        if (!canRequest || attempted) return null
+        attempted = true
+        generation += 1
+        return generation
+    }
+
+    fun finish(token: Int): Boolean = token == generation
+
+    fun invalidatePending() {
+        generation += 1
+    }
+
+    fun resetForNextGeneration() {
+        generation += 1
+        attempted = false
     }
 }

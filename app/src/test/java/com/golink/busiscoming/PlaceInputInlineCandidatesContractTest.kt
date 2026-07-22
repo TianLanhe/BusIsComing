@@ -16,26 +16,35 @@ class PlaceInputInlineCandidatesContractTest {
     private val searchLayoutXml = File("src/main/res/layout/fragment_search.xml").readText()
 
     @Test
-    fun `edit and search use one place pair editor geometry`() {
+    fun `route edit restores historical geometry while search keeps compact editor`() {
         val sharedFile = File("src/main/res/layout/view_place_pair_editor.xml")
-        assertTrue("Missing shared place pair editor layout", sharedFile.isFile)
+        assertTrue("Missing search place pair editor layout", sharedFile.isFile)
         val shared = sharedFile.readText()
         assertTrue(shared.contains("android:minHeight=\"56dp\""))
         assertTrue(shared.contains("android:layout_width=\"48dp\""))
         assertTrue(shared.contains("android:layout_height=\"48dp\""))
         assertTrue(shared.contains("android:layout_marginTop=\"8dp\""))
         assertTrue(shared.contains("android:id=\"@+id/placePairSwapButton\""))
-        assertTrue(editLayoutXml.contains("PlacePairEditorView"))
         assertTrue(searchLayoutXml.contains("PlacePairEditorView"))
-        assertFalse(editActivityKt.contains("syncSwapButtonVisibility"))
+        assertFalse(editLayoutXml.contains("PlacePairEditorView"))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/originInputLayout\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/destinationInputLayout\""))
+        assertTrue(editLayoutXml.contains("android:minHeight=\"56dp\""))
+        assertTrue(editLayoutXml.contains("android:paddingStart=\"16dp\""))
+        assertTrue(editLayoutXml.contains("android:layout_marginTop=\"14dp\""))
+        assertTrue(editLayoutXml.contains("android:layout_marginTop=\"6dp\""))
+        assertTrue(editLayoutXml.contains("?attr/selectableItemBackgroundBorderless"))
+        assertTrue(editActivityKt.contains("syncSwapButtonVisibility"))
+        assertFalse(editActivityKt.contains("PlacePairEditorView"))
     }
 
     @Test
     fun routeEditProvidesInlineCandidateLists() {
-        val shared = File("src/main/res/layout/view_place_pair_editor.xml").readText()
-        assertTrue(shared.contains("android:id=\"@+id/placePairOriginCandidateList\""))
-        assertTrue(shared.contains("android:id=\"@+id/placePairDestinationCandidateList\""))
-        assertTrue(editLayoutXml.contains("android:id=\"@+id/routePlacePairEditor\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/originCandidateList\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/destinationCandidateList\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/originSearchLoading\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/destinationSearchLoading\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/originAttributionText\""))
         assertTrue(editLayoutXml.contains("android:id=\"@+id/routeEditScroll\""))
         assertTrue(editLayoutXml.contains("<androidx.core.widget.NestedScrollView"))
     }
@@ -49,6 +58,16 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(controllerKt.contains("PlaceDistanceFormatter"))
         assertFalse(controllerKt.contains("showDropDown()"))
         assertFalse(controllerKt.contains("dismissDropDown()"))
+    }
+
+    @Test
+    fun sharedControllerRestoresTheFieldDefaultHelperAfterClearingMessages() {
+        assertTrue(
+            controllerKt.contains(
+                "private val defaultInstructionText = instructionText ?: inputLayout.helperText"
+            )
+        )
+        assertTrue(controllerKt.contains("inputLayout.helperText = defaultInstructionText"))
     }
 
     @Test

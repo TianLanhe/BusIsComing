@@ -152,15 +152,22 @@ class AppSettingsSupportContractTest {
     }
 
     @Test
-    fun transitCodeShortcutShowsRequestAndPinnedFeedbackWithoutPermissionCopy() {
+    fun transitCodeShortcutUsesXiaomiPermissionRecoveryWithoutFalseConfirmationCopy() {
         assertTrue(settingsFragmentLayoutXml.contains("@+id/settingsTransitCodeShortcutValue"))
         assertTrue(settingsFragmentKt.contains("override fun onResume()"))
         assertTrue(settingsFragmentKt.contains("TransitCodeShortcutManager.currentState"))
-        assertTrue(settingsFragmentKt.contains("transit_code_shortcut_confirm_system"))
+        assertTrue(settingsFragmentKt.contains("TransitCodeShortcutRequestResult.NEEDS_PERMISSION"))
+        assertTrue(settingsFragmentKt.contains("XiaomiShortcutPermissionNavigator"))
+        assertTrue(settingsFragmentKt.contains("ActivityResultContracts.StartActivityForResult"))
+        assertTrue(settingsFragmentKt.contains("shortcutPermissionSettingsLauncher"))
+        assertFalse(settingsFragmentKt.contains("consumePermissionNavigationPending"))
+        assertFalse(settingsFragmentKt.contains("markPermissionNavigationPending"))
         assertTrue(settingsFragmentKt.contains("transit_code_shortcut_already_added"))
         assertTrue(stringsXml.contains("name=\"transit_code_shortcut_added\""))
         assertTrue(stringsXml.contains("name=\"transit_code_shortcut_unsupported_guide\""))
-        assertFalse(stringsXml.contains("快捷方式權限"))
+        assertTrue(stringsXml.contains("name=\"transit_code_shortcut_permission_required\""))
+        assertTrue(stringsXml.contains("桌面快捷方式"))
+        assertFalse(settingsFragmentKt.contains("transit_code_shortcut_confirm_system"))
     }
 
     private fun assertEntry(rowId: String, stringName: String) {

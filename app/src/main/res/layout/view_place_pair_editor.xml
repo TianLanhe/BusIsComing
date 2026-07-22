@@ -53,7 +53,7 @@
                     android:layout_gravity="center"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:contentDescription="@string/use_my_location"
-                    android:padding="13dp"
+                    android:padding="12dp"
                     app:srcCompat="@drawable/ic_location_outline"
                     app:tint="@color/bus_chip_selected" />
 
@@ -168,7 +168,7 @@
             android:layout_gravity="center"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/swap_origin_destination"
-            android:padding="11dp"
+            android:padding="12dp"
             app:srcCompat="@drawable/ic_swap_curved"
             app:tint="@color/bus_chip_selected" />
     </FrameLayout>

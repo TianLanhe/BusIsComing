@@ -32,6 +32,7 @@ import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import androidx.recyclerview.widget.RecyclerView
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.PlaceAttribution
@@ -376,23 +377,26 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
             waitUntil { currentPlaceRequests.get() == 1 }
+            waitUntil { snapshotCallback.get() != null }
             onView(withId(R.id.placePairOriginInput)).perform(
                 replaceText("保留的起點草稿"),
                 closeSoftKeyboard()
             )
-            assertTrue(snapshotCallback.get() == null)
             val requestsBeforeRecreation = currentPlaceRequests.get()
+            val staleSnapshotCallback = requireNotNull(snapshotCallback.get())
+            snapshotCallback.set(null)
 
             scenario.recreate()
 
             waitUntil { snapshotCallback.get() != null }
+            val activeSnapshotCallback = requireNotNull(snapshotCallback.get())
             assertEquals(requestsBeforeRecreation, currentPlaceRequests.get())
             onView(withId(R.id.placePairOriginInput)).check(matches(withText("保留的起點草稿")))
             onView(withId(R.id.placePairOriginInput)).check(matches(isEnabled()))
             onView(withId(R.id.placePairDestinationInput)).check(matches(isEnabled()))
             onView(withId(R.id.placePairOriginLoading)).check(matches(withEffectiveVisibility(GONE)))
 
-            snapshotCallback.get()?.invoke(
+            staleSnapshotCallback.invoke(
                 CurrentLocationSnapshot(
                     latitude = 22.31,
                     longitude = 114.17,
@@ -406,6 +410,22 @@ class SearchDestinationInstrumentedTest {
                 closeSoftKeyboard()
             )
             waitForText("測試終點")
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<androidx.recyclerview.widget.RecyclerView>(
+                    R.id.placePairDestinationCandidateList
+                )
+                val row = list.findViewHolderForAdapterPosition(0)?.itemView as? ViewGroup
+                assertEquals(View.GONE, row?.getChildAt(1)?.visibility)
+            }
+
+            activeSnapshotCallback.invoke(
+                CurrentLocationSnapshot(
+                    latitude = 22.31,
+                    longitude = 114.17,
+                    accuracyMeters = 10f,
+                    elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
+                )
+            )
             waitUntil {
                 var distanceVisible = false
                 scenario.onActivity { activity ->
@@ -419,6 +439,56 @@ class SearchDestinationInstrumentedTest {
             }
             onView(withId(R.id.placePairOriginInput)).check(matches(withText("保留的起點草稿")))
             assertEquals(requestsBeforeRecreation, currentPlaceRequests.get())
+        }
+    }
+
+    @Test
+    fun firstEntrySnapshotRunsBesideAutoOriginAndSurvivesOriginEditing() {
+        installDependencies(ImmediateRouteRepository())
+        val currentPlaceCallback =
+            AtomicReference<((CurrentPlaceSelectionResult) -> Unit)?>(null)
+        val snapshotCallback = AtomicReference<((CurrentLocationSnapshot?) -> Unit)?>(null)
+        SearchFragment.currentPlaceRequestOverride = { isAuto, callback ->
+            if (isAuto) currentPlaceCallback.set(callback)
+        }
+        SearchFragment.currentLocationSnapshotRequestOverride = { callback ->
+            snapshotCallback.set(callback)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { currentPlaceCallback.get() != null && snapshotCallback.get() != null }
+            onView(withId(R.id.placePairOriginInput)).check(matches(isEnabled()))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(isEnabled()))
+
+            onView(withId(R.id.placePairOriginInput)).perform(
+                click(),
+                replaceText("o"),
+                closeSoftKeyboard()
+            )
+            snapshotCallback.get()?.invoke(
+                CurrentLocationSnapshot(
+                    latitude = 22.31,
+                    longitude = 114.17,
+                    accuracyMeters = 10f,
+                    elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
+                )
+            )
+            waitForText("測試起點")
+            waitForCandidateDistance(scenario, R.id.placePairOriginCandidateList)
+            onView(withText("測試起點")).perform(click())
+
+            onView(withId(R.id.placePairDestinationInput)).perform(
+                click(),
+                replaceText("d"),
+                closeSoftKeyboard()
+            )
+            waitForText("測試終點")
+            waitForCandidateDistance(scenario, R.id.placePairDestinationCandidateList)
+            currentPlaceCallback.get()?.invoke(CurrentPlaceSelectionResult.Failure)
+
+            onView(withId(R.id.placePairOriginInput)).check(matches(withText("測試起點")))
+            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("d")))
         }
     }
 
@@ -516,6 +586,21 @@ class SearchDestinationInstrumentedTest {
             Thread.sleep(50)
         }
         assertTrue("Timed out waiting for condition", condition())
+    }
+
+    private fun waitForCandidateDistance(
+        scenario: ActivityScenario<MainActivity>,
+        listId: Int
+    ) {
+        waitUntil {
+            var visible = false
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<RecyclerView>(listId)
+                val row = list.findViewHolderForAdapterPosition(0)?.itemView as? ViewGroup
+                visible = row?.getChildAt(1)?.visibility == View.VISIBLE
+            }
+            visible
+        }
     }
 
     private fun swipeDownVisibleArea(): ViewAction = object : ViewAction {

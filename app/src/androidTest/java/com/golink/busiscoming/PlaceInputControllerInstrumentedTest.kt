@@ -25,6 +25,7 @@ import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import java.util.concurrent.Executors
 import java.io.FileInputStream
+import kotlin.math.roundToInt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -33,6 +34,53 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PlaceInputControllerInstrumentedTest {
+    @Test
+    fun routeEditKeepsHistoricalInputGeometryAndMaterialLocationTool() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            scenario.onActivity { activity ->
+                val originLayout = activity.findViewById<TextInputLayout>(R.id.originInputLayout)
+                val destinationLayout =
+                    activity.findViewById<TextInputLayout>(R.id.destinationInputLayout)
+                val originInput =
+                    activity.findViewById<MaterialAutoCompleteTextView>(R.id.originInput)
+                val destinationInput =
+                    activity.findViewById<MaterialAutoCompleteTextView>(R.id.destinationInput)
+                val originLoading = activity.findViewById<LinearLayout>(R.id.originSearchLoading)
+                val destinationLoading =
+                    activity.findViewById<LinearLayout>(R.id.destinationSearchLoading)
+                val originCandidates =
+                    activity.findViewById<RecyclerView>(R.id.originCandidateList)
+                val swap = activity.findViewById<View>(R.id.swapPlacesButton)
+
+                assertTrue(originInput.height >= xmlDp(activity, 56))
+                assertTrue(destinationInput.height >= xmlDp(activity, 56))
+                assertEquals(xmlDp(activity, 16), originInput.paddingStart)
+                assertEquals(xmlDp(activity, 16), originInput.paddingEnd)
+                assertEquals(
+                    activity.getString(R.string.place_search_helper),
+                    originLayout.helperText
+                )
+                assertEquals(
+                    activity.getString(R.string.place_search_helper),
+                    destinationLayout.helperText
+                )
+                assertEquals(TextInputLayout.END_ICON_CUSTOM, originLayout.endIconMode)
+                assertTrue(originLayout.endIconDrawable != null)
+                assertEquals(
+                    activity.getString(R.string.use_my_location),
+                    originLayout.endIconContentDescription
+                )
+                assertEquals(xmlDp(activity, 14), destinationLayout.marginTop())
+                assertEquals(xmlDp(activity, 6), originCandidates.marginTop())
+                assertEquals(xmlDp(activity, 18), originLoading.getChildAt(0).layoutParams.width)
+                assertEquals(xmlDp(activity, 18), destinationLoading.getChildAt(0).layoutParams.width)
+                assertEquals(xmlDp(activity, 48), swap.layoutParams.width)
+                assertEquals(xmlDp(activity, 48), swap.layoutParams.height)
+                assertTrue(swap.background != null)
+            }
+        }
+    }
+
     @Test
     fun inlineCandidatesLimitResultsIgnoreStaleSearchAndRemainScrollable() {
         ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
@@ -193,6 +241,14 @@ class PlaceInputControllerInstrumentedTest {
 
     private fun dp(context: Context, value: Int): Int {
         return (value * context.resources.displayMetrics.density).toInt()
+    }
+
+    private fun xmlDp(context: Context, value: Int): Int {
+        return (value * context.resources.displayMetrics.density).roundToInt()
+    }
+
+    private fun View.marginTop(): Int {
+        return (layoutParams as ViewGroup.MarginLayoutParams).topMargin
     }
 
     private fun saveScreenshot(name: String) {

@@ -37,10 +37,10 @@ class RouteEditCandidateBackInstrumentedTest {
             waitUntilResumed(RouteEditActivity::class.java)
             onView(withId(R.id.routeEditTitle)).check(matches(isDisplayed()))
             closeSoftKeyboard()
-            onView(withId(R.id.placePairOriginCandidateList)).perform(setVisible())
+            onView(withId(R.id.originCandidateList)).perform(setVisible())
 
             pressBack()
-            onView(withId(R.id.placePairOriginCandidateList)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.originCandidateList)).check(matches(withEffectiveVisibility(GONE)))
             onView(withId(R.id.routeEditTitle)).check(matches(isDisplayed()))
 
             pressBack()
