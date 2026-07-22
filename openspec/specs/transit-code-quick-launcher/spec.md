@@ -3,6 +3,7 @@
 ## Purpose
 定義當前生產 `乘車碼` 單按鈕入口：根據 AlipayHK 與支付寶安裝狀態自動組裝候選鏈，優先 AlipayHK，並與已移除的微信實驗入口完全解耦。
 ## Requirements
+
 ### Requirement: 正式乘車碼入口按安裝狀態組裝候選鏈
 系統 SHALL 在用戶使用正式 `乘車碼` 入口時，根據本機 AlipayHK 與支付寶安裝狀態自動組裝固定候選鏈，並優先使用 AlipayHK。
 
@@ -54,20 +55,27 @@
 - **AND** 系統 SHALL 顯示 `未能開啟乘車碼，請確認已安裝 AlipayHK 或支付寶。`
 
 ### Requirement: 正式入口與實驗入口及巴士查詢狀態隔離
-系統 SHALL 將正式乘車碼入口作為單按鈕自動拉起流程，並 SHALL NOT 保留或依賴已廢棄的微信／AlipayHK 實驗面板；正式入口 SHALL 與巴士查詢狀態隔離。
+系統 SHALL 將所有正式乘車碼入口匯入同一單按鈕自動拉起流程，並 SHALL NOT 保留或依賴已廢棄的微信／AlipayHK 實驗面板；正式入口 SHALL 與巴士查詢及候車監控狀態隔離。
 
 #### Scenario: 正式入口不打開實驗面板
-- **WHEN** 用戶點擊主頁正式 `乘車碼` 入口
+- **WHEN** 用戶使用靜態 shortcut、pinned shortcut 或通知乘車碼 action
 - **THEN** 系統 SHALL 直接執行正式乘車碼候選鏈
-- **AND** 系統 SHALL NOT 顯示 `實驗性乘車碼入口` 底部彈層
-- **AND** 系統 SHALL NOT 顯示微信 SDK、AlipayHK 實驗候選列表或診斷摘要
-- **AND** 系統 SHALL NOT 在上架包中保留可直接打開該實驗面板的 current UI 或測試入口
+- **AND** 系統 SHALL NOT 顯示實驗性乘車碼底部彈層、候選列表或診斷摘要
 
 #### Scenario: 正式入口不嘗試微信
-- **WHEN** 用戶點擊主頁正式 `乘車碼` 入口
-- **THEN** 系統 SHALL NOT 嘗試微信 OpenSDK、小程序 `userName` 或任何微信 scheme 候選
-- **AND** 系統 SHALL NOT 因微信 `has_no_permission` 或其他微信錯誤阻塞 AlipayHK／支付寶流程
+- **WHEN** 用戶使用任何正式乘車碼入口
+- **THEN** 系統 SHALL NOT 嘗試微信 OpenSDK、小程序或微信 scheme
 - **AND** 系統 SHALL NOT 引入微信 OpenSDK runtime dependency
+
+#### Scenario: 使用乘車碼後不保存支付偏好
+- **WHEN** 用戶使用正式乘車碼入口並成功或失敗返回 App
+- **THEN** 系統 SHALL NOT 寫入任何 AlipayHK／支付寶偏好
+- **AND** 系統 SHALL NOT 新增、修改或刪除任何常用行程資料
+
+#### Scenario: 使用乘車碼不改變巴士狀態
+- **WHEN** 用戶已有選中行程、搜尋上下文、排序、查詢結果或運行中的監控時使用正式乘車碼入口
+- **THEN** 系統 SHALL 保留既有巴士查詢狀態與監控 session
+- **AND** 系統 SHALL NOT 自動查詢、刷新、清空結果或停止監控
 
 #### Scenario: 使用乘車碼入口後不保存支付偏好
 - **WHEN** 用戶使用正式 `乘車碼` 入口並成功或失敗返回 App
@@ -93,3 +101,60 @@
 - **WHEN** 系統查詢 AlipayHK 或支付寶 package 狀態時發生可捕獲異常或無法確認已安裝
 - **THEN** 系統 SHALL 將該錢包視為未安裝來組裝候選鏈
 - **AND** 系統 SHALL NOT 因 package 查詢失敗而讓 `乘車碼` 點擊崩潰
+
+### Requirement: 正式乘車碼由系統快捷與候車情境提供
+系統 SHALL 完全移除常用頁乘車碼入口，並由長按 App 圖示的靜態 shortcut、用戶確認的桌面 pinned shortcut及候車監控通知 action 提供正式入口。
+
+#### Scenario: 長按 App 圖示顯示靜態入口
+- **WHEN** Android launcher 支援 App shortcuts 且用戶長按 BusIsComing 圖示
+- **THEN** 系統 SHALL 顯示本地化的「乘車碼」shortcut
+- **AND** 點擊後 SHALL 直接進入正式乘車碼候選鏈
+
+#### Scenario: 桌面快捷方式直接開啟
+- **WHEN** 用戶已從設定頁固定乘車碼 shortcut 並點擊桌面圖示
+- **THEN** 系統 SHALL 直接進入與靜態 shortcut 相同的正式乘車碼候選鏈
+- **AND** 系統 SHALL NOT 要求先切換至常用頁
+
+#### Scenario: 常用頁不顯示乘車碼
+- **WHEN** 用戶查看常用頁的一般、首次空狀態或結果狀態
+- **THEN** 系統 SHALL NOT 顯示乘車碼按鈕、懸浮入口、固定工具區或 coachmark
+
+### Requirement: 乘車碼 pinned shortcut 使用可確認的建立流程
+系統 SHALL 透過 Android pinned shortcut 能力建立乘車碼桌面入口，並提供成功 callback 及結構化平台結果，使設定頁不需要推測請求是否完成。
+
+#### Scenario: 建立 pinned shortcut 請求
+- **WHEN** launcher 支援 pinned shortcut 且乘車碼 shortcut 尚未固定
+- **THEN** 系統 SHALL 使用穩定 shortcut id、App 圖示、當前語言標籤及正式乘車碼 explicit intent 建立請求
+- **AND** 請求 SHALL 包含只在 launcher 真正完成固定後觸發的成功 callback
+
+#### Scenario: 查詢已固定狀態
+- **WHEN** 系統需要顯示或刷新乘車碼 shortcut 狀態
+- **THEN** shortcut manager SHALL 回傳已固定、未固定或不可可靠判定的結構化狀態
+- **AND** package／launcher 查詢例外 SHALL NOT 讓設定頁崩潰
+
+#### Scenario: 平台接受但尚未成功
+- **WHEN** `requestPinShortcut` 返回 true 且成功 callback 尚未觸發
+- **THEN** shortcut manager SHALL 回傳請求已發出狀態
+- **AND** 該狀態 SHALL NOT 等同固定成功
+
+#### Scenario: 平台拒絕或拋出例外
+- **WHEN** `requestPinShortcut` 返回 false 或拋出可捕獲例外
+- **THEN** shortcut manager SHALL 回傳失敗狀態
+- **AND** 系統 SHALL 保留再次請求能力
+
+### Requirement: 所有乘車碼快捷入口沿用正式啟動契約
+系統 SHALL 讓 pinned shortcut、長按 App 圖示的靜態 shortcut及候車監控通知 action 使用同一正式 `OPEN_TRANSIT_CODE` explicit intent 與既有支付工具候選鏈。
+
+#### Scenario: 從桌面 pinned shortcut 開啟乘車碼
+- **WHEN** 用戶點擊已固定至桌面的乘車碼 shortcut
+- **THEN** 系統 SHALL 進入正式乘車碼啟動流程
+- **AND** 系統 SHALL NOT 打開設定頁、搜尋頁或實驗性乘車碼面板
+
+#### Scenario: 從靜態 shortcut 開啟乘車碼
+- **WHEN** 用戶長按 App 圖示並點擊靜態 `乘車碼` shortcut
+- **THEN** 系統 SHALL 使用與 pinned shortcut 相同的正式乘車碼啟動流程
+
+#### Scenario: 快捷入口不改變巴士狀態
+- **WHEN** 用戶透過 pinned、靜態或通知入口開啟乘車碼後返回 App
+- **THEN** 系統 SHALL 保留既有常用行程選擇、搜尋上下文、排序及查詢結果
+- **AND** 系統 SHALL NOT 寫入支付工具偏好或修改已保存行程
