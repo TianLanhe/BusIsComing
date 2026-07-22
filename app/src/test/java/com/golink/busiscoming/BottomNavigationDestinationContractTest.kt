@@ -67,6 +67,28 @@ class BottomNavigationDestinationContractTest {
         }
     }
 
+    @Test
+    fun `journeys and routes use official outline and fill state pairs`() {
+        assertSelector(
+            name = "ic_nav_frequent_routes_state",
+            checked = "ic_nav_journeys_filled",
+            unchecked = "ic_nav_journeys_outline"
+        )
+        assertSelector(
+            name = "ic_nav_search_state",
+            checked = "ic_nav_routes_filled",
+            unchecked = "ic_nav_routes_outline"
+        )
+
+        assertVector("ic_nav_journeys_outline", BOOKMARKS_OUTLINE)
+        assertVector("ic_nav_journeys_filled", BOOKMARKS_FILLED)
+        assertVector("ic_nav_routes_outline", ROUTE_OUTLINE)
+        assertVector("ic_nav_routes_filled", ROUTE_FILLED)
+
+        assertFalse(File("src/main/res/drawable/ic_nav_frequent_routes.xml").exists())
+        assertFalse(File("src/main/res/drawable/ic_nav_search.xml").exists())
+    }
+
     private fun assertMenuItem(
         id: String,
         title: String,
@@ -88,6 +110,23 @@ class BottomNavigationDestinationContractTest {
         }
     }
 
+    private fun assertSelector(name: String, checked: String, unchecked: String) {
+        val selector = File("src/main/res/drawable/$name.xml").readText()
+        val checkedItem = selector.substringAfter("@drawable/$checked").substringBefore("/>")
+        assertTrue(checkedItem.contains("android:state_checked=\"true\""))
+        assertTrue(selector.contains("<item android:drawable=\"@drawable/$unchecked\" />"))
+    }
+
+    private fun assertVector(name: String, pathData: String) {
+        val vector = File("src/main/res/drawable/$name.xml").readText()
+        assertTrue(vector.contains("android:width=\"24dp\""))
+        assertTrue(vector.contains("android:height=\"24dp\""))
+        assertTrue(vector.contains("android:viewportWidth=\"960\""))
+        assertTrue(vector.contains("android:viewportHeight=\"960\""))
+        assertTrue(vector.contains("android:translateY=\"960\""))
+        assertTrue(vector.contains("android:pathData=\"$pathData\""))
+    }
+
     private fun values(directory: File): Map<String, String> =
         Regex(
             "<string\\s+name=\"([^\"]+)\"(?:\\s+[^>]*)?>(.*?)</string>",
@@ -100,4 +139,15 @@ class BottomNavigationDestinationContractTest {
                     .joinToString("\n") { it.readText() }
             )
             .associate { it.groupValues[1] to it.groupValues[2] }
+
+    private companion object {
+        const val BOOKMARKS_OUTLINE =
+            "M120-40v-640q0-33 23.5-56.5T200-760h400q33 0 56.5 23.5T680-680v640L400-160 120-40Zm80-122 200-86 200 86v-518H200v518Zm560 2v-680H240v-80h520q33 0 56.5 23.5T840-840v680h-80ZM200-680h400-400Z"
+        const val BOOKMARKS_FILLED =
+            "M120-40v-640q0-33 23.5-56.5T200-760h400q33 0 56.5 23.5T680-680v640L400-160 120-40Zm640-120v-680H240v-80h520q33 0 56.5 23.5T840-840v680h-80Z"
+        const val ROUTE_OUTLINE =
+            "M360-120q-66 0-113-47t-47-113v-327q-35-13-57.5-43.5T120-720q0-50 35-85t85-35q50 0 85 35t35 85q0 39-22.5 69.5T280-607v327q0 33 23.5 56.5T360-200q33 0 56.5-23.5T440-280v-400q0-66 47-113t113-47q66 0 113 47t47 113v327q35 13 57.5 43.5T840-240q0 50-35 85t-85 35q-50 0-85-35t-35-85q0-39 22.5-70t57.5-43v-327q0-33-23.5-56.5T600-760q-33 0-56.5 23.5T520-680v400q0 66-47 113t-113 47ZM240-680q17 0 28.5-11.5T280-720q0-17-11.5-28.5T240-760q-17 0-28.5 11.5T200-720q0 17 11.5 28.5T240-680Zm480 480q17 0 28.5-11.5T760-240q0-17-11.5-28.5T720-280q-17 0-28.5 11.5T680-240q0 17 11.5 28.5T720-200ZM240-720Zm480 480Z"
+        const val ROUTE_FILLED =
+            "M360-120q-66 0-113-47t-47-113v-327q-35-13-57.5-43.5T120-720q0-50 35-85t85-35q50 0 85 35t35 85q0 39-22.5 69.5T280-607v327q0 33 23.5 56.5T360-200q33 0 56.5-23.5T440-280v-400q0-66 47-113t113-47q66 0 113 47t47 113v327q35 13 57.5 43.5T840-240q0 50-35 85t-85 35q-50 0-85-35t-35-85q0-39 22.5-70t57.5-43v-327q0-33-23.5-56.5T600-760q-33 0-56.5 23.5T520-680v400q0 66-47 113t-113 47Z"
+    }
 }
