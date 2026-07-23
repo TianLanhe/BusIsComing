@@ -30,26 +30,24 @@ object WebsiteMetadataParser {
             val source = URL(responseUrl)
             if (
                 source.protocol != HTTPS || source.host != OFFICIAL_HOST ||
-                source.path != METADATA_PATH
+                source.path != METADATA_PATH || !source.hasSafeAuthorityAndSuffix()
             ) {
                 return WebsiteUpdateResult.Failed(UpdateFailureKind.INVALID_METADATA)
             }
             val json = JSONObject(body)
             val platform = json.requiredString("platform")
             val status = json.requiredString("status")
-            val applicationId = json.requiredString("applicationId")
             val versionName = json.requiredString("versionName")
             val versionCode = json.requiredLong("versionCode")
             val fileName = json.requiredString("fileName")
             val sizeBytes = json.requiredLong("sizeBytes")
             val lastUpdated = json.requiredString("lastUpdated")
-            val downloadUrl = URL(json.requiredString("downloadUrl"))
+            val downloadUrl = json.requiredString("downloadUrl")
             if (
                 platform != "android" || status != "available" ||
-                applicationId != APPLICATION_ID || versionCode <= 0L ||
+                versionCode <= 0L ||
                 versionName.isBlank() || !fileName.endsWith(".apk", ignoreCase = true) ||
-                sizeBytes <= 0L || downloadUrl.protocol != HTTPS ||
-                downloadUrl.host != OFFICIAL_HOST || downloadUrl.path != DOWNLOAD_PATH
+                sizeBytes <= 0L || !isAllowedDownloadUrl(downloadUrl)
             ) {
                 return WebsiteUpdateResult.Failed(UpdateFailureKind.INVALID_METADATA)
             }
@@ -107,13 +105,28 @@ object WebsiteMetadataParser {
         return parsed.takeIf { formatter.format(it) == value }?.time
     }
 
+    private fun isAllowedDownloadUrl(value: String): Boolean {
+        if (value == DOWNLOAD_PATH) return true
+        val url = runCatching { URL(value) }.getOrNull() ?: return false
+        return url.protocol == HTTPS &&
+            url.host == OFFICIAL_HOST &&
+            url.path == DOWNLOAD_PATH &&
+            url.hasSafeAuthorityAndSuffix()
+    }
+
+    private fun URL.hasSafeAuthorityAndSuffix(): Boolean =
+        userInfo == null &&
+            (port == -1 || port == DEFAULT_HTTPS_PORT) &&
+            query == null &&
+            ref == null
+
     const val METADATA_URL =
         "https://www.busiscoming.com/api/downloads/android/latest/metadata"
     private const val HTTPS = "https"
+    private const val DEFAULT_HTTPS_PORT = 443
     private const val OFFICIAL_HOST = "www.busiscoming.com"
     private const val METADATA_PATH = "/api/downloads/android/latest/metadata"
     private const val DOWNLOAD_PATH = "/api/downloads/android/latest"
-    private const val APPLICATION_ID = "com.golink.busiscoming"
 }
 
 interface WebsiteUpdateSource {
@@ -121,7 +134,10 @@ interface WebsiteUpdateSource {
 }
 
 class HttpWebsiteUpdateSource(
-    private val requestExecutor: Executor = SHARED_EXECUTOR
+    private val requestExecutor: Executor = SHARED_EXECUTOR,
+    private val connectionFactory: (URL) -> HttpURLConnection = {
+        it.openConnection() as HttpURLConnection
+    }
 ) : WebsiteUpdateSource {
     override fun check(
         installedVersionCode: Long,
@@ -135,7 +151,7 @@ class HttpWebsiteUpdateSource(
 
     private fun request(installedVersionCode: Long, checkedAt: Long): WebsiteUpdateResult {
         val connection = try {
-            URL(WebsiteMetadataParser.METADATA_URL).openConnection() as HttpURLConnection
+            connectionFactory(URL(WebsiteMetadataParser.METADATA_URL))
         } catch (_: Exception) {
             return WebsiteUpdateResult.Failed(UpdateFailureKind.NETWORK)
         }

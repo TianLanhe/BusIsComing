@@ -1,12 +1,12 @@
 ## Context
 
-設定頁目前由 `SettingsFragment` 直接把 `settingsUpdateRow` 綁定到 `unsupported_check_update` Toast；`AppSupportActions` 已有依 App 實際語言組合官方網站路徑及安全開啟 URL 的共用能力。工程尚未引入 Google Play In-App Updates，也沒有更新領域模型、網站 metadata repository 或更新偏好存取。
+本 change 已把設定頁「檢查更新」接入更新領域模型、網站 metadata source、Play In-App Updates 與本機狀態；`AppSupportActions` 依 App 實際語言組合官方網站路徑並安全開啟 URL。這次修訂聚焦於讓 Android 契約與已部署網站的真實響應一致，並補強長時間門檻的自動化驗證。
 
 App 將同時由 Google Play 與官方網站提供下載，但兩個渠道不能用同一個全局版本判斷取代彼此：Play 會按帳號擁有權、軌道、地區、裝置與灰度判斷可用版本；網站只提供一個全局 APK。另一方面，只要 application ID、簽名及 versionCode 相容，Play app signing key 簽署的 universal APK 可作網站正式包。
 
-設計確認時，網站候選 APK 的 SHA-256 簽名憑證為 upload key `AC:B1:8B:84:F0:67:E9:CE:4D:AD:EA:D5:B2:97:7C:1E:F4:06:2E:3D:DE:39:52:A6:E3:CC:36:8B:D5:D7:43:69`，而 Play app signing key 為 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`。網站尚未上線，因此可在沒有存量遷移的情況下直接改用 Play signed universal APK。
+設計確認時，網站候選 APK 的 SHA-256 簽名憑證為 upload key `AC:B1:8B:84:F0:67:E9:CE:4D:AD:EA:D5:B2:97:7C:1E:F4:06:2E:3D:DE:39:52:A6:E3:CC:36:8B:D5:D7:43:69`，而 Play app signing key 為 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`。正式網站 APK 仍須在 App 上架後改用 Play signed universal APK，runtime metadata 是否包含 `applicationId` 不改變這項發佈門檻。
 
-網站 `feat/010-website-analytics` 已規劃 `GET /api/downloads/android/latest/metadata`，但設計時 handler 尚未註冊，sample DTO 亦未包含 App 要求驗證的 `applicationId`。這是網站渠道實作與真實驗收的跨倉庫前置條件，不在 Android Activity 中以硬編碼版本繞過。
+網站 `feat/010-website-analytics` 建立的 `GET /api/downloads/android/latest/metadata` 已部署。它是供網站首頁與 App 共用的公開下載資訊 DTO，刻意只回傳平台、狀態、版本、檔名、大小、更新日期與下載路徑，不公開 `applicationId`；目前 `downloadUrl` 為相對路徑 `/api/downloads/android/latest`。Android 不應要求網站新增與版本判斷無關的包名回聲，而應以固定官方 endpoint、嚴格欄位及下載路徑白名單建立 runtime 信任邊界。
 
 ## Goals / Non-Goals
 
@@ -75,7 +75,7 @@ SharedPreferences 保存：
 
 ### 4. 以渠道權威時間判斷三天門檻
 
-Play 更新使用 `clientVersionStalenessDays()`；如果為 null，使用本機首次觀察到該 versionCode 的時間。網站使用必填 `lastUpdated`，以香港時區完整日數計算。自動提醒條件為：較高 versionCode、已滿 3 天、未 skip、defer 到期、Activity 可安全展示。
+Play 更新使用 `clientVersionStalenessDays()`；如果為 null，使用本機首次觀察到該 versionCode 的時間。網站把必填 `lastUpdated` 解析為香港時區當日零時，並以滿 `3 × 24` 小時判斷門檻；剛好滿 72 小時即到期。自動提醒條件為：較高 versionCode、已滿 3 天、未 skip、defer 到期、Activity 可安全展示。
 
 點擊「稍後提醒」把同版本延後 3 天；「略過此版本」只抑制該 versionCode 的自動 Dialog；「前往更新」亦先寫 3 天 defer，避免跳到商店或網站後未完成安裝而次日再提示。手動檢查無視 24 小時、3 天、defer 及 skip，惟不自行清除 skip。
 
@@ -106,7 +106,6 @@ flexible 不允許或 flow 無法啟動時，先用明確 package 的 `market://
 ```text
 platform
 status
-applicationId
 versionName
 versionCode
 fileName
@@ -115,7 +114,9 @@ lastUpdated
 downloadUrl
 ```
 
-App 驗證 HTTPS、host、platform、available 狀態、`com.golink.busiscoming`、正整數 versionCode、可展示 versionName、日期及必要欄位。版本只比較 versionCode；metadata 的 downloadUrl 不作 App Intent 目標。更新操作依目前語言固定開啟 `/zh-hant/#download`、`/zh-hans/#download` 或 `/en/#download`，讓用戶在網站再次確認下載。
+App 僅由固定 HTTPS 官方 endpoint 取得資料，驗證響應最終 URL 沒有 user info、非預期 port、query 或 fragment，並驗證 `platform=android`、`status=available`、正整數 versionCode、可展示 versionName、正整數 sizeBytes、ISO 日期及必要欄位。`applicationId` 不屬於 runtime DTO；APK 的 application ID 與簽名由發佈管線從實際 APK 驗證。
+
+`downloadUrl` 只接受精確相對路徑 `/api/downloads/android/latest`，或完全等價的 `https://www.busiscoming.com/api/downloads/android/latest`；其他相對路徑、scheme-relative URL、非官方 host、HTTP、非預期 port、query 或 fragment 均視為無效。版本只比較 versionCode，且 `downloadUrl` 僅作契約一致性驗證，不作 App Intent 目標。更新操作依目前語言固定開啟 `/zh-hant/#download`、`/zh-hans/#download` 或 `/en/#download`，讓用戶在網站再次確認下載。
 
 被否決方案：App 直接打 `/api/downloads/android/latest` 會在進入瀏覽器後立即下載；接受服務端任意 URL 會擴大跳轉風險；在 App 內下載與調起 installer 需要不適合本產品的高風險權限。
 
@@ -131,13 +132,14 @@ App 驗證 HTTPS、host、platform、available 狀態、`com.golink.busiscoming`
 
 協調器維持單一有效檢查 generation；重疊手動操作附著到進行中的有效請求，或使舊 callback 作廢。只有 resumed Activity 能顯示 Dialog 或啟動 Play flow；背景完成結果先持久化，恢復前台再交付。Fragment 銷毀後不再接收 UI callback，但 App 級檢查可完成。
 
-時間來源、Play source、網站 source、package probe 及 state store 應可注入 fake，讓 JVM 測試覆蓋 24 小時、3 天、時鐘回撥、錯誤矩陣與 generation。instrumentation 驗證設定頁與 Dialog；真實 internal test 驗證 Play 資格、簽名與 flexible 流程，mock 不代替最後門檻。
+時間來源、Play source、網站 source、package probe 及 state store 應可注入 fake。JVM 測試使用固定 epoch，不實際等待，至少覆蓋 24 小時自動節流與 72 小時首次／稍後提醒在「前一毫秒、剛好、後一毫秒」的結果、系統時間回撥、同版 skip／defer、新版本重置、錯誤矩陣與 generation；網站 source 另以已部署響應同形 fixture 覆蓋無 `applicationId`、相對 `downloadUrl` 及惡意 URL 邊界。instrumentation 驗證設定頁與 Dialog；真實 internal test 驗證 Play 資格、簽名與 flexible 流程，mock 不代替最後門檻。
 
 被否決方案：以實際系統時間和 Play singleton 寫死會讓邊界測試不穩定；只做 instrumentation 無法完整覆蓋狀態矩陣。
 
 ## Risks / Trade-offs
 
-- [網站 metadata 尚未落地或 DTO 缺少 `applicationId`] → 把網站 endpoint 部署與契約更新列為 apply 前置／整合任務；App 不用硬編碼版本冒充成功。
+- [網站公開 DTO 與 Android parser 漂移] → 以網站實際響應同形 fixture、已部署 endpoint 只讀核對及固定欄位白名單回歸；`applicationId` 不作 runtime 必填欄位。
+- [相對 `downloadUrl` 被誤當非法或任意 URL 被誤信任] → 只接受精確官方相對路徑或其等價官方 HTTPS 絕對 URL，拒絕 query、fragment、其他 host／path／scheme，且永不直接用作 Intent。
 - [Play Core 在 sideload／帳號未擁有時可能無法提供版本] → `ERROR_APP_NOT_OWNED` 只用已遵守 Play 100% 門檻的網站 metadata 判斷是否顯示更新，操作仍導向 Play。
 - [Package installer 可能為 null 或隨更新改變] → 首次保存渠道；有 Play 時始終 Play；無 Play 且未知時只歸為未知非 Play，不把 installer 當安全憑證。
 - [Play 暫時錯誤造成網站錯誤降級] → resolver 必須同時判斷 Play error 與官方 package 可用性，暫時錯誤只保留可靠快照。
@@ -150,8 +152,8 @@ App 驗證 HTTPS、host、platform、available 狀態、`com.golink.busiscoming`
 
 ## Migration Plan
 
-1. 先在網站倉庫完成並部署 metadata endpoint，補充 `applicationId` 契約、測試及 `no-store`。
-2. 在 Android 工程新增 Play 依賴、有限 package visibility、更新模型／policy／store／source／coordinator 及純邏輯測試。
+1. 確認網站已部署 metadata endpoint、真實 DTO 不含 `applicationId`、`downloadUrl` 可為固定相對路徑，並保持 `Cache-Control: no-store`。
+2. 在 Android 工程以真實 DTO 契約修正網站 parser，並維持既有 Play 依賴、有限 package visibility、更新模型／policy／store／source／coordinator。
 3. 接入 `MainActivity` 冷啟動與 `SettingsFragment` 手動入口、小紅點、三語 Dialog、flexible 完成提示及 instrumentation。
 4. 上架前保持 `FORCE_WEBSITE_UPDATE_CHECK=true`，驗證所有安裝來源都只走網站；上架後改為 `false`，再以 Play internal test／Internal App Sharing 及已擁有 App 的帳號驗證較高 versionCode flexible flow。
 5. 運行 `./gradlew build`，並完成三語×深淺色×360dp×font scale 1.0／1.3／2.0 與 TalkBack 人工驗收。
@@ -160,4 +162,4 @@ App 驗證 HTTPS、host、platform、available 狀態、`com.golink.busiscoming`
 
 ## Open Questions
 
-無未裁決產品行為。網站 metadata endpoint 的實作與部署、Play internal test 帳號／裝置及 signed universal APK 取得屬實作前置條件，而非待決設計選項。
+無未裁決產品行為。網站 metadata endpoint 已可進行只讀線上契約驗證；Play internal test 帳號／裝置及 signed universal APK 取得仍屬上架後驗收條件，而非待決設計選項。

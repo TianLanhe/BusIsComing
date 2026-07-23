@@ -44,6 +44,30 @@ class AppUpdateCoordinatorTest {
     }
 
     @Test
+    fun websiteOnlyAutomaticCheckRunsAgainExactlyAtTwentyFourHours() {
+        var now = 1_000_000_000L
+        val website = FakeWebsiteUpdateSource(
+            WebsiteUpdateResult.Available(availableSnapshot(9L, 1L, UpdateChannel.WEBSITE))
+        )
+        val coordinator = coordinator(
+            now = { now },
+            website = website,
+            forceWebsiteOnly = true
+        )
+
+        assertTrue(coordinator.check(UpdateCheckTrigger.AUTOMATIC))
+        assertEquals(1, website.checkCount)
+
+        now += UpdatePolicy.AUTO_CHECK_INTERVAL_MILLIS - 1L
+        assertFalse(coordinator.check(UpdateCheckTrigger.AUTOMATIC))
+        assertEquals(1, website.checkCount)
+
+        now += 1L
+        assertTrue(coordinator.check(UpdateCheckTrigger.AUTOMATIC))
+        assertEquals(2, website.checkCount)
+    }
+
+    @Test
     fun overlappingManualCheckAttachesToSingleFlightAndUpgradesResultTrigger() {
         val play = FakePlayUpdateSource()
         val coordinator = coordinator(now = { 1_000_000_000L }, play = play)

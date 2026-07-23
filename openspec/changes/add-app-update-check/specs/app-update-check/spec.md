@@ -72,6 +72,11 @@
 - **THEN** 系統 SHALL NOT 發起新的自動網絡或 Play 檢查
 - **AND** 設定頁 SHALL 繼續使用最近一次可靠結果
 
+#### Scenario: 自動檢查間隔邊界
+- **WHEN** 距離上次自動檢查嘗試為 24 小時前一毫秒
+- **THEN** 系統 SHALL NOT 發起新的自動檢查
+- **AND** 剛好達到或超過 24 小時時系統 SHALL 允許新的自動檢查
+
 #### Scenario: 自動檢查失敗
 - **WHEN** 自動檢查因 Play、網站、網絡或資料格式失敗
 - **THEN** 系統 SHALL 保持靜默且 SHALL NOT 顯示 Toast 或更新 Dialog
@@ -103,7 +108,12 @@
 
 #### Scenario: 網站渠道提供更新日期
 - **WHEN** 網站 metadata 合法且包含較高 versionCode 與 `lastUpdated`
-- **THEN** 系統 SHALL 按香港時區及完整日數計算更新已發佈多久
+- **THEN** 系統 SHALL 把日期解析為香港時區當日零時並以滿 72 小時計算更新已發佈多久
+
+#### Scenario: 網站三天門檻邊界
+- **WHEN** 目前時間距網站 `lastUpdated` 香港零時為 72 小時前一毫秒
+- **THEN** 系統 SHALL 視為尚未到期
+- **AND** 剛好達到或超過 72 小時時系統 SHALL 視為已滿 3 天
 
 ### Requirement: 系統管理首次提醒、稍後提醒與略過版本
 系統 SHALL 只在更新對目前用戶可用滿 3 天後自動提醒，並 SHALL 以 versionCode 隔離稍後提醒與略過狀態。
@@ -129,6 +139,11 @@
 - **WHEN** 用戶選擇「稍後提醒」
 - **THEN** 系統 SHALL 把該 versionCode 的下一次自動提醒延後 3 天
 - **AND** 設定頁 SHALL 繼續展示更新及小紅點
+
+#### Scenario: 稍後提醒期限邊界
+- **WHEN** 同一 versionCode 距離稍後提醒操作為 72 小時前一毫秒
+- **THEN** 系統 SHALL 繼續抑制自動 Dialog
+- **AND** 剛好達到或超過 72 小時時系統 SHALL 允許再次自動提醒
 
 #### Scenario: 略過目前版本
 - **WHEN** 用戶選擇「略過此版本」
@@ -218,9 +233,25 @@
 
 #### Scenario: 合法網站 metadata 有更新
 - **WHEN** 網站渠道取得 `https://www.busiscoming.com/api/downloads/android/latest/metadata`
-- **AND** 響應的 `platform`、`status`、`applicationId`、`versionName`、`versionCode`、`fileName`、`sizeBytes`、`lastUpdated` 與 `downloadUrl` 均合法
-- **AND** `applicationId` 為 `com.golink.busiscoming` 且 versionCode 高於目前 App
+- **AND** 響應的 `platform`、`status`、`versionName`、`versionCode`、`fileName`、`sizeBytes`、`lastUpdated` 與 `downloadUrl` 均合法
+- **AND** versionCode 高於目前 App
 - **THEN** 系統 SHALL 保存網站更新結果
+
+#### Scenario: 網站 metadata 不依賴 applicationId
+- **WHEN** 官方網站 metadata 不包含 `applicationId`
+- **AND** 其他必填欄位與來源均合法
+- **THEN** 系統 SHALL 正常完成版本判斷
+- **AND** 系統 SHALL NOT 因缺少 `applicationId` 把響應視為失敗
+
+#### Scenario: 網站 metadata 使用固定相對下載路徑
+- **WHEN** 合法 metadata 的 `downloadUrl` 為 `/api/downloads/android/latest`
+- **THEN** 系統 SHALL 接受該響應
+- **AND** 系統 SHALL 只把該欄位用作契約驗證而不直接啟動下載
+
+#### Scenario: 網站 metadata 使用等價官方絕對下載 URL
+- **WHEN** 合法 metadata 的 `downloadUrl` 為 `https://www.busiscoming.com/api/downloads/android/latest`
+- **THEN** 系統 SHALL 接受該響應
+- **AND** 系統 SHALL 仍按目前語言開啟網站 `#download` 頁面
 
 #### Scenario: 網站 metadata 沒有較高版本
 - **WHEN** 合法網站 metadata 的 versionCode 不高於目前 App
@@ -228,7 +259,7 @@
 - **AND** 系統 SHALL NOT 顯示更新小紅點或 Dialog
 
 #### Scenario: 網站 metadata 無效
-- **WHEN** metadata 來自非 HTTPS／非官方 host、缺少必填欄位、包名不符、日期非法或狀態不可用
+- **WHEN** metadata 來自非 HTTPS／非官方 host、來源 URL 帶有非預期 port／query／fragment、缺少必填欄位、日期非法、狀態不可用，或 `downloadUrl` 為其他相對路徑、scheme-relative URL、非官方 host、HTTP、非預期 port、帶 query／fragment 的 URL
 - **THEN** 系統 SHALL 將本次檢查視為失敗
 - **AND** 系統 SHALL NOT 以服務端任意 URL 啟動外部下載
 
@@ -283,5 +314,5 @@
 
 #### Scenario: 網站 metadata 來自實際 APK
 - **WHEN** 網站準備公開 Play 簽署 APK
-- **THEN** application ID、versionName、versionCode、sizeBytes 與 SHA-256 SHALL 從實際 APK 驗證或提取
+- **THEN** application ID、versionName、versionCode、sizeBytes 與 SHA-256 SHALL 從實際 APK 驗證或提取，其中 application ID 與簽名屬發佈驗證而非公開 runtime metadata 必填欄位
 - **AND** metadata、下載響應與 APK bytes SHALL 一致
