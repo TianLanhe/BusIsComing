@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.ui.main.SearchCandidateLocationSnapshotRequestState
 import com.golink.busiscoming.ui.main.SearchCurrentPlaceRequestState
 import com.golink.busiscoming.ui.main.SearchResultSaveEligibility
 import org.junit.Assert.assertFalse
@@ -60,25 +61,36 @@ class SearchInteractionPolicyTest {
     }
 
     @Test
-    fun `restored search starts at most one silent candidate snapshot request`() {
-        val state = SearchCurrentPlaceRequestState()
+    fun `one view generation starts at most one candidate snapshot request`() {
+        val state = SearchCandidateLocationSnapshotRequestState()
 
-        assertNull(state.beginSilentSnapshotRequest(canRequest = false))
-        val token = state.beginSilentSnapshotRequest(canRequest = true)
+        assertNull(state.beginRequest(canRequest = false))
+        val token = state.beginRequest(canRequest = true)
 
         assertNotNull(token)
-        assertNull(state.beginSilentSnapshotRequest(canRequest = true))
+        assertNull(state.beginRequest(canRequest = true))
         assertTrue(state.finish(token!!))
     }
 
     @Test
-    fun `a newer request invalidates a silent candidate snapshot callback`() {
-        val state = SearchCurrentPlaceRequestState()
-        val stale = state.beginSilentSnapshotRequest(canRequest = true)!!
+    fun `candidate snapshot request does not invalidate automatic origin request`() {
+        val currentPlaceState = SearchCurrentPlaceRequestState()
+        val snapshotState = SearchCandidateLocationSnapshotRequestState()
+        val auto = currentPlaceState.beginAutoRequest(false, "", false)!!
 
-        state.beginManualRequest()
+        assertNotNull(snapshotState.beginRequest(canRequest = true))
+        assertTrue(currentPlaceState.finish(auto))
+    }
+
+    @Test
+    fun `a new view generation invalidates an old candidate snapshot callback`() {
+        val state = SearchCandidateLocationSnapshotRequestState()
+        val stale = state.beginRequest(canRequest = true)!!
+
+        state.resetForNextGeneration()
 
         assertFalse(state.finish(stale))
+        assertNotNull(state.beginRequest(canRequest = true))
     }
 
     @Test

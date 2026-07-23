@@ -18,6 +18,7 @@ enum class TransitCodeShortcutState {
 
 enum class TransitCodeShortcutRequestResult {
     ALREADY_PINNED,
+    NEEDS_PERMISSION,
     REQUESTED,
     UNSUPPORTED,
     FAILED
@@ -40,19 +41,28 @@ object TransitCodeShortcutManager {
         }
     }
 
-    fun requestPinnedShortcut(context: Context): TransitCodeShortcutRequestResult {
+    fun requestPinnedShortcut(
+        context: Context,
+        bypassXiaomiPermissionGate: Boolean = false
+    ): TransitCodeShortcutRequestResult {
         if (currentState(context) == TransitCodeShortcutState.PINNED) {
+            recordPinned(context)
+            refreshPublishedShortcut(context)
             return TransitCodeShortcutRequestResult.ALREADY_PINNED
+        }
+        val permissionStore = XiaomiShortcutPermissionStateStore(context)
+        val permissionAction = XiaomiShortcutPermissionPolicy().action(
+            gatePassed = permissionStore.isGatePassed(),
+            bypassPermissionGate = bypassXiaomiPermissionGate
+        )
+        if (permissionAction == XiaomiShortcutPermissionAction.OPEN_SETTINGS) {
+            return TransitCodeShortcutRequestResult.NEEDS_PERMISSION
         }
         if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) {
             return TransitCodeShortcutRequestResult.UNSUPPORTED
         }
-        val shortcut = ShortcutInfoCompat.Builder(context, SHORTCUT_ID)
-            .setShortLabel(context.getString(R.string.transit_code))
-            .setLongLabel(context.getString(R.string.transit_code_shortcut_long_label))
-            .setIcon(IconCompat.createWithResource(context, R.drawable.ic_transit_code))
-            .setIntent(TransitCodeEntryPoint.createIntent(context))
-            .build()
+        val shortcut = createShortcut(context)
+        refreshPublishedShortcut(context, shortcut)
         val callbackIntent = Intent(context, TransitCodeShortcutPinnedReceiver::class.java)
             .setAction(ACTION_PINNED)
         val callback = PendingIntent.getBroadcast(
@@ -71,11 +81,46 @@ object TransitCodeShortcutManager {
             TransitCodeShortcutRequestResult.FAILED
         }
     }
+
+    fun refreshPublishedShortcut(context: Context) {
+        refreshPublishedShortcut(context, createShortcut(context))
+    }
+
+    fun recordPinned(context: Context) {
+        XiaomiShortcutPermissionStateStore(context).markGatePassed()
+    }
+
+    fun recordPinRequestIncomplete(context: Context) {
+        if (XiaomiShortcutPermissionPolicy().isXiaomiFamily) {
+            XiaomiShortcutPermissionStateStore(context).clearGate()
+        }
+    }
+
+    private fun createShortcut(context: Context): ShortcutInfoCompat {
+        return ShortcutInfoCompat.Builder(context, SHORTCUT_ID)
+            .setShortLabel(context.getString(R.string.transit_code))
+            .setLongLabel(context.getString(R.string.transit_code_shortcut_long_label))
+            .setIcon(IconCompat.createWithResource(context, R.drawable.ic_transit_code))
+            .setIntent(TransitCodeEntryPoint.createShortcutIntent(context))
+            .build()
+    }
+
+    private fun refreshPublishedShortcut(
+        context: Context,
+        shortcut: ShortcutInfoCompat
+    ) {
+        try {
+            ShortcutManagerCompat.updateShortcuts(context, listOf(shortcut))
+        } catch (_: RuntimeException) {
+            // Static shortcuts can be immutable on some launchers; the manifest update remains authoritative.
+        }
+    }
 }
 
 class TransitCodeShortcutPinnedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != TransitCodeShortcutManager.ACTION_PINNED) return
+        TransitCodeShortcutManager.recordPinned(context)
         Toast.makeText(context, R.string.transit_code_shortcut_added, Toast.LENGTH_SHORT).show()
     }
 }

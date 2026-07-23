@@ -24,7 +24,6 @@ class AppPageStyleContractTest {
 
     @Test
     fun editPageUsesGradientFunctionalAreaAndKeepsInputsAvailable() {
-        val placePairLayout = File("src/main/res/layout/view_place_pair_editor.xml").readText()
         assertTrue(manageLayoutXml.contains("android:id=\"@+id/routeConfigList\""))
         assertTrue(editLayoutXml.contains("android:id=\"@+id/routeEditFormCard\""))
         assertTrue(editLayoutXml.contains("android:gravity=\"center_vertical\""))
@@ -32,8 +31,9 @@ class AppPageStyleContractTest {
         assertTrue(editFormBackgroundXml.contains("<gradient"))
         assertTrue(editFormBackgroundXml.contains("@color/bus_form_gradient_start"))
         assertTrue(editFormBackgroundXml.contains("@color/bus_form_gradient_end"))
-        assertTrue(editLayoutXml.contains("PlacePairEditorView"))
-        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairOriginCandidateList\""))
-        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairDestinationCandidateList\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/originInputLayout\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/destinationInputLayout\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/originCandidateList\""))
+        assertTrue(editLayoutXml.contains("android:id=\"@+id/destinationCandidateList\""))
     }
 }
