@@ -6,6 +6,7 @@ import com.golink.busiscoming.data.local.AppThemePreferenceStore
 import com.golink.busiscoming.data.local.AppLanguageRepository
 import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.update.AppUpdateRuntime
+import com.golink.busiscoming.ui.main.TransitCodeShortcutManager
 
 class BusIsComingApplication : Application() {
     override fun onCreate() {
@@ -15,5 +16,8 @@ class BusIsComingApplication : Application() {
         AppCompatDelegate.setDefaultNightMode(mode.nightMode)
         AppUpdateRuntime.initialize(this, BuildConfig.VERSION_CODE.toLong())
         super.onCreate()
+        Thread {
+            TransitCodeShortcutManager.refreshPublishedShortcut(applicationContext)
+        }.start()
     }
 }

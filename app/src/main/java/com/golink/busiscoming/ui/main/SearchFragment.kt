@@ -3,6 +3,7 @@ package com.golink.busiscoming.ui.main
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -52,6 +53,8 @@ class SearchFragment : Fragment() {
     private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val busRouteRepository: BusRouteRepository = busRouteRepositoryFactory()
     private val currentPlaceRequestState = SearchCurrentPlaceRequestState()
+    private val candidateLocationSnapshotRequestState =
+        SearchCandidateLocationSnapshotRequestState()
     private val routeQueryCoordinator = RouteQueryCoordinator(
         repository = busRouteRepository,
         executor = queryExecutor,
@@ -75,6 +78,7 @@ class SearchFragment : Fragment() {
     private var restoredOriginGoogleAttribution: Boolean = false
     private var restoredDestinationGoogleAttribution: Boolean = false
     private var restoredShouldRequery: Boolean = false
+    private var candidateLocationSnapshot: CurrentLocationSnapshot? = null
     private var hasSubmittedQuery: Boolean = false
     private var successfulQueryOrigin: Place? = null
     private var successfulQueryDestination: Place? = null
@@ -206,6 +210,7 @@ class SearchFragment : Fragment() {
                 onSearchSelectionChanged()
             }
         )
+        applyCandidateLocationSnapshotIfFresh()
         currentLocationButton.setOnClickListener { requestCurrentOrigin(isAuto = false) }
 
         resultList = view.findViewById(R.id.searchResultList)
@@ -277,7 +282,6 @@ class SearchFragment : Fragment() {
         renderAttribution()
         renderSearchActions()
         restoreSubmittedQueryIfNeeded()
-        requestSilentCandidateLocationSnapshotIfNeeded()
         isViewStateRestored = true
         if (hasPendingDestinationSelection) {
             hasPendingDestinationSelection = false
@@ -290,6 +294,7 @@ class SearchFragment : Fragment() {
             hasPendingDestinationSelection = true
             return
         }
+        requestCandidateLocationSnapshotIfNeeded()
         val generation = currentPlaceRequestState.beginAutoRequest(
             hasSelectedOrigin = originController?.selectedPlace != null || restoredOrigin != null,
             originInput = originController?.currentInputText().orEmpty(),
@@ -300,6 +305,7 @@ class SearchFragment : Fragment() {
 
     fun onDestinationHidden() {
         invalidateCurrentPlaceRequest()
+        candidateLocationSnapshotRequestState.resetForNextGeneration()
         routeQueryCoordinator.invalidate()
         routeQueryState.cancel()
         swipeRefresh.isRefreshing = false
@@ -308,6 +314,7 @@ class SearchFragment : Fragment() {
 
     override fun onDestroyView() {
         invalidateCurrentPlaceRequest()
+        candidateLocationSnapshotRequestState.resetForNextGeneration()
         routeQueryCoordinator.invalidate()
         routeQueryState.cancel()
         originController?.dispose()
@@ -376,8 +383,10 @@ class SearchFragment : Fragment() {
                 originController?.setExternalLoading(false)
                 when (result) {
                     is CurrentPlaceSelectionResult.Success -> {
-                        originController?.setCurrentLocationSnapshot(result.snapshot)
-                        destinationController?.setCurrentLocationSnapshot(result.snapshot)
+                        applyCandidateLocationSnapshot(
+                            result.snapshot,
+                            invalidatePendingRequest = true
+                        )
                         originController?.setSelectedPlace(result.place)
                         attributionState.setOriginGoogleMaps(
                             result.attribution == PlaceAttribution.GOOGLE_MAPS
@@ -386,6 +395,7 @@ class SearchFragment : Fragment() {
                         onSearchSelectionChanged()
                     }
                     CurrentPlaceSelectionResult.Failure -> {
+                        requestCandidateLocationSnapshotIfNeeded()
                         if (isAuto) {
                             originController?.setHelperText(
                                 getString(R.string.current_location_manual_origin)
@@ -409,22 +419,21 @@ class SearchFragment : Fragment() {
         }
     }
 
-    private fun requestSilentCandidateLocationSnapshotIfNeeded() {
-        val hasRestoredState = restoredOrigin != null ||
-            restoredDestination != null ||
-            !restoredOriginInput.isNullOrBlank() ||
-            !restoredDestinationInput.isNullOrBlank() ||
-            hasSubmittedQuery
+    private fun requestCandidateLocationSnapshotIfNeeded() {
+        if (applyCandidateLocationSnapshotIfFresh()) return
         val context = context ?: return
-        val canRequest = hasRestoredState &&
-            LocationPermissionUtils.hasForegroundLocationPermission(context) &&
+        val canRequest = LocationPermissionUtils.hasForegroundLocationPermission(context) &&
             SystemLocationUtils.isLocationEnabled(context)
-        val generation = currentPlaceRequestState.beginSilentSnapshotRequest(canRequest) ?: return
+        val generation = candidateLocationSnapshotRequestState.beginRequest(canRequest) ?: return
         val handleResult: (CurrentLocationSnapshot?) -> Unit = { snapshot ->
             mainHandler.post {
-                if (!isViewActive() || !currentPlaceRequestState.finish(generation)) return@post
-                originController?.setCurrentLocationSnapshot(snapshot)
-                destinationController?.setCurrentLocationSnapshot(snapshot)
+                if (
+                    !isViewActive() ||
+                    !candidateLocationSnapshotRequestState.finish(generation)
+                ) {
+                    return@post
+                }
+                snapshot?.let { applyCandidateLocationSnapshot(it) }
             }
         }
         val override = currentLocationSnapshotRequestOverride
@@ -433,6 +442,29 @@ class SearchFragment : Fragment() {
         } else {
             (activity as? MainActivity)?.requestCurrentLocationSnapshot(handleResult)
         }
+    }
+
+    private fun applyCandidateLocationSnapshotIfFresh(): Boolean {
+        val snapshot = candidateLocationSnapshot ?: return false
+        val ageMillis = SystemClock.elapsedRealtime() - snapshot.elapsedRealtimeMillis
+        if (ageMillis !in 0..CANDIDATE_LOCATION_SNAPSHOT_MAX_AGE_MS) {
+            candidateLocationSnapshot = null
+            return false
+        }
+        applyCandidateLocationSnapshot(snapshot)
+        return true
+    }
+
+    private fun applyCandidateLocationSnapshot(
+        snapshot: CurrentLocationSnapshot,
+        invalidatePendingRequest: Boolean = false
+    ) {
+        if (invalidatePendingRequest) {
+            candidateLocationSnapshotRequestState.invalidatePending()
+        }
+        candidateLocationSnapshot = snapshot
+        originController?.setCurrentLocationSnapshot(snapshot)
+        destinationController?.setCurrentLocationSnapshot(snapshot)
     }
 
     private fun query(preserveSort: Boolean = false) {
@@ -760,5 +792,6 @@ class SearchFragment : Fragment() {
         const val STATE_SEARCH_SCROLL_POSITION = "search_scroll_position"
         const val STATE_SEARCH_SCROLL_OFFSET = "search_scroll_offset"
         private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 3
+        private const val CANDIDATE_LOCATION_SNAPSHOT_MAX_AGE_MS = 30_000L
     }
 }

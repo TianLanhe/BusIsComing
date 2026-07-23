@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.Fragment
 import com.golink.busiscoming.BuildConfig
@@ -34,6 +35,22 @@ class SettingsFragment : Fragment() {
     private var updateDot: View? = null
     private var updateSubscription: AutoCloseable? = null
     private var manualUpdateCheckRequested = false
+    private val shortcutPermissionNavigator = XiaomiShortcutPermissionNavigator()
+    private var shortcutRecheckRunnable: Runnable? = null
+    private var awaitingShortcutPermissionResult = false
+    private val shortcutPermissionSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (!awaitingShortcutPermissionResult) return@registerForActivityResult
+        awaitingShortcutPermissionResult = false
+        val context = context ?: return@registerForActivityResult
+        if (TransitCodeShortcutManager.currentState(context) == TransitCodeShortcutState.PINNED) {
+            TransitCodeShortcutManager.recordPinned(context)
+            renderTransitCodeShortcutState()
+        } else {
+            requestTransitCodeShortcut(bypassXiaomiPermissionGate = true)
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -118,18 +135,7 @@ class SettingsFragment : Fragment() {
             startActivity(Intent(requireContext(), RouteTransferActivity::class.java))
         }
         view.findViewById<View>(R.id.settingsTransitCodeShortcutRow).setOnClickListener {
-            val message = when (TransitCodeShortcutManager.requestPinnedShortcut(requireContext())) {
-                TransitCodeShortcutRequestResult.ALREADY_PINNED ->
-                    R.string.transit_code_shortcut_already_added
-                TransitCodeShortcutRequestResult.REQUESTED ->
-                    R.string.transit_code_shortcut_confirm_system
-                TransitCodeShortcutRequestResult.UNSUPPORTED ->
-                    R.string.transit_code_shortcut_unsupported_guide
-                TransitCodeShortcutRequestResult.FAILED ->
-                    R.string.transit_code_shortcut_failed_retry
-            }
-            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
-            renderTransitCodeShortcutState()
+            requestTransitCodeShortcut()
         }
         view.findViewById<View>(R.id.settingsShareRow).setOnClickListener {
             AppSupportActions.shareApp(requireContext())
@@ -154,12 +160,20 @@ class SettingsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        val context = context ?: return
+        if (TransitCodeShortcutManager.currentState(context) == TransitCodeShortcutState.PINNED) {
+            TransitCodeShortcutManager.recordPinned(context)
+        } else if (XiaomiShortcutPermissionStateStore(context).consumePinRequestPending()) {
+            TransitCodeShortcutManager.recordPinRequestIncomplete(context)
+        }
         renderTransitCodeShortcutState()
     }
 
     override fun onDestroyView() {
         updateSubscription?.close()
         updateSubscription = null
+        shortcutRecheckRunnable?.let { transitCodeShortcutValue?.removeCallbacks(it) }
+        shortcutRecheckRunnable = null
         transitCodeShortcutValue = null
         updateRow = null
         updateSummary = null
@@ -198,17 +212,112 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    private fun renderTransitCodeShortcutState() {
-        val value = transitCodeShortcutValue ?: return
-        value.setText(
-            if (TransitCodeShortcutManager.currentState(requireContext()) ==
-                TransitCodeShortcutState.PINNED
-            ) {
-                R.string.transit_code_shortcut_already_added
-            } else {
-                R.string.settings_transit_code_shortcut_summary
+    private fun requestTransitCodeShortcut(bypassXiaomiPermissionGate: Boolean = false) {
+        val context = context ?: return
+        when (
+            TransitCodeShortcutManager.requestPinnedShortcut(
+                context,
+                bypassXiaomiPermissionGate
+            )
+        ) {
+            TransitCodeShortcutRequestResult.ALREADY_PINNED -> {
+                Toast.makeText(
+                    context,
+                    R.string.transit_code_shortcut_already_added,
+                    Toast.LENGTH_SHORT
+                ).show()
+                renderTransitCodeShortcutState()
             }
-        )
+            TransitCodeShortcutRequestResult.NEEDS_PERMISSION -> {
+                openXiaomiShortcutPermissionSettings()
+            }
+            TransitCodeShortcutRequestResult.REQUESTED -> {
+                XiaomiShortcutPermissionStateStore(context).markPinRequestPending()
+                renderTransitCodeShortcutState(requestPending = true)
+                scheduleShortcutStateRecheck()
+            }
+            TransitCodeShortcutRequestResult.UNSUPPORTED -> {
+                Toast.makeText(
+                    context,
+                    R.string.transit_code_shortcut_unsupported_guide,
+                    Toast.LENGTH_LONG
+                ).show()
+                renderTransitCodeShortcutState()
+            }
+            TransitCodeShortcutRequestResult.FAILED -> {
+                TransitCodeShortcutManager.recordPinRequestIncomplete(context)
+                Toast.makeText(
+                    context,
+                    R.string.transit_code_shortcut_failed_retry,
+                    Toast.LENGTH_SHORT
+                ).show()
+                renderTransitCodeShortcutState()
+            }
+        }
+    }
+
+    private fun openXiaomiShortcutPermissionSettings() {
+        val context = context ?: return
+        awaitingShortcutPermissionResult = true
+        when (
+            shortcutPermissionNavigator.open(context) { intent ->
+                shortcutPermissionSettingsLauncher.launch(intent)
+            }
+        ) {
+            XiaomiShortcutPermissionNavigationResult.XIAOMI_SETTINGS,
+            XiaomiShortcutPermissionNavigationResult.APP_DETAILS -> {
+                Toast.makeText(
+                    context,
+                    R.string.transit_code_shortcut_permission_guide,
+                    Toast.LENGTH_LONG
+                ).show()
+                renderTransitCodeShortcutState()
+            }
+            XiaomiShortcutPermissionNavigationResult.FAILED -> {
+                awaitingShortcutPermissionResult = false
+                Toast.makeText(
+                    context,
+                    R.string.transit_code_shortcut_failed_retry,
+                    Toast.LENGTH_SHORT
+                ).show()
+                renderTransitCodeShortcutState()
+            }
+        }
+    }
+
+    private fun scheduleShortcutStateRecheck() {
+        val value = transitCodeShortcutValue ?: return
+        shortcutRecheckRunnable?.let(value::removeCallbacks)
+        val runnable = Runnable {
+            shortcutRecheckRunnable = null
+            val context = context ?: return@Runnable
+            if (TransitCodeShortcutManager.currentState(context) == TransitCodeShortcutState.PINNED) {
+                TransitCodeShortcutManager.recordPinned(context)
+            } else if (XiaomiShortcutPermissionStateStore(context).consumePinRequestPending()) {
+                TransitCodeShortcutManager.recordPinRequestIncomplete(context)
+            }
+            renderTransitCodeShortcutState()
+        }
+        shortcutRecheckRunnable = runnable
+        value.postDelayed(runnable, SHORTCUT_STATE_RECHECK_DELAY_MS)
+    }
+
+    private fun renderTransitCodeShortcutState(requestPending: Boolean = false) {
+        val value = transitCodeShortcutValue ?: return
+        val context = context ?: return
+        val state = TransitCodeShortcutManager.currentState(context)
+        val textRes = when {
+            state == TransitCodeShortcutState.PINNED ->
+                R.string.transit_code_shortcut_already_added
+            requestPending -> R.string.transit_code_shortcut_request_pending
+            XiaomiShortcutPermissionPolicy().action(
+                gatePassed = XiaomiShortcutPermissionStateStore(context).isGatePassed(),
+                bypassPermissionGate = false
+            ) == XiaomiShortcutPermissionAction.OPEN_SETTINGS ->
+                R.string.transit_code_shortcut_permission_required
+            else -> R.string.settings_transit_code_shortcut_summary
+        }
+        value.setText(textRes)
     }
 
     private fun AppThemeMode.labelRes(): Int = when (this) {
@@ -221,5 +330,9 @@ class SettingsFragment : Fragment() {
         AppLanguage.TRADITIONAL_CHINESE -> R.string.language_traditional_self
         AppLanguage.SIMPLIFIED_CHINESE -> R.string.language_simplified_self
         AppLanguage.ENGLISH -> R.string.language_english_self
+    }
+
+    private companion object {
+        const val SHORTCUT_STATE_RECHECK_DELAY_MS = 1_500L
     }
 }

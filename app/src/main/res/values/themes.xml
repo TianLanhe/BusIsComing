@@ -22,6 +22,10 @@
 
     <style name="Theme.BusIsComing" parent="Theme.BusIsComing.Base" />
 
+    <style name="Theme.BusIsComing.ShortcutRelay" parent="android:style/Theme.NoDisplay">
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
     <style name="StableShortText">
         <item name="android:letterSpacing">0</item>
         <item name="android:textAlignment">gravity</item>

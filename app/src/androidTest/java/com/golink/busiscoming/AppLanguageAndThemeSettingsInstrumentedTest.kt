@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.res.Configuration
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.MenuItemCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
@@ -21,6 +22,7 @@ import com.golink.busiscoming.data.local.AppThemePreferenceStore
 import com.golink.busiscoming.data.localization.AppLanguageChoice
 import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.ui.main.MainActivity
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -64,6 +66,16 @@ class AppLanguageAndThemeSettingsInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_settings)).perform(click())
             waitForSettingsValues("淺色模式", "繁體中文")
+            scenario.onActivity { activity ->
+                assertBottomNavigationCopy(
+                    activity,
+                    journeys = "行程",
+                    routes = "路線",
+                    settings = "設定",
+                    journeysDescription = "已儲存行程",
+                    routesDescription = "搜尋巴士路線"
+                )
+            }
 
             onView(withId(R.id.settingsAppearanceRow)).perform(click())
             onView(withText("淺色模式")).inRoot(isDialog()).check(matches(isChecked()))
@@ -91,6 +103,16 @@ class AppLanguageAndThemeSettingsInstrumentedTest {
             }
             waitForSettingsValues("深色模式", "简体中文")
             scenario.onActivity { activity ->
+                assertBottomNavigationCopy(
+                    activity,
+                    journeys = "行程",
+                    routes = "路线",
+                    settings = "设置",
+                    journeysDescription = "已保存行程",
+                    routesDescription = "搜索公交路线"
+                )
+            }
+            scenario.onActivity { activity ->
                 val nightMode = activity.resources.configuration.uiMode and
                     Configuration.UI_MODE_NIGHT_MASK
                 assertEquals(Configuration.UI_MODE_NIGHT_YES, nightMode)
@@ -112,6 +134,16 @@ class AppLanguageAndThemeSettingsInstrumentedTest {
                     AppThemePreferenceStore(context).getMode() == AppThemeMode.LIGHT
             }
             waitForSettingsValues("Light", "English")
+            scenario.onActivity { activity ->
+                assertBottomNavigationCopy(
+                    activity,
+                    journeys = "Journeys",
+                    routes = "Routes",
+                    settings = "Settings",
+                    journeysDescription = "Saved journeys",
+                    routesDescription = "Find bus routes"
+                )
+            }
 
             onView(withId(R.id.settingsAppearanceRow)).perform(click())
             onView(withText("Dark")).inRoot(isDialog()).perform(click())
@@ -130,6 +162,27 @@ class AppLanguageAndThemeSettingsInstrumentedTest {
                 assertSame(activityBeforeReselect, activityAfterReselect)
             }
         }
+    }
+
+    private fun assertBottomNavigationCopy(
+        activity: MainActivity,
+        journeys: String,
+        routes: String,
+        settings: String,
+        journeysDescription: String,
+        routesDescription: String
+    ) {
+        val menu = activity.findViewById<BottomNavigationView>(R.id.topLevelNav).menu
+        val journeysItem = menu.findItem(R.id.navigation_frequent_routes)
+        val routesItem = menu.findItem(R.id.navigation_search)
+        val settingsItem = menu.findItem(R.id.navigation_settings)
+
+        assertEquals(journeys, journeysItem.title.toString())
+        assertEquals(journeysDescription, MenuItemCompat.getContentDescription(journeysItem).toString())
+        assertEquals(routes, routesItem.title.toString())
+        assertEquals(routesDescription, MenuItemCompat.getContentDescription(routesItem).toString())
+        assertEquals(settings, settingsItem.title.toString())
+        assertEquals(settings, MenuItemCompat.getContentDescription(settingsItem).toString())
     }
 
     private fun waitForSettingsValues(appearance: String, language: String) {

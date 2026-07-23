@@ -39,11 +39,12 @@ class PlaceInputController(
     private val isActive: () -> Boolean,
     private val maxVisibleRows: Int = PlaceCandidatePresentationPolicy.DEFAULT_MAX_VISIBLE_ROWS,
     private val idleToolView: View? = null,
-    private val instructionText: CharSequence? = null,
+    instructionText: CharSequence? = null,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
     private val onPlaceSelected: (Place) -> Unit = {},
     private val onUserTextEdited: () -> Unit = {}
 ) {
+    private val defaultInstructionText = instructionText ?: inputLayout.helperText
     private val rowHeightPx = dp(context, CANDIDATE_ROW_HEIGHT_DP)
     private val adapter = PlaceCandidateAdapter(context) { place ->
         setSelectedPlace(place)
@@ -82,7 +83,7 @@ class PlaceInputController(
                 input.text.isNullOrBlank() &&
                 inputLayout.error == null
             ) {
-                inputLayout.helperText = instructionText
+                inputLayout.helperText = defaultInstructionText
             } else if (!hasFocus) {
                 hideCandidates()
             }
@@ -171,7 +172,7 @@ class PlaceInputController(
 
     fun clearMessages() {
         inputLayout.error = null
-        inputLayout.helperText = null
+        inputLayout.helperText = defaultInstructionText
     }
 
     fun setCurrentLocationSnapshot(snapshot: CurrentLocationSnapshot?) {

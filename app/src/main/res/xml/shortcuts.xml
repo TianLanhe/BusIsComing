@@ -8,7 +8,7 @@
         android:shortcutLongLabel="@string/transit_code_shortcut_long_label">
         <intent
             android:action="com.golink.busiscoming.action.OPEN_TRANSIT_CODE"
-            android:targetClass="com.golink.busiscoming.ui.main.MainActivity"
+            android:targetClass="com.golink.busiscoming.ui.main.TransitCodeShortcutActivity"
             android:targetPackage="com.golink.busiscoming" />
     </shortcut>
 </shortcuts>

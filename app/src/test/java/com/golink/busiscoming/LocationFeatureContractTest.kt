@@ -135,7 +135,8 @@ class LocationFeatureContractTest {
         assertFalse(googleResolverKt.contains("MockPlaceNameResolver"))
 
         assertTrue(stringsXml.contains("地址由 Google Maps 提供"))
-        assertTrue(routeEditLayoutXml.contains("PlacePairEditorView"))
+        assertFalse(routeEditLayoutXml.contains("PlacePairEditorView"))
+        assertTrue(routeEditLayoutXml.contains("@+id/originAttributionText"))
         assertTrue(placePairLayoutXml.contains("@+id/placePairOriginAttribution"))
         assertTrue(placePairLayoutXml.contains("@string/google_maps_address_attribution"))
         assertTrue(routeEditActivityKt.contains("showOriginAttribution(nameResult.attribution)"))

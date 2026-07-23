@@ -15,6 +15,7 @@
         <package android:name="com.android.vending" />
         <package android:name="com.eg.android.AlipayGphone" />
         <package android:name="hk.alipay.wallet" />
+        <package android:name="com.miui.securitycenter" />
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
@@ -39,6 +40,15 @@
         <receiver
             android:name=".ui.main.TransitCodeShortcutPinnedReceiver"
             android:exported="false" />
+
+        <activity
+            android:name=".ui.main.TransitCodeShortcutActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.BusIsComing.ShortcutRelay" />
 
         <activity
             android:name=".ui.edit.RouteEditActivity"
