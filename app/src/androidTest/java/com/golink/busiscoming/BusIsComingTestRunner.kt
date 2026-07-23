@@ -11,6 +11,9 @@ import com.golink.busiscoming.data.local.AppLanguageRepository
 import com.golink.busiscoming.data.local.AppThemePreferenceStore
 import com.golink.busiscoming.data.localization.AppLanguageChoice
 import com.golink.busiscoming.data.model.AppThemeMode
+import com.golink.busiscoming.data.model.InitialInstallChannel
+import com.golink.busiscoming.data.update.SharedPreferencesUpdateStateStore
+import com.golink.busiscoming.data.update.UpdateStoredState
 import org.junit.runner.Description
 import org.junit.runner.notification.RunListener
 
@@ -51,4 +54,10 @@ private fun resetTestSettings(context: android.content.Context) {
     }
     AppThemePreferenceStore(context).setMode(AppThemeMode.SYSTEM)
     AppCompatDelegate.setDefaultNightMode(AppThemeMode.SYSTEM.nightMode)
+    SharedPreferencesUpdateStateStore(context, BuildConfig.VERSION_CODE.toLong()).save(
+        UpdateStoredState.initial(BuildConfig.VERSION_CODE.toLong()).copy(
+            initialInstallChannel = InitialInstallChannel.UNKNOWN_NON_PLAY,
+            lastAutoAttemptAt = System.currentTimeMillis()
+        )
+    )
 }

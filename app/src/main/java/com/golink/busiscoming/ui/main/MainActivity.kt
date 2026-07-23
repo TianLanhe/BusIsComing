@@ -21,10 +21,13 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -41,6 +44,8 @@ import com.golink.busiscoming.data.location.PlaceNameResolutionResult
 import com.golink.busiscoming.data.location.PlaceNameResolver
 import com.golink.busiscoming.data.location.SavedRouteLocationSorter
 import com.golink.busiscoming.data.location.SystemLocationUtils
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
+import com.golink.busiscoming.data.model.AppUpdateState
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfig
@@ -49,6 +54,10 @@ import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
+import com.golink.busiscoming.data.model.UpdateChannel
+import com.golink.busiscoming.data.model.UpdateCheckTrigger
+import com.golink.busiscoming.data.update.AppUpdateExternalActions
+import com.golink.busiscoming.data.update.AppUpdateRuntime
 import com.golink.busiscoming.data.repository.BusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
@@ -69,6 +78,8 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.snackbar.Snackbar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -76,6 +87,11 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
+    private val appUpdateLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) {
+        AppUpdateRuntime.coordinator.refreshPlayInstallStatus()
+    }
     private lateinit var routeConfigRepository: RouteConfigRepository
     private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
@@ -150,6 +166,10 @@ class MainActivity : AppCompatActivity() {
     private var currentLocationSnapshot: CurrentLocationSnapshot? = null
     private var savedRouteUsageSession = SavedRouteUsageSession()
     private val shownLocationFallbackToasts = mutableSetOf<LocationFallbackToast>()
+    private var appUpdateSubscription: AutoCloseable? = null
+    private var updatePromptDialog: AlertDialog? = null
+    private var updateDownloadedSnackbar: Snackbar? = null
+    private var hasRequestedAutomaticUpdateCheck = false
     private var pendingLocationPermissionAction: PendingLocationPermissionAction? = null
     private var pendingLocationSettingsCurrentPlaceCallback: ((CurrentPlaceSelectionResult) -> Unit)? = null
     private var hasPlayedFirstRunIntroAnimation: Boolean = false
@@ -222,6 +242,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        appUpdateSubscription?.close()
+        appUpdateSubscription = null
+        updatePromptDialog?.dismiss()
+        updatePromptDialog = null
+        updateDownloadedSnackbar?.dismiss()
+        updateDownloadedSnackbar = null
         invalidateActiveQuery()
         mainHandler.removeCallbacksAndMessages(null)
         routeDetailBottomSheet.dispose()
@@ -233,10 +259,25 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        AppUpdateRuntime.coordinator.reloadPersistedState()
+        AppUpdateRuntime.coordinator.refreshPlayInstallStatus()
+        handleAppUpdateState(AppUpdateRuntime.coordinator.currentState())
         if (frequentRoutesInitialized) {
             loadRouteConfigs()
         }
         retryCurrentPlaceAfterLocationSettings()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appUpdateSubscription?.close()
+        appUpdateSubscription = AppUpdateRuntime.coordinator.observe(::handleAppUpdateState)
+    }
+
+    override fun onStop() {
+        appUpdateSubscription?.close()
+        appUpdateSubscription = null
+        super.onStop()
     }
 
     fun onFrequentRoutesViewReady() {
@@ -247,6 +288,123 @@ class MainActivity : AppCompatActivity() {
         frequentRoutesInitialized = true
         loadRouteConfigs()
         restoreFrequentQueryIfNeeded()
+        if (!hasRequestedAutomaticUpdateCheck) {
+            hasRequestedAutomaticUpdateCheck = true
+            mainHandler.post {
+                AppUpdateRuntime.coordinator.check(UpdateCheckTrigger.AUTOMATIC)
+            }
+        }
+    }
+
+    private fun handleAppUpdateState(state: AppUpdateState) {
+        renderDownloadedUpdate(state.playUpdateDownloaded)
+        if (
+            !state.isChecking && state.snapshot.hasNewerVersion &&
+            state.lastFailure == null &&
+            AppUpdateRuntime.coordinator.shouldPrompt() && canShowUpdateUi()
+        ) {
+            showUpdatePrompt(state)
+        }
+    }
+
+    private fun canShowUpdateUi(): Boolean =
+        !isFinishing && !isDestroyed &&
+            lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+            !supportFragmentManager.isStateSaved
+
+    private fun showUpdatePrompt(state: AppUpdateState) {
+        if (updatePromptDialog?.isShowing == true) return
+        val version = state.snapshot.availableVersionName
+            ?: state.snapshot.availableVersionCode?.toString()
+            ?: return
+        val content = layoutInflater.inflate(R.layout.dialog_app_update, null)
+        content.findViewById<TextView>(R.id.updatePromptMessage).text =
+            getString(R.string.update_prompt_message, version)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.update_prompt_title)
+            .setView(content)
+            .setCancelable(false)
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnDismissListener { updatePromptDialog = null }
+        content.findViewById<MaterialButton>(R.id.updatePromptUpdateButton).setOnClickListener {
+            AppUpdateRuntime.coordinator.deferCurrentVersion()
+            dialog.dismiss()
+            startSelectedUpdate()
+        }
+        content.findViewById<MaterialButton>(R.id.updatePromptLaterButton).setOnClickListener {
+            AppUpdateRuntime.coordinator.deferCurrentVersion()
+            dialog.dismiss()
+        }
+        content.findViewById<MaterialButton>(R.id.updatePromptSkipButton).setOnClickListener {
+            AppUpdateRuntime.coordinator.skipCurrentVersion()
+            dialog.dismiss()
+        }
+        updatePromptDialog = dialog
+        dialog.show()
+    }
+
+    private fun startSelectedUpdate() {
+        val snapshot = AppUpdateRuntime.coordinator.currentState().snapshot
+        when (snapshot.channel) {
+            UpdateChannel.PLAY -> {
+                val flexibleStarted = snapshot.flexibleAllowed &&
+                    AppUpdateRuntime.coordinator.startFlexibleUpdate(this, appUpdateLauncher)
+                if (!flexibleStarted) {
+                    AppUpdateExternalActions.openPlayListing(this)
+                }
+            }
+            UpdateChannel.WEBSITE -> AppUpdateExternalActions.openWebsiteDownloadPage(
+                context = this,
+                language = AppLanguageRuntime.snapshot().effectiveLanguage
+            )
+            UpdateChannel.PLAY_UNAVAILABLE,
+            null -> Toast.makeText(
+                this,
+                R.string.update_play_unavailable,
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun renderDownloadedUpdate(downloaded: Boolean) {
+        if (!downloaded) {
+            updateDownloadedSnackbar?.dismiss()
+            updateDownloadedSnackbar = null
+            return
+        }
+        if (updateDownloadedSnackbar?.isShown == true) return
+        val snackbar = Snackbar.make(
+            findViewById(R.id.mainRoot),
+            R.string.update_downloaded_message,
+            Snackbar.LENGTH_INDEFINITE
+        ).setAnchorView(topLevelNav).setAction(R.string.update_downloaded_action) {
+            AppUpdateRuntime.coordinator.completePlayUpdate { success ->
+                if (!success) {
+                    runOnUiThread {
+                        Toast.makeText(
+                            this,
+                            R.string.update_complete_failed,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        }
+        snackbar.view.findViewById<TextView>(
+            com.google.android.material.R.id.snackbar_text
+        ).apply {
+            maxLines = 4
+            ellipsize = null
+        }
+        snackbar.view.findViewById<TextView>(
+            com.google.android.material.R.id.snackbar_action
+        ).apply {
+            isSingleLine = false
+            maxLines = 2
+            ellipsize = null
+        }
+        updateDownloadedSnackbar = snackbar.also(Snackbar::show)
     }
 
     private fun bindViews() {

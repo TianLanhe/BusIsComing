@@ -29,7 +29,7 @@ android {
         applicationId = "com.golink.busiscoming"
         minSdk = 25
         targetSdk = 36
-        versionCode = 4
+        versionCode = 6
         versionName = "1.1"
 
         testInstrumentationRunner = "com.golink.busiscoming.BusIsComingTestRunner"
@@ -42,6 +42,7 @@ android {
                     ?: ""
             ).asBuildConfigString()
         )
+        buildConfigField("boolean", "FORCE_WEBSITE_UPDATE_CHECK", "true")
     }
 
     buildFeatures {
@@ -72,6 +73,8 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.jsoup)
     implementation(libs.play.services.location)
+    implementation(libs.play.app.update)
+    implementation(libs.play.app.update.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.json)
     androidTestImplementation(libs.androidx.test.core.ktx)

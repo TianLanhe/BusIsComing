@@ -17,6 +17,10 @@ import com.golink.busiscoming.data.localization.AppLanguage
 import com.golink.busiscoming.data.localization.AppLanguageChoice
 import com.golink.busiscoming.data.localization.LanguageSnapshot
 import com.golink.busiscoming.data.model.AppThemeMode
+import com.golink.busiscoming.data.model.AppUpdateState
+import com.golink.busiscoming.data.model.UpdateCheckTrigger
+import com.golink.busiscoming.data.model.UpdateFailureKind
+import com.golink.busiscoming.data.update.AppUpdateRuntime
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.ui.settings.AboutActivity
 import com.golink.busiscoming.ui.settings.AppSupportActions
@@ -25,6 +29,11 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class SettingsFragment : Fragment() {
     private var transitCodeShortcutValue: TextView? = null
+    private var updateRow: View? = null
+    private var updateSummary: TextView? = null
+    private var updateDot: View? = null
+    private var updateSubscription: AutoCloseable? = null
+    private var manualUpdateCheckRequested = false
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -54,7 +63,12 @@ class SettingsFragment : Fragment() {
         }
         renderThemeMode(themeStore.getMode())
         transitCodeShortcutValue = view.findViewById(R.id.settingsTransitCodeShortcutValue)
+        updateRow = view.findViewById(R.id.settingsUpdateRow)
+        updateSummary = view.findViewById(R.id.settingsUpdateSummary)
+        updateDot = view.findViewById(R.id.settingsUpdateDot)
         renderTransitCodeShortcutState()
+        renderUpdateState(AppUpdateRuntime.coordinator.currentState())
+        updateSubscription = AppUpdateRuntime.coordinator.observe(::renderUpdateState)
         view.findViewById<View>(R.id.settingsAppearanceRow).setOnClickListener {
             val modes = arrayOf(AppThemeMode.SYSTEM, AppThemeMode.LIGHT, AppThemeMode.DARK)
             val labels = modes.map { getString(it.labelRes()) }.toTypedArray()
@@ -126,8 +140,9 @@ class SettingsFragment : Fragment() {
         view.findViewById<View>(R.id.settingsRatingRow).setOnClickListener {
             Toast.makeText(requireContext(), R.string.unsupported_rate_app, Toast.LENGTH_SHORT).show()
         }
-        view.findViewById<View>(R.id.settingsUpdateRow).setOnClickListener {
-            Toast.makeText(requireContext(), R.string.unsupported_check_update, Toast.LENGTH_SHORT).show()
+        updateRow?.setOnClickListener {
+            manualUpdateCheckRequested = true
+            AppUpdateRuntime.coordinator.check(UpdateCheckTrigger.MANUAL)
         }
         view.findViewById<View>(R.id.settingsAboutRow).setOnClickListener {
             startActivity(Intent(requireContext(), AboutActivity::class.java))
@@ -143,8 +158,44 @@ class SettingsFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        updateSubscription?.close()
+        updateSubscription = null
         transitCodeShortcutValue = null
+        updateRow = null
+        updateSummary = null
+        updateDot = null
         super.onDestroyView()
+    }
+
+    private fun renderUpdateState(state: AppUpdateState) {
+        val summaryView = updateSummary ?: return
+        val model = UpdateSettingsUiModelFactory.create(state, System.currentTimeMillis())
+        val summary = if (model.versionArgument != null) {
+            getString(model.summaryRes, model.versionArgument)
+        } else {
+            getString(model.summaryRes)
+        }
+        summaryView.text = summary
+        updateDot?.visibility = if (model.showDot) View.VISIBLE else View.GONE
+        updateRow?.apply {
+            isEnabled = model.rowEnabled
+            contentDescription = getString(
+                R.string.update_row_content_description,
+                getString(R.string.settings_check_update),
+                summary
+            )
+        }
+        if (manualUpdateCheckRequested && !state.isChecking) {
+            manualUpdateCheckRequested = false
+            if (state.lastFailure != null) {
+                val message = if (state.lastFailure.kind == UpdateFailureKind.PLAY_UNAVAILABLE) {
+                    R.string.update_play_unavailable
+                } else {
+                    R.string.update_status_failed
+                }
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun renderTransitCodeShortcutState() {

@@ -38,3 +38,38 @@
 - 相同 stop id 的請求可去重，語言切換不造成跨語言快取污染或不必要的重複網路請求。
 - DATA.GOV.HK timeout、HTTP 失敗、HTTP 200 空 `data` 及欄位缺失均有回歸測試，失敗時路線卡仍可用且不把降級值長期快取為簡體成功結果。
 - 站名補齊與 ETA 並行時，ETA 不等待站名查詢完成；完成真實裝置三語及網路降級驗證。
+
+## TD-002：Google Play 上架前暫時強制網站更新渠道
+
+- **狀態**：已啟用，主動延期
+- **記錄日期**：2026-07-24
+- **影響範圍**：App 自動與手動更新檢查、更新渠道選擇及 Play flexible update
+- **目前影響**：所有安裝來源均只從官方網站 metadata 判斷更新，更新操作只開啟目前語言的網站下載頁；既有 Google Play 優先分流及 flexible update 代碼保留，但目前不會進入。
+
+### 已驗證根因
+
+- App 尚未正式上架 Google Play，現階段沒有可供目前 application ID、帳號及裝置真實驗證的 Play 更新版本。
+- 在此階段依賴 Play Core 結果無法完成正式資格及 flexible flow 驗收，亦會讓網站測試版本的更新路徑不穩定。
+- 移除 Play 實作會增加正式上架後的恢復改動及回歸風險，因此採用本機構建開關隔離臨時行為。
+
+### 本次延期邊界
+
+- 開關位於 `app/build.gradle.kts`：`FORCE_WEBSITE_UPDATE_CHECK=true`。
+- 開關啟用時，coordinator 不執行 Play 版本檢查、下載狀態監聽、安裝狀態刷新或 flexible update，可靠快照固定使用 `WEBSITE` 渠道。
+- 保留 Play source、渠道 resolver、Play 詳情頁及 flexible update 實作，不另建平行更新流程。
+- 此開關是本機構建配置，不提供用戶可見設定或遠端控制。
+
+### 後續恢復步驟
+
+1. App 正式上架 Google Play，並準備相同 application ID、正確簽名及較高 `versionCode` 的 internal test／Internal App Sharing 版本。
+2. 把 `app/build.gradle.kts` 的 `FORCE_WEBSITE_UPDATE_CHECK` 改為 `false`。
+3. 以已擁有 App 的真實 Play 帳號驗證資格判斷、flexible 下載、取消／返回、下載完成、`completeUpdate()` 及升級後清除小紅點。
+4. 運行既有開關接線、Play 分流及三語設定頁契約測試，完成 Play 詳情頁恢復路徑回歸。
+5. 將本條目狀態改為已關閉，記錄驗證版本、軌道及日期。
+
+### 關閉條件
+
+- Google Play 已正式上架，且 `FORCE_WEBSITE_UPDATE_CHECK=false` 已進入準備發佈的構建。
+- 真實 Play 測試證明 Play 安裝與網站安裝在裝置有 Play 時均使用 Play 資格結果。
+- flexible update 與 Play 詳情頁兜底完成真實裝置驗證，無 Play 的非 Play 安裝仍可使用網站渠道。
+- OpenSpec `add-app-update-check` 的 Play 真實驗收任務已有證據並完成勾選。
