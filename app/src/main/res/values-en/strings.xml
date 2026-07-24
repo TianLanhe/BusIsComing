@@ -47,7 +47,8 @@
     <string name="update_status_available_failed">Version %1$s is available; last check failed</string>
     <string name="update_status_failed">Couldn’t check for updates. Tap to retry</string>
     <string name="update_prompt_title">New version available</string>
-    <string name="update_prompt_message">Version %1$s is ready to download. What would you like to do?</string>
+    <string name="update_prompt_version">Version %1$s</string>
+    <string name="update_prompt_message">A new version is ready to download. You can update now or come back to it later.</string>
     <string name="update_action_update">Update now</string>
     <string name="update_action_later">Remind me later</string>
     <string name="update_action_skip">Skip this version</string>

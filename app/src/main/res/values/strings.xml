@@ -47,7 +47,8 @@
     <string name="update_status_available_failed">有新版本 %1$s 可用；上次檢查失敗</string>
     <string name="update_status_failed">檢查失敗，點按重試</string>
     <string name="update_prompt_title">發現新版本</string>
-    <string name="update_prompt_message">版本 %1$s 已可下載。你想如何處理？</string>
+    <string name="update_prompt_version">版本 %1$s</string>
+    <string name="update_prompt_message">新版本已可下載。你可以現在更新，或稍後再處理。</string>
     <string name="update_action_update">前往更新</string>
     <string name="update_action_later">稍後提醒</string>
     <string name="update_action_skip">略過此版本</string>

@@ -18,6 +18,8 @@ class AppUpdateUiContractTest {
         File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val updateDialogSource =
         File("src/main/res/layout/dialog_app_update.xml").readText()
+    private val themeSource =
+        File("src/main/res/values/themes.xml").readText()
     private val settingsSource =
         File("src/main/java/com/golink/busiscoming/ui/main/SettingsFragment.kt").readText() +
             File("src/main/java/com/golink/busiscoming/ui/main/UpdateSettingsUiModel.kt").readText()
@@ -42,20 +44,38 @@ class AppUpdateUiContractTest {
     }
 
     @Test
-    fun updateDialogHasOnlyThreeExplicitActionsAndCannotBeCanceled() {
-        assertTrue(updateDialogSource.contains("@string/update_action_update"))
-        assertTrue(updateDialogSource.contains("@string/update_action_later"))
-        assertTrue(updateDialogSource.contains("@string/update_action_skip"))
+    fun updateDialogOwnsApprovedHierarchyActionOrderAndStyles() {
+        val titleIndex = updateDialogSource.indexOf("@+id/updatePromptTitle")
+        val versionIndex = updateDialogSource.indexOf("@+id/updatePromptVersion")
+        val messageIndex = updateDialogSource.indexOf("@+id/updatePromptMessage")
+        val laterIndex = updateDialogSource.indexOf("@+id/updatePromptLaterButton")
+        val skipIndex = updateDialogSource.indexOf("@+id/updatePromptSkipButton")
+        val updateIndex = updateDialogSource.indexOf("@+id/updatePromptUpdateButton")
+
+        assertTrue(titleIndex >= 0)
+        assertTrue(titleIndex < versionIndex)
+        assertTrue(versionIndex < messageIndex)
+        assertTrue(messageIndex < laterIndex)
+        assertTrue(laterIndex < skipIndex)
+        assertTrue(skipIndex < updateIndex)
+        assertTrue(updateDialogSource.contains("@string/update_prompt_title"))
+        assertTrue(updateDialogSource.contains("@string/update_prompt_message"))
+        assertTrue(updateDialogSource.contains("android:orientation=\"horizontal\""))
+        assertTrue(updateDialogSource.contains("android:layout_weight=\"1\""))
+        assertTrue(updateDialogSource.contains("android:minHeight=\"48dp\""))
         assertTrue(updateDialogSource.contains("android:singleLine=\"false\""))
-        assertTrue(mainActivitySource.contains("R.id.updatePromptUpdateButton"))
-        assertTrue(mainActivitySource.contains("R.id.updatePromptLaterButton"))
-        assertTrue(mainActivitySource.contains("R.id.updatePromptSkipButton"))
-        assertFalse(mainActivitySource.contains("setItems("))
-        assertTrue(mainActivitySource.contains("setCancelable(false)"))
-        assertTrue(mainActivitySource.contains("setCanceledOnTouchOutside(false)"))
-        assertTrue(mainActivitySource.contains("deferCurrentVersion"))
-        assertTrue(mainActivitySource.contains("skipCurrentVersion"))
-        assertFalse(mainActivitySource.contains("AppUpdateType.IMMEDIATE"))
+        assertTrue(
+            updateDialogSource.contains(
+                "@style/Widget.BusIsComing.UpdatePrompt.Button.Tonal"
+            )
+        )
+        assertTrue(
+            themeSource.contains(
+                "<style name=\"ThemeOverlay.BusIsComing.UpdatePrompt\""
+            )
+        )
+        assertTrue(themeSource.contains("<item name=\"cornerSize\">16dp</item>"))
+        assertTrue(themeSource.contains("<item name=\"cornerRadius\">8dp</item>"))
     }
 
     @Test
@@ -78,6 +98,7 @@ class AppUpdateUiContractTest {
             "update_status_available",
             "update_status_failed",
             "update_prompt_title",
+            "update_prompt_version",
             "update_prompt_message",
             "update_action_update",
             "update_action_later",
@@ -90,6 +111,22 @@ class AppUpdateUiContractTest {
             assertTrue("Simplified missing $name", simplified.contains("name=\"$name\""))
             assertTrue("English missing $name", english.contains("name=\"$name\""))
         }
+
+        assertEquals("版本 %1\$s", stringValue(traditional, "update_prompt_version"))
+        assertEquals("版本 %1\$s", stringValue(simplified, "update_prompt_version"))
+        assertEquals("Version %1\$s", stringValue(english, "update_prompt_version"))
+        assertEquals(
+            "新版本已可下載。你可以現在更新，或稍後再處理。",
+            stringValue(traditional, "update_prompt_message")
+        )
+        assertEquals(
+            "新版本已可下载。你可以现在更新，或稍后再处理。",
+            stringValue(simplified, "update_prompt_message")
+        )
+        assertEquals(
+            "A new version is ready to download. You can update now or come back to it later.",
+            stringValue(english, "update_prompt_message")
+        )
     }
 
     @Test
@@ -129,5 +166,13 @@ class AppUpdateUiContractTest {
         assertTrue(success)
         assertEquals("https://www.busiscoming.com/en/#download", started?.url)
         assertEquals(null, started?.packageName)
+    }
+
+    private fun stringValue(source: String, name: String): String {
+        return Regex("""<string name="$name">([^<]*)</string>""")
+            .find(source)
+            ?.groupValues
+            ?.get(1)
+            ?: error("Missing string $name")
     }
 }

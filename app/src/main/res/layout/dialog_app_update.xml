@@ -1,54 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/updatePromptScroll"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:paddingStart="24dp"
-    android:paddingEnd="8dp"
-    android:paddingBottom="8dp">
+    android:fillViewport="true"
+    android:overScrollMode="ifContentScrolls">
 
-    <com.google.android.material.textview.MaterialTextView
-        android:id="@+id/updatePromptMessage"
+    <LinearLayout
+        android:id="@+id/updatePromptContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="8dp"
-        android:textAppearance="?attr/textAppearanceBody1" />
+        android:orientation="vertical">
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/updatePromptUpdateButton"
-        style="@style/Widget.MaterialComponents.Button.TextButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end|center_vertical"
-        android:minHeight="48dp"
-        android:singleLine="false"
-        android:text="@string/update_action_update"
-        android:textAlignment="viewEnd"
-        android:textAllCaps="false" />
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/updatePromptTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:layout_marginTop="24dp"
+            android:layout_marginEnd="24dp"
+            android:text="@string/update_prompt_title"
+            android:textAppearance="@style/TextAppearance.BusIsComing.UpdatePrompt.Title" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/updatePromptLaterButton"
-        style="@style/Widget.MaterialComponents.Button.TextButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end|center_vertical"
-        android:minHeight="48dp"
-        android:singleLine="false"
-        android:text="@string/update_action_later"
-        android:textAlignment="viewEnd"
-        android:textAllCaps="false" />
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/updatePromptVersion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="24dp"
+            android:textAppearance="@style/TextAppearance.BusIsComing.UpdatePrompt.Version"
+            tools:text="版本 1.0" />
 
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/updatePromptSkipButton"
-        style="@style/Widget.MaterialComponents.Button.TextButton"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end|center_vertical"
-        android:minHeight="48dp"
-        android:singleLine="false"
-        android:text="@string/update_action_skip"
-        android:textAlignment="viewEnd"
-        android:textAllCaps="false" />
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/updatePromptMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="24dp"
+            android:text="@string/update_prompt_message"
+            android:textAppearance="@style/TextAppearance.BusIsComing.UpdatePrompt.Message" />
 
-</LinearLayout>
+        <LinearLayout
+            android:id="@+id/updatePromptActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="fill_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/updatePromptLaterButton"
+                style="@style/Widget.BusIsComing.UpdatePrompt.Button.Text"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:singleLine="false"
+                android:text="@string/update_action_later" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/updatePromptSkipButton"
+                style="@style/Widget.BusIsComing.UpdatePrompt.Button.Skip"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:singleLine="false"
+                android:text="@string/update_action_skip" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/updatePromptUpdateButton"
+                style="@style/Widget.BusIsComing.UpdatePrompt.Button.Tonal"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:singleLine="false"
+                android:text="@string/update_action_update" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>
