@@ -1,5 +1,7 @@
 package com.golink.busiscoming
 
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
@@ -29,6 +31,7 @@ import com.golink.busiscoming.ui.main.MainActivity
 import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -78,7 +81,7 @@ class AppUpdateInstrumentedTest {
             initialInstallChannel = InitialInstallChannel.NON_PLAY,
             lastAutoAttemptAt = now,
             snapshot = availableSnapshot(now - 4L * UpdatePolicy.DAY_MILLIS),
-            deferredVersionCode = 8L,
+            deferredVersionCode = availableVersionCode(),
             deferredUntil = now + UpdatePolicy.DEFER_INTERVAL_MILLIS
         ))
 
@@ -103,18 +106,59 @@ class AppUpdateInstrumentedTest {
         ))
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            assertUpdateDialogActions()
+            assertUpdateDialogActions(scenario)
             scenario.recreate()
-            assertUpdateDialogActions()
+            assertUpdateDialogActions(scenario)
 
             pressBack()
-            assertUpdateDialogActions()
+            assertUpdateDialogActions(scenario)
 
             onView(withText(R.string.update_action_later)).perform(click())
             onView(withText(R.string.update_prompt_title)).check(doesNotExist())
 
             scenario.recreate()
             onView(withText(R.string.update_prompt_title)).check(doesNotExist())
+        }
+    }
+
+    @Test
+    fun skipActionPersistsSkippedVersionAndClosesDialog() {
+        val now = System.currentTimeMillis()
+        seed(
+            UpdateStoredState(
+                initialInstallChannel = InitialInstallChannel.NON_PLAY,
+                lastAutoAttemptAt = now,
+                snapshot = availableSnapshot(now - 4L * UpdatePolicy.DAY_MILLIS)
+            )
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.updatePromptSkipButton)).perform(click())
+            onView(withId(R.id.updatePromptTitle)).check(doesNotExist())
+            assertEquals(availableVersionCode(), loadStoredState().skippedVersionCode)
+        }
+    }
+
+    @Test
+    fun updateActionDefersVersionBeforeUnavailableFallback() {
+        val now = System.currentTimeMillis()
+        seed(
+            UpdateStoredState(
+                initialInstallChannel = InitialInstallChannel.PLAY,
+                lastAutoAttemptAt = now,
+                snapshot = availableSnapshot(
+                    availableSinceAt = now - 4L * UpdatePolicy.DAY_MILLIS,
+                    channel = UpdateChannel.PLAY_UNAVAILABLE
+                )
+            )
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.updatePromptUpdateButton)).perform(click())
+            onView(withId(R.id.updatePromptTitle)).check(doesNotExist())
+            val stored = loadStoredState()
+            assertEquals(availableVersionCode(), stored.deferredVersionCode)
+            assertTrue(requireNotNull(stored.deferredUntil) > now)
         }
     }
 
@@ -140,11 +184,38 @@ class AppUpdateInstrumentedTest {
         }
     }
 
-    private fun assertUpdateDialogActions() {
-        onView(withText(R.string.update_prompt_title)).check(matches(isDisplayed()))
-        onView(withText(R.string.update_action_update)).check(matches(isDisplayed()))
-        onView(withText(R.string.update_action_later)).check(matches(isDisplayed()))
-        onView(withText(R.string.update_action_skip)).check(matches(isDisplayed()))
+    private fun assertUpdateDialogActions(scenario: ActivityScenario<MainActivity>) {
+        var expectedVersion = ""
+        scenario.onActivity {
+            expectedVersion = it.getString(R.string.update_prompt_version, "1.2")
+        }
+        onView(withId(R.id.updatePromptTitle)).check(matches(isDisplayed()))
+        onView(withId(R.id.updatePromptVersion)).check(
+            matches(withText(expectedVersion))
+        )
+        onView(withId(R.id.updatePromptMessage)).check(matches(isDisplayed()))
+        onView(withId(R.id.updatePromptLaterButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.updatePromptSkipButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.updatePromptUpdateButton)).check(matches(isDisplayed()))
+        onView(withId(R.id.updatePromptActions)).check { view, noViewFoundException ->
+            if (noViewFoundException != null) throw noViewFoundException
+            val actions = view as LinearLayout
+            assertEquals(LinearLayout.HORIZONTAL, actions.orientation)
+            assertEquals(
+                listOf(
+                    R.id.updatePromptLaterButton,
+                    R.id.updatePromptSkipButton,
+                    R.id.updatePromptUpdateButton
+                ),
+                (0 until actions.childCount).map { actions.getChildAt(it).id }
+            )
+            actions.children().forEach { child ->
+                val params = child.layoutParams as LinearLayout.LayoutParams
+                assertEquals(0, params.width)
+                assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, params.height)
+                assertEquals(1.0f, params.weight, 0.0f)
+            }
+        }
     }
 
     private fun openUpdateSetting() {
@@ -164,17 +235,31 @@ class AppUpdateInstrumentedTest {
         instrumentation.waitForIdleSync()
     }
 
-    private fun availableSnapshot(availableSinceAt: Long) = UpdateSnapshot(
+    private fun availableSnapshot(
+        availableSinceAt: Long,
+        channel: UpdateChannel = UpdateChannel.WEBSITE
+    ) = UpdateSnapshot(
         state = UpdateSnapshotState.UPDATE_AVAILABLE,
-        channel = UpdateChannel.WEBSITE,
+        channel = channel,
         installedVersionCode = versionCode(),
-        availableVersionCode = 8L,
+        availableVersionCode = availableVersionCode(),
         availableVersionName = "1.2",
         availableSinceAt = availableSinceAt,
         firstSeenAt = availableSinceAt,
         checkedAt = System.currentTimeMillis(),
         flexibleAllowed = false
     )
+
+    private fun LinearLayout.children(): List<android.view.View> {
+        return (0 until childCount).map(::getChildAt)
+    }
+
+    private fun loadStoredState(): UpdateStoredState {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        return SharedPreferencesUpdateStateStore(context, versionCode()).load()
+    }
+
+    private fun availableVersionCode(): Long = versionCode() + 1L
 
     private fun versionCode(): Long = BuildConfig.VERSION_CODE.toLong()
 }

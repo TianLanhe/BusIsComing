@@ -318,20 +318,18 @@ class MainActivity : AppCompatActivity() {
             ?: state.snapshot.availableVersionCode?.toString()
             ?: return
         val content = layoutInflater.inflate(R.layout.dialog_app_update, null)
-        content.findViewById<TextView>(R.id.updatePromptMessage).text =
-            getString(R.string.update_prompt_message, version)
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.update_prompt_title)
+        content.findViewById<TextView>(R.id.updatePromptVersion).text =
+            getString(R.string.update_prompt_version, version)
+        applyUpdatePromptLayout(content)
+        val dialog = MaterialAlertDialogBuilder(
+            this,
+            R.style.ThemeOverlay_BusIsComing_UpdatePrompt
+        )
             .setView(content)
             .setCancelable(false)
             .create()
         dialog.setCanceledOnTouchOutside(false)
         dialog.setOnDismissListener { updatePromptDialog = null }
-        content.findViewById<MaterialButton>(R.id.updatePromptUpdateButton).setOnClickListener {
-            AppUpdateRuntime.coordinator.deferCurrentVersion()
-            dialog.dismiss()
-            startSelectedUpdate()
-        }
         content.findViewById<MaterialButton>(R.id.updatePromptLaterButton).setOnClickListener {
             AppUpdateRuntime.coordinator.deferCurrentVersion()
             dialog.dismiss()
@@ -340,8 +338,49 @@ class MainActivity : AppCompatActivity() {
             AppUpdateRuntime.coordinator.skipCurrentVersion()
             dialog.dismiss()
         }
+        content.findViewById<MaterialButton>(R.id.updatePromptUpdateButton).setOnClickListener {
+            AppUpdateRuntime.coordinator.deferCurrentVersion()
+            dialog.dismiss()
+            startSelectedUpdate()
+        }
         updatePromptDialog = dialog
         dialog.show()
+    }
+
+    private fun applyUpdatePromptLayout(content: View) {
+        val actions = content.findViewById<LinearLayout>(R.id.updatePromptActions)
+        val buttons = listOf(
+            content.findViewById<MaterialButton>(R.id.updatePromptLaterButton),
+            content.findViewById<MaterialButton>(R.id.updatePromptSkipButton),
+            content.findViewById<MaterialButton>(R.id.updatePromptUpdateButton)
+        )
+        val configuration = resources.configuration
+        val horizontal = UpdatePromptLayoutPolicy.resolve(
+            screenWidthDp = configuration.screenWidthDp,
+            fontScale = configuration.fontScale
+        ) == UpdatePromptLayoutMode.HORIZONTAL
+
+        actions.orientation = if (horizontal) {
+            LinearLayout.HORIZONTAL
+        } else {
+            LinearLayout.VERTICAL
+        }
+        buttons.forEachIndexed { index, button ->
+            button.layoutParams = if (horizontal) {
+                LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    1.0f
+                )
+            } else {
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    if (index > 0) topMargin = dp(4)
+                }
+            }
+        }
     }
 
     private fun startSelectedUpdate() {

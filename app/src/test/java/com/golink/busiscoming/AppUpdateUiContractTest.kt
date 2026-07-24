@@ -76,6 +76,27 @@ class AppUpdateUiContractTest {
         )
         assertTrue(themeSource.contains("<item name=\"cornerSize\">16dp</item>"))
         assertTrue(themeSource.contains("<item name=\"cornerRadius\">8dp</item>"))
+        assertTrue(mainActivitySource.contains("R.id.updatePromptVersion"))
+        assertTrue(mainActivitySource.contains("UpdatePromptLayoutPolicy.resolve("))
+        assertTrue(
+            mainActivitySource.contains(
+                "R.style.ThemeOverlay_BusIsComing_UpdatePrompt"
+            )
+        )
+        assertFalse(
+            mainActivitySource.contains(
+                ".setTitle(R.string.update_prompt_title)"
+            )
+        )
+        assertTrue(mainActivitySource.contains("R.id.updatePromptUpdateButton"))
+        assertTrue(mainActivitySource.contains("R.id.updatePromptLaterButton"))
+        assertTrue(mainActivitySource.contains("R.id.updatePromptSkipButton"))
+        assertFalse(mainActivitySource.contains("setItems("))
+        assertTrue(mainActivitySource.contains("setCancelable(false)"))
+        assertTrue(mainActivitySource.contains("setCanceledOnTouchOutside(false)"))
+        assertTrue(mainActivitySource.contains("deferCurrentVersion"))
+        assertTrue(mainActivitySource.contains("skipCurrentVersion"))
+        assertFalse(mainActivitySource.contains("AppUpdateType.IMMEDIATE"))
     }
 
     @Test
