@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
 import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.test.core.app.ActivityScenario
@@ -69,7 +71,7 @@ class AppUpdateVisualMatrixInstrumentedTest {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 assertTheme(scenario, theme)
                 assertLanguage(scenario, language)
-                assertPromptFits()
+                assertPromptFits(fontScale.toFloat())
                 saveScreenshot("dialog-${language.name}-${theme.name}-$fontScale.png")
 
                 onView(withText(R.string.update_action_later)).perform(click())
@@ -98,14 +100,61 @@ class AppUpdateVisualMatrixInstrumentedTest {
         }
     }
 
-    private fun assertPromptFits() {
+    private fun assertPromptFits(fontScale: Float) {
         listOf(
-            R.string.update_prompt_title,
-            R.string.update_action_update,
-            R.string.update_action_later,
-            R.string.update_action_skip
-        ).forEach { textRes ->
-            onView(withText(textRes)).check(matches(isCompletelyDisplayed())).check(noEllipsis())
+            R.id.updatePromptTitle,
+            R.id.updatePromptVersion,
+            R.id.updatePromptMessage,
+            R.id.updatePromptLaterButton,
+            R.id.updatePromptSkipButton,
+            R.id.updatePromptUpdateButton
+        ).forEach { viewId ->
+            onView(withId(viewId))
+                .check(matches(isCompletelyDisplayed()))
+                .check(noEllipsis())
+        }
+
+        onView(withId(R.id.updatePromptActions)).check { view, noViewFoundException ->
+            if (noViewFoundException != null) throw noViewFoundException
+            val actions = view as LinearLayout
+            val expectedOrientation = if (fontScale >= 2.0f) {
+                LinearLayout.VERTICAL
+            } else {
+                LinearLayout.HORIZONTAL
+            }
+            assertEquals(expectedOrientation, actions.orientation)
+            assertEquals(
+                listOf(
+                    R.id.updatePromptLaterButton,
+                    R.id.updatePromptSkipButton,
+                    R.id.updatePromptUpdateButton
+                ),
+                (0 until actions.childCount).map { actions.getChildAt(it).id }
+            )
+
+            val children = (0 until actions.childCount).map(actions::getChildAt)
+            if (expectedOrientation == LinearLayout.HORIZONTAL) {
+                children.forEach { child ->
+                    val params = child.layoutParams as LinearLayout.LayoutParams
+                    assertEquals(0, params.width)
+                    assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, params.height)
+                    assertEquals(1.0f, params.weight, 0.0f)
+                }
+                assertTrue(
+                    children.zipWithNext().all { (left, right) -> left.left < right.left }
+                )
+                assertTrue(children.map { it.height }.distinct().size == 1)
+            } else {
+                children.forEach { child ->
+                    val params = child.layoutParams as LinearLayout.LayoutParams
+                    assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, params.width)
+                    assertEquals(ViewGroup.LayoutParams.WRAP_CONTENT, params.height)
+                    assertEquals(0.0f, params.weight, 0.0f)
+                }
+                assertTrue(
+                    children.zipWithNext().all { (top, bottom) -> top.top < bottom.top }
+                )
+            }
         }
     }
 
