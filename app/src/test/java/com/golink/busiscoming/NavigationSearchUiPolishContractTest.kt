@@ -105,6 +105,11 @@ class NavigationSearchUiPolishContractTest {
         }
         assertTrue(placePairLayout.contains("app:boxStrokeColor=\"@color/search_input_stroke\""))
         assertTrue(placePairLayout.contains("app:boxStrokeWidthFocused=\"2dp\""))
+        val swapSlot = placePairLayout
+            .substringAfter("android:id=\"@+id/placePairSwapSlot\"")
+            .substringBefore(">")
+        assertTrue(swapSlot.contains("android:layout_height=\"48dp\""))
+        assertFalse(placePairLayout.contains("android:layout_height=\"120dp\""))
     }
 
     @Test

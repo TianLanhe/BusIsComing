@@ -176,6 +176,7 @@ class SearchFragment : Fragment() {
             instructionText = getString(R.string.place_search_helper),
             onCandidateVisibilityChanged = { visible ->
                 if (visible) destinationController?.hideCandidates()
+                placeEditor.requestToolAlignment()
                 updateRefreshEnabled()
             },
             onPlaceSelected = {
@@ -208,6 +209,7 @@ class SearchFragment : Fragment() {
             instructionText = getString(R.string.place_search_helper),
             onCandidateVisibilityChanged = { visible ->
                 if (visible) originController?.hideCandidates()
+                placeEditor.requestToolAlignment()
                 updateRefreshEnabled()
             },
             onPlaceSelected = {

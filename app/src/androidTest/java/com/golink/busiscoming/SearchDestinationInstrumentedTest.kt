@@ -64,6 +64,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.math.abs
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -120,6 +121,72 @@ class SearchDestinationInstrumentedTest {
                     activity.findViewById<TextInputLayout>(R.id.placePairOriginLayout)
                         .hint
                         .toString()
+                )
+            }
+        }
+    }
+
+    @Test
+    fun routeSearchToolsUseInputCentersAndSwapDoesNotJumpWithCandidates() {
+        val callback = AtomicReference<((CurrentPlaceSelectionResult) -> Unit)?>(null)
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { _, result ->
+            callback.set(result)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { callback.get() != null }
+            onView(withId(R.id.placePairOriginLoading)).check(matches(isDisplayed()))
+
+            var swapCenterBeforeCandidates = 0
+            scenario.onActivity { activity ->
+                val originInput = activity.findViewById<View>(R.id.placePairOriginInput)
+                val destinationInput =
+                    activity.findViewById<View>(R.id.placePairDestinationInput)
+                val locationButton =
+                    activity.findViewById<View>(R.id.placePairCurrentLocationButton)
+                val originLoading = activity.findViewById<View>(R.id.placePairOriginLoading)
+                val swapButton = activity.findViewById<View>(R.id.placePairSwapButton)
+                val tolerance = dp(activity, 1)
+                val originCenter = originInput.centerYOnScreen()
+                val destinationCenter = destinationInput.centerYOnScreen()
+                val expectedSwapCenter = (originCenter + destinationCenter) / 2
+
+                val locationCenter = locationButton.centerYOnScreen()
+                val loadingCenter = originLoading.centerYOnScreen()
+                val swapCenter = swapButton.centerYOnScreen()
+                assertTrue(
+                    "origin=$originCenter location=$locationCenter tolerance=$tolerance",
+                    abs(originCenter - locationCenter) <= tolerance
+                )
+                assertTrue(
+                    "origin=$originCenter loading=$loadingCenter tolerance=$tolerance",
+                    abs(originCenter - loadingCenter) <= tolerance
+                )
+                assertTrue(
+                    "expectedSwap=$expectedSwapCenter actualSwap=$swapCenter tolerance=$tolerance",
+                    abs(expectedSwapCenter - swapCenter) <= tolerance
+                )
+                swapCenterBeforeCandidates = swapButton.centerYOnScreen()
+            }
+
+            callback.get()?.invoke(CurrentPlaceSelectionResult.Failure)
+            onView(withId(R.id.placePairOriginInput)).perform(
+                click(),
+                replaceText("o"),
+                closeSoftKeyboard()
+            )
+            waitForText("測試起點")
+
+            scenario.onActivity { activity ->
+                val candidateList =
+                    activity.findViewById<View>(R.id.placePairOriginCandidateList)
+                val swapButton = activity.findViewById<View>(R.id.placePairSwapButton)
+                assertEquals(View.VISIBLE, candidateList.visibility)
+                assertTrue(
+                    abs(swapCenterBeforeCandidates - swapButton.centerYOnScreen()) <=
+                        dp(activity, 1)
                 )
             }
         }
@@ -722,6 +789,12 @@ class SearchDestinationInstrumentedTest {
 
     private fun dp(context: android.content.Context, value: Int): Int {
         return (value * context.resources.displayMetrics.density).toInt()
+    }
+
+    private fun View.centerYOnScreen(): Int {
+        val location = IntArray(2)
+        getLocationOnScreen(location)
+        return location[1] + height / 2
     }
 
     private fun currentPlaceSuccess(name: String): CurrentPlaceSelectionResult.Success {
