@@ -20,6 +20,7 @@ import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
+import com.golink.busiscoming.ui.common.PlaceInputMessage
 import com.golink.busiscoming.ui.edit.RouteEditActivity
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
@@ -34,6 +35,76 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PlaceInputControllerInstrumentedTest {
+    @Test
+    fun routeSearchMessageSinkReceivesSelectionInstructionEmptyAndFailureStates() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            val messages = mutableListOf<PlaceInputMessage>()
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                val inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                val loading = View(activity)
+                val candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                root.addView(inputLayout)
+                root.addView(loading)
+                root.addView(candidateList)
+
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = loading,
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> =
+                            when (keyword) {
+                                "空" -> emptyList()
+                                "錯" -> error("expected search failure")
+                                else -> listOf(place("候選"))
+                            }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true },
+                    instructionText = activity.getString(R.string.place_search_helper),
+                    onMessageChanged = { message -> messages += message }
+                )
+                controller.setSelectedPlace(place("已選地點"))
+                assertEquals(PlaceInputMessage.NONE, messages.last())
+                messages.clear()
+                input.requestFocus()
+                input.setText("空")
+                assertEquals(PlaceInputMessage.INSTRUCTION, messages.first())
+            }
+
+            waitUntil { messages.lastOrNull() == PlaceInputMessage.NO_MATCHES }
+
+            scenario.onActivity {
+                input.setText("錯")
+            }
+            waitUntil { messages.lastOrNull() == PlaceInputMessage.SEARCH_FAILED }
+
+            scenario.onActivity {
+                controller.dispose()
+            }
+            executor.shutdownNow()
+        }
+    }
+
     @Test
     fun routeEditKeepsHistoricalInputGeometryAndMaterialLocationTool() {
         ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->

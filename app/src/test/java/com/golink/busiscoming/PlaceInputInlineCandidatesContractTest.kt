@@ -68,6 +68,11 @@ class PlaceInputInlineCandidatesContractTest {
             )
         )
         assertTrue(controllerKt.contains("inputLayout.helperText = defaultInstructionText"))
+        assertTrue(
+            controllerKt.contains(
+                "private val onMessageChanged: ((PlaceInputMessage) -> Unit)? = null"
+            )
+        )
     }
 
     @Test

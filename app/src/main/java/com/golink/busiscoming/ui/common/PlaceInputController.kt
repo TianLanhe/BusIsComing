@@ -42,7 +42,8 @@ class PlaceInputController(
     instructionText: CharSequence? = null,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
     private val onPlaceSelected: (Place) -> Unit = {},
-    private val onUserTextEdited: () -> Unit = {}
+    private val onUserTextEdited: () -> Unit = {},
+    private val onMessageChanged: ((PlaceInputMessage) -> Unit)? = null
 ) {
     private val defaultInstructionText = instructionText ?: inputLayout.helperText
     private val rowHeightPx = dp(context, CANDIDATE_ROW_HEIGHT_DP)
@@ -83,7 +84,7 @@ class PlaceInputController(
                 input.text.isNullOrBlank() &&
                 inputLayout.error == null
             ) {
-                inputLayout.helperText = defaultInstructionText
+                showInstruction()
             } else if (!hasFocus) {
                 hideCandidates()
             }
@@ -111,7 +112,7 @@ class PlaceInputController(
         input.setText(place.name, false)
         input.setSelection(input.text?.length ?: 0)
         suppressTextChange = false
-        clearMessages()
+        clearAfterSelection()
     }
 
     fun restoreInputText(text: String) {
@@ -172,7 +173,12 @@ class PlaceInputController(
 
     fun clearMessages() {
         inputLayout.error = null
-        inputLayout.helperText = defaultInstructionText
+        if (onMessageChanged == null) {
+            inputLayout.helperText = defaultInstructionText
+        } else {
+            inputLayout.helperText = null
+            onMessageChanged.invoke(PlaceInputMessage.INSTRUCTION)
+        }
     }
 
     fun setCurrentLocationSnapshot(snapshot: CurrentLocationSnapshot?) {
@@ -241,8 +247,7 @@ class PlaceInputController(
                     .onFailure {
                         adapter.submitPlaces(emptyList())
                         hideCandidates()
-                        inputLayout.helperText = null
-                        inputLayout.error = input.context.getString(R.string.place_search_failed)
+                        showSearchFailed()
                     }
             }
         }
@@ -253,12 +258,58 @@ class PlaceInputController(
         inputLayout.error = null
         if (places.isEmpty()) {
             hideCandidates()
-            inputLayout.helperText = input.context.getString(R.string.place_search_empty)
+            showNoMatches()
         } else {
-            inputLayout.helperText = null
+            if (onMessageChanged == null) {
+                inputLayout.helperText = null
+            } else {
+                inputLayout.helperText = null
+                onMessageChanged.invoke(PlaceInputMessage.INSTRUCTION)
+            }
             if (input.hasFocus()) {
                 showCandidates()
             }
+        }
+    }
+
+    private fun showInstruction() {
+        inputLayout.error = null
+        if (onMessageChanged == null) {
+            inputLayout.helperText = defaultInstructionText
+        } else {
+            inputLayout.helperText = null
+            onMessageChanged.invoke(PlaceInputMessage.INSTRUCTION)
+        }
+    }
+
+    private fun showNoMatches() {
+        inputLayout.error = null
+        if (onMessageChanged == null) {
+            inputLayout.helperText = input.context.getString(R.string.place_search_empty)
+        } else {
+            inputLayout.helperText = null
+            onMessageChanged.invoke(PlaceInputMessage.NO_MATCHES)
+        }
+    }
+
+    private fun showSearchFailed() {
+        if (onMessageChanged == null) {
+            inputLayout.helperText = null
+            inputLayout.error = input.context.getString(R.string.place_search_failed)
+        } else {
+            inputLayout.error = null
+            inputLayout.helperText = null
+            onMessageChanged.invoke(PlaceInputMessage.SEARCH_FAILED)
+        }
+    }
+
+    private fun clearAfterSelection() {
+        inputLayout.error = null
+        if (onMessageChanged == null) {
+            inputLayout.helperText = defaultInstructionText
+        } else {
+            inputLayout.helperText = null
+            onMessageChanged.invoke(PlaceInputMessage.NONE)
         }
     }
 
