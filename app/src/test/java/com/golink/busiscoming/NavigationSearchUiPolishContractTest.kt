@@ -70,7 +70,7 @@ class NavigationSearchUiPolishContractTest {
     }
 
     @Test
-    fun `search inputs own their tools candidates and attribution beside a fixed swap action`() {
+    fun `search inputs render one border caption without supporting text rows`() {
         assertFalse(searchLayout.contains("android:text=\"@string/search_title\""))
         assertTrue(searchLayout.contains("android:id=\"@+id/searchPlacePairEditor\""))
         assertTrue(placePairLayout.contains("android:id=\"@+id/placePairInputColumn\""))
@@ -78,7 +78,15 @@ class NavigationSearchUiPolishContractTest {
         assertTrue(placePairLayout.contains("android:id=\"@+id/placePairOriginToolSlot\""))
         assertTrue(placePairLayout.contains("android:id=\"@+id/placePairDestinationToolSlot\""))
         assertTrue(placePairLayout.contains("android:id=\"@+id/placePairCurrentLocationButton\""))
-        assertTrue(placePairLayout.contains("android:id=\"@+id/placePairDestinationAttribution\""))
+        assertFalse(placePairLayout.contains("placePairOriginAttribution"))
+        assertFalse(placePairLayout.contains("placePairDestinationAttribution"))
+        assertTrue(placePairLayout.contains("app:expandedHintEnabled=\"false\""))
+        assertTrue(
+            placePairLayout.contains(
+                "app:hintTextAppearance=\"@style/TextAppearance.BusIsComing.SearchFieldCaption\""
+            )
+        )
+        assertTrue(searchFragment.contains("SearchFieldCaptionRenderer"))
 
         val originIndex = placePairLayout.indexOf("@+id/placePairOriginLayout")
         val originCandidatesIndex = placePairLayout.indexOf("@+id/placePairOriginCandidateList")

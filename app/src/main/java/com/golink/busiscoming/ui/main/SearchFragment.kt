@@ -24,6 +24,7 @@ import com.golink.busiscoming.data.location.SystemLocationUtils
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteCardStopPreview
+import com.golink.busiscoming.data.model.RouteConfigValidationError
 import com.golink.busiscoming.data.model.RouteConfigValidator
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
@@ -38,7 +39,6 @@ import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.PlacePairEditorView
 import com.golink.busiscoming.ui.common.RouteResultControlsView
-import com.golink.busiscoming.ui.common.localizedMessage
 import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.ExecutorService
@@ -101,8 +101,8 @@ class SearchFragment : Fragment() {
     private lateinit var resultUpdatedAt: TextView
     private lateinit var saveButton: MaterialButton
     private lateinit var queryButton: MaterialButton
-    private lateinit var originAttribution: TextView
-    private lateinit var destinationAttribution: TextView
+    private var originCaptionRenderer: SearchFieldCaptionRenderer? = null
+    private var destinationCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var candidateBackCallback: OnBackPressedCallback? = null
 
     override fun onCreateView(
@@ -149,9 +149,17 @@ class SearchFragment : Fragment() {
         destinationInput.isSaveEnabled = false
         val originLayout = placeEditor.originInputLayout
         val destinationLayout = placeEditor.destinationInputLayout
-        originAttribution = placeEditor.originAttribution
-        destinationAttribution = placeEditor.destinationAttribution
         val currentLocationButton = placeEditor.currentLocationButton
+        originCaptionRenderer = SearchFieldCaptionRenderer(
+            inputLayout = originLayout,
+            input = originInput,
+            labelResource = R.string.search_field_origin_label
+        )
+        destinationCaptionRenderer = SearchFieldCaptionRenderer(
+            inputLayout = destinationLayout,
+            input = destinationInput,
+            labelResource = R.string.search_field_destination_label
+        )
 
         originController = PlaceInputController(
             context = context,
@@ -181,6 +189,9 @@ class SearchFragment : Fragment() {
                 attributionState.clearOrigin()
                 renderAttribution()
                 onSearchSelectionChanged()
+            },
+            onMessageChanged = { message ->
+                originCaptionRenderer?.onPlaceInputMessage(message)
             }
         )
         destinationController = PlaceInputController(
@@ -208,6 +219,9 @@ class SearchFragment : Fragment() {
                 attributionState.clearDestination()
                 renderAttribution()
                 onSearchSelectionChanged()
+            },
+            onMessageChanged = { message ->
+                destinationCaptionRenderer?.onPlaceInputMessage(message)
             }
         )
         applyCandidateLocationSnapshotIfFresh()
@@ -321,6 +335,8 @@ class SearchFragment : Fragment() {
         destinationController?.dispose()
         originController = null
         destinationController = null
+        originCaptionRenderer = null
+        destinationCaptionRenderer = null
         isViewStateRestored = false
         hasPendingDestinationSelection = false
         candidateBackCallback = null
@@ -376,6 +392,7 @@ class SearchFragment : Fragment() {
         isAuto: Boolean,
         generation: Int = currentPlaceRequestState.beginManualRequest()
     ) {
+        originCaptionRenderer?.setLocationFailure(false)
         originController?.setExternalLoading(true)
         val handleResult: (CurrentPlaceSelectionResult) -> Unit = { result ->
             mainHandler.post {
@@ -397,9 +414,7 @@ class SearchFragment : Fragment() {
                     CurrentPlaceSelectionResult.Failure -> {
                         requestCandidateLocationSnapshotIfNeeded()
                         if (isAuto) {
-                            originController?.setHelperText(
-                                getString(R.string.current_location_manual_origin)
-                            )
+                            originCaptionRenderer?.setLocationFailure(true)
                         } else {
                             Toast.makeText(
                                 requireContext(),
@@ -471,8 +486,8 @@ class SearchFragment : Fragment() {
         val origin = originController?.selectedPlace
         val destination = destinationController?.selectedPlace
         val validation = RouteConfigValidator.validate(getString(R.string.search_title), origin, destination)
-        originController?.setError(validation.originError.localizedMessage(requireContext()))
-        destinationController?.setError(validation.destinationError.localizedMessage(requireContext()))
+        originCaptionRenderer?.setValidation(captionValidation(validation.originError))
+        destinationCaptionRenderer?.setValidation(captionValidation(validation.destinationError))
         if (!validation.isValid || origin == null || destination == null) return
 
         hasSubmittedQuery = true
@@ -668,17 +683,18 @@ class SearchFragment : Fragment() {
     }
 
     private fun renderAttribution() {
-        if (!::originAttribution.isInitialized || !::destinationAttribution.isInitialized) return
-        originAttribution.visibility = if (attributionState.originUsesGoogleMaps) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
-        destinationAttribution.visibility = if (attributionState.destinationUsesGoogleMaps) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        originCaptionRenderer?.setGoogleMaps(attributionState.originUsesGoogleMaps)
+        destinationCaptionRenderer?.setGoogleMaps(attributionState.destinationUsesGoogleMaps)
+    }
+
+    private fun captionValidation(
+        error: RouteConfigValidationError?
+    ): SearchFieldValidation? = when (error) {
+        RouteConfigValidationError.ORIGIN_REQUIRED,
+        RouteConfigValidationError.DESTINATION_REQUIRED,
+        RouteConfigValidationError.REQUIRED -> SearchFieldValidation.MISSING_PLACE
+        RouteConfigValidationError.SAME_PLACES -> SearchFieldValidation.SAME_AS_ORIGIN
+        null -> null
     }
 
     private fun onSearchSelectionChanged() {

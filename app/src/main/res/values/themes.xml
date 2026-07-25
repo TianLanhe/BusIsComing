@@ -59,6 +59,13 @@
         <item name="android:textSize">14sp</item>
     </style>
 
+    <style name="TextAppearance.BusIsComing.SearchFieldCaption"
+        parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:letterSpacing">0</item>
+        <item name="android:textColor">@color/bus_text_secondary</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
     <style name="Widget.BusIsComing.UpdatePrompt.Button.Text"
         parent="StableShortText.Button.Text">
         <item name="android:minHeight">48dp</item>

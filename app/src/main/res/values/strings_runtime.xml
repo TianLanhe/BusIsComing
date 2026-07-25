@@ -187,5 +187,9 @@
     <string name="search_field_choose_place_compact">選擇地點</string>
     <string name="search_field_same_as_origin">不能與起點相同</string>
     <string name="search_field_same_as_origin_compact">與起點相同</string>
+    <string name="search_field_caption_format">%1$s · %2$s</string>
+    <string name="search_field_accessibility_status">%1$s，%2$s</string>
+    <string name="search_field_accessibility_value">%1$s，%2$s</string>
+    <string name="search_field_accessibility_value_status">%1$s，%2$s，%3$s</string>
     <string name="route_direction_format">往 %1$s 方向</string>
 </resources>

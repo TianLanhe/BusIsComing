@@ -20,10 +20,12 @@
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/origin_search_hint"
+                android:hint="@string/search_field_origin_label"
                 app:boxStrokeColor="@color/search_input_stroke"
                 app:boxStrokeWidth="1dp"
-                app:boxStrokeWidthFocused="2dp">
+                app:boxStrokeWidthFocused="2dp"
+                app:expandedHintEnabled="false"
+                app:hintTextAppearance="@style/TextAppearance.BusIsComing.SearchFieldCaption">
 
                 <com.google.android.material.textfield.MaterialAutoCompleteTextView
                     android:id="@+id/placePairOriginInput"
@@ -68,17 +70,6 @@
             </FrameLayout>
         </FrameLayout>
 
-        <TextView
-            android:id="@+id/placePairOriginAttribution"
-            style="@style/StableShortText.Label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/google_maps_address_attribution"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="12sp"
-            android:visibility="gone" />
-
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/placePairOriginCandidateList"
             android:layout_width="match_parent"
@@ -98,10 +89,12 @@
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/destination_search_hint"
+                android:hint="@string/search_field_destination_label"
                 app:boxStrokeColor="@color/search_input_stroke"
                 app:boxStrokeWidth="1dp"
-                app:boxStrokeWidthFocused="2dp">
+                app:boxStrokeWidthFocused="2dp"
+                app:expandedHintEnabled="false"
+                app:hintTextAppearance="@style/TextAppearance.BusIsComing.SearchFieldCaption">
 
                 <com.google.android.material.textfield.MaterialAutoCompleteTextView
                     android:id="@+id/placePairDestinationInput"
@@ -134,17 +127,6 @@
                     android:visibility="gone" />
             </FrameLayout>
         </FrameLayout>
-
-        <TextView
-            android:id="@+id/placePairDestinationAttribution"
-            style="@style/StableShortText.Label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/google_maps_address_attribution"
-            android:textColor="@color/bus_text_secondary"
-            android:textSize="12sp"
-            android:visibility="gone" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/placePairDestinationCandidateList"

@@ -55,6 +55,7 @@ import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.SearchFragment
+import com.google.android.material.textfield.TextInputLayout
 import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.Matcher
 import org.junit.After
@@ -81,6 +82,50 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
+    fun routeSearchCaptionMovesFromInstructionToLocationFailureThenSelectedPlace() {
+        val callback = AtomicReference<((CurrentPlaceSelectionResult) -> Unit)?>(null)
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { _, result ->
+            callback.set(result)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            waitUntil { callback.get() != null }
+
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "起點 · 從清單選擇",
+                    activity.findViewById<TextInputLayout>(R.id.placePairOriginLayout)
+                        .hint
+                        .toString()
+                )
+            }
+
+            callback.get()?.invoke(CurrentPlaceSelectionResult.Failure)
+            waitUntil {
+                var hint = ""
+                scenario.onActivity { activity ->
+                    hint = activity.findViewById<TextInputLayout>(R.id.placePairOriginLayout)
+                        .hint
+                        .toString()
+                }
+                hint == "起點 · 定位失敗，請手動選擇"
+            }
+
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "起點",
+                    activity.findViewById<TextInputLayout>(R.id.placePairOriginLayout)
+                        .hint
+                        .toString()
+                )
+            }
+        }
+    }
+
+    @Test
     fun searchFlowSupportsFallbackSwapQueryActionsRefreshAndSave() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val routeRepository = ImmediateRouteRepository()
@@ -92,7 +137,7 @@ class SearchDestinationInstrumentedTest {
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
-            waitForText("暫時無法取得目前位置，請手動選擇起點")
+            waitForOriginHint("起點 · 定位失敗，請手動選擇")
 
             onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
 
@@ -238,20 +283,53 @@ class SearchDestinationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
             waitForText("Google 測試地址")
-            onView(withId(R.id.placePairOriginAttribution)).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "起點 · 地址由 Google Maps 提供",
+                    activity.findViewById<TextInputLayout>(R.id.placePairOriginLayout)
+                        .hint
+                        .toString()
+                )
+            }
 
             selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
             onView(withId(R.id.placePairSwapButton)).perform(click())
             onView(withId(R.id.placePairDestinationInput)).check(matches(withText("Google 測試地址")))
-            onView(withId(R.id.placePairOriginAttribution)).check(matches(withEffectiveVisibility(GONE)))
-            onView(withId(R.id.placePairDestinationAttribution)).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "起點",
+                    activity.findViewById<TextInputLayout>(R.id.placePairOriginLayout)
+                        .hint
+                        .toString()
+                )
+                assertEquals(
+                    "終點 · 地址由 Google Maps 提供",
+                    activity.findViewById<TextInputLayout>(R.id.placePairDestinationLayout)
+                        .hint
+                        .toString()
+                )
+            }
 
             scenario.recreate()
             onView(withId(R.id.placePairDestinationInput)).check(matches(withText("Google 測試地址")))
-            onView(withId(R.id.placePairDestinationAttribution)).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "終點 · 地址由 Google Maps 提供",
+                    activity.findViewById<TextInputLayout>(R.id.placePairDestinationLayout)
+                        .hint
+                        .toString()
+                )
+            }
 
             onView(withId(R.id.placePairDestinationInput)).perform(replaceText("手動修改"))
-            onView(withId(R.id.placePairDestinationAttribution)).check(matches(withEffectiveVisibility(GONE)))
+            scenario.onActivity { activity ->
+                assertEquals(
+                    "終點 · 從清單選擇",
+                    activity.findViewById<TextInputLayout>(R.id.placePairDestinationLayout)
+                        .hint
+                        .toString()
+                )
+            }
         }
     }
 
@@ -262,7 +340,7 @@ class SearchDestinationInstrumentedTest {
 
         ActivityScenario.launch(MainActivity::class.java).use {
             onView(withId(R.id.navigation_search)).perform(click())
-            waitForText("暫時無法取得目前位置，請手動選擇起點")
+            waitForOriginHint("起點 · 定位失敗，請手動選擇")
             onView(withId(R.id.placePairOriginInput)).perform(replaceText("未確認起點"))
             onView(withId(R.id.placePairSwapButton)).perform(click())
             onView(withId(R.id.placePairOriginInput)).check(matches(withText("")))
@@ -278,7 +356,7 @@ class SearchDestinationInstrumentedTest {
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
-            waitForText("暫時無法取得目前位置，請手動選擇起點")
+            waitForOriginHint("起點 · 定位失敗，請手動選擇")
             selectPlace(R.id.placePairOriginInput, "o", "測試起點")
             selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
             onView(withId(R.id.searchQueryButton)).perform(click())
@@ -520,6 +598,20 @@ class SearchDestinationInstrumentedTest {
             } catch (_: AssertionError) {
                 false
             }
+        }
+    }
+
+    private fun waitForOriginHint(expected: String) {
+        waitUntil {
+            var hint = ""
+            try {
+                onView(withId(R.id.placePairOriginLayout)).check { view, _ ->
+                    hint = (view as TextInputLayout).hint?.toString().orEmpty()
+                }
+            } catch (_: Throwable) {
+                return@waitUntil false
+            }
+            hint == expected
         }
     }
 

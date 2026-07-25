@@ -108,7 +108,7 @@ class GoogleReverseGeocodingCurrentPlaceInstrumentedTest {
             assertNotEquals("地址由 Google Maps 提供", address)
             assertFalse("起點地址不應是 plus code: $address", looksLikePlusCode(address))
             it.onActivity { activity ->
-                val attribution = activity.findViewById<TextView>(R.id.placePairOriginAttribution)
+                val attribution = activity.findViewById<TextView>(R.id.originAttributionText)
                 assertEquals(View.VISIBLE, attribution.visibility)
             }
         }

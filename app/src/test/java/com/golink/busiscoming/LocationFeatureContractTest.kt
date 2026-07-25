@@ -137,11 +137,12 @@ class LocationFeatureContractTest {
         assertTrue(stringsXml.contains("地址由 Google Maps 提供"))
         assertFalse(routeEditLayoutXml.contains("PlacePairEditorView"))
         assertTrue(routeEditLayoutXml.contains("@+id/originAttributionText"))
-        assertTrue(placePairLayoutXml.contains("@+id/placePairOriginAttribution"))
-        assertTrue(placePairLayoutXml.contains("@string/google_maps_address_attribution"))
+        assertFalse(placePairLayoutXml.contains("@+id/placePairOriginAttribution"))
+        assertFalse(placePairLayoutXml.contains("@string/google_maps_address_attribution"))
         assertTrue(routeEditActivityKt.contains("showOriginAttribution(nameResult.attribution)"))
         assertTrue(routeEditActivityKt.contains("hideOriginAttribution()"))
-        assertTrue(searchFragmentKt.contains("placeEditor.originAttribution"))
+        assertTrue(searchFragmentKt.contains("SearchFieldCaptionRenderer"))
+        assertTrue(searchFragmentKt.contains("setGoogleMaps"))
         assertTrue(searchFragmentKt.contains("result.attribution == PlaceAttribution.GOOGLE_MAPS"))
     }
 
