@@ -37,7 +37,7 @@
 - Produces: `enum class SearchFieldCaptionStatus`
 - Produces: `SearchFieldCaptionState.onPlaceInputMessage(message)`, `setGoogleMaps(Boolean)`, `setLocationFailure(Boolean)`, `setValidation(SearchFieldValidation?)`, `visibleStatus()`
 
-- [ ] **Step 1: 寫入狀態優先級失敗測試**
+- [x] **Step 1: 寫入狀態優先級失敗測試**
 
 ```kotlin
 class SearchFieldCaptionStateTest {
@@ -67,7 +67,7 @@ class SearchFieldCaptionStateTest {
 }
 ```
 
-- [ ] **Step 2: 執行測試並確認因類別尚不存在而失敗**
+- [x] **Step 2: 執行測試並確認因類別尚不存在而失敗**
 
 Run:
 
@@ -77,7 +77,7 @@ Run:
 
 Expected: `compileDebugUnitTestKotlin` 失敗，指出 `SearchFieldCaptionState`／`PlaceInputMessage` 尚未定義。
 
-- [ ] **Step 3: 實作最小結構化訊息與狀態機**
+- [x] **Step 3: 實作最小結構化訊息與狀態機**
 
 ```kotlin
 enum class PlaceInputMessage {
@@ -152,7 +152,7 @@ internal class SearchFieldCaptionState {
 }
 ```
 
-- [ ] **Step 4: 新增完整與緊湊三語資源**
+- [x] **Step 4: 新增完整與緊湊三語資源**
 
 新增 `search_field_origin_label`、`search_field_destination_label`，以及下表完整／
 `_compact` 成對資源：
@@ -162,21 +162,21 @@ internal class SearchFieldCaptionState {
 | `search_field_origin_label` | 起點 | 起点 | From |
 | `search_field_destination_label` | 終點 | 终点 | To |
 | `search_field_choose_from_list` | 從清單選擇 | 从列表选择 | Choose from list |
-| `search_field_choose_from_list_compact` | 選擇地點 | 选择地点 | Choose place |
+| `search_field_choose_from_list_compact` | 選擇地點 | 选择地点 | Select |
 | `search_field_google_maps_address` | 地址由 Google Maps 提供 | 地址由 Google Maps 提供 | Google Maps address |
-| `search_field_google_maps_address_compact` | Google Maps 地址 | Google Maps 地址 | Google Maps address |
+| `search_field_google_maps_address_compact` | Google 地址 | Google 地址 | By Google |
 | `search_field_no_matches` | 找不到配對地點 | 没有匹配地点 | No matches |
 | `search_field_no_matches_compact` | 無配對 | 无匹配 | No match |
 | `search_field_search_failed` | 搜尋失敗 | 搜索失败 | Search failed |
-| `search_field_search_failed_compact` | 搜尋失敗 | 搜索失败 | Search failed |
+| `search_field_search_failed_compact` | 搜尋失敗 | 搜索失败 | Failed |
 | `search_field_location_failure` | 定位失敗，請手動選擇 | 定位失败，请手动选择 | Location unavailable |
-| `search_field_location_failure_compact` | 定位失敗 | 定位失败 | Location failed |
+| `search_field_location_failure_compact` | 定位失敗 | 定位失败 | No location |
 | `search_field_choose_place` | 請選擇地點 | 请选择地点 | Choose a place |
-| `search_field_choose_place_compact` | 選擇地點 | 选择地点 | Choose place |
+| `search_field_choose_place_compact` | 選擇地點 | 选择地点 | Select |
 | `search_field_same_as_origin` | 不能與起點相同 | 不能与起点相同 | Must differ from start |
-| `search_field_same_as_origin_compact` | 與起點相同 | 与起点相同 | Same as start |
+| `search_field_same_as_origin_compact` | 與起點相同 | 与起点相同 | Same start |
 
-- [ ] **Step 5: 執行狀態測試並確認通過**
+- [x] **Step 5: 執行狀態測試並確認通過**
 
 Run:
 
@@ -186,7 +186,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL`。
 
-- [ ] **Step 6: 提交狀態模型與資源**
+- [x] **Step 6: 提交狀態模型與資源**
 
 ```bash
 git add app/src/main/java/com/golink/busiscoming/ui/common/PlaceInputMessage.kt \
@@ -210,7 +210,7 @@ git commit -m "feat: model route search field captions"
 - Produces: optional constructor parameter `onMessageChanged: ((PlaceInputMessage) -> Unit)? = null`
 - Preserves: without `onMessageChanged`, `clearMessages()` restores the historical helper and `setError()` uses TextInputLayout error.
 
-- [ ] **Step 1: 新增訊息輸出與舊頁不變的失敗測試**
+- [x] **Step 1: 新增訊息輸出與舊頁不變的失敗測試**
 
 在 `PlaceInputControllerInstrumentedTest` 建立帶 `onMessageChanged` 的控制器與可返回
 空結果、失敗和成功結果的 repository，依序斷言：
@@ -225,7 +225,7 @@ assertEquals(PlaceInputMessage.INSTRUCTION, messages.last())
 保留並重跑既有 `routeEditKeepsHistoricalInputGeometryAndMaterialLocationTool`，確認未提供
 callback 時兩個行程編輯欄仍顯示 `place_search_helper`。
 
-- [ ] **Step 2: 在專用未啟動 AVD 上執行測試並確認 callback 缺失造成失敗**
+- [x] **Step 2: 在專用未啟動 AVD 上執行測試並確認 callback 缺失造成失敗**
 
 先重新確認 `Pixel_9_API_36_1` 未運行且 `emulator-5556` 未被佔用；若被其他工作啟動，
 按用戶要求等待它關閉，最長兩小時。確認可用後：
@@ -251,7 +251,7 @@ Run:
 
 Expected: 新測試在編譯或斷言階段失敗；既有行程編輯測試仍通過。
 
-- [ ] **Step 3: 實作可選輸出且保留舊路徑**
+- [x] **Step 3: 實作可選輸出且保留舊路徑**
 
 在 constructor 末端加入：
 
@@ -294,7 +294,7 @@ private fun clearAfterSelection() {
 `setSelectedPlace()` 使用 `clearAfterSelection()`；使用者編輯、raw text、成功候選、
 無結果及搜尋失敗分別輸出 `INSTRUCTION`、`NO_MATCHES` 或 `SEARCH_FAILED`。
 
-- [ ] **Step 4: 重跑 controller instrumentation 與本地契約測試**
+- [x] **Step 4: 重跑 controller instrumentation 與本地契約測試**
 
 Run:
 
@@ -307,7 +307,7 @@ Run:
 
 Expected: 兩條命令均 `BUILD SUCCESSFUL`，既有行程編輯 helper 斷言不變。
 
-- [ ] **Step 5: 提交共用控制器接口**
+- [x] **Step 5: 提交共用控制器接口**
 
 ```bash
 git add app/src/main/java/com/golink/busiscoming/ui/common/PlaceInputController.kt \
@@ -333,7 +333,7 @@ git commit -m "feat: expose place input status messages"
 - Produces: `SearchFieldCaptionRenderer.onPlaceInputMessage`, `setGoogleMaps`, `setLocationFailure`, `setValidation`
 - Produces: `PlacePairEditorView.originCaptionRenderer()` and `destinationCaptionRenderer()` are not exposed; `SearchFragment` owns renderer instances.
 
-- [ ] **Step 1: 寫入路線頁提示位置與狀態的失敗測試**
+- [x] **Step 1: 寫入路線頁提示位置與狀態的失敗測試**
 
 更新本地契約測試，斷言：
 
@@ -356,7 +356,7 @@ assertEquals("起點 · 地址由 Google Maps 提供", originLayout.hint.toStrin
 assertEquals("終點 · 不能與起點相同", destinationLayout.hint.toString())
 ```
 
-- [ ] **Step 2: 執行本地與 instrumentation 測試並確認舊布局造成失敗**
+- [x] **Step 2: 執行本地與 instrumentation 測試並確認舊布局造成失敗**
 
 Run:
 
@@ -369,7 +369,7 @@ Run:
 
 Expected: 契約測試因 attribution TextView 仍存在而失敗；instrumentation 因 hint 尚未包含狀態而失敗。
 
-- [ ] **Step 3: 實作 renderer**
+- [x] **Step 3: 實作 renderer**
 
 `SearchFieldCaptionRenderer` 接收 `TextInputLayout`、輸入 View、欄位 label 資源和
 以下完整／緊湊 resource mapping：
@@ -418,7 +418,7 @@ fun render() {
 一次重渲染。錯誤狀態使用 `bus_danger` hint／stroke，其他狀態恢復
 `search_input_stroke` 和次要提示色。
 
-- [ ] **Step 4: 接入 SearchFragment 並移除下方 attribution**
+- [x] **Step 4: 接入 SearchFragment 並移除下方 attribution**
 
 - 建立起點／終點 renderer，再把 `renderer::onPlaceInputMessage` 傳給兩個 controller。
 - `renderAttribution()` 改成對 renderer 呼叫 `setGoogleMaps`。
@@ -429,7 +429,7 @@ fun render() {
 - 從 `PlacePairEditorView` 和 XML 移除兩個 attribution TextView；候選清單仍位於各自
   TextInputLayout 之後。
 
-- [ ] **Step 5: 重跑提示狀態、Google attribution 與行程編輯隔離測試**
+- [x] **Step 5: 重跑提示狀態、Google attribution 與行程編輯隔離測試**
 
 Run:
 
@@ -443,7 +443,7 @@ Run:
 
 Expected: 所有指定測試通過，Google 歸因跟隨交換／重建，RouteEdit helper 維持原狀。
 
-- [ ] **Step 6: 提交路線頁提示渲染**
+- [x] **Step 6: 提交路線頁提示渲染**
 
 ```bash
 git add app/src/main/java/com/golink/busiscoming/ui/main/SearchFieldCaptionRenderer.kt \
@@ -472,13 +472,13 @@ git commit -m "feat: show route search status on field borders"
 - Produces: `PlacePairToolAlignment.swapTop(originCenter, destinationCenter, originCandidateOccupiedHeight, toolHeight)`
 - `PlacePairEditorView` 在 layout 或候選 visibility／尺寸改變後重新套用 translationY。
 
-- [ ] **Step 1: 寫入幾何公式失敗測試**
+- [x] **Step 1: 寫入幾何公式失敗測試**
 
 ```kotlin
 @Test
 fun `swap center removes the visible origin candidate displacement`() {
     assertEquals(
-        48,
+        46,
         PlacePairToolAlignment.swapTop(
             originCenter = 36,
             destinationCenter = 184,
@@ -498,7 +498,7 @@ assertTrue(abs(expectedSwapCenter - swap.centerYOnScreen()) <= dp(activity, 1))
 assertTrue(abs(swapCenterBeforeCandidates - swapCenterAfterCandidates) <= dp(activity, 1))
 ```
 
-- [ ] **Step 2: 執行幾何 unit test 與 instrumentation 並確認失敗**
+- [x] **Step 2: 執行幾何 unit test 與 instrumentation 並確認失敗**
 
 Run:
 
@@ -511,7 +511,7 @@ Run:
 Expected: unit test 因 policy 尚未存在而失敗；instrumentation 顯示固定 `56dp`／`120dp`
 容器中心與實際輸入區中心不一致。
 
-- [ ] **Step 3: 實作純幾何 policy**
+- [x] **Step 3: 實作純幾何 policy**
 
 ```kotlin
 internal object PlacePairToolAlignment {
@@ -530,7 +530,7 @@ internal object PlacePairToolAlignment {
 }
 ```
 
-- [ ] **Step 4: 讓 PlacePairEditorView 套用實際 View 坐標**
+- [x] **Step 4: 讓 PlacePairEditorView 套用實際 View 坐標**
 
 - XML 把 `placePairOriginToolSlot`、`placePairDestinationToolSlot`、
   `placePairSwapSlot` 的高度統一為 `48dp`，刪除 `120dp`。
@@ -542,7 +542,7 @@ internal object PlacePairToolAlignment {
 - root、輸入欄、候選 visibility 或尺寸改變時 post 重算；工具 visibility 切換不得
   改變槽位置。
 
-- [ ] **Step 5: 重跑幾何、候選開合與布局契約測試**
+- [x] **Step 5: 重跑幾何、候選開合與布局契約測試**
 
 Run:
 
@@ -556,7 +556,7 @@ Run:
 
 Expected: 幾何誤差均不超過 `1dp`，候選清單開合前後交換按鈕中心不變。
 
-- [ ] **Step 6: 提交工具居中修復**
+- [x] **Step 6: 提交工具居中修復**
 
 ```bash
 git add app/src/main/java/com/golink/busiscoming/ui/common/PlacePairToolAlignment.kt \
@@ -578,23 +578,30 @@ git commit -m "fix: center route search field tools"
 - Consumes: completed caption renderer and geometry alignment.
 - Produces: checked plan tasks and fresh build／instrumentation evidence.
 
-- [ ] **Step 1: 在專用模擬器驗證可見矩陣**
+- [x] **Step 1: 在專用模擬器驗證可見矩陣**
 
 依次切換香港繁體、簡體、英文；淺色、深色；font scale 1.0、1.3、2.0。在 360dp
 寬度驗證空白、普通選定、Google 地址、無匹配、搜尋失敗、定位失敗、未選定、
 相同地點與候選展開狀態。完整文案放不下時必須切到預定緊湊文案，仍不得裁切。
 
-- [ ] **Step 2: 執行完整 instrumentation suite**
+- [x] **Step 2: 執行完整 instrumentation suite**
 
 Run:
 
 ```bash
-./gradlew connectedDebugAndroidTest
+adb -s "$route_ui_qa_serial" shell am instrument -w -r \
+  -e notClass \
+  com.golink.busiscoming.AppUpdateInstrumentedTest,com.golink.busiscoming.AppUpdateVisualMatrixInstrumentedTest,com.golink.busiscoming.RouteSearchInputVisualMatrixInstrumentedTest \
+  com.golink.busiscoming.test/com.golink.busiscoming.BusIsComingTestRunner
 ```
 
-Expected: `BUILD SUCCESSFUL`，0 failed tests。
+Expected: `OK (61 tests)`。使用序號限定的 `adb am instrument`，避免 Gradle
+`connectedDebugAndroidTest` 同時使用驗證開始前已運行的其他裝置。既有
+`AppUpdateInstrumentedTest` 硬性要求設備沒有 Google Play，但本次專用 AVD 包含並
+啟用了 `com.android.vending`，故按環境前置條件排除；該模組不在本變更範圍內。
+兩個視覺矩陣類需要專用 runner 參數，分開執行。
 
-- [ ] **Step 3: 關閉本次啟動的模擬器並確認釋放**
+- [x] **Step 3: 關閉本次啟動的模擬器並確認釋放**
 
 Run:
 
@@ -606,7 +613,7 @@ adb devices
 Expected: 執行期間記錄於 `route_ui_qa_serial` 的本次序號消失；不得關閉驗證開始前
 已存在的其他裝置。
 
-- [ ] **Step 4: 執行完整專案 build**
+- [x] **Step 4: 執行完整專案 build**
 
 Run:
 
@@ -616,7 +623,7 @@ Run:
 
 Expected: `BUILD SUCCESSFUL`，涵蓋編譯、unit tests、lint 與 debug／release assemble。
 
-- [ ] **Step 5: 檢查需求、差異與工作區隔離**
+- [x] **Step 5: 檢查需求、差異與工作區隔離**
 
 Run:
 
@@ -629,7 +636,18 @@ git status --short
 Expected: 沒有 whitespace error；變更僅涉及計劃列出的檔案；工作區只剩原有
 `app/build.gradle.kts` 未提交修改。
 
-- [ ] **Step 6: 更新計劃勾選並提交驗證記錄**
+- [x] **Step 6: 更新計劃勾選並提交驗證記錄**
+
+完成記錄：
+
+- `RouteSearchInputVisualMatrixInstrumentedTest` 在 360dp、font scale
+  1.0／1.3／2.0、香港繁體／簡體／英文、淺色／深色共 18 個組合全部通過。
+- 排除上述環境限定更新類與需專用參數的矩陣類後，裝置回歸 `OK (61 tests)`；
+  其中 2 項真實 Google API 驗收按既有 `runGoogleApiAcceptance` 開關正常跳過。
+- `SearchDestinationInstrumentedTest` 共 12 項通過，定位及交換工具實測中心誤差不超過
+  `1dp`，候選清單開合不令交換工具跳動。
+- `./gradlew build` 通過，包含 408 項本地單元測試、lint 及 debug／release 組裝。
+- 本次啟動的 `emulator-5556` 已關閉；驗證開始前存在的 `emulator-5554` 保持運行。
 
 把本文件全部 task checkbox 更新為 `[x]`，然後：
 

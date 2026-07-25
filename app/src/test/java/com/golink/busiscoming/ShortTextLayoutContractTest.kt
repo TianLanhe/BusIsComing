@@ -67,9 +67,6 @@ class ShortTextLayoutContractTest {
                 "@style/StableShortText.Button",
                 "@style/StableShortText.Title"
             ),
-            "view_place_pair_editor.xml" to listOf(
-                "@style/StableShortText.Label"
-            ),
             "activity_route_manage.xml" to listOf(
                 "@style/StableShortText.Button",
                 "@style/StableShortText.Title"

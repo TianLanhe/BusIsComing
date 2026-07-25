@@ -176,7 +176,7 @@
     <string name="search_field_choose_from_list">從清單選擇</string>
     <string name="search_field_choose_from_list_compact">選擇地點</string>
     <string name="search_field_google_maps_address">地址由 Google Maps 提供</string>
-    <string name="search_field_google_maps_address_compact">Google Maps 地址</string>
+    <string name="search_field_google_maps_address_compact">Google 地址</string>
     <string name="search_field_no_matches">找不到配對地點</string>
     <string name="search_field_no_matches_compact">無配對</string>
     <string name="search_field_search_failed">搜尋失敗</string>

@@ -153,16 +153,16 @@ To · Must differ from start
 
 | 狀態 | 香港繁體緊湊文案 | 簡體中文緊湊文案 | English compact |
 | --- | --- | --- | --- |
-| 一般指引 | 選擇地點 | 选择地点 | Choose place |
-| Google attribution | Google Maps 地址 | Google Maps 地址 | Google Maps address |
+| 一般指引 | 選擇地點 | 选择地点 | Select |
+| Google attribution | Google 地址 | Google 地址 | By Google |
 | 無匹配 | 無配對 | 无匹配 | No match |
-| 搜尋失敗 | 搜尋失敗 | 搜索失败 | Search failed |
-| 自動定位失敗 | 定位失敗 | 定位失败 | Location failed |
-| 未選定校驗 | 選擇地點 | 选择地点 | Choose place |
-| 相同地點校驗 | 與起點相同 | 与起点相同 | Same as start |
+| 搜尋失敗 | 搜尋失敗 | 搜索失败 | Failed |
+| 自動定位失敗 | 定位失敗 | 定位失败 | No location |
+| 未選定校驗 | 選擇地點 | 选择地点 | Select |
+| 相同地點校驗 | 與起點相同 | 与起点相同 | Same start |
 
-緊湊文案仍與欄位名稱組合，例如 `起點 · Google Maps 地址` 或
-`To · Same as start`。完整 TalkBack 描述在兩種可見文案下保持相同。
+緊湊文案仍與欄位名稱組合，例如 `起點 · Google 地址` 或
+`To · Same start`。完整 TalkBack 描述在兩種可見文案下保持相同。
 
 ### 5. 定位工具以實際輸入區中心定位
 
