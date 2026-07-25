@@ -21,5 +21,21 @@
     <string name="validation_required">必填</string><string name="validation_origin_required">请选择起点地点</string><string name="validation_destination_required">请选择终点地点</string><string name="validation_same_places">起点和终点不能相同</string><string name="distance_from_current_meters">距当前位置 %1$d 米</string><string name="distance_from_current">距当前位置 %1$s</string>
     <string name="share_copy">想在坐公交前快速知道哪条路线更合适？BusIsComing 可以保存常用行程，快速比较候车时间、票价和耗时。%1$s</string><string name="feedback_subject">BusIsComing 问题反馈</string><string name="feedback_body">问题描述：\n\n\nApp 版本：%1$s\nAndroid 版本：%2$s\n设备型号：%3$s</string>
     <string name="route_export_success">已导出 %1$d 个常用行程。</string><string name="route_import_none">导入完成：没有新增行程，%1$d 个已存在。</string><string name="route_import_merged">导入完成：新增 %1$d 个行程，跳过 %2$d 个已存在行程。</string><string name="route_import_replaced">替换完成：已删除 %1$d 个行程并导入 %2$d 个行程。</string>
+    <string name="search_field_origin_label">起点</string>
+    <string name="search_field_destination_label">终点</string>
+    <string name="search_field_choose_from_list">从列表选择</string>
+    <string name="search_field_choose_from_list_compact">选择地点</string>
+    <string name="search_field_google_maps_address">地址由 Google Maps 提供</string>
+    <string name="search_field_google_maps_address_compact">Google Maps 地址</string>
+    <string name="search_field_no_matches">没有匹配地点</string>
+    <string name="search_field_no_matches_compact">无匹配</string>
+    <string name="search_field_search_failed">搜索失败</string>
+    <string name="search_field_search_failed_compact">搜索失败</string>
+    <string name="search_field_location_failure">定位失败，请手动选择</string>
+    <string name="search_field_location_failure_compact">定位失败</string>
+    <string name="search_field_choose_place">请选择地点</string>
+    <string name="search_field_choose_place_compact">选择地点</string>
+    <string name="search_field_same_as_origin">不能与起点相同</string>
+    <string name="search_field_same_as_origin_compact">与起点相同</string>
     <string name="route_direction_format">往 %1$s 方向</string>
 </resources>

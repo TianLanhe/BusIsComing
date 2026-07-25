@@ -171,5 +171,21 @@
     <string name="route_import_none">匯入完成：沒有新增行程，%1$d 個已存在。</string>
     <string name="route_import_merged">匯入完成：新增 %1$d 個行程，跳過 %2$d 個已存在行程。</string>
     <string name="route_import_replaced">取代完成：已刪除 %1$d 個行程並匯入 %2$d 個行程。</string>
+    <string name="search_field_origin_label">起點</string>
+    <string name="search_field_destination_label">終點</string>
+    <string name="search_field_choose_from_list">從清單選擇</string>
+    <string name="search_field_choose_from_list_compact">選擇地點</string>
+    <string name="search_field_google_maps_address">地址由 Google Maps 提供</string>
+    <string name="search_field_google_maps_address_compact">Google Maps 地址</string>
+    <string name="search_field_no_matches">找不到配對地點</string>
+    <string name="search_field_no_matches_compact">無配對</string>
+    <string name="search_field_search_failed">搜尋失敗</string>
+    <string name="search_field_search_failed_compact">搜尋失敗</string>
+    <string name="search_field_location_failure">定位失敗，請手動選擇</string>
+    <string name="search_field_location_failure_compact">定位失敗</string>
+    <string name="search_field_choose_place">請選擇地點</string>
+    <string name="search_field_choose_place_compact">選擇地點</string>
+    <string name="search_field_same_as_origin">不能與起點相同</string>
+    <string name="search_field_same_as_origin_compact">與起點相同</string>
     <string name="route_direction_format">往 %1$s 方向</string>
 </resources>

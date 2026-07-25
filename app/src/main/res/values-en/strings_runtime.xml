@@ -21,5 +21,21 @@
     <string name="validation_required">Required</string><string name="validation_origin_required">Choose a starting point</string><string name="validation_destination_required">Choose a destination</string><string name="validation_same_places">Start and destination must be different</string><string name="distance_from_current_meters">%1$d m from your location</string><string name="distance_from_current">%1$s from your location</string>
     <string name="share_copy">Want to pick a bus route more quickly before you leave? BusIsComing saves regular journeys and compares arrivals, fares, and travel times. %1$s</string><string name="feedback_subject">BusIsComing feedback</string><string name="feedback_body">Describe the issue:\n\n\nApp version: %1$s\nAndroid version: %2$s\nDevice: %3$s</string>
     <string name="route_export_success">Exported %1$d regular journeys.</string><string name="route_import_none">Import complete: no journeys added; %1$d already existed.</string><string name="route_import_merged">Import complete: added %1$d and skipped %2$d existing journeys.</string><string name="route_import_replaced">Replace complete: removed %1$d and imported %2$d journeys.</string>
+    <string name="search_field_origin_label">From</string>
+    <string name="search_field_destination_label">To</string>
+    <string name="search_field_choose_from_list">Choose from list</string>
+    <string name="search_field_choose_from_list_compact">Choose place</string>
+    <string name="search_field_google_maps_address">Google Maps address</string>
+    <string name="search_field_google_maps_address_compact">Google Maps address</string>
+    <string name="search_field_no_matches">No matches</string>
+    <string name="search_field_no_matches_compact">No match</string>
+    <string name="search_field_search_failed">Search failed</string>
+    <string name="search_field_search_failed_compact">Search failed</string>
+    <string name="search_field_location_failure">Location unavailable</string>
+    <string name="search_field_location_failure_compact">Location failed</string>
+    <string name="search_field_choose_place">Choose a place</string>
+    <string name="search_field_choose_place_compact">Choose place</string>
+    <string name="search_field_same_as_origin">Must differ from start</string>
+    <string name="search_field_same_as_origin_compact">Same as start</string>
     <string name="route_direction_format">Towards %1$s</string>
 </resources>
