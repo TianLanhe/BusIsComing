@@ -1,7 +1,7 @@
 ## 1. 固定展示狀態與資源契約
 
-- [ ] 1.1 在 `app/src/test` 新增搜尋展示狀態的純邏輯測試，覆蓋 Editing／Querying／Results／EditingResults／DirtyEditing／Saved、空結果／失敗、取消編輯、輸入失效及新 generation 重設保存狀態
-- [ ] 1.2 實作搜尋頁專用展示狀態與 reducer／policy，讓其只保存 UI 模式、查詢快照及保存狀態，並繼續以 `RouteQueryState` 作為 query id、進行中與 callback generation 的真相來源
+- [x] 1.1 在 `app/src/test` 新增搜尋展示狀態的純邏輯測試，覆蓋 Editing／Querying／Results／EditingResults／DirtyEditing／Saved、空結果／失敗、取消編輯、輸入失效及新 generation 重設保存狀態
+- [x] 1.2 實作搜尋頁專用展示狀態與 reducer／policy，讓其只保存 UI 模式、查詢快照及保存狀態，並繼續以 `RouteQueryState` 作為 query id、進行中與 callback generation 的真相來源
 - [ ] 1.3 擴充 XML／Manifest contract tests，先固定地點靜態 helper、共用狀態卡、「本次行程」欄、搜尋頁舊保存入口移除及 `MainActivity` IME 策略
 - [ ] 1.4 擴充 locale resource contract tests，要求本 change 新增或修改的查詢、編輯、取消編輯、保存、已保存、狀態卡及無障礙文案同時存在於香港繁體、簡體及英文資源
 

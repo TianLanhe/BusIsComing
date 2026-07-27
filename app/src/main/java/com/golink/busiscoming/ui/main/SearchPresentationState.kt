@@ -1,0 +1,107 @@
+package com.golink.busiscoming.ui.main
+
+import com.golink.busiscoming.data.model.Place
+
+/**
+ * 搜尋頁展示層的模式；查詢 generation 與進行中狀態仍由 [RouteQueryState] 擁有。
+ */
+enum class SearchDisplayMode {
+    EDITING,
+    QUERYING,
+    RESULTS,
+    EDITING_RESULTS,
+    DIRTY_EDITING
+}
+
+/** 目前查詢結果可用的保存狀態。 */
+enum class SearchSaveState {
+    UNAVAILABLE,
+    AVAILABLE,
+    SAVED
+}
+
+/** 成功查詢所對應的起終點快照。 */
+data class SearchQuerySnapshot(
+    val origin: Place,
+    val destination: Place
+)
+
+/**
+ * 搜尋頁的純展示狀態。
+ *
+ * 不持有 query id、進行中旗標或 callback generation；呼叫端必須先由
+ * [RouteQueryState] 驗證回呼仍屬目前查詢，才把結果事件交給此 reducer。
+ */
+class SearchPresentationState {
+    var mode: SearchDisplayMode = SearchDisplayMode.EDITING
+        private set
+    var querySnapshot: SearchQuerySnapshot? = null
+        private set
+    var saveState: SearchSaveState = SearchSaveState.UNAVAILABLE
+        private set
+
+    fun beginQuery(origin: Place, destination: Place) {
+        mode = SearchDisplayMode.QUERYING
+        querySnapshot = SearchQuerySnapshot(origin, destination)
+        saveState = SearchSaveState.UNAVAILABLE
+    }
+
+    fun completeWithResults(): Boolean {
+        if (mode != SearchDisplayMode.QUERYING || querySnapshot == null) return false
+        mode = SearchDisplayMode.RESULTS
+        saveState = SearchSaveState.AVAILABLE
+        return true
+    }
+
+    fun completeEmpty(): Boolean = completeWithoutResults()
+
+    fun failQuery(): Boolean = completeWithoutResults()
+
+    fun cancelQuery(): Boolean = completeWithoutResults()
+
+    fun beginEditingResults(): Boolean {
+        if (mode != SearchDisplayMode.RESULTS || querySnapshot == null) return false
+        mode = SearchDisplayMode.EDITING_RESULTS
+        return true
+    }
+
+    fun cancelEditing(): Boolean {
+        if (mode != SearchDisplayMode.EDITING_RESULTS || querySnapshot == null) return false
+        mode = SearchDisplayMode.RESULTS
+        return true
+    }
+
+    fun onInputChanged(): Boolean {
+        when (mode) {
+            SearchDisplayMode.QUERYING -> resetToEditing()
+            SearchDisplayMode.RESULTS,
+            SearchDisplayMode.EDITING_RESULTS -> {
+                mode = SearchDisplayMode.DIRTY_EDITING
+                querySnapshot = null
+                saveState = SearchSaveState.UNAVAILABLE
+            }
+
+            SearchDisplayMode.EDITING,
+            SearchDisplayMode.DIRTY_EDITING -> return false
+        }
+        return true
+    }
+
+    fun markSaved(): Boolean {
+        if (mode != SearchDisplayMode.RESULTS || saveState != SearchSaveState.AVAILABLE) return false
+        saveState = SearchSaveState.SAVED
+        return true
+    }
+
+    private fun completeWithoutResults(): Boolean {
+        if (mode != SearchDisplayMode.QUERYING) return false
+        resetToEditing()
+        return true
+    }
+
+    private fun resetToEditing() {
+        mode = SearchDisplayMode.EDITING
+        querySnapshot = null
+        saveState = SearchSaveState.UNAVAILABLE
+    }
+}
