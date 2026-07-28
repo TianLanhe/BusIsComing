@@ -152,26 +152,34 @@ class NavigationSearchUiPolishContractTest {
     }
 
     @Test
-    fun `search save belongs to the input column and results use sort then metadata`() {
+    fun `search puts the legacy save action in the current trip context instead of the editor`() {
         assertFalse(searchLayout.contains("android:id=\"@+id/searchResultSummaryContainer\""))
-        assertFalse(searchLayout.contains("android:id=\"@+id/searchEditButton\""))
         assertFalse(searchLayout.contains("android:id=\"@+id/searchResultActions\""))
         assertFalse(searchFragment.contains("configureResultSummaryLayout"))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchInputContainer\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchTripContext\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchTripRouteText\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchEditButton\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchCancelEditButton\""))
         val saveButton = searchLayout.substringAfter("@+id/searchSaveButton").substringBefore("/>")
         assertTrue(saveButton.contains("style=\"@style/StableShortText.Button.Tonal\""))
         assertTrue(saveButton.contains("android:layout_height=\"wrap_content\""))
         assertTrue(saveButton.contains("android:minHeight=\"48dp\""))
         assertTrue(saveButton.contains("android:visibility=\"gone\""))
 
-        val placeColumnStart = searchLayout.indexOf("@+id/searchPlacePairEditor")
+        val inputContainerStart = searchLayout.indexOf("@+id/searchInputContainer")
         val saveIndex = searchLayout.indexOf("@+id/searchSaveButton")
-        assertTrue(placeColumnStart < saveIndex)
+        val inputContainerEnd = searchLayout.indexOf("</LinearLayout>", inputContainerStart)
+        val subtitleIndex = searchLayout.indexOf("@string/search_subtitle")
+        assertTrue(subtitleIndex > inputContainerStart)
+        assertTrue(subtitleIndex < inputContainerEnd)
+        assertTrue(saveIndex > inputContainerEnd)
         val sortIndex = searchLayout.indexOf("@+id/searchRouteResultControls")
         val listIndex = searchLayout.indexOf("@+id/searchResultList")
         assertTrue(sortIndex < listIndex)
         assertTrue(resultControlsLayout.indexOf("@+id/sortControls") <
             resultControlsLayout.indexOf("@+id/resultSummaryContainer"))
-        assertTrue(searchFragment.contains("SearchResultSaveEligibility.isVisible"))
+        assertTrue(searchFragment.contains("SearchTripContextVisibility"))
     }
 
     @Test

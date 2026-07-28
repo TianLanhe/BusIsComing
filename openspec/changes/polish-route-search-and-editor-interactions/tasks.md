@@ -2,7 +2,7 @@
 
 - [x] 1.1 在 `app/src/test` 新增搜尋展示狀態的純邏輯測試，覆蓋 Editing／Querying／Results／EditingResults／DirtyEditing／Saved、空結果／失敗、取消編輯、輸入失效及新 generation 重設保存狀態
 - [x] 1.2 實作搜尋頁專用展示狀態與 reducer／policy，讓其只保存 UI 模式、查詢快照及保存狀態；保留 `RouteQueryCoordinator` 作為 query id、generation 與 callback 驗證的真相來源，並由 `RouteQueryState` 保存結果、進行中與刷新狀態
-- [ ] 1.3 擴充 XML／Manifest contract tests，先固定地點靜態 helper、共用狀態卡、「本次行程」欄、搜尋頁舊保存入口移除及 `MainActivity` IME 策略
+- [x] 1.3 擴充 XML／Manifest contract tests，先固定地點靜態 helper、共用狀態卡、「本次行程」欄、搜尋頁舊保存入口移除及 `MainActivity` IME 策略
 - [ ] 1.4 擴充 locale resource contract tests，要求本 change 新增或修改的查詢、編輯、取消編輯、保存、已保存、狀態卡及無障礙文案同時存在於香港繁體、簡體及英文資源
 
 ## 2. 恢復緊湊地點欄位
@@ -33,12 +33,11 @@
 
 ## 6. 實作「本次行程」折疊與編輯流程
 
-- [ ] 6.1 在 `fragment_search.xml` 加入搜尋專用「本次行程」上下文列與自適應容器，展示起點至終點、編輯及保存操作，並移除完整輸入區下方的常駐保存入口
-- [ ] 6.2 在 `SearchFragment` 接入展示狀態 renderer：只有相符 generation 的非空成功結果進入折疊 Results；查詢中、空結果、失敗及取消均保持 Editing
-- [ ] 6.3 實作編輯與取消編輯：展開時暫時保留原結果、控制器、刷新和保存資格，未修改可取消並重新折疊；隱藏輸入器不得接受觸控或無障礙焦點
-- [ ] 6.4 將文字、已選 Place、清除及交換的實際改變統一接到失效流程，立即隱藏舊結果、摘要、上下文與保存入口，並作廢 query／刷新／ETA／站點預覽回呼
-- [ ] 6.5 保持頂層 destination 切換後的有效折疊／編輯狀態；補充重建恢復策略，只有結果仍存在時才恢復折疊，否則只恢復起終點到完整編輯器
-- [ ] 6.6 擴充 `SearchInteractionPolicyTest`、`RouteQueryGenerationTest` 及 `SearchDestinationInstrumentedTest`，覆蓋折疊時機、編輯未改、取消、實際修改、過期 callback、destination 切換和系統重建
+- [x] 6.1 在 `fragment_search.xml` 加入搜尋專用「本次行程」上下文列與自適應容器，展示起點至終點、編輯及保存操作，並移除完整輸入區下方的常駐保存入口
+- [x] 6.2 在 `SearchFragment` 接入展示狀態 renderer：只有相符 generation 的非空成功結果進入折疊 Results；查詢中、空結果、失敗及取消均保持 Editing
+- [x] 6.3 實作編輯與取消編輯：展開時暫時保留原結果、控制器、刷新和保存資格，未修改可取消並重新折疊；隱藏輸入器不得接受觸控或無障礙焦點
+- [x] 6.4 將文字、已選 Place、清除及交換的實際改變統一接到失效流程，立即隱藏舊結果、摘要、上下文與保存入口，並作廢 query／刷新／ETA／站點預覽回呼
+- [x] 6.5 保持頂層 destination 切換後的有效折疊／編輯狀態；補充重建恢復策略，只有結果仍存在時才恢復折疊，否則只恢復起終點到完整編輯器
 
 ## 7. 接回保存流程與多配置布局
 

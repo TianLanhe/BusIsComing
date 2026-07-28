@@ -26,6 +26,22 @@ data class SearchQuerySnapshot(
     val destination: Place
 )
 
+/** 「本次行程」上下文僅能由仍在記憶體中的有效非空結果顯示。 */
+object SearchTripContextVisibility {
+    fun isVisible(mode: SearchDisplayMode, resultCount: Int): Boolean =
+        resultCount > 0 && (mode == SearchDisplayMode.RESULTS || mode == SearchDisplayMode.EDITING_RESULTS)
+
+    fun showCancelEditing(mode: SearchDisplayMode): Boolean =
+        mode == SearchDisplayMode.EDITING_RESULTS
+
+    fun shouldRestoreFoldedContext(
+        savedMode: SearchDisplayMode,
+        retainedResultCount: Int,
+        hasValidSnapshot: Boolean
+    ): Boolean =
+        savedMode == SearchDisplayMode.RESULTS && retainedResultCount > 0 && hasValidSnapshot
+}
+
 /**
  * 搜尋頁的純展示狀態。
  *

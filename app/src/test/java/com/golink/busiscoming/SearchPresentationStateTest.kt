@@ -4,6 +4,7 @@ import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.ui.main.SearchDisplayMode
 import com.golink.busiscoming.ui.main.SearchPresentationState
 import com.golink.busiscoming.ui.main.SearchSaveState
+import com.golink.busiscoming.ui.main.SearchTripContextVisibility
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -134,6 +135,40 @@ class SearchPresentationStateTest {
         assertTrue(state.completeRefreshEmpty())
 
         assertEditingWithoutQueryContext(state)
+    }
+
+    @Test
+    fun `trip context only folds a nonempty successful result and keeps it while editing unchanged`() {
+        val state = SearchPresentationState()
+
+        state.beginQuery(origin, destination)
+        assertFalse(SearchTripContextVisibility.isVisible(state.mode, resultCount = 0))
+        assertFalse(SearchTripContextVisibility.isVisible(state.mode, resultCount = 1))
+
+        state.completeWithResults()
+        assertTrue(SearchTripContextVisibility.isVisible(state.mode, resultCount = 1))
+
+        state.beginEditingResults()
+        assertTrue(SearchTripContextVisibility.isVisible(state.mode, resultCount = 1))
+        assertTrue(SearchTripContextVisibility.showCancelEditing(state.mode))
+    }
+
+    @Test
+    fun `trip context cannot be restored from a saved mode without retained results`() {
+        assertFalse(
+            SearchTripContextVisibility.shouldRestoreFoldedContext(
+                savedMode = SearchDisplayMode.RESULTS,
+                retainedResultCount = 0,
+                hasValidSnapshot = true
+            )
+        )
+        assertTrue(
+            SearchTripContextVisibility.shouldRestoreFoldedContext(
+                savedMode = SearchDisplayMode.RESULTS,
+                retainedResultCount = 1,
+                hasValidSnapshot = true
+            )
+        )
     }
 
     private fun assertEditingWithoutQueryContext(state: SearchPresentationState) {

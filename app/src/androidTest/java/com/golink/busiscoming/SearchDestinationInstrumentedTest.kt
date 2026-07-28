@@ -397,11 +397,12 @@ class SearchDestinationInstrumentedTest {
             onView(allOf(withId(R.id.resultUpdatedAtText), isDisplayed())).check(matches(isDisplayed()))
             scenario.onActivity { activity ->
                 val save = activity.findViewById<View>(R.id.searchSaveButton)
-                val placeColumn = activity.findViewById<View>(R.id.placePairInputColumn)
-                val swapSlot = activity.findViewById<View>(R.id.placePairSwapSlot)
+                val tripContext = activity.findViewById<View>(R.id.searchTripContext)
+                val inputContainer = activity.findViewById<View>(R.id.searchInputContainer)
                 assertTrue(save.measuredHeight >= dp(activity, 48))
-                assertTrue(save.right <= placeColumn.right)
-                assertTrue(save.right <= swapSlot.left)
+                assertEquals(View.VISIBLE, tripContext.visibility)
+                assertEquals(View.GONE, inputContainer.visibility)
+                assertTrue(save.right <= tripContext.right)
             }
             onView(allOf(withId(R.id.sortRouteButton), isDisplayed())).perform(click())
             onView(allOf(withId(R.id.sortRouteButton), isDisplayed())).check(matches(withText("路線 ↑")))
@@ -478,6 +479,44 @@ class SearchDestinationInstrumentedTest {
             .filter { it.name == "測試終點 -> 測試起點" }
             .forEach { repository.delete(it.id) }
         repository.close()
+    }
+
+    @Test
+    fun successfulSearchFoldsToTripContextAndOnlyActualEditInvalidatesRetainedResults() {
+        val routeRepository = CapturingRouteRepository()
+        installDependencies(routeRepository)
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil { routeRepository.callbacks.size == 1 }
+
+            routeRepository.callbacks.single().onInitialRoutes(listOf(route("折疊路線")))
+            waitForText("折疊路線")
+            onView(withId(R.id.searchTripContext)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchInputContainer))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchEditButton)).perform(click())
+            onView(withId(R.id.searchInputContainer)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchCancelEditButton)).check(matches(isDisplayed()))
+            onView(withText("折疊路線")).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchCancelEditButton)).perform(click())
+            onView(withId(R.id.searchInputContainer))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchTripContext)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchEditButton)).perform(click())
+            onView(withId(R.id.placePairDestinationInput)).perform(replaceText("實際修改"))
+            onView(withId(R.id.searchTripContext))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchResultList))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchRouteResultControls))
+                .check(matches(withEffectiveVisibility(GONE)))
+        }
     }
 
     @Test

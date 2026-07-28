@@ -192,6 +192,12 @@ class PlaceInputController(
         return true
     }
 
+    /** 搜尋輸入器折疊時，同步清除焦點與欄位級候選，避免隱藏控制項繼續接收操作。 */
+    fun clearFocusAndHideCandidates() {
+        input.clearFocus()
+        hideCandidates()
+    }
+
     fun setError(message: String?) {
         inputLayout.error = message
     }

@@ -111,6 +111,11 @@ class SearchFragment : Fragment() {
     private lateinit var resultMetaContainer: View
     private lateinit var resultCount: TextView
     private lateinit var resultUpdatedAt: TextView
+    private lateinit var inputContainer: View
+    private lateinit var tripContext: View
+    private lateinit var tripRouteText: TextView
+    private lateinit var editButton: MaterialButton
+    private lateinit var cancelEditButton: MaterialButton
     private lateinit var saveButton: MaterialButton
     private lateinit var queryButton: MaterialButton
     private var originCaptionRenderer: SearchFieldCaptionRenderer? = null
@@ -263,6 +268,11 @@ class SearchFragment : Fragment() {
         resultMetaContainer = resultControls.summaryContainer
         resultCount = resultControls.summaryText
         resultUpdatedAt = resultControls.updatedAtText
+        inputContainer = view.findViewById(R.id.searchInputContainer)
+        tripContext = view.findViewById(R.id.searchTripContext)
+        tripRouteText = view.findViewById(R.id.searchTripRouteText)
+        editButton = view.findViewById(R.id.searchEditButton)
+        cancelEditButton = view.findViewById(R.id.searchCancelEditButton)
         saveButton = view.findViewById(R.id.searchSaveButton)
         queryButton = view.findViewById(R.id.searchQueryButton)
         detailSheet = RouteDetailBottomSheet(
@@ -312,6 +322,8 @@ class SearchFragment : Fragment() {
             hideCandidateLists()
         }
         queryButton.setOnClickListener { query() }
+        editButton.setOnClickListener { beginEditingCurrentTrip() }
+        cancelEditButton.setOnClickListener { cancelEditingCurrentTrip() }
         saveButton.setOnClickListener { saveCurrentRoute() }
         originInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId != EditorInfo.IME_ACTION_SEARCH && actionId != EditorInfo.IME_ACTION_DONE) {
@@ -866,11 +878,19 @@ class SearchFragment : Fragment() {
     private fun swapSearchPlaces() {
         invalidateCurrentPlaceRequest()
         val destination = destinationController ?: return
+        val originBefore = originController?.selectedPlace
+        val destinationBefore = destination.selectedPlace
+        val originTextBefore = originController?.currentInputText()
+        val destinationTextBefore = destination.currentInputText()
         originController?.swapWith(destination)
         attributionState.swap()
         renderAttribution()
         hideCandidateLists()
-        onSearchSelectionChanged()
+        val changed = originBefore != originController?.selectedPlace ||
+            destinationBefore != destination.selectedPlace ||
+            originTextBefore != originController?.currentInputText() ||
+            destinationTextBefore != destination.currentInputText()
+        if (changed) onSearchSelectionChanged()
     }
 
     private fun hideCandidateLists() {
@@ -912,6 +932,18 @@ class SearchFragment : Fragment() {
         updateRefreshEnabled()
     }
 
+    private fun beginEditingCurrentTrip() {
+        if (!presentationState.beginEditingResults()) return
+        renderSearchUi()
+        updateRefreshEnabled()
+    }
+
+    private fun cancelEditingCurrentTrip() {
+        if (!presentationState.cancelEditing()) return
+        renderSearchUi()
+        updateRefreshEnabled()
+    }
+
     private fun clearSuccessfulQuery() {
         successfulQueryOrigin = null
         successfulQueryDestination = null
@@ -931,8 +963,79 @@ class SearchFragment : Fragment() {
         )
         queryButton.isEnabled = ui.isQueryEnabled
         queryButton.setText(if (ui.isQuerying) R.string.action_querying else R.string.search_routes)
+        renderTripContext()
+        renderRetainedResults()
         renderStatusCard(ui.statusCard)
         renderSaveAction()
+    }
+
+    private fun renderTripContext() {
+        val hasSnapshot = presentationState.querySnapshot != null
+        val showTripContext = when (presentationState.mode) {
+            SearchDisplayMode.RESULTS -> SearchTripContextVisibility.shouldRestoreFoldedContext(
+                savedMode = presentationState.mode,
+                retainedResultCount = currentResults.size,
+                hasValidSnapshot = hasSnapshot
+            )
+
+            SearchDisplayMode.EDITING_RESULTS ->
+                SearchTripContextVisibility.isVisible(
+                    mode = presentationState.mode,
+                    resultCount = currentResults.size
+                ) && hasSnapshot
+
+            else -> false
+        }
+        val showEditor = presentationState.mode != SearchDisplayMode.RESULTS
+        inputContainer.visibility = if (showEditor) View.VISIBLE else View.GONE
+        inputContainer.importantForAccessibility = if (showEditor) {
+            View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        if (!showEditor) {
+            originController?.clearFocusAndHideCandidates()
+            destinationController?.clearFocusAndHideCandidates()
+        }
+        tripContext.visibility = if (showTripContext) View.VISIBLE else View.GONE
+        tripContext.importantForAccessibility = if (showTripContext) {
+            View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        val snapshot = presentationState.querySnapshot
+        if (showTripContext && snapshot != null) {
+            tripRouteText.text = getString(
+                R.string.search_trip_route,
+                snapshot.origin.name,
+                snapshot.destination.name
+            )
+        } else {
+            tripRouteText.text = null
+        }
+        editButton.visibility = if (presentationState.mode == SearchDisplayMode.RESULTS) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        cancelEditButton.visibility = if (
+            SearchTripContextVisibility.showCancelEditing(presentationState.mode)
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+    }
+
+    private fun renderRetainedResults() {
+        val showResults = currentResults.isNotEmpty() &&
+            (presentationState.mode == SearchDisplayMode.RESULTS ||
+                presentationState.mode == SearchDisplayMode.EDITING_RESULTS)
+        if (showResults) resultAdapter.submitList(currentResults)
+        resultList.visibility = if (showResults) View.VISIBLE else View.GONE
+        routeResultControls.visibility = if (showResults) View.VISIBLE else View.GONE
+        sortControls.visibility = if (showResults) View.VISIBLE else View.GONE
+        resultMetaContainer.visibility = if (showResults) View.VISIBLE else View.GONE
     }
 
     private fun renderStatusCard(status: SearchQueryStatusCard) {
@@ -973,7 +1076,11 @@ class SearchFragment : Fragment() {
     private fun renderSaveAction() {
         if (!::saveButton.isInitialized) return
         saveButton.visibility = if (
-            SearchResultSaveEligibility.isVisible(
+            presentationState.saveState == SearchSaveState.AVAILABLE &&
+                SearchTripContextVisibility.isVisible(
+                    presentationState.mode,
+                    currentResults.size
+                ) && SearchResultSaveEligibility.isVisible(
                 queryOrigin = successfulQueryOrigin,
                 queryDestination = successfulQueryDestination,
                 currentOrigin = originController?.selectedPlace,
@@ -981,7 +1088,7 @@ class SearchFragment : Fragment() {
                 resultCount = currentResults.size,
                 queryInProgress = routeQueryState.isQueryInProgress,
                 queryFailed = routeQueryState.errorMessage != null
-            )
+                )
         ) {
             View.VISIBLE
         } else {
