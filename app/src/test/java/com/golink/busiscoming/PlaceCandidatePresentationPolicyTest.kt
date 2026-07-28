@@ -89,4 +89,40 @@ class PlaceCandidatePresentationPolicyTest {
             )
         )
     }
+
+    @Test
+    fun editorBootstrapRequestsOneCompleteRowOnlyWhenInitialSpaceCannotFitOne() {
+        assertEquals(
+            52,
+            PlaceCandidatePresentationPolicy.editorBootstrapHeightPx(
+                availableHeightPx = 51,
+                rowHeightPx = 52,
+                itemCount = 20
+            )
+        )
+        assertEquals(
+            52,
+            PlaceCandidatePresentationPolicy.editorBootstrapHeightPx(
+                availableHeightPx = 0,
+                rowHeightPx = 52,
+                itemCount = 1
+            )
+        )
+        assertEquals(
+            0,
+            PlaceCandidatePresentationPolicy.editorBootstrapHeightPx(
+                availableHeightPx = 52,
+                rowHeightPx = 52,
+                itemCount = 20
+            )
+        )
+        assertEquals(
+            0,
+            PlaceCandidatePresentationPolicy.editorBootstrapHeightPx(
+                availableHeightPx = 51,
+                rowHeightPx = 52,
+                itemCount = 0
+            )
+        )
+    }
 }

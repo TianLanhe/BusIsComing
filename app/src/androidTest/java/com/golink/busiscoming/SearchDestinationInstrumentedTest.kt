@@ -563,6 +563,40 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
+    fun duplicateLookupFailureKeepsDialogOpenAndRetryInsertsExactlyOnce() {
+        val gateway = RecordingSaveGateway().apply {
+            duplicateOutcomes += { throw IllegalStateException("injected duplicate lookup failure") }
+            duplicateOutcomes += { false }
+            insertOutcomes += { 73L }
+        }
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.routeConfigSaveGatewayFactory = { gateway }
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitForText("測試路線")
+
+            onView(withId(R.id.searchSaveButton)).perform(click())
+            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+            waitForTextInDialog(
+                InstrumentationRegistry.getInstrumentation().targetContext
+                    .getString(R.string.save_frequent_failed)
+            )
+            assertEquals(1, gateway.duplicateCheckCount)
+            assertEquals(0, gateway.insertCount)
+
+            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+            assertEquals(2, gateway.duplicateCheckCount)
+            assertEquals(1, gateway.insertCount)
+        }
+    }
+
+    @Test
     fun cancelAndEditingResultsSaveKeepTheCurrentGenerationWhileANewQueryResetsIt() {
         val gateway = RecordingSaveGateway().apply {
             insertOutcomes += { 51L }
@@ -1620,11 +1654,15 @@ class SearchDestinationInstrumentedTest {
 
     private class RecordingSaveGateway : RouteConfigSaveGateway {
         val duplicateNames = mutableSetOf<String>()
+        val duplicateOutcomes = ArrayDeque<() -> Boolean>()
         val insertOutcomes = ArrayDeque<() -> Long>()
+        var duplicateCheckCount: Int = 0
         var insertCount: Int = 0
 
-        override fun hasDuplicate(name: String, origin: Place, destination: Place): Boolean =
-            name in duplicateNames
+        override fun hasDuplicate(name: String, origin: Place, destination: Place): Boolean {
+            duplicateCheckCount += 1
+            return duplicateOutcomes.removeFirstOrNull()?.invoke() ?: (name in duplicateNames)
+        }
 
         override fun insert(name: String, origin: Place, destination: Place): Long {
             insertCount += 1

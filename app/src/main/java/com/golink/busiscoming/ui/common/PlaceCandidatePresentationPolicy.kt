@@ -20,4 +20,13 @@ object PlaceCandidatePresentationPolicy {
         val visibleRows = min(itemCount, min(resolvedMaxRows, completeRows))
         return rowHeightPx * visibleRows
     }
+
+    fun editorBootstrapHeightPx(
+        availableHeightPx: Int,
+        rowHeightPx: Int,
+        itemCount: Int
+    ): Int {
+        if (rowHeightPx <= 0 || itemCount <= 0 || availableHeightPx >= rowHeightPx) return 0
+        return rowHeightPx
+    }
 }

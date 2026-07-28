@@ -113,6 +113,15 @@ class PlaceInputInlineCandidatesContractTest {
     }
 
     @Test
+    fun `route editor requests candidate space before visibility while search keeps zero-height fallback`() {
+        assertTrue(controllerKt.contains("onCandidateSpaceRequired"))
+        assertTrue(controllerKt.contains("editorBootstrapHeightPx"))
+        assertTrue(editActivityKt.contains("onCandidateSpaceRequired = { minimumHeightPx ->"))
+        assertTrue(editActivityKt.contains("requestCandidateSpace("))
+        assertFalse(searchFragmentKt.contains("onCandidateSpaceRequired"))
+    }
+
+    @Test
     fun `search uses six candidate rows and locks outer scrolling while candidates are visible`() {
         assertTrue(
             searchFragmentKt.contains("private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 6")

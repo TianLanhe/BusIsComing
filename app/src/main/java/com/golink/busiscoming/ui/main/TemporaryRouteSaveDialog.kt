@@ -90,13 +90,14 @@ object TemporaryRouteSaveDialog {
                             nameLayout.error = context.getString(R.string.save_query_changed)
                             return@setOnClickListener
                         }
-                        if (saveGateway.hasDuplicate(name, origin, destination)) {
-                            nameLayout.error = context.getString(R.string.route_duplicate_detail)
-                            return@setOnClickListener
-                        }
-                        // Main-thread synchronous insert keeps the freshness check and write
-                        // contiguous; the Fragment rechecks after insert only before changing UI.
                         val id = try {
+                            if (saveGateway.hasDuplicate(name, origin, destination)) {
+                                nameLayout.error =
+                                    context.getString(R.string.route_duplicate_detail)
+                                return@setOnClickListener
+                            }
+                            // Main-thread synchronous insert keeps the freshness check and write
+                            // contiguous; the Fragment rechecks after insert only before changing UI.
                             saveGateway.insert(name, origin, destination)
                         } catch (_: Exception) {
                             -1L

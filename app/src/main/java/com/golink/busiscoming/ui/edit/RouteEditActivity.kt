@@ -161,6 +161,9 @@ class RouteEditActivity : AppCompatActivity() {
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
             isActive = { !isFinishing && !isDestroyed },
+            onCandidateSpaceRequired = { minimumHeightPx ->
+                requestCandidateSpace(originInputLayout, originCandidateList, minimumHeightPx)
+            },
             onCandidateVisibilityChanged = { visible ->
                 if (visible) {
                     destinationController.hideCandidates()
@@ -193,6 +196,13 @@ class RouteEditActivity : AppCompatActivity() {
             mainHandler = mainHandler,
             searchExecutor = searchExecutor,
             isActive = { !isFinishing && !isDestroyed },
+            onCandidateSpaceRequired = { minimumHeightPx ->
+                requestCandidateSpace(
+                    destinationInputLayout,
+                    destinationCandidateList,
+                    minimumHeightPx
+                )
+            },
             onCandidateVisibilityChanged = { visible ->
                 if (visible) {
                     originController.hideCandidates()
@@ -469,6 +479,20 @@ class RouteEditActivity : AppCompatActivity() {
                 }
             }, CANDIDATE_VISIBILITY_RECHECK_MS)
         }
+    }
+
+    private fun requestCandidateSpace(
+        inputLayout: TextInputLayout,
+        candidateList: RecyclerView,
+        minimumHeightPx: Int
+    ) {
+        if (minimumHeightPx <= 0) return
+        if (candidateList.layoutParams.height < minimumHeightPx) {
+            candidateList.layoutParams = candidateList.layoutParams.apply {
+                height = minimumHeightPx
+            }
+        }
+        ensureCandidateVisible(inputLayout, candidateList)
     }
 
     private fun scrollCandidateIntoVisibleArea(candidateList: RecyclerView) {

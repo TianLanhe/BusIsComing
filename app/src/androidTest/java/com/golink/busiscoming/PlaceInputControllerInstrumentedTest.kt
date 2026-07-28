@@ -402,6 +402,92 @@ class PlaceInputControllerInstrumentedTest {
     }
 
     @Test
+    fun editorBootstrapRequestsOuterSpaceAndShowsACompleteRowAfterRemeasurement() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            lateinit var candidateList: RecyclerView
+            var requestedHeight = 0
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                val inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                root.addView(inputLayout)
+                root.addView(candidateList)
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = View(activity),
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> =
+                            (1..4).map { index -> place("啟動候選$index") }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true },
+                    onCandidateSpaceRequired = { minimumHeightPx ->
+                        requestedHeight = minimumHeightPx
+                        activity.javaClass.getDeclaredMethod(
+                            "requestCandidateSpace",
+                            TextInputLayout::class.java,
+                            RecyclerView::class.java,
+                            Int::class.javaPrimitiveType
+                        ).apply { isAccessible = true }
+                            .invoke(activity, inputLayout, candidateList, minimumHeightPx)
+                    }
+                )
+                input.requestFocus()
+                controller.javaClass.getDeclaredField("imeTopPx")
+                    .apply { isAccessible = true }
+                    .setInt(controller, 0)
+                controller.javaClass.getDeclaredMethod(
+                    "updatePlaceCandidates",
+                    List::class.java
+                ).apply { isAccessible = true }.invoke(
+                    controller,
+                    (1..4).map { index -> place("啟動候選$index") }
+                )
+
+                assertEquals(dp(activity, 52), requestedHeight)
+                assertEquals(View.INVISIBLE, candidateList.visibility)
+                assertEquals(dp(activity, 52), candidateList.layoutParams.height)
+            }
+
+            waitUntil {
+                var visibleWithCompleteRows = false
+                scenario.onActivity { activity ->
+                    val rowHeight = dp(activity, 52)
+                    visibleWithCompleteRows =
+                        candidateList.visibility == View.VISIBLE &&
+                            candidateList.height >= rowHeight &&
+                            candidateList.height % rowHeight == 0
+                }
+                visibleWithCompleteRows
+            }
+
+            scenario.onActivity {
+                controller.dispose()
+            }
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
     fun exclusiveCandidateScrollKeepsItsOwnRecyclerViewScrollableWithoutNestedHandoff() {
         ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
             val executor = Executors.newSingleThreadExecutor()

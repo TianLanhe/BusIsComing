@@ -42,6 +42,7 @@ class PlaceInputController(
     private val idleToolView: View? = null,
     instructionText: CharSequence? = null,
     private val exclusiveVerticalScroll: Boolean = false,
+    private val onCandidateSpaceRequired: ((Int) -> Unit)? = null,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
     private val onPlaceSelected: (Place) -> Unit = {},
     private val onUserTextEdited: () -> Unit = {},
@@ -59,6 +60,7 @@ class PlaceInputController(
     private var imeTopPx = context.resources.displayMetrics.heightPixels
     private var searchLoading = false
     private var externalLoading = false
+    private var candidateSpaceRequestPending = false
     private val candidateGestureOwnership = object : RecyclerView.SimpleOnItemTouchListener() {
         override fun onInterceptTouchEvent(recyclerView: RecyclerView, event: MotionEvent): Boolean {
             if (!exclusiveVerticalScroll || candidateList.visibility != View.VISIBLE) return false
@@ -184,12 +186,12 @@ class PlaceInputController(
     }
 
     fun hideCandidates(): Boolean {
-        if (candidateList.visibility != View.VISIBLE) return false
-        setCandidateScrollLock(false)
-        candidateList.visibility = View.GONE
-        candidateList.layoutParams = candidateList.layoutParams.apply { height = 0 }
-        onCandidateVisibilityChanged(false)
-        return true
+        val hadCandidatePresentation =
+            candidateList.visibility != View.GONE || candidateList.layoutParams.height > 0
+        if (!hadCandidatePresentation) return false
+        setCandidatePresentation(View.GONE, 0)
+        candidateSpaceRequestPending = false
+        return hadCandidatePresentation
     }
 
     /** 搜尋輸入器折疊時，同步清除焦點與欄位級候選，避免隱藏控制項繼續接收操作。 */
@@ -286,6 +288,7 @@ class PlaceInputController(
     }
 
     private fun updatePlaceCandidates(places: List<Place>) {
+        candidateSpaceRequestPending = false
         adapter.submitPlaces(places)
         inputLayout.error = null
         if (places.isEmpty()) {
@@ -348,6 +351,7 @@ class PlaceInputController(
     private fun showCandidates() {
         if (adapter.itemCount == 0 || !input.hasFocus()) return
         if (!updateCandidateHeight()) return
+        candidateSpaceRequestPending = false
         if (candidateList.visibility != View.VISIBLE) {
             setCandidateScrollLock(true)
             candidateList.visibility = View.VISIBLE
@@ -386,14 +390,42 @@ class PlaceInputController(
             maxVisibleRows = maxVisibleRows
         )
         if (height <= 0) {
-            candidateList.layoutParams = candidateList.layoutParams.apply { this.height = 0 }
-            hideCandidates()
+            val bootstrapHeight = onCandidateSpaceRequired?.let {
+                PlaceCandidatePresentationPolicy.editorBootstrapHeightPx(
+                    availableHeightPx = availableHeight,
+                    rowHeightPx = rowHeightPx,
+                    itemCount = adapter.itemCount
+                )
+            } ?: 0
+            if (bootstrapHeight > 0) {
+                setCandidatePresentation(View.INVISIBLE, bootstrapHeight)
+                if (!candidateSpaceRequestPending) {
+                    candidateSpaceRequestPending = true
+                    onCandidateSpaceRequired?.invoke(bootstrapHeight)
+                }
+            } else {
+                setCandidatePresentation(View.GONE, 0)
+            }
             return false
         }
         candidateList.layoutParams = candidateList.layoutParams.apply {
             this.height = height
         }
         return true
+    }
+
+    private fun setCandidatePresentation(visibility: Int, height: Int) {
+        val wasVisible = candidateList.visibility == View.VISIBLE
+        if (wasVisible && visibility != View.VISIBLE) {
+            setCandidateScrollLock(false)
+        }
+        candidateList.layoutParams = candidateList.layoutParams.apply {
+            this.height = height
+        }
+        candidateList.visibility = visibility
+        if (wasVisible && visibility != View.VISIBLE) {
+            onCandidateVisibilityChanged(false)
+        }
     }
 
     private fun cancelPendingSearch(hideLoading: Boolean = true) {
