@@ -113,7 +113,10 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(searchFragmentKt.contains("SearchCandidateScrollLock"))
         assertTrue(searchFragmentKt.contains("setCandidateScrollLock"))
         assertTrue(controllerKt.contains("exclusiveVerticalScroll"))
-        assertTrue(controllerKt.contains("requestDisallowInterceptTouchEvent(true)"))
+        assertTrue(controllerKt.contains("addOnItemTouchListener"))
+        assertTrue(controllerKt.contains("RecyclerView.SimpleOnItemTouchListener"))
+        assertTrue(controllerKt.contains("MotionEvent.ACTION_DOWN"))
+        assertFalse(searchFragmentKt.contains("scrollFlags ="))
     }
 
     @Test

@@ -42,18 +42,21 @@
 
 不採用「所有配置強制至少 5 行」，因為小屏或 font scale 2.0 下會遮擋輸入框或侵入 IME。
 
-### 3. 候選展開期間凍結搜尋外層滾動
+### 3. 候選展開期間由 RecyclerView 擁有搜尋手勢
 
 `SearchFragment` 沿用 `PlaceInputController.onCandidateVisibilityChanged`，在任一候選可見時：
 
-- 暫停 `searchContent` 的 AppBar scroll flags；
 - 停用 `SwipeRefreshLayout`；
-- 阻止候選 RecyclerView 把 nested scroll 傳給外層 Coordinator／AppBar；
+- 保持 `searchContent` 的 AppBar scroll flags 與目前 offset 完全不變；
+- 搜尋候選 RecyclerView 停用 nested scrolling，並在 `OnItemTouchListener` 的
+  `ACTION_DOWN` 起向父層要求不攔截觸控、停止既有 nested scroll；
+- 同一手勢的 `ACTION_MOVE` 持續保有父層不攔截狀態，`ACTION_UP`／`ACTION_CANCEL`
+  才釋放；
 - 保持候選自身的觸控滾動和點擊。
 
-候選到達頂部或底部後，剩餘手勢亦不交給外層頁面；只有選擇地點、點擊空白、按返回或其他既有關閉流程收起候選後，才恢復外層 scroll flags 與刷新 eligibility。新增／編輯／複製行程的 `NestedScrollView` 邊界傳遞策略保持不變。
+候選到達頂部或底部後，剩餘手勢亦不交給外層頁面；只有選擇地點、點擊空白、按返回或其他既有關閉流程收起候選後，才恢復刷新 eligibility。新增／編輯／複製行程的 `NestedScrollView` 邊界傳遞策略保持不變。
 
-只設定 `nestedScrollingEnabled=true` 的替代方案無法避免 AppBar 在 nested pre-scroll 階段先移動；把候選改成 overlay／bottom sheet 則會破壞現有欄位級內嵌語義，均不採用。
+只設定 `nestedScrollingEnabled=true` 的替代方案無法避免 AppBar 在 nested pre-scroll 階段先移動；把 AppBar flags 設為 `0` 則會重算 total scroll range 並可能重置部分捲動 offset，故不採用。把候選改成 overlay／bottom sheet 會破壞現有欄位級內嵌語義，亦不採用。
 
 ### 4. `MainActivity` 使用不 resize 的 IME 策略
 
@@ -120,7 +123,7 @@
 ## Risks / Trade-offs
 
 - [Risk] `adjustNothing` 令主視窗不再因 IME 自動縮小，候選或輸入可能被覆蓋 → 以既有 IME Insets 計算候選高度，並在 API 25／36、常見 IME、手勢／三鍵導航驗證。
-- [Risk] 凍結 AppBar 與關閉 nested scroll propagation 可能影響候選關閉後的結果滾動 → 由單一候選可見性聚合函式保存／恢復 scroll flags，加入候選開關和列表位置 instrumentation。
+- [Risk] 候選手勢 ownership 可能影響關閉後的結果滾動 → 只在候選可見的完整觸控手勢期間禁止父層攔截，不修改 AppBar flags／offset，並加入候選開關與列表位置 instrumentation。
 - [Risk] 展示狀態與既有查詢 state 重複成為真相來源 → 展示狀態不保存 query id 或進行中布林值；所有 callback 仍由 `RouteQueryCoordinator` 以 generation 驗證，`RouteQueryState` 保存結果／進行中／刷新，renderer 只組合兩個 state。
 - [Risk] 抽取狀態卡可能令常用頁產生視覺回歸 → 保留既有 ID、尺寸、文案與動畫行為，使用 contract test 和常用頁 loading／空／失敗回歸。
 - [Risk] 「本次行程」欄在長地點和大字體下過高 → 以量度／font scale 切換雙行，不縮字；覆蓋三語、360dp 與 font scale 2.0。

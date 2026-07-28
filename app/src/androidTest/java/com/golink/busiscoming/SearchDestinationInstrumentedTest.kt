@@ -196,7 +196,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
-    fun searchCandidatesShowSixRowsAndFreezeTheAppBarUntilTheyClose() {
+    fun searchCandidatesKeepAppBarStateAndOwnVerticalGesturesUntilTheyClose() {
         installDependencies(ImmediateRouteRepository())
         SearchFragment.currentPlaceRequestOverride = { _, callback ->
             callback(CurrentPlaceSelectionResult.Failure)
@@ -206,8 +206,7 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.navigation_search)).perform(click())
             onView(withId(R.id.placePairOriginInput)).perform(
                 click(),
-                replaceText("many"),
-                closeSoftKeyboard()
+                replaceText("many")
             )
             waitUntil {
                 var visible = false
@@ -227,13 +226,13 @@ class SearchDestinationInstrumentedTest {
                     R.id.placePairOriginCandidateList
                 )
                 val refresh = activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh)
-                val frozenScrollFlags = (searchContent.layoutParams as
+                val preservedScrollFlags = (searchContent.layoutParams as
                     com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
-                assertEquals(0, frozenScrollFlags)
+                assertEquals(1, preservedScrollFlags)
                 assertFalse(candidates.isNestedScrollingEnabled)
                 assertFalse(refresh.isEnabled)
                 assertEquals(0, candidates.height % dp(activity, 52))
-                assertEquals(6, candidates.height / dp(activity, 52))
+                assertTrue(candidates.height / dp(activity, 52) in 5..6)
                 frozenAppBarTop = appBar.top
             }
             onView(withId(R.id.placePairOriginCandidateList)).perform(swipeUp())
@@ -268,9 +267,9 @@ class SearchDestinationInstrumentedTest {
             }
             scenario.onActivity { activity ->
                 val searchContent = activity.findViewById<View>(R.id.searchContent)
-                val restoredFlags = (searchContent.layoutParams as
+                val preservedFlagsAfterClose = (searchContent.layoutParams as
                     com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
-                assertEquals(1, restoredFlags)
+                assertEquals(1, preservedFlagsAfterClose)
             }
         }
     }

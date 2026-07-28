@@ -3,42 +3,25 @@ package com.golink.busiscoming.ui.main
 /**
  * 聚合搜尋頁兩個地點候選列表的外層捲動鎖定狀態。
  *
- * 搜尋候選展開時，AppBar 必須保持在目前位置；最後一個候選關閉後才恢復
- * 展開前的 flags，而不是假設原本一定是 [AppBarLayout.LayoutParams.SCROLL_FLAG_SCROLL]。
+ * 此狀態只用於讓搜尋頁在候選展開時關閉刷新與啟用返回鍵處理。AppBar 的
+ * scroll flags 和目前 offset 不會被改寫，候選手勢由 RecyclerView 自身擁有。
  */
 internal class SearchCandidateScrollLock {
-    private var savedScrollFlags: Int? = null
+    private var outerScrollLocked = false
 
     fun update(
         originCandidatesVisible: Boolean,
-        destinationCandidatesVisible: Boolean,
-        currentScrollFlags: Int
+        destinationCandidatesVisible: Boolean
     ): State {
-        val candidatesVisible = originCandidatesVisible || destinationCandidatesVisible
-        if (candidatesVisible) {
-            if (savedScrollFlags == null) {
-                savedScrollFlags = currentScrollFlags
-            }
-            return State(
-                outerScrollLocked = true,
-                scrollFlagsToApply = if (currentScrollFlags == 0) null else 0
-            )
-        }
-
-        val flagsToRestore = savedScrollFlags
-        savedScrollFlags = null
-        return State(
-            outerScrollLocked = false,
-            scrollFlagsToApply = flagsToRestore
-        )
+        outerScrollLocked = originCandidatesVisible || destinationCandidatesVisible
+        return State(outerScrollLocked)
     }
 
     fun reset() {
-        savedScrollFlags = null
+        outerScrollLocked = false
     }
 
-    data class State(
-        val outerScrollLocked: Boolean,
-        val scrollFlagsToApply: Int? = null
-    )
+    fun isOuterScrollLocked(): Boolean = outerScrollLocked
+
+    data class State(val outerScrollLocked: Boolean)
 }

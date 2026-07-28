@@ -79,5 +79,14 @@ class PlaceCandidatePresentationPolicyTest {
                 itemCount = 20
             )
         )
+        assertEquals(
+            0,
+            PlaceCandidatePresentationPolicy.heightPx(
+                availableHeightPx = 51,
+                rowHeightPx = 52,
+                itemCount = 20,
+                maxVisibleRows = 6
+            )
+        )
     }
 }

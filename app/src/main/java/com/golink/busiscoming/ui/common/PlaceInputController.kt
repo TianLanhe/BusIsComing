@@ -6,6 +6,7 @@ import android.text.TextUtils
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -58,6 +59,18 @@ class PlaceInputController(
     private var imeTopPx = context.resources.displayMetrics.heightPixels
     private var searchLoading = false
     private var externalLoading = false
+    private val candidateGestureOwnership = object : RecyclerView.SimpleOnItemTouchListener() {
+        override fun onInterceptTouchEvent(recyclerView: RecyclerView, event: MotionEvent): Boolean {
+            if (!exclusiveVerticalScroll || candidateList.visibility != View.VISIBLE) return false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN,
+                MotionEvent.ACTION_MOVE -> claimCandidateGesture(recyclerView)
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> releaseCandidateGesture(recyclerView)
+            }
+            return false
+        }
+    }
 
     var selectedPlace: Place? = null
         private set
@@ -70,17 +83,19 @@ class PlaceInputController(
         candidateList.background = ContextCompat.getDrawable(context, R.drawable.place_candidate_list_background)
         candidateList.elevation = dp(context, 2).toFloat()
         candidateList.visibility = View.GONE
-        candidateList.setOnTouchListener { _, _ ->
-            if (exclusiveVerticalScroll && candidateList.visibility == View.VISIBLE) {
-                candidateList.parent?.requestDisallowInterceptTouchEvent(true)
-                candidateList.stopNestedScroll()
-            }
-            false
-        }
+        if (exclusiveVerticalScroll) candidateList.addOnItemTouchListener(candidateGestureOwnership)
         ViewCompat.setOnApplyWindowInsetsListener(candidateList) { view, insets ->
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            imeTopPx = (view.rootView.height - imeBottom).coerceAtLeast(rowHeightPx * MIN_VISIBLE_ROWS)
-            updateCandidateHeight()
+            imeTopPx = (view.rootView.height - imeBottom).coerceAtLeast(0)
+            val hasCompleteRows = updateCandidateHeight()
+            if (
+                hasCompleteRows &&
+                candidateList.visibility != View.VISIBLE &&
+                input.hasFocus() &&
+                adapter.itemCount > 0
+            ) {
+                showCandidates()
+            }
             insets
         }
         input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
@@ -172,6 +187,7 @@ class PlaceInputController(
         if (candidateList.visibility != View.VISIBLE) return false
         setCandidateScrollLock(false)
         candidateList.visibility = View.GONE
+        candidateList.layoutParams = candidateList.layoutParams.apply { height = 0 }
         onCandidateVisibilityChanged(false)
         return true
     }
@@ -206,6 +222,7 @@ class PlaceInputController(
         setSearchLoading(false)
         hideCandidates()
         ViewCompat.setOnApplyWindowInsetsListener(candidateList, null)
+        if (exclusiveVerticalScroll) candidateList.removeOnItemTouchListener(candidateGestureOwnership)
     }
 
     private fun handleTextChanged(keyword: String) {
@@ -324,7 +341,7 @@ class PlaceInputController(
 
     private fun showCandidates() {
         if (adapter.itemCount == 0 || !input.hasFocus()) return
-        updateCandidateHeight()
+        if (!updateCandidateHeight()) return
         if (candidateList.visibility != View.VISIBLE) {
             setCandidateScrollLock(true)
             candidateList.visibility = View.VISIBLE
@@ -337,12 +354,22 @@ class PlaceInputController(
         if (!exclusiveVerticalScroll) return
         candidateList.isNestedScrollingEnabled = !visible
         if (visible) {
-            candidateList.parent?.requestDisallowInterceptTouchEvent(true)
-            candidateList.stopNestedScroll()
+            claimCandidateGesture(candidateList)
+        } else {
+            releaseCandidateGesture(candidateList)
         }
     }
 
-    private fun updateCandidateHeight() {
+    private fun claimCandidateGesture(recyclerView: RecyclerView) {
+        recyclerView.parent?.requestDisallowInterceptTouchEvent(true)
+        recyclerView.stopNestedScroll()
+    }
+
+    private fun releaseCandidateGesture(recyclerView: RecyclerView) {
+        recyclerView.parent?.requestDisallowInterceptTouchEvent(false)
+    }
+
+    private fun updateCandidateHeight(): Boolean {
         val candidateTop = candidateTopInRoot()
         val availableHeight = (imeTopPx - candidateTop - dp(candidateList.context, CANDIDATE_BOTTOM_SAFE_INSET_DP))
             .coerceAtLeast(0)
@@ -352,10 +379,15 @@ class PlaceInputController(
             itemCount = adapter.itemCount,
             maxVisibleRows = maxVisibleRows
         )
-        if (height <= 0) return
+        if (height <= 0) {
+            candidateList.layoutParams = candidateList.layoutParams.apply { this.height = 0 }
+            hideCandidates()
+            return false
+        }
         candidateList.layoutParams = candidateList.layoutParams.apply {
             this.height = height
         }
+        return true
     }
 
     private fun cancelPendingSearch(hideLoading: Boolean = true) {
@@ -503,7 +535,6 @@ class PlaceInputController(
         private const val MIN_SEARCH_LENGTH = 1
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val CANDIDATE_ROW_HEIGHT_DP = 52
-        private const val MIN_VISIBLE_ROWS = 3
         private const val CANDIDATE_BOTTOM_SAFE_INSET_DP = 8
 
         private fun dp(context: Context, value: Int): Int {

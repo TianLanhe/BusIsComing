@@ -15,8 +15,8 @@
 
 - [x] 3.1 擴充 `PlaceCandidatePresentationPolicyTest` 與搜尋布局 contract tests，固定標準配置至少 5 個完整候選、最多 6 個，以及空間不足時只容納完整項目的降級規則
 - [x] 3.2 將搜尋 destination 的 `PlaceInputController.maxVisibleRows` 調整為 6，沿用既有約 `52dp` 項目高度與 IME 可視區計算，不改變新增／編輯／複製行程的候選策略
-- [x] 3.3 在 `SearchFragment` 聚合起終點候選可見性：任一候選展開時保存並停用 `searchContent` AppBar scroll flags、停用下拉刷新並阻止候選 nested scroll 傳給外層；全部關閉後精確恢復原狀態
-- [x] 3.4 擴充 `PlaceInputControllerInstrumentedTest`／`SearchDestinationInstrumentedTest`，驗證候選內部可上下滑動、到頂或到底均不帶動 AppBar／頁面／結果列表，關閉候選後外層滾動、刷新資格及結果位置恢復
+- [x] 3.3 在 `SearchFragment` 聚合起終點候選可見性：任一候選展開時保持 AppBar flags 與 offset、停用下拉刷新，並由候選 `RecyclerView` 自 `ACTION_DOWN` 起獨占觸控與阻止 nested scroll 傳給外層；全部關閉後恢復刷新資格
+- [ ] 3.4 擴充 `PlaceInputControllerInstrumentedTest`／`SearchDestinationInstrumentedTest`，驗證候選內部可上下滑動、到頂或到底均不帶動 AppBar／頁面／結果列表，關閉候選後外層滾動、刷新資格及結果位置恢復（已補可編譯覆蓋，待有裝置執行）
 
 ## 4. 固定底部導航的 IME 行為
 

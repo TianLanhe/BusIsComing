@@ -15,7 +15,6 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.google.android.material.appbar.AppBarLayout
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
@@ -106,7 +105,6 @@ class SearchFragment : Fragment() {
     private var destinationCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var candidateBackCallback: OnBackPressedCallback? = null
     private val candidateScrollLock = SearchCandidateScrollLock()
-    private lateinit var searchContent: View
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -145,7 +143,6 @@ class SearchFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val context = requireContext()
-        searchContent = view.findViewById(R.id.searchContent)
         val placeEditor = view.findViewById<PlacePairEditorView>(R.id.searchPlacePairEditor)
         val originInput = placeEditor.originInput
         val destinationInput = placeEditor.destinationInput
@@ -662,8 +659,7 @@ class SearchFragment : Fragment() {
 
     private fun updateRefreshEnabled() {
         if (!::swipeRefresh.isInitialized) return
-        val candidatesVisible = originController?.isCandidateVisible() == true ||
-            destinationController?.isCandidateVisible() == true
+        val candidatesVisible = candidateScrollLock.isOuterScrollLocked()
         candidateBackCallback?.isEnabled = candidatesVisible
         swipeRefresh.isEnabled = currentResults.isNotEmpty() &&
             !candidatesVisible &&
@@ -671,17 +667,10 @@ class SearchFragment : Fragment() {
     }
 
     private fun setCandidateScrollLock() {
-        if (!::searchContent.isInitialized) return
-        val appBarLayoutParams = searchContent.layoutParams as? AppBarLayout.LayoutParams ?: return
-        val state = candidateScrollLock.update(
+        candidateScrollLock.update(
             originCandidatesVisible = originController?.isCandidateVisible() == true,
-            destinationCandidatesVisible = destinationController?.isCandidateVisible() == true,
-            currentScrollFlags = appBarLayoutParams.scrollFlags
+            destinationCandidatesVisible = destinationController?.isCandidateVisible() == true
         )
-        state.scrollFlagsToApply?.let { scrollFlags ->
-            appBarLayoutParams.scrollFlags = scrollFlags
-            searchContent.layoutParams = appBarLayoutParams
-        }
     }
 
     private fun formatUpdatedAt(value: Long?): String {
