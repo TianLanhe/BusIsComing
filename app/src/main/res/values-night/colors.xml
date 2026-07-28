@@ -28,6 +28,7 @@
     <color name="bus_divider">#FF354A44</color>
     <color name="bus_outline_strong">#FF5A766E</color>
     <color name="bus_danger">#FFFFB4AB</color>
+    <color name="bus_wait_unavailable_surface">#FF482725</color>
     <color name="bus_on_danger">#FF3B0907</color>
     <color name="bus_action_secondary">#FFF0B25B</color>
     <color name="bus_on_secondary">#FF2A1700</color>

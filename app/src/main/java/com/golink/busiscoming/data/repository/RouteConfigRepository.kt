@@ -16,15 +16,18 @@ import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_NA
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN_LATITUDE
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN_LONGITUDE
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_ORIGIN_NAME
+import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_PIN_ROUTE_CONFIG_ID
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_USAGE_COUNT
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.COLUMN_UPDATED_AT
 import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.TABLE_ROUTE_CONFIGS
+import com.golink.busiscoming.data.local.RouteConfigDbHelper.Companion.TABLE_ROUTE_RESULT_PINS
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfig
 import com.golink.busiscoming.data.transfer.TransferRoute
 
 class RouteConfigRepository(
     context: Context,
+    private val routeUpdateFailureInjector: RouteUpdateFailureInjector = RouteUpdateFailureInjector.NONE,
     private val importFailureInjector: RouteImportFailureInjector = RouteImportFailureInjector.NONE
 ) {
     private val dbHelper = RouteConfigDbHelper(context.applicationContext)
@@ -114,19 +117,35 @@ class RouteConfigRepository(
         }
     }
 
-    fun update(config: RouteConfig) {
+    fun update(config: RouteConfig, clearRouteResultPins: Boolean = false) {
         val values = ContentValues().apply {
             put(COLUMN_NAME, config.name)
             putPlace(ORIGIN_PREFIX, config.origin)
             putPlace(DESTINATION_PREFIX, config.destination)
             put(COLUMN_UPDATED_AT, System.currentTimeMillis())
         }
-        dbHelper.writableDatabase.update(
-            TABLE_ROUTE_CONFIGS,
-            values,
-            "$COLUMN_ID = ?",
-            arrayOf(config.id.toString())
-        )
+        val database = dbHelper.writableDatabase
+        database.beginTransaction()
+        try {
+            val updatedRows = database.update(
+                TABLE_ROUTE_CONFIGS,
+                values,
+                "$COLUMN_ID = ?",
+                arrayOf(config.id.toString())
+            )
+            if (updatedRows != 1) throw SQLiteException("Failed to update journey")
+            if (clearRouteResultPins) {
+                routeUpdateFailureInjector.invoke(RouteUpdateFailureStage.AFTER_ROUTE_UPDATE)
+                database.delete(
+                    TABLE_ROUTE_RESULT_PINS,
+                    "$COLUMN_PIN_ROUTE_CONFIG_ID = ?",
+                    arrayOf(config.id.toString())
+                )
+            }
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
     }
 
     fun recordUsage(id: Long, usedAtMillis: Long = System.currentTimeMillis()) {

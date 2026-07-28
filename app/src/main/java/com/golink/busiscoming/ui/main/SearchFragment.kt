@@ -516,7 +516,7 @@ class SearchFragment : Fragment() {
                     preserveSort = preserveSort,
                     updatedAtMillis = System.currentTimeMillis()
                 )
-                resultAdapter.submitList(currentResults)
+                resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
                 resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
                 routeResultControls.visibility =
                     if (currentResults.isEmpty()) View.GONE else View.VISIBLE
@@ -563,7 +563,7 @@ class SearchFragment : Fragment() {
                 routeQueryState.fail(getString(R.string.search_failed), preserveResults = isRefresh)
                 clearSuccessfulQuery()
                 if (isRefresh) {
-                    resultAdapter.submitList(currentResults)
+                    resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
                     resultList.visibility = View.VISIBLE
                     routeResultControls.visibility = View.VISIBLE
                     sortControls.visibility = View.VISIBLE
@@ -601,7 +601,7 @@ class SearchFragment : Fragment() {
 
     private fun updateRoute(routeId: String, transform: (BusRouteOption) -> BusRouteOption) {
         if (!routeQueryState.update(routeId, transform)) return
-        resultAdapter.submitList(currentResults)
+        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
         currentResults.firstOrNull { it.resultId == routeId }?.let(etaSheet::update)
     }
 
@@ -622,7 +622,7 @@ class SearchFragment : Fragment() {
     private fun sortBy(field: SortField) {
         if (currentResults.isEmpty()) return
         routeQueryState.toggleSort(field)
-        resultAdapter.submitList(currentResults)
+        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
         updateSortControls()
     }
 

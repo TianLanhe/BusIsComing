@@ -21,6 +21,7 @@ class RouteQueryStateTest {
         )
 
         state.replaceInitial(routes, preserveSort = false)
+        assertEquals(listOf("slow", "fast"), state.rawResults.map { it.routeName })
         assertEquals(listOf("fast", "slow"), state.results.map { it.routeName })
         state.toggleSort(SortField.ROUTE)
         state.replaceInitial(routes.reversed(), preserveSort = true)
@@ -40,6 +41,10 @@ class RouteQueryStateTest {
         state.updateWaitTime("soon", WaitTimeState.Available(3))
 
         assertEquals(listOf("soon", "later"), state.results.map { it.routeName })
+        assertEquals(
+            listOf(8, 3),
+            state.rawResults.map { (it.waitTimeState as WaitTimeState.Available).minutes }
+        )
     }
 
     @Test

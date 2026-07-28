@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="route_card_stroke_width">1dp</dimen>
+    <dimen name="route_pin_stroke_width">2dp</dimen>
+    <dimen name="route_pin_swipe_label_size">14sp</dimen>
+</resources>

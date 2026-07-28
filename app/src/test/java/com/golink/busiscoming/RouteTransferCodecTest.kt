@@ -39,6 +39,10 @@ class RouteTransferCodecTest {
         assertFalse(encoded.toString(Charsets.UTF_8).contains("usageCount"))
         assertFalse(encoded.toString(Charsets.UTF_8).contains("lastUsedAt"))
         assertFalse(encoded.toString(Charsets.UTF_8).contains("\"id\""))
+        assertFalse(encoded.toString(Charsets.UTF_8).contains("fingerprint"))
+        assertFalse(encoded.toString(Charsets.UTF_8).contains("pinnedAt"))
+        assertFalse(encoded.toString(Charsets.UTF_8).contains("route_result_pins"))
+        assertFalse(encoded.toString(Charsets.UTF_8).contains("\"token\""))
 
         val decoded = RouteTransferCodec.decode(encoded)
 

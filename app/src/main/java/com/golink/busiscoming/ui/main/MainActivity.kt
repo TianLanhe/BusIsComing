@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.view.Gravity
 import android.os.Build
 import android.os.Handler
@@ -16,6 +18,8 @@ import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -29,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.golink.busiscoming.R
@@ -48,8 +53,12 @@ import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.model.AppUpdateState
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.model.PinLevel
 import com.golink.busiscoming.data.model.RouteConfig
 import com.golink.busiscoming.data.model.RouteCardStopPreview
+import com.golink.busiscoming.data.model.RoutePinRecord
+import com.golink.busiscoming.data.model.RoutePinSessionState
+import com.golink.busiscoming.data.model.RoutePinSnapshot
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
@@ -63,6 +72,8 @@ import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
+import com.golink.busiscoming.data.repository.PinnedRouteRepository
+import com.golink.busiscoming.data.repository.RouteEndpointSnapshot
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.service.BusMonitorSchedulingCapability
 import com.golink.busiscoming.service.BusMonitorSessionStore
@@ -100,6 +111,7 @@ class MainActivity : AppCompatActivity() {
     private val routeDetailRepository: RouteDetailRepository = routeDetailRepositoryFactory()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val pinExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val routeQueryCoordinator = RouteQueryCoordinator(
         repository = busRouteRepository,
         executor = queryExecutor,
@@ -108,6 +120,10 @@ class MainActivity : AppCompatActivity() {
     )
 
     private lateinit var queryButton: MaterialButton
+    private lateinit var pinnedRouteRepository: PinnedRouteRepository
+    private lateinit var pinMutationCoordinator: RoutePinMutationCoordinator
+    private val routePinSessionState = RoutePinSessionState()
+    private val savedRoutePinLoadGate = SavedRoutePinLoadGate()
     private lateinit var emptyRouteState: LinearLayout
     private lateinit var firstRunHeadlineText: TextView
     private lateinit var firstRunSampleLabelText: TextView
@@ -153,7 +169,7 @@ class MainActivity : AppCompatActivity() {
         get() = routeQueryState.sortDirection
     private var currentQueryContext: QueryContext? = null
     private val isQueryInProgress: Boolean
-        get() = routeQueryState.isQueryInProgress
+        get() = routeQueryState.isQueryInProgress || activePinQueryId != null
     private var preserveSortOnNextResults: Boolean = false
     private var pendingMonitorStart: PendingMonitorStart? = null
     private val refreshFeedbackState = RouteRefreshFeedbackState()
@@ -178,6 +194,11 @@ class MainActivity : AppCompatActivity() {
     private var restoredFrequentSortField: SortField? = null
     private var restoredFrequentSortDirection: SortDirection = SortDirection.ASC
     private var pendingFrequentViewport: RefreshViewport? = null
+    private var activePinQueryId: Int? = null
+    private var activePinQueryIsRefresh: Boolean = false
+    private var frequentProjectionGeneration: Int = 0
+    private var pinReadFailureShown: Boolean = false
+    private var pinGestureStartsInExcludedArea: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -188,6 +209,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
 
         routeConfigRepository = RouteConfigRepository(this)
+        pinnedRouteRepository = PinnedRouteRepository(this)
+        setupPinPersistence()
         currentLocationCoordinator = CurrentLocationCoordinator(this)
         locationPermissionStateStore = LocationPermissionStateStore(this)
         placeNameResolver = GoogleReverseGeocodingPlaceNameResolver(this)
@@ -227,6 +250,10 @@ class MainActivity : AppCompatActivity() {
         }
         sortField?.let { outState.putString(STATE_FREQUENT_SORT_FIELD, it.name) }
         outState.putString(STATE_FREQUENT_SORT_DIRECTION, sortDirection.name)
+        TemporaryRoutePinBundleCodec.write(
+            outState,
+            routePinSessionState.temporarySavedState()
+        )
         if (::resultList.isInitialized) {
             val manager = resultList.layoutManager as? LinearLayoutManager
             val position = manager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
@@ -254,6 +281,9 @@ class MainActivity : AppCompatActivity() {
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
         queryExecutor.shutdownNow()
+        pinExecutor.shutdownNow()
+        pinnedRouteRepository.close()
+        routeConfigRepository.close()
         super.onDestroy()
     }
 
@@ -511,13 +541,290 @@ class MainActivity : AppCompatActivity() {
         busRouteAdapter = BusRouteAdapter(
             onRouteClick = ::showRouteDetail,
             onEtaClick = ::showEtaArrivals,
-            onMonitorClick = ::showMonitorSettings
+            onMonitorClick = ::showMonitorSettings,
+            onPinAction = ::handlePinAction
         )
         resultList.layoutManager = LinearLayoutManager(this)
         resultList.adapter = busRouteAdapter
+        if (!areSystemAnimationsEnabled()) resultList.itemAnimator = null
+        installPinSwipeGestures()
         resultSwipeRefresh.setColorSchemeResources(R.color.bus_chip_selected)
         renderRefreshFeedback()
         updateSwipeRefreshState()
+    }
+
+    private fun setupPinPersistence() {
+        val store = object : PinMutationStore {
+            override fun insertIfAbsent(
+                journeyId: Long,
+                record: RoutePinRecord,
+                completion: (Boolean) -> Unit
+            ) {
+                val expectedEndpoints = routeConfigs
+                    .firstOrNull { it.id == journeyId }
+                    ?.let(RouteEndpointSnapshot::from)
+                pinExecutor.execute {
+                    val success = runCatching {
+                        expectedEndpoints != null &&
+                            pinnedRouteRepository.insertIfAbsentWhenEndpointsMatch(
+                                journeyId = journeyId,
+                                fingerprint = record.fingerprint,
+                                pinnedAt = record.pinnedAt,
+                                expectedEndpoints = expectedEndpoints
+                            )
+                    }.getOrDefault(false)
+                    mainHandler.post {
+                        if (!isFinishing && !isDestroyed) completion(success)
+                    }
+                }
+            }
+
+            override fun delete(
+                journeyId: Long,
+                fingerprint: String,
+                completion: (Boolean) -> Unit
+            ) {
+                pinExecutor.execute {
+                    val success = runCatching {
+                        pinnedRouteRepository.delete(journeyId, fingerprint)
+                        true
+                    }.getOrDefault(false)
+                    mainHandler.post {
+                        if (!isFinishing && !isDestroyed) completion(success)
+                    }
+                }
+            }
+        }
+        pinMutationCoordinator = RoutePinMutationCoordinator(
+            sessionState = routePinSessionState,
+            store = store,
+            observer = object : RoutePinMutationCoordinator.Observer {
+                override fun onPinStateChanged(journeyId: Long) {
+                    if (activeSavedJourneyId() == journeyId) {
+                        renderProjectedResultsPreservingViewport()
+                    }
+                }
+
+                override fun onPersistentSaved(journeyId: Long, record: RoutePinRecord) {
+                    if (activeSavedJourneyId() != journeyId) return
+                    val routeName = routeForFingerprint(record.fingerprint)?.routeName ?: return
+                    val journeyName = routeConfigRepository.getById(journeyId)?.name ?: return
+                    showPinSnackbar(
+                        getString(
+                            R.string.route_pin_persistent_success,
+                            routeName,
+                            journeyName
+                        )
+                    )
+                }
+
+                override fun onCancelled(snapshot: RoutePinSnapshot) = Unit
+
+                override fun onFailure(
+                    journeyId: Long,
+                    failure: RoutePinMutationCoordinator.Failure
+                ) {
+                    if (activeSavedJourneyId() != journeyId) return
+                    showPinSnackbar(
+                        getString(
+                            when (failure) {
+                                RoutePinMutationCoordinator.Failure.SAVE ->
+                                    R.string.route_pin_save_failed
+                                RoutePinMutationCoordinator.Failure.CANCEL ->
+                                    R.string.route_pin_cancel_failed
+                                RoutePinMutationCoordinator.Failure.UNDO ->
+                                    R.string.route_pin_undo_failed
+                            }
+                        )
+                    )
+                }
+            }
+        )
+    }
+
+    private fun installPinSwipeGestures() {
+        resultList.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(recyclerView: RecyclerView, event: MotionEvent): Boolean {
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        val child = recyclerView.findChildViewUnder(event.x, event.y)
+                        pinGestureStartsInExcludedArea = child != null &&
+                            RoutePinGestureHitTest.isExcluded(child, event.rawX, event.rawY)
+                    }
+                    MotionEvent.ACTION_UP,
+                    MotionEvent.ACTION_CANCEL -> pinGestureStartsInExcludedArea = false
+                }
+                return false
+            }
+        })
+        val thresholdTracker = RoutePinSwipeThresholdTracker()
+        val callback = object : ItemTouchHelper.SimpleCallback(
+            0,
+            ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+        ) {
+            private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = ContextCompat.getColor(this@MainActivity, R.color.bus_text_primary)
+                textSize = resources.getDimension(R.dimen.route_pin_swipe_label_size)
+                typeface = Typeface.DEFAULT_BOLD
+            }
+
+            override fun isLongPressDragEnabled(): Boolean = false
+
+            override fun getMovementFlags(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ): Int {
+                if (pinGestureStartsInExcludedArea) return makeMovementFlags(0, 0)
+                val item = busRouteAdapter.routeCardAt(viewHolder.adapterPosition)
+                    ?: return makeMovementFlags(0, 0)
+                val directions = when (item.pinLevel) {
+                    PinLevel.UNPINNED -> ItemTouchHelper.RIGHT
+                    PinLevel.TEMPORARY,
+                    PinLevel.PERSISTENT -> ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+                }
+                return makeMovementFlags(0, directions)
+            }
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean = false
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.adapterPosition
+                val item = busRouteAdapter.routeCardAt(position) ?: return
+                when (
+                    RoutePinSwipePolicy.action(
+                        pinLevel = item.pinLevel,
+                        eligible = item.isPinEligible,
+                        deltaX = if (direction == ItemTouchHelper.RIGHT) {
+                            viewHolder.itemView.width.toFloat()
+                        } else {
+                            -viewHolder.itemView.width.toFloat()
+                        },
+                        width = viewHolder.itemView.width.toFloat()
+                    )
+                ) {
+                    RoutePinSwipeAction.PIN_TEMPORARY ->
+                        handlePinAction(item, RoutePinAction.PIN_TEMPORARY)
+                    RoutePinSwipeAction.PIN_PERSISTENT ->
+                        handlePinAction(item, RoutePinAction.PIN_PERSISTENT)
+                    RoutePinSwipeAction.CANCEL ->
+                        handlePinAction(item, RoutePinAction.CANCEL)
+                    RoutePinSwipeAction.UNAVAILABLE -> {
+                        showPinSnackbar(getString(R.string.route_pin_unavailable))
+                        reboundItem(position, item.stableId)
+                    }
+                    RoutePinSwipeAction.REBOUND -> reboundItem(position, item.stableId)
+                }
+            }
+
+            override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float =
+                RoutePinSwipePolicy.SWIPE_THRESHOLD
+
+            override fun getSwipeEscapeVelocity(defaultValue: Float): Float = Float.MAX_VALUE
+
+            override fun getSwipeVelocityThreshold(defaultValue: Float): Float = Float.MAX_VALUE
+
+            override fun getAnimationDuration(
+                recyclerView: RecyclerView,
+                animationType: Int,
+                animateDx: Float,
+                animateDy: Float
+            ): Long = if (areSystemAnimationsEnabled()) PIN_SWIPE_RETURN_DURATION_MS else 0L
+
+            override fun onChildDraw(
+                canvas: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                val item = busRouteAdapter.routeCardAt(viewHolder.adapterPosition)
+                if (item != null && dX != 0f) {
+                    drawPinSwipeBackground(canvas, viewHolder.itemView, item, dX, backgroundPaint, labelPaint)
+                    if (
+                        isCurrentlyActive &&
+                        thresholdTracker.shouldHaptic(
+                            item.pinLevel,
+                            item.isPinEligible,
+                            dX,
+                            viewHolder.itemView.width.toFloat()
+                        )
+                    ) {
+                        viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    }
+                }
+                super.onChildDraw(
+                    canvas,
+                    recyclerView,
+                    viewHolder,
+                    dX,
+                    dY,
+                    actionState,
+                    isCurrentlyActive
+                )
+            }
+
+            override fun clearView(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder
+            ) {
+                super.clearView(recyclerView, viewHolder)
+                thresholdTracker.reset()
+            }
+        }
+        ItemTouchHelper(callback).attachToRecyclerView(resultList)
+    }
+
+    private fun drawPinSwipeBackground(
+        canvas: Canvas,
+        cardView: View,
+        item: RouteCardItem,
+        deltaX: Float,
+        backgroundPaint: Paint,
+        labelPaint: Paint
+    ) {
+        backgroundPaint.color = ContextCompat.getColor(
+            this,
+            if (deltaX > 0f) R.color.bus_surface_variant else R.color.bus_wait_unavailable_surface
+        )
+        val left = if (deltaX > 0f) cardView.left.toFloat() else cardView.right + deltaX
+        val right = if (deltaX > 0f) cardView.left + deltaX else cardView.right.toFloat()
+        canvas.drawRect(left, cardView.top.toFloat(), right, cardView.bottom.toFloat(), backgroundPaint)
+        val label = getString(
+            when {
+                !item.isPinEligible -> R.string.route_pin_unavailable_short
+                deltaX < 0f -> R.string.route_pin_action_cancel
+                item.pinLevel == PinLevel.UNPINNED -> R.string.route_pin_action_temporary
+                item.pinLevel == PinLevel.TEMPORARY -> R.string.route_pin_action_persistent
+                else -> R.string.route_pin_already_persistent
+            }
+        )
+        val textWidth = labelPaint.measureText(label)
+        val x = if (deltaX > 0f) {
+            cardView.left + dp(16).toFloat()
+        } else {
+            cardView.right - dp(16).toFloat() - textWidth
+        }
+        val y = cardView.top + cardView.height / 2f -
+            (labelPaint.descent() + labelPaint.ascent()) / 2f
+        canvas.drawText(label, x, y, labelPaint)
+    }
+
+    private fun reboundItem(position: Int, stableId: String) {
+        resultList.post {
+            val currentPosition =
+                busRouteAdapter.currentList.indexOfFirst { it.stableId == stableId }
+            val notifyPosition = currentPosition.takeIf { it >= 0 } ?: position
+            if (notifyPosition in 0 until busRouteAdapter.itemCount) {
+                busRouteAdapter.notifyItemChanged(notifyPosition)
+            }
+        }
     }
 
     private fun setupActions() {
@@ -616,6 +923,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun restoreFrequentQueryState(savedInstanceState: Bundle?) {
         if (savedInstanceState == null) return
+        routePinSessionState.restoreTemporarySavedState(
+            TemporaryRoutePinBundleCodec.read(savedInstanceState)
+        )
         restoredActiveQueryRouteId = savedInstanceState.longOrNull(STATE_ACTIVE_QUERY_ROUTE_ID)
         restoredFrequentSortField = savedInstanceState.getString(STATE_FREQUENT_SORT_FIELD)
             ?.let { runCatching { SortField.valueOf(it) }.getOrNull() }
@@ -663,7 +973,9 @@ class MainActivity : AppCompatActivity() {
     private fun loadRouteConfigs() {
         val previousSelectedId = selectedRoute?.id ?: savedRouteUsageSession.selectedRouteId
         val previousRouteSnapshot = routeIdentitySnapshot(routeConfigs)
+        val previousRoutes = routeConfigs
         routeConfigs = loadRankedRouteConfigs()
+        RoutePinSessionReconciler.reconcile(previousRoutes, routeConfigs, routePinSessionState)
 
         if (routeConfigs.isEmpty()) {
             if (currentQueryContext is QueryContext.Saved) {
@@ -809,6 +1121,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentQueryContext = queryContext
+        frequentProjectionGeneration += 1
         preserveSortOnNextResults = preserveSort
         routeQueryState.begin(refresh = isRefresh)
         renderHomeShell()
@@ -822,12 +1135,7 @@ class MainActivity : AppCompatActivity() {
             destination,
             object : RouteQueryCoordinator.Callback {
                 override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
-                    if (isRefresh) {
-                        handleRefreshSuccess(queryId, routes)
-                    } else {
-                        showInitialRoutes(routes)
-                        finishQueryLoading()
-                    }
+                    acceptInitialRoutesAwaitingPins(queryId, routes)
                 }
 
                 override fun onRouteWaitTimeUpdated(
@@ -848,6 +1156,8 @@ class MainActivity : AppCompatActivity() {
 
                 override fun onFailure(queryId: Int, error: Throwable) {
                     Log.e(LOG_TAG, "Bus route query failed", error)
+                    savedRoutePinLoadGate.invalidate()
+                    activePinQueryId = null
                     if (isRefresh) {
                         handleRefreshFailure(queryId)
                     } else {
@@ -859,11 +1169,32 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
+        activePinQueryId = queryId
+        activePinQueryIsRefresh = isRefresh
+        val journeyId = (queryContext as QueryContext.Saved).routeId
+        savedRoutePinLoadGate.begin(
+            queryId = queryId,
+            journeyId = journeyId,
+            baselineMutationGenerations =
+                routePinSessionState.mutationGenerationSnapshot(journeyId)
+        )
+        loadPersistentPins(queryId, journeyId)
         if (isRefresh) {
             showRefreshLoadingState(queryId)
         }
     }
 
+    private fun acceptInitialRoutesAwaitingPins(queryId: Int, routes: List<BusRouteOption>) {
+        routeQueryState.complete(
+            routes = routes,
+            preserveSort = preserveSortOnNextResults,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        preserveSortOnNextResults = false
+        savedRoutePinLoadGate.acceptRoutes(queryId, routes)?.let(::finishPinGatedQuery)
+    }
+
+    @Suppress("unused")
     private fun showInitialRoutes(routes: List<BusRouteOption>) {
         routeQueryState.complete(
             routes = routes,
@@ -873,17 +1204,53 @@ class MainActivity : AppCompatActivity() {
         preserveSortOnNextResults = false
         updateSortControls()
         updateResultSummary(routes)
-        displayResults(currentResults)
-        restorePendingFrequentViewport()
+        displayResults(routes)
+    }
+
+    private fun loadPersistentPins(queryId: Int, journeyId: Long) {
+        pinExecutor.execute {
+            val result = runCatching { pinnedRouteRepository.load(journeyId) }
+            mainHandler.post {
+                if (isFinishing || isDestroyed) return@post
+                savedRoutePinLoadGate.acceptPins(queryId, journeyId, result)
+                    ?.let(::finishPinGatedQuery)
+            }
+        }
+    }
+
+    private fun finishPinGatedQuery(completion: SavedRoutePinLoadGate.Completion) {
+        if (activePinQueryId != completion.queryId) return
+        activePinQueryId = null
+        if (completion.pinReadFailed) {
+            if (!pinReadFailureShown) {
+                pinReadFailureShown = true
+                showPinSnackbar(getString(R.string.route_pin_load_failed))
+            }
+        } else {
+            routePinSessionState.replacePersistentPreservingMutations(
+                journeyId = completion.journeyId,
+                records = completion.pins,
+                baselineMutationGenerations = completion.baselineMutationGenerations
+            )
+        }
+        updateSortControls()
+        updateResultSummary(completion.routes)
+        if (activePinQueryIsRefresh) {
+            handleRefreshSuccess(completion.queryId, completion.routes)
+        } else {
+            displayResults(routeQueryState.rawResults)
+            restorePendingFrequentViewport()
+            finishQueryLoading()
+        }
     }
 
     private fun restorePendingFrequentViewport() {
         val viewport = pendingFrequentViewport ?: return
-        if (currentResults.isEmpty()) return
+        if (busRouteAdapter.itemCount == 0) return
         pendingFrequentViewport = null
         (resultList.layoutManager as? LinearLayoutManager)
             ?.scrollToPositionWithOffset(
-                viewport.position.coerceIn(0, currentResults.lastIndex),
+                viewport.position.coerceIn(0, busRouteAdapter.itemCount - 1),
                 viewport.offset
             )
     }
@@ -893,8 +1260,8 @@ class MainActivity : AppCompatActivity() {
         if (!refreshFeedbackState.succeed(queryId, result)) return
 
         if (routes.isNotEmpty()) {
-            showInitialRoutes(routes)
-            resultList.scrollToPosition(0)
+            displayResults(routeQueryState.rawResults)
+            restoreRefreshViewport()
         }
         renderRefreshFeedback()
         scheduleRefreshSuccessFinish(queryId)
@@ -911,7 +1278,7 @@ class MainActivity : AppCompatActivity() {
         val action = refreshFeedbackState.finishSuccess(queryId) ?: return
         refreshFinishRunnable = null
         if (action == RouteRefreshFinishAction.SHOW_EMPTY_RESULTS) {
-            showInitialRoutes(emptyList())
+            displayResults(emptyList())
         }
         refreshViewport = null
         renderRefreshFeedback()
@@ -932,11 +1299,13 @@ class MainActivity : AppCompatActivity() {
     private fun updateRouteWaitTime(routeId: String, waitTimeState: WaitTimeState) {
         if (!routeQueryState.updateWaitTime(routeId, waitTimeState)) return
         currentResults.firstOrNull { it.resultId == routeId }?.let { etaArrivalsBottomSheet.update(it) }
+        if (activePinQueryId != null) return
         displayResults(currentResults)
     }
 
     private fun updateRouteStopPreview(routeId: String, preview: RouteCardStopPreview) {
         if (!routeQueryState.updateStopPreview(routeId, preview)) return
+        if (activePinQueryId != null) return
         displayResults(currentResults)
     }
 
@@ -945,6 +1314,7 @@ class MainActivity : AppCompatActivity() {
 
         routeQueryState.toggleSort(field)
         updateSortControls()
+        if (activePinQueryId != null) return
         displayResults(currentResults)
     }
 
@@ -965,13 +1335,120 @@ class MainActivity : AppCompatActivity() {
             resultSummaryContainer.visibility = View.VISIBLE
             val shouldAnimate = resultListContainer.visibility != View.VISIBLE
             resultListContainer.visibility = View.VISIBLE
-            busRouteAdapter.submitList(results)
+            busRouteAdapter.submitList(projectFrequentRouteItems())
             if (shouldAnimate) {
                 animateIn(resultListContainer)
             }
         }
         updateStickyResultControlsVisibility()
         updateSwipeRefreshState()
+    }
+
+    private fun projectFrequentRouteItems(): List<BusRouteListItem> {
+        val journeyId = activeSavedJourneyId()
+            ?: return SearchRouteItemProjector.project(routeQueryState.results)
+        return PinnedRouteProjector.project(
+            routes = routeQueryState.rawResults,
+            pins = routePinSessionState.records(journeyId),
+            sortField = sortField ?: SortField.DURATION,
+            sortDirection = sortDirection,
+            scopeKey = "$journeyId:$frequentProjectionGeneration"
+        )
+    }
+
+    private fun activeSavedJourneyId(): Long? =
+        (currentQueryContext as? QueryContext.Saved)?.routeId
+
+    private fun routeForFingerprint(fingerprint: String): BusRouteOption? {
+        return projectFrequentRouteItems()
+            .filterIsInstance<RouteCardItem>()
+            .firstOrNull { it.fingerprint == fingerprint }
+            ?.route
+    }
+
+    private fun renderProjectedResultsPreservingViewport() {
+        if (!::busRouteAdapter.isInitialized || routeQueryState.rawResults.isEmpty()) return
+        val layoutManager = resultList.layoutManager as? LinearLayoutManager
+        val firstPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+        val anchorId = if (firstPosition != RecyclerView.NO_POSITION) {
+            busRouteAdapter.currentList.getOrNull(firstPosition)?.stableId
+        } else {
+            null
+        }
+        val anchorOffset = if (firstPosition != RecyclerView.NO_POSITION) {
+            layoutManager?.findViewByPosition(firstPosition)?.top ?: 0
+        } else {
+            0
+        }
+        busRouteAdapter.submitList(projectFrequentRouteItems()) {
+            if (anchorId == null) return@submitList
+            val nextPosition = RouteListViewportAnchor.positionOf(
+                busRouteAdapter.currentList,
+                anchorId
+            )
+            if (nextPosition >= 0) {
+                resultList.post {
+                    (resultList.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
+                }
+            }
+        }
+    }
+
+    private fun handlePinAction(item: RouteCardItem, action: RoutePinAction) {
+        val journeyId = activeSavedJourneyId() ?: return
+        val fingerprint = item.fingerprint
+        if (fingerprint == null) {
+            showPinSnackbar(getString(R.string.route_pin_unavailable))
+            return
+        }
+        when (action) {
+            RoutePinAction.PIN_TEMPORARY -> {
+                routePinSessionState.pinTemporary(
+                    journeyId,
+                    fingerprint,
+                    System.currentTimeMillis()
+                )
+                routePinSessionState.nextMutationGeneration(journeyId, fingerprint)
+                renderProjectedResultsPreservingViewport()
+                showPinSnackbar(
+                    message = getString(
+                        R.string.route_pin_temporary_success,
+                        item.route.routeName
+                    ),
+                    actionLabel = getString(R.string.route_pin_action_persistent)
+                ) {
+                    pinMutationCoordinator.promotePersistent(journeyId, fingerprint)
+                }
+            }
+            RoutePinAction.PIN_PERSISTENT ->
+                pinMutationCoordinator.promotePersistent(journeyId, fingerprint)
+            RoutePinAction.CANCEL -> {
+                val snapshot = pinMutationCoordinator.cancel(journeyId, fingerprint) ?: return
+                showPinSnackbar(
+                    message = getString(
+                        R.string.route_pin_cancelled,
+                        item.route.routeName
+                    ),
+                    actionLabel = getString(R.string.route_pin_action_undo)
+                ) {
+                    pinMutationCoordinator.undo(snapshot)
+                }
+            }
+        }
+    }
+
+    private fun showPinSnackbar(
+        message: String,
+        actionLabel: String? = null,
+        action: (() -> Unit)? = null
+    ) {
+        val snackbar = Snackbar.make(resultList, message, Snackbar.LENGTH_LONG)
+            .setAnchorView(topLevelNav)
+        if (actionLabel != null && action != null) {
+            snackbar.setAction(actionLabel) { action() }
+        }
+        snackbar.show()
     }
 
     private fun showRouteDetail(route: BusRouteOption) {
@@ -1299,6 +1776,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun invalidateActiveQuery() {
         routeQueryCoordinator.invalidate()
+        savedRoutePinLoadGate.invalidate()
+        activePinQueryId = null
         routeQueryState.cancel()
         cancelRefreshFeedback()
         if (::queryButton.isInitialized) {
@@ -1382,6 +1861,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectRoute(route: RouteConfig) {
         if (selectedRoute?.id == route.id) return
+        selectedRoute?.id?.let(routePinSessionState::clearTemporary)
         manualRouteSelectionGeneration += 1
         nearbySelectedRouteId = null
         selectedRoute = routeConfigs.firstOrNull { it.id == route.id } ?: route
@@ -1768,6 +2248,7 @@ class MainActivity : AppCompatActivity() {
         private const val CURRENT_PLACE_TOTAL_TIMEOUT_MS = 5_000L
         private const val FIRST_RUN_INTRO_DURATION_MS = 180L
         private const val FIRST_RUN_INTRO_STAGGER_MS = 45L
+        private const val PIN_SWIPE_RETURN_DURATION_MS = 210L
         private const val STATE_SELECTED_ROUTE_ID = "selected_route_id"
         private const val STATE_RECORDED_USAGE_ROUTE_ID = "recorded_usage_route_id"
         private const val STATE_SELECTED_DESTINATION = "selected_destination"

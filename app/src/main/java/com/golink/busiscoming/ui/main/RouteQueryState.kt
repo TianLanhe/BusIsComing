@@ -8,6 +8,8 @@ import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.BusRouteSorter
 
 class RouteQueryState {
+    var rawResults: List<BusRouteOption> = emptyList()
+        private set
     var results: List<BusRouteOption> = emptyList()
         private set
     var sortField: SortField? = null
@@ -28,6 +30,7 @@ class RouteQueryState {
         isRefreshing = refresh
         errorMessage = null
         if (!refresh) {
+            rawResults = emptyList()
             results = emptyList()
             updatedAtMillis = null
         }
@@ -47,6 +50,7 @@ class RouteQueryState {
 
     fun fail(message: String, preserveResults: Boolean) {
         if (!preserveResults) {
+            rawResults = emptyList()
             results = emptyList()
             sortField = null
             sortDirection = SortDirection.ASC
@@ -65,7 +69,7 @@ class RouteQueryState {
     fun restoreSort(field: SortField?, direction: SortDirection) {
         sortField = field
         sortDirection = direction
-        field?.let { results = BusRouteSorter.sort(results, it, direction) }
+        results = field?.let { BusRouteSorter.sort(rawResults, it, direction) } ?: rawResults
     }
 
     fun replaceInitial(routes: List<BusRouteOption>, preserveSort: Boolean) {
@@ -74,7 +78,8 @@ class RouteQueryState {
             sortDirection = SortDirection.ASC
         }
         sortField = nextSort
-        results = BusRouteSorter.sort(routes, nextSort, sortDirection)
+        rawResults = routes
+        results = BusRouteSorter.sort(rawResults, nextSort, sortDirection)
     }
 
     fun toggleSort(field: SortField) {
@@ -84,7 +89,7 @@ class RouteQueryState {
             SortDirection.ASC
         }
         sortField = field
-        results = BusRouteSorter.sort(results, field, sortDirection)
+        results = BusRouteSorter.sort(rawResults, field, sortDirection)
     }
 
     fun updateWaitTime(routeId: String, waitTimeState: WaitTimeState): Boolean {
@@ -100,6 +105,7 @@ class RouteQueryState {
     }
 
     fun clear() {
+        rawResults = emptyList()
         results = emptyList()
         sortField = null
         sortDirection = SortDirection.ASC
@@ -111,7 +117,7 @@ class RouteQueryState {
 
     private fun updateInternal(routeId: String, transform: (BusRouteOption) -> BusRouteOption): Boolean {
         var changed = false
-        results = results.map { route ->
+        rawResults = rawResults.map { route ->
             if (route.resultId == routeId) {
                 changed = true
                 transform(route)
@@ -119,8 +125,10 @@ class RouteQueryState {
                 route
             }
         }
-        if (changed && sortField == SortField.ARRIVAL) {
-            results = BusRouteSorter.sort(results, SortField.ARRIVAL, sortDirection)
+        if (changed) {
+            results = sortField?.let { field ->
+                BusRouteSorter.sort(rawResults, field, sortDirection)
+            } ?: rawResults
         }
         return changed
     }

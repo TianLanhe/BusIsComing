@@ -110,4 +110,25 @@
     <string name="route_transfer_error_write">Export failed. The app tried to remove the incomplete file.</string>
     <string name="route_transfer_error_import">Import failed. Your current journeys were not changed.</string>
     <string name="route_transfer_uri_expired">File access has expired. Choose the file again.</string>
+    <string name="unpinned_routes_divider">%1$d routes below, sorted by %2$s %3$s</string>
+    <string name="route_pin_state_temporary">Pinned for this session</string>
+    <string name="route_pin_state_persistent">Always pinned</string>
+    <string name="route_pin_action_temporary">Pin for this session</string>
+    <string name="route_pin_action_persistent">Always pin</string>
+    <string name="route_pin_action_cancel">Unpin</string>
+    <string name="route_pin_action_undo">Undo</string>
+    <string name="route_pin_temporary_success">%1$s is pinned for this session</string>
+    <string name="route_pin_persistent_success">%1$s is always pinned for “%2$s”</string>
+    <string name="route_pin_cancelled">%1$s was unpinned</string>
+    <string name="route_pin_already_persistent">Already always pinned</string>
+    <string name="route_pin_unavailable">This route cannot be pinned right now</string>
+    <string name="route_pin_unavailable_short">Cannot pin</string>
+    <string name="route_pin_load_failed">Always-pinned routes could not be loaded. Route results are still available.</string>
+    <string name="route_pin_save_failed">Could not save this route as always pinned. It remains pinned for this session.</string>
+    <string name="route_pin_cancel_failed">Could not unpin this route. Its previous state was restored.</string>
+    <string name="route_pin_undo_failed">Could not restore this always-pinned route.</string>
+    <string name="route_endpoint_change_pin_title">Save new endpoints?</string>
+    <string name="route_endpoint_change_pin_message">Saving will remove %1$d always-pinned routes from this journey.</string>
+    <string name="route_endpoint_change_pin_confirm">Save and remove</string>
+    <string name="route_update_failed">Could not save this journey. Your existing data was not changed.</string>
 </resources>

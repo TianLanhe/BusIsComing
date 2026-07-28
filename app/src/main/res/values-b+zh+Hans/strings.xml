@@ -110,4 +110,25 @@
     <string name="route_transfer_error_write">导出失败，已尝试清理未完整写入的文件。</string>
     <string name="route_transfer_error_import">导入失败，现有行程未被修改。</string>
     <string name="route_transfer_uri_expired">文件访问权限已失效，请重新选择文件。</string>
+    <string name="unpinned_routes_divider">以下 %1$d 条按%2$s %3$s 排序</string>
+    <string name="route_pin_state_temporary">本次置顶</string>
+    <string name="route_pin_state_persistent">长期置顶</string>
+    <string name="route_pin_action_temporary">本次置顶</string>
+    <string name="route_pin_action_persistent">长期置顶</string>
+    <string name="route_pin_action_cancel">取消置顶</string>
+    <string name="route_pin_action_undo">撤销</string>
+    <string name="route_pin_temporary_success">%1$s 已在本次置顶</string>
+    <string name="route_pin_persistent_success">%1$s 已为“%2$s”长期置顶</string>
+    <string name="route_pin_cancelled">已取消置顶 %1$s</string>
+    <string name="route_pin_already_persistent">已长期置顶</string>
+    <string name="route_pin_unavailable">暂时无法置顶这条路线</string>
+    <string name="route_pin_unavailable_short">不可置顶</string>
+    <string name="route_pin_load_failed">无法加载长期置顶，路线结果仍可正常使用</string>
+    <string name="route_pin_save_failed">无法保存长期置顶，已恢复本次置顶</string>
+    <string name="route_pin_cancel_failed">无法取消长期置顶，已恢复原状态</string>
+    <string name="route_pin_undo_failed">无法恢复长期置顶</string>
+    <string name="route_endpoint_change_pin_title">保存新的起终点？</string>
+    <string name="route_endpoint_change_pin_message">保存后会清除这个行程的 %1$d 条长期置顶。</string>
+    <string name="route_endpoint_change_pin_confirm">保存并清除</string>
+    <string name="route_update_failed">无法保存行程，原有数据未被修改</string>
 </resources>

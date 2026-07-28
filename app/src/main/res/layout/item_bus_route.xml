@@ -10,157 +10,172 @@
     app:strokeColor="@color/bus_divider"
     app:strokeWidth="1dp">
 
-    <LinearLayout
+    <androidx.coordinatorlayout.widget.CoordinatorLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="86dp"
-        android:orientation="vertical"
-        android:paddingStart="14dp"
-        android:paddingEnd="0dp"
-        android:paddingVertical="12dp">
+        android:layout_height="wrap_content">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:minHeight="56dp"
-            android:orientation="horizontal">
+            android:minHeight="86dp"
+            android:orientation="vertical"
+            android:paddingStart="14dp"
+            android:paddingEnd="0dp"
+            android:paddingVertical="12dp">
 
             <LinearLayout
-                android:id="@+id/busRouteTextColumn"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/busRouteNameText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="28dp"
-                    android:includeFontPadding="false"
-                    android:maxLines="3"
-                    android:textColor="@color/bus_text_primary"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
-
-                <com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout
-                    android:id="@+id/busStopPreviewLayout"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/busStopOriginText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:importantForAccessibility="no"
-                        android:includeFontPadding="false"
-                        android:maxLines="1"
-                        android:textColor="@color/bus_text_secondary"
-                        android:textSize="14sp" />
-
-                    <TextView
-                        android:id="@+id/busStopDirectionText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:importantForAccessibility="no"
-                        android:includeFontPadding="false"
-                        android:paddingHorizontal="4dp"
-                        android:text="@string/route_direction_arrow"
-                        android:textColor="@color/bus_text_secondary"
-                        android:textSize="14sp" />
-
-                    <TextView
-                        android:id="@+id/busStopDestinationText"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:ellipsize="end"
-                        android:importantForAccessibility="no"
-                        android:includeFontPadding="false"
-                        android:maxLines="1"
-                        android:textColor="@color/bus_text_secondary"
-                        android:textSize="14sp" />
-                </com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/busWaitArea"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical|end"
-                android:orientation="horizontal"
-                android:paddingStart="4dp">
+                android:gravity="center_vertical"
+                android:minHeight="56dp"
+                android:orientation="horizontal">
 
                 <LinearLayout
-                    android:id="@+id/busEtaTextColumn"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/busRouteTextColumn"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical|end"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
-                        android:id="@+id/busArrivalText"
+                        android:id="@+id/busRouteNameText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="end"
-                        android:maxLines="2"
+                        android:layout_marginEnd="28dp"
                         android:includeFontPadding="false"
-                        android:textColor="@color/bus_wait_accent"
-                        android:textSize="16sp"
+                        android:maxLines="3"
+                        android:textColor="@color/bus_text_primary"
+                        android:textSize="20sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/busNextArrivalText"
+                    <com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout
+                        android:id="@+id/busStopPreviewLayout"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:gravity="end"
-                        android:includeFontPadding="false"
-                        android:maxLines="2"
-                        android:textColor="@color/bus_text_secondary"
-                        android:textSize="12sp"
-                        android:visibility="gone" />
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/busStopOriginText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:importantForAccessibility="no"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:textColor="@color/bus_text_secondary"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/busStopDirectionText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:importantForAccessibility="no"
+                            android:includeFontPadding="false"
+                            android:paddingHorizontal="4dp"
+                            android:text="@string/route_direction_arrow"
+                            android:textColor="@color/bus_text_secondary"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/busStopDestinationText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:importantForAccessibility="no"
+                            android:includeFontPadding="false"
+                            android:maxLines="1"
+                            android:textColor="@color/bus_text_secondary"
+                            android:textSize="14sp" />
+                    </com.golink.busiscoming.ui.main.AdaptiveStopPreviewLayout>
                 </LinearLayout>
 
-                <androidx.appcompat.widget.AppCompatImageButton
-                    android:id="@+id/busMonitorButton"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:layout_gravity="center_vertical"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/monitor_content_description"
-                    android:padding="14dp"
-                    android:scaleType="center"
-                    android:src="@drawable/ic_notification_bell"
-                    app:tint="@color/bus_text_secondary" />
+                <LinearLayout
+                    android:id="@+id/busWaitArea"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical|end"
+                    android:orientation="horizontal"
+                    android:paddingStart="4dp">
+
+                    <LinearLayout
+                        android:id="@+id/busEtaTextColumn"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical|end"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/busArrivalText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="end"
+                            android:maxLines="2"
+                            android:includeFontPadding="false"
+                            android:textColor="@color/bus_wait_accent"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/busNextArrivalText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:gravity="end"
+                            android:includeFontPadding="false"
+                            android:maxLines="2"
+                            android:textColor="@color/bus_text_secondary"
+                            android:textSize="12sp"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.AppCompatImageButton
+                        android:id="@+id/busMonitorButton"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_gravity="center_vertical"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/monitor_content_description"
+                        android:padding="14dp"
+                        android:scaleType="center"
+                        android:src="@drawable/ic_notification_bell"
+                        app:tint="@color/bus_text_secondary" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginEnd="14dp"
+                android:layout_marginTop="10dp"
+                android:background="@color/bus_divider" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="14dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/busRouteInfoText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp" />
             </LinearLayout>
         </LinearLayout>
 
         <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginEnd="14dp"
-            android:layout_marginTop="10dp"
-            android:background="@color/bus_divider" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="14dp"
-            android:layout_marginTop="8dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/busRouteInfoText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="@color/bus_text_secondary"
-                android:textSize="14sp" />
-        </LinearLayout>
-    </LinearLayout>
+            android:id="@+id/busPersistentPinBookmark"
+            android:layout_width="10dp"
+            android:layout_height="25dp"
+            android:layout_gravity="start|top"
+            android:layout_marginStart="2dp"
+            android:background="@drawable/ic_route_pin_bookmark"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+    </androidx.coordinatorlayout.widget.CoordinatorLayout>
 </com.google.android.material.card.MaterialCardView>

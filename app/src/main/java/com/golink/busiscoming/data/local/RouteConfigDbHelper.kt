@@ -7,6 +7,11 @@ import android.database.sqlite.SQLiteOpenHelper
 class RouteConfigDbHelper(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        db.setForeignKeyConstraintsEnabled(true)
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -26,6 +31,7 @@ class RouteConfigDbHelper(context: Context) :
             )
             """.trimIndent()
         )
+        createRouteResultPinSchema(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -47,6 +53,34 @@ class RouteConfigDbHelper(context: Context) :
                 "$COLUMN_LAST_USED_AT INTEGER"
             )
         }
+        if (oldVersion < 4) {
+            createRouteResultPinSchema(db)
+        }
+    }
+
+    private fun createRouteResultPinSchema(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_ROUTE_RESULT_PINS (
+                $COLUMN_PIN_ROUTE_CONFIG_ID INTEGER NOT NULL,
+                $COLUMN_PIN_ROUTE_FINGERPRINT TEXT NOT NULL,
+                $COLUMN_PINNED_AT INTEGER NOT NULL,
+                PRIMARY KEY($COLUMN_PIN_ROUTE_CONFIG_ID, $COLUMN_PIN_ROUTE_FINGERPRINT),
+                FOREIGN KEY($COLUMN_PIN_ROUTE_CONFIG_ID)
+                    REFERENCES $TABLE_ROUTE_CONFIGS($COLUMN_ID)
+                    ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS $INDEX_ROUTE_RESULT_PINS_ROUTE_TIME
+            ON $TABLE_ROUTE_RESULT_PINS(
+                $COLUMN_PIN_ROUTE_CONFIG_ID,
+                $COLUMN_PINNED_AT DESC
+            )
+            """.trimIndent()
+        )
     }
 
     private fun addColumnIfMissing(db: SQLiteDatabase, columnName: String, columnDefinition: String) {
@@ -67,9 +101,11 @@ class RouteConfigDbHelper(context: Context) :
 
     companion object {
         const val DATABASE_NAME = "bus_is_coming.db"
-        const val DATABASE_VERSION = 3
+        const val DATABASE_VERSION = 4
 
         const val TABLE_ROUTE_CONFIGS = "route_configs"
+        const val TABLE_ROUTE_RESULT_PINS = "route_result_pins"
+        const val INDEX_ROUTE_RESULT_PINS_ROUTE_TIME = "index_route_result_pins_route_time"
         const val COLUMN_ID = "id"
         const val COLUMN_NAME = "name"
         const val COLUMN_ORIGIN_NAME = "origin_name"
@@ -82,5 +118,8 @@ class RouteConfigDbHelper(context: Context) :
         const val COLUMN_UPDATED_AT = "updated_at"
         const val COLUMN_USAGE_COUNT = "usage_count"
         const val COLUMN_LAST_USED_AT = "last_used_at"
+        const val COLUMN_PIN_ROUTE_CONFIG_ID = "route_config_id"
+        const val COLUMN_PIN_ROUTE_FINGERPRINT = "route_fingerprint"
+        const val COLUMN_PINNED_AT = "pinned_at"
     }
 }

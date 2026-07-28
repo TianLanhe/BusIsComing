@@ -6,10 +6,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.RouteConfigDbHelper
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.model.PinLevel
 import com.golink.busiscoming.data.model.RouteConfig
+import com.golink.busiscoming.data.model.RoutePinRecord
 import com.golink.busiscoming.data.repository.RouteImportFailureStage
 import com.golink.busiscoming.data.repository.RouteImportMode
 import com.golink.busiscoming.data.repository.RouteConfigRepository
+import com.golink.busiscoming.data.repository.PinnedRouteRepository
+import com.golink.busiscoming.data.repository.RouteUpdateFailureInjector
+import com.golink.busiscoming.data.repository.RouteUpdateFailureStage
 import com.golink.busiscoming.data.transfer.TransferRoute
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,6 +28,7 @@ import org.junit.runner.RunWith
 class RouteConfigRepositoryInstrumentedTest {
     private lateinit var context: Context
     private var repository: RouteConfigRepository? = null
+    private var pinRepository: PinnedRouteRepository? = null
 
     @Before
     fun setUp() {
@@ -32,6 +38,7 @@ class RouteConfigRepositoryInstrumentedTest {
 
     @After
     fun tearDown() {
+        pinRepository?.close()
         repository?.close()
         context.deleteDatabase(RouteConfigDbHelper.DATABASE_NAME)
     }
@@ -85,12 +92,80 @@ class RouteConfigRepositoryInstrumentedTest {
     }
 
     @Test
+    fun renamingJourneyPreservesItsPinnedRoutes() {
+        repository = RouteConfigRepository(context)
+        pinRepository = PinnedRouteRepository(context)
+        val origin = Place("起點", 22.1, 114.1)
+        val destination = Place("終點", 22.2, 114.2)
+        val id = repository!!.insert("舊名稱", origin, destination)
+        pinRepository!!.insertIfAbsent(id, "v1|route", 10L)
+
+        repository!!.update(
+            RouteConfig(id, "新名稱", origin, destination),
+            clearRouteResultPins = false
+        )
+
+        assertEquals("新名稱", repository!!.getById(id)?.name)
+        assertEquals(listOf("v1|route"), pinRepository!!.load(id).map { it.fingerprint })
+    }
+
+    @Test
+    fun endpointUpdateAndPinClearAreAtomicAndJourneyScoped() {
+        repository = RouteConfigRepository(context)
+        pinRepository = PinnedRouteRepository(context)
+        val origin = Place("起點", 22.1, 114.1)
+        val destination = Place("終點", 22.2, 114.2)
+        val firstId = repository!!.insert("第一", origin, destination)
+        val secondId = repository!!.insert("第二", origin, destination)
+        pinRepository!!.insertIfAbsent(firstId, "v1|first", 10L)
+        pinRepository!!.insertIfAbsent(secondId, "v1|second", 20L)
+        val changedOrigin = Place("新起點", 22.3, 114.3)
+
+        repository!!.update(
+            RouteConfig(firstId, "第一", changedOrigin, destination),
+            clearRouteResultPins = true
+        )
+
+        assertEquals(changedOrigin, repository!!.getById(firstId)?.origin)
+        assertTrue(pinRepository!!.load(firstId).isEmpty())
+        assertEquals(listOf("v1|second"), pinRepository!!.load(secondId).map { it.fingerprint })
+    }
+
+    @Test
+    fun endpointUpdateFailureRollsBackJourneyAndPinnedRoutes() {
+        repository = RouteConfigRepository(
+            context,
+            routeUpdateFailureInjector = RouteUpdateFailureInjector { stage ->
+                if (stage == RouteUpdateFailureStage.AFTER_ROUTE_UPDATE) error("injected")
+            }
+        )
+        pinRepository = PinnedRouteRepository(context)
+        val origin = Place("起點", 22.1, 114.1)
+        val destination = Place("終點", 22.2, 114.2)
+        val id = repository!!.insert("保留", origin, destination)
+        pinRepository!!.insertIfAbsent(id, "v1|route", 10L)
+
+        try {
+            repository!!.update(
+                RouteConfig(id, "不應保留", Place("新起點", 22.3, 114.3), destination),
+                clearRouteResultPins = true
+            )
+            throw AssertionError("Expected injected failure")
+        } catch (_: IllegalStateException) {
+            assertEquals(RouteConfig(id, "保留", origin, destination), repository!!.getById(id))
+            assertEquals(listOf("v1|route"), pinRepository!!.load(id).map { it.fingerprint })
+        }
+    }
+
+    @Test
     fun mergeAddsOnlyDistinctRoutesAndPreservesExistingStatistics() {
         repository = RouteConfigRepository(context)
         val origin = Place("柴灣站", 22.2642, 114.2371)
         val destination = Place("中環碼頭", 22.2878, 114.1582)
         val existingId = repository!!.insert("上班", origin, destination)
         repository!!.recordUsage(existingId, usedAtMillis = 1234)
+        pinRepository = PinnedRouteRepository(context)
+        pinRepository!!.insertIfAbsent(existingId, "v1|existing", 10L)
 
         val result = repository!!.importRoutes(
             listOf(
@@ -108,9 +183,14 @@ class RouteConfigRepositoryInstrumentedTest {
         assertEquals(3, routes.size)
         assertEquals(1, routes.single { it.id == existingId }.usageCount)
         assertEquals(1234L, routes.single { it.id == existingId }.lastUsedAt)
+        assertEquals(
+            listOf("v1|existing"),
+            pinRepository!!.load(existingId).map { it.fingerprint }
+        )
         routes.filter { it.id != existingId }.forEach {
             assertEquals(0, it.usageCount)
             assertNull(it.lastUsedAt)
+            assertTrue(pinRepository!!.load(it.id).isEmpty())
         }
     }
 
@@ -128,6 +208,8 @@ class RouteConfigRepositoryInstrumentedTest {
             Place("舊終點二", 22.4, 114.4)
         )
         repository!!.recordUsage(firstId, 999)
+        pinRepository = PinnedRouteRepository(context)
+        pinRepository!!.insertIfAbsent(firstId, "v1|old", 10L)
         val imported = TransferRoute(
             "新路線",
             Place("新起點", 22.5, 114.5),
@@ -144,6 +226,9 @@ class RouteConfigRepositoryInstrumentedTest {
         assertEquals("新路線", saved.name)
         assertEquals(0, saved.usageCount)
         assertNull(saved.lastUsedAt)
+        assertTrue(pinRepository!!.load(firstId).isEmpty())
+        assertTrue(pinRepository!!.load(secondId).isEmpty())
+        assertTrue(pinRepository!!.load(saved.id).isEmpty())
     }
 
     @Test
@@ -197,6 +282,8 @@ class RouteConfigRepositoryInstrumentedTest {
             Place("終點", 22.2, 114.2)
         )
         repository!!.recordUsage(existingId, 5678)
+        pinRepository = PinnedRouteRepository(context)
+        pinRepository!!.insertIfAbsent(existingId, "v1|keep", 33L)
 
         try {
             repository!!.importRoutes(
@@ -209,6 +296,10 @@ class RouteConfigRepositoryInstrumentedTest {
             assertEquals(existingId, existing.id)
             assertEquals(1, existing.usageCount)
             assertEquals(5678L, existing.lastUsedAt)
+            assertEquals(
+                listOf(RoutePinRecord("v1|keep", PinLevel.PERSISTENT, 33L)),
+                pinRepository!!.load(existingId)
+            )
         }
     }
 
@@ -238,6 +329,8 @@ class RouteConfigRepositoryInstrumentedTest {
             readRouteConfigColumns(db)
         )
         assertEquals(0, routeConfigCount(db))
+        assertTrue(tableExists(db, RouteConfigDbHelper.TABLE_ROUTE_RESULT_PINS))
+        assertTrue(indexExists(db, RouteConfigDbHelper.INDEX_ROUTE_RESULT_PINS_ROUTE_TIME))
         helper.close()
     }
 
@@ -251,6 +344,8 @@ class RouteConfigRepositoryInstrumentedTest {
         assertEquals(RouteConfigDbHelper.DATABASE_VERSION, db.version)
         assertEquals(1, routeConfigCount(db))
         assertTrue(readRouteConfigColumns(db).containsAll(setOf("usage_count", "last_used_at")))
+        assertTrue(tableExists(db, RouteConfigDbHelper.TABLE_ROUTE_RESULT_PINS))
+        assertTrue(indexExists(db, RouteConfigDbHelper.INDEX_ROUTE_RESULT_PINS_ROUTE_TIME))
         db.rawQuery(
             "SELECT usage_count, last_used_at FROM ${RouteConfigDbHelper.TABLE_ROUTE_CONFIGS}",
             null
@@ -337,5 +432,19 @@ class RouteConfigRepositoryInstrumentedTest {
                 cursor.moveToFirst()
                 cursor.getInt(0)
             }
+    }
+
+    private fun tableExists(db: SQLiteDatabase, table: String): Boolean {
+        return db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            arrayOf(table)
+        ).use { it.moveToFirst() }
+    }
+
+    private fun indexExists(db: SQLiteDatabase, index: String): Boolean {
+        return db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?",
+            arrayOf(index)
+        ).use { it.moveToFirst() }
     }
 }

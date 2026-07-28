@@ -35,11 +35,13 @@ import com.golink.busiscoming.data.model.RouteConfig
 import com.golink.busiscoming.data.model.RouteConfigValidator
 import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
+import com.golink.busiscoming.data.repository.PinnedRouteRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.applyStatusBarPadding
 import com.golink.busiscoming.ui.common.localizedMessage
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -48,6 +50,7 @@ import java.util.concurrent.Executors
 
 class RouteEditActivity : AppCompatActivity() {
     private lateinit var repository: RouteConfigRepository
+    private lateinit var pinnedRouteRepository: PinnedRouteRepository
     private lateinit var placeSearchRepository: PlaceSearchRepository
     private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
@@ -67,6 +70,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var originCandidateList: RecyclerView
     private lateinit var destinationCandidateList: RecyclerView
     private lateinit var swapPlacesButton: View
+    private lateinit var saveRouteButton: MaterialButton
     private lateinit var originController: PlaceInputController
     private lateinit var destinationController: PlaceInputController
     private var candidateBackCallback: OnBackInvokedCallback? = null
@@ -74,12 +78,14 @@ class RouteEditActivity : AppCompatActivity() {
     private var routeId: Long = NO_ROUTE_ID
     private val mainHandler = Handler(Looper.getMainLooper())
     private val searchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val pinExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var originTouchedByUser: Boolean = false
     private var currentPlaceGeneration: Int = 0
     private var pendingCurrentPlaceRequest: PendingCurrentPlaceRequest? = null
     private var pendingLocationSettingsRetry: PendingCurrentPlaceRequest? = null
     private var currentPlaceTimeoutRunnable: Runnable? = null
     private var hasPrefetchedCurrentAddress: Boolean = false
+    private var originalRouteConfig: RouteConfig? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,6 +94,7 @@ class RouteEditActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.routeEditContent).applyStatusBarPadding()
         repository = RouteConfigRepository(this)
+        pinnedRouteRepository = PinnedRouteRepository(this)
         placeSearchRepository = CitybusPlaceSearchRepository()
         currentLocationCoordinator = CurrentLocationCoordinator(this)
         locationPermissionStateStore = LocationPermissionStateStore(this)
@@ -107,6 +114,9 @@ class RouteEditActivity : AppCompatActivity() {
         updateCandidateBackPriority(false)
         mainHandler.removeCallbacksAndMessages(null)
         searchExecutor.shutdownNow()
+        pinExecutor.shutdownNow()
+        pinnedRouteRepository.close()
+        repository.close()
         super.onDestroy()
     }
 
@@ -146,7 +156,8 @@ class RouteEditActivity : AppCompatActivity() {
             animateSwap(view)
             swapPlaces()
         }
-        findViewById<MaterialButton>(R.id.saveRouteButton).setOnClickListener { saveRoute() }
+        saveRouteButton = findViewById<MaterialButton>(R.id.saveRouteButton)
+        saveRouteButton.setOnClickListener { saveRoute() }
         routeEditContent.setOnClickListener { hideCandidateLists() }
     }
 
@@ -518,6 +529,7 @@ class RouteEditActivity : AppCompatActivity() {
             return
         }
 
+        originalRouteConfig = route
         nameInput.setText(route.name)
         originController.setSelectedPlace(route.origin)
         destinationController.setSelectedPlace(route.destination)
@@ -545,11 +557,64 @@ class RouteEditActivity : AppCompatActivity() {
         if (routeId == NO_ROUTE_ID) {
             repository.insert(name, origin, destination)
             Toast.makeText(this, R.string.route_added, Toast.LENGTH_SHORT).show()
+            finish()
         } else {
-            repository.update(RouteConfig(routeId, name, origin, destination))
-            Toast.makeText(this, R.string.route_updated, Toast.LENGTH_SHORT).show()
+            val updated = RouteConfig(routeId, name, origin, destination)
+            val original = originalRouteConfig ?: repository.getById(routeId) ?: return
+            val endpointsChanged =
+                original.origin != updated.origin || original.destination != updated.destination
+            if (!endpointsChanged) {
+                persistUpdatedRoute(updated, clearRouteResultPins = false)
+                return
+            }
+            confirmEndpointChangeIfNeeded(updated)
         }
-        finish()
+    }
+
+    private fun confirmEndpointChangeIfNeeded(updated: RouteConfig) {
+        saveRouteButton.isEnabled = false
+        pinExecutor.execute {
+            val pinCountResult = runCatching { pinnedRouteRepository.count(updated.id) }
+            mainHandler.post {
+                if (isFinishing || isDestroyed) return@post
+                saveRouteButton.isEnabled = true
+                val pinCount = pinCountResult.getOrElse {
+                    Toast.makeText(this, R.string.route_update_failed, Toast.LENGTH_SHORT).show()
+                    return@post
+                }
+                if (pinCount == 0) {
+                    persistUpdatedRoute(updated, clearRouteResultPins = true)
+                    return@post
+                }
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.route_endpoint_change_pin_title)
+                    .setMessage(getString(R.string.route_endpoint_change_pin_message, pinCount))
+                    .setNegativeButton(R.string.action_cancel, null)
+                    .setPositiveButton(R.string.route_endpoint_change_pin_confirm) { _, _ ->
+                        persistUpdatedRoute(updated, clearRouteResultPins = true)
+                    }
+                    .show()
+            }
+        }
+    }
+
+    private fun persistUpdatedRoute(updated: RouteConfig, clearRouteResultPins: Boolean) {
+        saveRouteButton.isEnabled = false
+        pinExecutor.execute {
+            val result = runCatching {
+                repository.update(updated, clearRouteResultPins)
+            }
+            mainHandler.post {
+                if (isFinishing || isDestroyed) return@post
+                saveRouteButton.isEnabled = true
+                result.onSuccess {
+                    Toast.makeText(this, R.string.route_updated, Toast.LENGTH_SHORT).show()
+                    finish()
+                }.onFailure {
+                    Toast.makeText(this, R.string.route_update_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun swapPlaces() {

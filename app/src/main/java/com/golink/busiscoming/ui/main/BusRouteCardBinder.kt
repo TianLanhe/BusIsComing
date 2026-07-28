@@ -5,12 +5,15 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaArrival
+import com.golink.busiscoming.data.model.PinLevel
 import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.common.localizedText
+import com.google.android.material.card.MaterialCardView
 
 class BusRouteCardBinder(private val itemView: View) {
     private val localizedText = itemView.context.localizedText()
@@ -23,8 +26,12 @@ class BusRouteCardBinder(private val itemView: View) {
     private val stopOriginText: TextView = itemView.findViewById(R.id.busStopOriginText)
     private val stopDestinationText: TextView = itemView.findViewById(R.id.busStopDestinationText)
     private val routeInfoText: TextView = itemView.findViewById(R.id.busRouteInfoText)
+    private val bookmark: View = itemView.findViewById(R.id.busPersistentPinBookmark)
+    private val card: MaterialCardView = itemView as MaterialCardView
+    private val accessibilityActionIds = mutableListOf<Int>()
 
     fun bind(route: BusRouteOption, actions: BusRouteCardActions = BusRouteCardActions.Disabled) {
+        resetPinPresentation()
         routeNameText.text = route.routeName
         arrivalText.text = RouteResultCardFormatter.waitStatus(route.waitTimeState, localizedText)
         arrivalText.setTextColor(waitStatusColor(route.waitTimeState))
@@ -91,6 +98,88 @@ class BusRouteCardBinder(private val itemView: View) {
         }
     }
 
+    fun bind(item: RouteCardItem, actions: BusRouteCardActions = BusRouteCardActions.Disabled) {
+        bind(item.route, actions)
+        val isPinned = item.pinLevel != PinLevel.UNPINNED
+        card.strokeWidth = itemView.resources.getDimensionPixelSize(
+            if (isPinned) R.dimen.route_pin_stroke_width else R.dimen.route_card_stroke_width
+        )
+        card.strokeColor = ContextCompat.getColor(
+            itemView.context,
+            if (isPinned) R.color.bus_chip_selected else R.color.bus_divider
+        )
+        bookmark.visibility =
+            if (item.pinLevel == PinLevel.PERSISTENT) View.VISIBLE else View.GONE
+        ViewCompat.setStateDescription(
+            itemView,
+            when (item.pinLevel) {
+                PinLevel.UNPINNED -> null
+                PinLevel.TEMPORARY -> itemView.context.getString(R.string.route_pin_state_temporary)
+                PinLevel.PERSISTENT -> itemView.context.getString(R.string.route_pin_state_persistent)
+            }
+        )
+        bindPinAccessibilityActions(item, actions.pinAction)
+    }
+
+    private fun resetPinPresentation() {
+        card.strokeWidth = itemView.resources.getDimensionPixelSize(R.dimen.route_card_stroke_width)
+        card.strokeColor = ContextCompat.getColor(itemView.context, R.color.bus_divider)
+        bookmark.visibility = View.GONE
+        ViewCompat.setStateDescription(itemView, null)
+        accessibilityActionIds.forEach { ViewCompat.removeAccessibilityAction(itemView, it) }
+        accessibilityActionIds.clear()
+    }
+
+    private fun bindPinAccessibilityActions(
+        item: RouteCardItem,
+        onPinAction: ((RouteCardItem, RoutePinAction) -> Unit)?
+    ) {
+        if (onPinAction == null || !item.isPinEligible) return
+        when (item.pinLevel) {
+            PinLevel.UNPINNED -> addPinAccessibilityAction(
+                R.string.route_pin_action_temporary,
+                item,
+                RoutePinAction.PIN_TEMPORARY,
+                onPinAction
+            )
+            PinLevel.TEMPORARY -> {
+                addPinAccessibilityAction(
+                    R.string.route_pin_action_persistent,
+                    item,
+                    RoutePinAction.PIN_PERSISTENT,
+                    onPinAction
+                )
+                addPinAccessibilityAction(
+                    R.string.route_pin_action_cancel,
+                    item,
+                    RoutePinAction.CANCEL,
+                    onPinAction
+                )
+            }
+            PinLevel.PERSISTENT -> addPinAccessibilityAction(
+                R.string.route_pin_action_cancel,
+                item,
+                RoutePinAction.CANCEL,
+                onPinAction
+            )
+        }
+    }
+
+    private fun addPinAccessibilityAction(
+        labelRes: Int,
+        item: RouteCardItem,
+        action: RoutePinAction,
+        onPinAction: (RouteCardItem, RoutePinAction) -> Unit
+    ) {
+        accessibilityActionIds += ViewCompat.addAccessibilityAction(
+            itemView,
+            itemView.context.getString(labelRes)
+        ) { _, _ ->
+            onPinAction(item, action)
+            true
+        }
+    }
+
     private fun waitStatusColor(waitTimeState: WaitTimeState): Int {
         val colorRes = when (waitTimeState) {
             is WaitTimeState.Available -> R.color.bus_wait_accent
@@ -109,7 +198,8 @@ class BusRouteCardBinder(private val itemView: View) {
 data class BusRouteCardActions(
     val routeClick: ((BusRouteOption) -> Unit)? = null,
     val etaClick: ((BusRouteOption) -> Unit)? = null,
-    val monitorClick: ((BusRouteOption) -> Unit)? = null
+    val monitorClick: ((BusRouteOption) -> Unit)? = null,
+    val pinAction: ((RouteCardItem, RoutePinAction) -> Unit)? = null
 ) {
     companion object {
         val Disabled = BusRouteCardActions()

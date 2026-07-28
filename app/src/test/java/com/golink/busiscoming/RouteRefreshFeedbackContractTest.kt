@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -9,11 +10,13 @@ class RouteRefreshFeedbackContractTest {
         File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
 
     @Test
-    fun refreshSuccessUsesInitialRoutesAndDelayedGenerationBoundFinish() {
-        assertTrue(mainActivityKt.contains("handleRefreshSuccess(queryId, routes)"))
+    fun refreshSuccessWaitsForPinsAndKeepsViewportBeforeDelayedGenerationBoundFinish() {
+        assertTrue(mainActivityKt.contains("finishPinGatedQuery"))
+        assertTrue(mainActivityKt.contains("handleRefreshSuccess(completion.queryId, completion.routes)"))
         assertTrue(mainActivityKt.contains("REFRESH_SUCCESS_DURATION_MS"))
         assertTrue(mainActivityKt.contains("finishRefreshSuccess(queryId)"))
-        assertTrue(mainActivityKt.contains("resultList.scrollToPosition(0)"))
+        assertTrue(mainActivityKt.contains("restoreRefreshViewport()"))
+        assertFalse(mainActivityKt.contains("resultList.scrollToPosition(0)"))
     }
 
     @Test
