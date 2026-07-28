@@ -34,6 +34,8 @@ import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
@@ -327,6 +329,39 @@ class SearchDestinationInstrumentedTest {
                         viewport.firstResultPosition > expectedViewport.firstResultPosition
                 }
                 outerScrollResumed
+            }
+        }
+    }
+
+    @Test
+    fun searchCandidatesStayAboveImeWhenMainNavigationIsCovered() {
+        installDependencies(MultipleRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { _, callback ->
+            callback(CurrentPlaceSelectionResult.Failure)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            onView(withId(R.id.placePairOriginInput)).perform(click())
+            scenario.onActivity(::showOriginCandidatesForExistingResult)
+            waitUntil {
+                var candidatesAboveIme = false
+                scenario.onActivity { activity ->
+                    val candidates = activity.findViewById<RecyclerView>(
+                        R.id.placePairOriginCandidateList
+                    )
+                    val insets = requireNotNull(ViewCompat.getRootWindowInsets(candidates))
+                    val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+                    val rootLocation = IntArray(2)
+                    val candidateLocation = IntArray(2)
+                    candidates.rootView.getLocationOnScreen(rootLocation)
+                    candidates.getLocationOnScreen(candidateLocation)
+                    val imeTop = rootLocation[1] + candidates.rootView.height - imeInsets.bottom
+                    candidatesAboveIme = insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                        candidates.visibility == View.VISIBLE &&
+                        candidateLocation[1] + candidates.height <= imeTop
+                }
+                candidatesAboveIme
             }
         }
     }

@@ -1,10 +1,12 @@
 package com.golink.busiscoming
 
 import android.Manifest
+import android.view.View
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -14,11 +16,14 @@ import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.main.MainActivity
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Rule
@@ -80,6 +85,44 @@ class TopLevelNavigationInstrumentedTest {
             scenario.recreate()
             scenario.onActivity { activity ->
                 assertNavigationState(activity, R.id.navigation_settings)
+            }
+        }
+    }
+
+    @Test
+    fun imeCoversBottomNavigationWithoutMovingItAndRestoresItsSelectedDestination() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            var navigationBoundsBeforeIme: android.graphics.Rect? = null
+            scenario.onActivity { activity ->
+                navigationBoundsBeforeIme = screenBounds(
+                    activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                )
+            }
+
+            onView(withId(R.id.placePairOriginInput)).perform(click())
+            waitForImeVisibility(scenario, visible = true)
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                assertEquals(navigationBoundsBeforeIme, screenBounds(navigation))
+                assertEquals(R.id.navigation_search, navigation.selectedItemId)
+                assertFalse(navigation.isEnabled)
+                assertFalse(navigation.isClickable)
+                assertEquals(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,
+                    navigation.importantForAccessibility
+                )
+            }
+
+            onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
+            waitForImeVisibility(scenario, visible = false)
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                assertEquals(navigationBoundsBeforeIme, screenBounds(navigation))
+                assertEquals(R.id.navigation_search, navigation.selectedItemId)
+                assertTrue(navigation.isEnabled)
+                assertTrue(navigation.isClickable)
+                assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO, navigation.importantForAccessibility)
             }
         }
     }
@@ -198,6 +241,24 @@ class TopLevelNavigationInstrumentedTest {
             location[0] + view.width,
             location[1] + view.height
         )
+    }
+
+    private fun waitForImeVisibility(
+        scenario: ActivityScenario<MainActivity>,
+        visible: Boolean
+    ) {
+        val deadline = System.currentTimeMillis() + 10_000L
+        while (System.currentTimeMillis() < deadline) {
+            var currentVisibility: Boolean? = null
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                currentVisibility = ViewCompat.getRootWindowInsets(navigation)
+                    ?.isVisible(WindowInsetsCompat.Type.ime())
+            }
+            if (currentVisibility == visible) return
+            Thread.sleep(50)
+        }
+        assertTrue("Timed out waiting for IME visibility=$visible", false)
     }
 
     private fun dp(activity: MainActivity, value: Int): Int {

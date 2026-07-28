@@ -26,6 +26,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -185,7 +186,6 @@ class MainActivity : AppCompatActivity() {
         restoreFrequentQueryState(savedInstanceState)
         setContentView(R.layout.activity_main)
         title = "BusIsComing"
-        findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
 
         routeConfigRepository = RouteConfigRepository(this)
         currentLocationCoordinator = CurrentLocationCoordinator(this)
@@ -555,6 +555,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupTopLevelNavigation(savedInstanceState: Bundle?) {
         topLevelNav = findViewById(R.id.topLevelNav)
+        findViewById<View>(R.id.mainRoot).applyStatusBarPadding { insets ->
+            applyTopLevelNavigationImePolicy(
+                imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            )
+        }
         val restored = savedInstanceState
             ?.getString(STATE_SELECTED_DESTINATION)
             ?.let { runCatching { TopLevelDestination.valueOf(it) }.getOrNull() }
@@ -568,6 +573,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
         topLevelNav.selectedItemId = restored.menuItemId()
+    }
+
+    private fun applyTopLevelNavigationImePolicy(imeVisible: Boolean) {
+        val policy = MainActivityImeNavigationPolicy.resolve(imeVisible)
+        topLevelNav.isEnabled = policy.isEnabled
+        topLevelNav.isClickable = policy.isClickable
+        topLevelNav.importantForAccessibility = if (policy.hidesDescendantsFromAccessibility) {
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        } else {
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        }
     }
 
     private fun selectDestination(destination: TopLevelDestination): Boolean {

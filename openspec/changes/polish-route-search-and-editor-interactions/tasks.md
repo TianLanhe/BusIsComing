@@ -20,8 +20,8 @@
 
 ## 4. 固定底部導航的 IME 行為
 
-- [ ] 4.1 只為 `MainActivity` 設定 `adjustNothing` 或等效不 resize 的窗口策略，保留 `RouteEditActivity` 等次級頁的既有 IME 行為
-- [ ] 4.2 調整主 Activity／搜尋頁 Insets 協調，確保 IME 覆蓋物理底部導航時該導航不可觸控或取得無障礙焦點，收起 IME 後原 destination、量度與位置不變
+- [x] 4.1 只為 `MainActivity` 設定 `adjustNothing` 或等效不 resize 的窗口策略，保留 `RouteEditActivity` 等次級頁的既有 IME 行為
+- [x] 4.2 調整主 Activity／搜尋頁 Insets 協調，確保 IME 覆蓋物理底部導航時該導航不可觸控或取得無障礙焦點，收起 IME 後原 destination、量度與位置不變
 - [ ] 4.3 擴充 `TopLevelNavigationInstrumentedTest` 與搜尋候選 instrumentation，驗證底部導航不被抬到鍵盤上方、候選仍依 IME Insets 完整停留在鍵盤上方，並覆蓋收起鍵盤後恢復
 
 ## 5. 共用查詢狀態卡與防重入
