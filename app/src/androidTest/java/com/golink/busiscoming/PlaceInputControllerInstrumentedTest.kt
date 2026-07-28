@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -470,10 +472,47 @@ class PlaceInputControllerInstrumentedTest {
             scenario.onActivity {
                 assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)
                 assertEquals(View.VISIBLE, candidateList.visibility)
+
+                owner.disallowRequests.clear()
+                val activeOwnershipTime = SystemClock.uptimeMillis()
+                val activeOwnershipDown = MotionEvent.obtain(
+                    activeOwnershipTime,
+                    activeOwnershipTime,
+                    MotionEvent.ACTION_DOWN,
+                    candidateList.width / 2f,
+                    candidateList.height / 2f,
+                    0
+                )
+                try {
+                    candidateList.dispatchTouchEvent(activeOwnershipDown)
+                } finally {
+                    activeOwnershipDown.recycle()
+                }
+                assertTrue(owner.disallowRequests.last())
+
                 controller.dispose()
                 assertEquals(View.GONE, candidateList.visibility)
                 assertTrue(candidateList.isNestedScrollingEnabled)
                 assertFalse(owner.disallowRequests.last())
+
+                val requestCountAfterDispose = owner.disallowRequests.size
+                candidateList.visibility = View.VISIBLE
+                val postDisposeTime = SystemClock.uptimeMillis()
+                val postDisposeDown = MotionEvent.obtain(
+                    postDisposeTime,
+                    postDisposeTime,
+                    MotionEvent.ACTION_DOWN,
+                    candidateList.width / 2f,
+                    candidateList.height / 2f,
+                    0
+                )
+                try {
+                    candidateList.dispatchTouchEvent(postDisposeDown)
+                } finally {
+                    postDisposeDown.recycle()
+                }
+                assertEquals(requestCountAfterDispose, owner.disallowRequests.size)
+                candidateList.visibility = View.GONE
                 executor.shutdownNow()
             }
         }

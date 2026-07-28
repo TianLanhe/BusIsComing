@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -134,9 +135,54 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(searchInstrumentationTest.contains("showOriginCandidatesForExistingResult"))
         assertTrue(searchInstrumentationTest.contains("assertOuterViewportUnchanged"))
         assertTrue(searchInstrumentationTest.contains("onBackPressedDispatcher.onBackPressed()"))
-        assertTrue(controllerInstrumentationTest.contains("instrumented exclusive candidate list"))
-        assertTrue(controllerInstrumentationTest.contains("owner.disallowRequests.last()"))
-        assertTrue(controllerInstrumentationTest.contains("controller.dispose()"))
+
+        val exclusiveTest = extractFunction(
+            controllerInstrumentationTest,
+            "exclusiveCandidateScrollKeepsItsOwnRecyclerViewScrollableWithoutNestedHandoff"
+        )
+        val candidateInitializer = extractBlock(
+            exclusiveTest,
+            "candidateList = RecyclerView(activity).apply {"
+        )
+        val exclusiveDescription = "instrumented exclusive candidate list"
+        assertTrue(
+            "The exclusive matcher description must be assigned to candidateList",
+            Regex(
+                """(?m)^\s*contentDescription\s*=\s*"${Regex.escape(exclusiveDescription)}"\s*$"""
+            ).containsMatchIn(candidateInitializer)
+        )
+        assertTrue(
+            "The exclusive matcher must target candidateList's unique description",
+            exclusiveTest.contains("onView(withContentDescription(\"$exclusiveDescription\"))")
+        )
+        assertEquals(
+            "The exclusive candidate description must not identify another list",
+            2,
+            Regex(Regex.escape(exclusiveDescription))
+                .findAll(controllerInstrumentationTest)
+                .count()
+        )
+        assertAppearsInOrder(
+            exclusiveTest,
+            "owner.disallowRequests.clear()",
+            "MotionEvent.ACTION_DOWN",
+            "candidateList.dispatchTouchEvent(activeOwnershipDown)",
+            "activeOwnershipDown.recycle()",
+            "assertTrue(owner.disallowRequests.last())",
+            "controller.dispose()",
+            "assertEquals(View.GONE, candidateList.visibility)",
+            "assertTrue(candidateList.isNestedScrollingEnabled)",
+            "assertFalse(owner.disallowRequests.last())",
+            "val requestCountAfterDispose = owner.disallowRequests.size",
+            "candidateList.visibility = View.VISIBLE",
+            "val postDisposeDown = MotionEvent.obtain(",
+            "MotionEvent.ACTION_DOWN",
+            "candidateList.dispatchTouchEvent(postDisposeDown)",
+            "postDisposeDown.recycle()",
+            "assertEquals(requestCountAfterDispose, owner.disallowRequests.size)"
+        )
+        assertFalse(exclusiveTest.contains("MotionEvent.ACTION_UP"))
+        assertFalse(exclusiveTest.contains("MotionEvent.ACTION_CANCEL"))
     }
 
     @Test
@@ -145,5 +191,36 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(searchFragmentKt.contains("restoredDestination"))
         assertTrue(searchFragmentKt.contains("onSaveInstanceState"))
         assertTrue(searchFragmentKt.contains("currentPlaceRequestState.beginAutoRequest"))
+    }
+
+    private fun extractFunction(source: String, name: String): String {
+        return extractBlock(source, "fun $name(")
+    }
+
+    private fun extractBlock(source: String, marker: String): String {
+        val start = source.indexOf(marker)
+        assertTrue("Missing source block: $marker", start >= 0)
+        val bodyStart = source.indexOf('{', start)
+        assertTrue("Missing body for source block: $marker", bodyStart >= 0)
+        var depth = 0
+        for (index in bodyStart until source.length) {
+            when (source[index]) {
+                '{' -> depth += 1
+                '}' -> {
+                    depth -= 1
+                    if (depth == 0) return source.substring(start, index + 1)
+                }
+            }
+        }
+        error("Unterminated source block: $marker")
+    }
+
+    private fun assertAppearsInOrder(source: String, vararg expected: String) {
+        var cursor = 0
+        expected.forEach { fragment ->
+            val index = source.indexOf(fragment, cursor)
+            assertTrue("Missing or out-of-order instrumentation evidence: $fragment", index >= 0)
+            cursor = index + fragment.length
+        }
     }
 }
