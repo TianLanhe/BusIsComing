@@ -502,6 +502,56 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
+    fun searchUsesSharedStatusCardAndFixedRefreshFeedbackWithoutAllowingReentry() {
+        val routeRepository = CapturingRouteRepository()
+        installDependencies(routeRepository)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil { routeRepository.callbacks.size == 1 }
+
+            onView(withId(R.id.resultStatusCard)).check(matches(isDisplayed()))
+            onView(withId(R.id.resultStatusProgress)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
+
+            routeRepository.callbacks[0].onInitialRoutes(emptyList())
+            waitUntil {
+                var emptyVisible = false
+                scenario.onActivity { activity ->
+                    emptyVisible = activity.findViewById<View>(R.id.resultStatusCard).visibility ==
+                        View.VISIBLE && activity.findViewById<View>(R.id.resultStatusProgress).visibility ==
+                        View.GONE
+                }
+                emptyVisible
+            }
+            onView(withId(R.id.searchQueryButton)).check(matches(isEnabled()))
+            onView(withId(R.id.placePairOriginInput)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil { routeRepository.callbacks.size == 2 }
+            routeRepository.callbacks[1].onInitialRoutes(listOf(route("可刷新路線")))
+            waitForText("可刷新路線")
+
+            onView(withId(R.id.searchSwipeRefresh)).perform(swipeDownVisibleArea())
+            waitUntil { routeRepository.callbacks.size == 3 }
+            onView(withId(R.id.searchResultRefreshOverlay)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchResultRefreshProgress)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
+
+            routeRepository.callbacks[2].onInitialRoutes(listOf(route("刷新後路線")))
+            waitForText("刷新後路線")
+            onView(withId(R.id.searchResultRefreshSuccess)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
+            Thread.sleep(650)
+            onView(withId(R.id.searchResultRefreshOverlay)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchQueryButton)).check(matches(isEnabled()))
+        }
+    }
+
+    @Test
     fun googleAttributionFollowsSwapAndRecreationThenClearsOnManualEdit() {
         SearchFragment.placeSearchRepositoryFactory = { FakePlaceRepository() }
         SearchFragment.busRouteRepositoryFactory = { ImmediateRouteRepository() }
@@ -1060,6 +1110,7 @@ class SearchDestinationInstrumentedTest {
 
     private class CapturingRouteRepository : BusRouteRepository {
         val callbacks = mutableListOf<BusRouteQueryCallback>()
+        @Volatile var queryCount = 0
 
         override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> = emptyList()
 
@@ -1068,6 +1119,7 @@ class SearchDestinationInstrumentedTest {
             destination: Place,
             callback: BusRouteQueryCallback
         ) {
+            queryCount += 1
             callbacks += callback
         }
     }

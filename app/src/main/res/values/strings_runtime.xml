@@ -99,7 +99,9 @@
     <string name="route_query_loading_message">正在配對可用巴士方案和候車時間。</string>
     <string name="route_query_failure_message">請稍後重試，或換一個常用行程再查詢路線。</string>
     <string name="search_no_routes">找不到可用路線</string>
+    <string name="search_no_routes_message">請檢查起點和終點，或稍後再試。</string>
     <string name="search_failed">搜尋失敗，請稍後重試</string>
+    <string name="search_route_query_failure_message">請稍後重試，或調整起點和終點後重新查詢。</string>
     <string name="frequent_route_name_hint">常用行程名稱</string>
     <string name="route_preview">行程預覽</string>
     <string name="save_frequent_title">儲存為常用行程</string>

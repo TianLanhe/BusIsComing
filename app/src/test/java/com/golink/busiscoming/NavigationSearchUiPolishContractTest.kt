@@ -20,6 +20,25 @@ class NavigationSearchUiPolishContractTest {
         File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
 
     @Test
+    fun `frequent and search include the same route query status card`() {
+        val statusCard = File("src/main/res/layout/view_route_query_status_card.xml")
+        assertTrue("Missing shared query status card", statusCard.isFile)
+        val card = statusCard.readText()
+        assertTrue(card.contains("@+id/resultStatusCard"))
+        assertTrue(card.contains("@+id/resultStatusProgress"))
+        assertTrue(card.contains("@+id/resultStatusTitle"))
+        assertTrue(card.contains("@+id/resultStatusMessage"))
+        assertTrue(frequentLayout.contains("@layout/view_route_query_status_card"))
+        assertTrue(searchLayout.contains("@layout/view_route_query_status_card"))
+        assertFalse(searchLayout.contains("@+id/searchResultLoading"))
+        assertFalse(searchLayout.contains("@+id/searchResultStatus"))
+        assertTrue(searchLayout.contains("@+id/searchResultRefreshOverlay"))
+        assertTrue(searchLayout.contains("@+id/searchResultRefreshProgress"))
+        assertTrue(searchLayout.contains("@+id/searchResultRefreshSuccess"))
+        assertTrue(searchFragment.contains("renderSearchUi()"))
+    }
+
+    @Test
     fun `bottom navigation preserves indicator size with a dedicated label gap`() {
         val indicator = styleBlock("TopLevelNavigation.ActiveIndicator")
         assertTrue(indicator.contains("<item name=\"android:width\">64dp</item>"))

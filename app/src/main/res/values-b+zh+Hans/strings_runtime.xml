@@ -42,4 +42,6 @@
     <string name="search_field_accessibility_value">%1$s，%2$s</string>
     <string name="search_field_accessibility_value_status">%1$s，%2$s，%3$s</string>
     <string name="route_direction_format">往 %1$s 方向</string>
+    <string name="search_no_routes_message">请检查起点和终点，或稍后再试。</string>
+    <string name="search_route_query_failure_message">请稍后重试，或调整起点和终点后重新查询。</string>
 </resources>

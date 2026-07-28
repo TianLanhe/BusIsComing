@@ -26,10 +26,10 @@
 
 ## 5. 共用查詢狀態卡與防重入
 
-- [ ] 5.1 把常用頁既有 loading／空結果／失敗狀態卡抽為 `ui/common` 共用 View 或可 include layout，保留常用頁既有尺寸、文案、ID 契約及刷新回饋
-- [ ] 5.2 讓搜尋頁移除裸 `ProgressBar`／普通狀態文字並接入共用狀態卡，首次或新查詢時顯示「正在查詢路線」，空結果與失敗時展示對應卡片且保持完整編輯器
-- [ ] 5.3 讓 `SearchFragment` 的單一 `renderSearchUi()` 或等效入口同時依展示狀態與 `RouteQueryState` 推導搜尋按鈕 enabled、置灰、文字及狀態卡；查詢入口再次檢查進行中狀態以阻止快速連點、鍵盤 action 及刷新期間重複提交
-- [ ] 5.4 擴充常用頁及搜尋頁狀態 contract／instrumentation，覆蓋 loading、空、失敗、取消、舊結果刷新保留、刷新浮層，以及過期狀態回呼不得覆蓋新畫面
+- [x] 5.1 把常用頁既有 loading／空結果／失敗狀態卡抽為 `ui/common` 共用 View 或可 include layout，保留常用頁既有尺寸、文案、ID 契約及刷新回饋
+- [x] 5.2 讓搜尋頁移除裸 `ProgressBar`／普通狀態文字並接入共用狀態卡，首次或新查詢時顯示「正在查詢路線」，空結果與失敗時展示對應卡片且保持完整編輯器
+- [x] 5.3 讓 `SearchFragment` 的單一 `renderSearchUi()` 或等效入口同時依展示狀態與 `RouteQueryState` 推導搜尋按鈕 enabled、置灰、文字及狀態卡；查詢入口再次檢查進行中狀態以阻止快速連點、鍵盤 action 及刷新期間重複提交
+- [ ] 5.4 擴充常用頁及搜尋頁狀態 contract／instrumentation，覆蓋 loading、空、失敗、取消、舊結果刷新保留、刷新浮層，以及過期狀態回呼不得覆蓋新畫面（JVM contract 已通過、instrumentation 已編譯，待有裝置執行）
 
 ## 6. 實作「本次行程」折疊與編輯流程
 

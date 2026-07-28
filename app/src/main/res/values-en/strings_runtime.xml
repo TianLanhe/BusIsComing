@@ -42,4 +42,6 @@
     <string name="search_field_accessibility_value">%1$s, %2$s</string>
     <string name="search_field_accessibility_value_status">%1$s, %2$s, %3$s</string>
     <string name="route_direction_format">Towards %1$s</string>
+    <string name="search_no_routes_message">Check the start and destination, or try again later.</string>
+    <string name="search_route_query_failure_message">Try again later or adjust the start and destination.</string>
 </resources>

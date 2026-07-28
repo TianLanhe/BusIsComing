@@ -3,7 +3,7 @@ package com.golink.busiscoming.ui.main
 import com.golink.busiscoming.data.model.Place
 
 /**
- * 搜尋頁展示層的模式；查詢 generation 與進行中狀態仍由 [RouteQueryState] 擁有。
+ * 搜尋頁展示層的模式；查詢 generation 與 callback 驗證仍由 [RouteQueryCoordinator] 擁有。
  */
 enum class SearchDisplayMode {
     EDITING,
@@ -30,7 +30,7 @@ data class SearchQuerySnapshot(
  * 搜尋頁的純展示狀態。
  *
  * 不持有 query id、進行中旗標或 callback generation；呼叫端必須先由
- * [RouteQueryState] 驗證回呼仍屬目前查詢，才把結果事件交給此 reducer。
+ * [RouteQueryCoordinator] 驗證回呼仍屬目前查詢，才把結果事件交給此 reducer。
  */
 class SearchPresentationState {
     var mode: SearchDisplayMode = SearchDisplayMode.EDITING
