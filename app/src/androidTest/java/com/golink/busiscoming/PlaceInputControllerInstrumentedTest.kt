@@ -14,6 +14,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.scrollTo
+import androidx.test.espresso.action.ViewActions.swipeUp
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
@@ -285,6 +287,7 @@ class PlaceInputControllerInstrumentedTest {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
                     )
+                    contentDescription = "instrumented exclusive candidates"
                 }
                 root.addView(inputLayout)
                 root.addView(loading)
@@ -448,10 +451,14 @@ class PlaceInputControllerInstrumentedTest {
                 ready
             }
 
-            scenario.onActivity { activity ->
+            var startOffset = 0
+            scenario.onActivity {
                 assertFalse(candidateList.isNestedScrollingEnabled)
-                candidateList.scrollBy(0, dp(activity, 52) * 6)
-                assertTrue(candidateList.computeVerticalScrollOffset() > 0)
+                startOffset = candidateList.computeVerticalScrollOffset()
+            }
+            onView(withContentDescription("instrumented exclusive candidates")).perform(swipeUp())
+            scenario.onActivity {
+                assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)
                 input.clearFocus()
                 assertTrue(candidateList.isNestedScrollingEnabled)
                 controller.dispose()

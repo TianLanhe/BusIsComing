@@ -15,6 +15,12 @@ class PlaceInputInlineCandidatesContractTest {
     private val searchFragmentKt =
         File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
     private val searchLayoutXml = File("src/main/res/layout/fragment_search.xml").readText()
+    private val searchInstrumentationTest = File(
+        "src/androidTest/java/com/golink/busiscoming/SearchDestinationInstrumentedTest.kt"
+    ).readText()
+    private val controllerInstrumentationTest = File(
+        "src/androidTest/java/com/golink/busiscoming/PlaceInputControllerInstrumentedTest.kt"
+    ).readText()
 
     @Test
     fun `route edit restores historical geometry while search keeps compact editor`() {
@@ -117,6 +123,15 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(controllerKt.contains("RecyclerView.SimpleOnItemTouchListener"))
         assertTrue(controllerKt.contains("MotionEvent.ACTION_DOWN"))
         assertFalse(searchFragmentKt.contains("scrollFlags ="))
+    }
+
+    @Test
+    fun `candidate instrumentation preserves a refreshable result viewport and uses real swipes`() {
+        assertTrue(searchInstrumentationTest.contains("refresh.isEnabled"))
+        assertTrue(searchInstrumentationTest.contains("findFirstVisibleItemPosition"))
+        assertTrue(searchInstrumentationTest.contains("showOriginCandidatesForExistingResult"))
+        assertTrue(searchInstrumentationTest.contains("assertOuterViewportUnchanged"))
+        assertTrue(controllerInstrumentationTest.contains("perform(swipeUp())"))
     }
 
     @Test

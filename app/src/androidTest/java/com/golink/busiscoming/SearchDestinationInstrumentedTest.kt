@@ -34,6 +34,7 @@ import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
@@ -196,18 +197,36 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
-    fun searchCandidatesKeepAppBarStateAndOwnVerticalGesturesUntilTheyClose() {
-        installDependencies(ImmediateRouteRepository())
+    fun searchCandidatesKeepTheRefreshableResultViewportAndOwnVerticalGesturesUntilTheyClose() {
+        installDependencies(MultipleRouteRepository())
         SearchFragment.currentPlaceRequestOverride = { _, callback ->
             callback(CurrentPlaceSelectionResult.Failure)
         }
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil {
+                var ready = false
+                scenario.onActivity { activity ->
+                    val results = activity.findViewById<RecyclerView>(R.id.searchResultList)
+                    ready = results.visibility == View.VISIBLE && results.adapter?.itemCount == 20
+                }
+                ready
+            }
+            var resultViewport: OuterViewport? = null
+            scenario.onActivity { activity ->
+                assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                resultViewport = outerViewport(activity)
+            }
             onView(withId(R.id.placePairOriginInput)).perform(
-                click(),
-                replaceText("many")
+                click()
             )
+            scenario.onActivity { activity ->
+                showOriginCandidatesForExistingResult(activity)
+            }
             waitUntil {
                 var visible = false
                 scenario.onActivity { activity ->
@@ -218,9 +237,9 @@ class SearchDestinationInstrumentedTest {
                 visible
             }
 
-            var frozenAppBarTop = 0
+            val expectedViewport = requireNotNull(resultViewport)
+            var candidateStartOffset = 0
             scenario.onActivity { activity ->
-                val appBar = activity.findViewById<View>(R.id.searchAppBar)
                 val searchContent = activity.findViewById<View>(R.id.searchContent)
                 val candidates = activity.findViewById<RecyclerView>(
                     R.id.placePairOriginCandidateList
@@ -233,30 +252,30 @@ class SearchDestinationInstrumentedTest {
                 assertFalse(refresh.isEnabled)
                 assertEquals(0, candidates.height % dp(activity, 52))
                 assertTrue(candidates.height / dp(activity, 52) in 5..6)
-                frozenAppBarTop = appBar.top
+                candidateStartOffset = candidates.computeVerticalScrollOffset()
+                assertOuterViewportUnchanged(expectedViewport, activity)
             }
             onView(withId(R.id.placePairOriginCandidateList)).perform(swipeUp())
             scenario.onActivity { activity ->
-                val appBar = activity.findViewById<View>(R.id.searchAppBar)
                 val candidates = activity.findViewById<RecyclerView>(
                     R.id.placePairOriginCandidateList
                 )
-                assertTrue(candidates.computeVerticalScrollOffset() > 0)
-                assertEquals(frozenAppBarTop, appBar.top)
+                assertTrue(candidates.computeVerticalScrollOffset() > candidateStartOffset)
+                assertOuterViewportUnchanged(expectedViewport, activity)
                 candidates.scrollToPosition(19)
             }
             onView(withId(R.id.placePairOriginCandidateList)).perform(swipeUp())
             scenario.onActivity { activity ->
-                assertEquals(frozenAppBarTop, activity.findViewById<View>(R.id.searchAppBar).top)
+                assertOuterViewportUnchanged(expectedViewport, activity)
                 activity.findViewById<RecyclerView>(R.id.placePairOriginCandidateList)
                     .scrollToPosition(0)
             }
             onView(withId(R.id.placePairOriginCandidateList)).perform(swipeDown())
             scenario.onActivity { activity ->
-                assertEquals(frozenAppBarTop, activity.findViewById<View>(R.id.searchAppBar).top)
+                assertOuterViewportUnchanged(expectedViewport, activity)
             }
 
-            onView(withId(R.id.searchContent)).perform(click())
+            onView(withId(R.id.searchContent)).perform(click(), closeSoftKeyboard())
             waitUntil {
                 var closed = false
                 scenario.onActivity { activity ->
@@ -270,6 +289,18 @@ class SearchDestinationInstrumentedTest {
                 val preservedFlagsAfterClose = (searchContent.layoutParams as
                     com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
                 assertEquals(1, preservedFlagsAfterClose)
+                assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                assertOuterViewportUnchanged(expectedViewport, activity)
+            }
+            onView(withId(R.id.searchResultList)).perform(swipeUp())
+            waitUntil {
+                var outerScrollResumed = false
+                scenario.onActivity { activity ->
+                    val viewport = outerViewport(activity)
+                    outerScrollResumed = viewport.appBarTop < expectedViewport.appBarTop ||
+                        viewport.firstResultPosition > expectedViewport.firstResultPosition
+                }
+                outerScrollResumed
             }
         }
     }
@@ -844,6 +875,37 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    private fun showOriginCandidatesForExistingResult(activity: MainActivity) {
+        val search = activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+        val controllerField = SearchFragment::class.java.getDeclaredField("originController")
+        controllerField.isAccessible = true
+        val controller = requireNotNull(controllerField.get(search))
+        val updateCandidates = controller.javaClass.getDeclaredMethod(
+            "updatePlaceCandidates",
+            List::class.java
+        )
+        updateCandidates.isAccessible = true
+        updateCandidates.invoke(
+            controller,
+            (1..20).map { index -> Place("保留結果候選$index", 22.3, 114.1 + index) }
+        )
+    }
+
+    private fun outerViewport(activity: MainActivity): OuterViewport {
+        val resultList = activity.findViewById<RecyclerView>(R.id.searchResultList)
+        val manager = resultList.layoutManager as LinearLayoutManager
+        val position = manager.findFirstVisibleItemPosition()
+        return OuterViewport(
+            appBarTop = activity.findViewById<View>(R.id.searchAppBar).top,
+            firstResultPosition = position,
+            firstResultTop = manager.findViewByPosition(position)?.top ?: 0
+        )
+    }
+
+    private fun assertOuterViewportUnchanged(expected: OuterViewport, activity: MainActivity) {
+        assertEquals(expected, outerViewport(activity))
+    }
+
     private fun swipeDownVisibleArea(): ViewAction = object : ViewAction {
         override fun getConstraints(): Matcher<View> = isDisplayed()
 
@@ -922,6 +984,19 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    private class MultipleRouteRepository : BusRouteRepository {
+        override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> =
+            (1..20).map { index -> route("測試路線$index") }
+
+        override fun searchRoutesProgressively(
+            origin: Place,
+            destination: Place,
+            callback: BusRouteQueryCallback
+        ) {
+            callback.onInitialRoutes(searchRoutes(origin, destination))
+        }
+    }
+
     private class CapturingRouteRepository : BusRouteRepository {
         val callbacks = mutableListOf<BusRouteQueryCallback>()
 
@@ -963,6 +1038,12 @@ class SearchDestinationInstrumentedTest {
     }
 
     private companion object {
+        data class OuterViewport(
+            val appBarTop: Int,
+            val firstResultPosition: Int,
+            val firstResultTop: Int
+        )
+
         fun route(name: String): BusRouteOption = BusRouteOption(
             routeName = name,
             routeSegments = listOf("88"),
