@@ -719,6 +719,7 @@ class SearchFragment : Fragment() {
         val action = refreshFeedbackState.finishSuccess(refreshToken) ?: return
         refreshFinishRunnable = null
         if (action == RouteRefreshFinishAction.SHOW_EMPTY_RESULTS) {
+            presentationState.completeRefreshEmpty()
             displayInitialResults(
                 routes = emptyList(),
                 preserveSort = preserveSort,
@@ -899,6 +900,7 @@ class SearchFragment : Fragment() {
         routeQueryCoordinator.invalidate()
         routeQueryState.clear()
         presentationState.onInputChanged()
+        cancelRefreshFeedback()
         swipeRefresh.isRefreshing = false
         resultAdapter.submitList(emptyList())
         resultList.visibility = View.GONE

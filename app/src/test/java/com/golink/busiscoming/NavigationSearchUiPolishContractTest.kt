@@ -185,6 +185,7 @@ class NavigationSearchUiPolishContractTest {
             .substringBefore("private fun clearSuccessfulQuery()")
         assertTrue(changedBlock.contains("routeQueryCoordinator.invalidate()"))
         assertTrue(changedBlock.contains("routeQueryState.clear()"))
+        assertTrue(changedBlock.contains("cancelRefreshFeedback()"))
         assertTrue(changedBlock.contains("routeResultControls.visibility = View.GONE"))
     }
 

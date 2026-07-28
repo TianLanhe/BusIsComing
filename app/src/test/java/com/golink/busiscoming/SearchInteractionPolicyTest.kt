@@ -30,12 +30,16 @@ class SearchInteractionPolicyTest {
     }
 
     @Test
-    fun `save is hidden for changed input new query failure or empty result`() {
+    fun `save is hidden for changed input or empty result`() {
         val replacement = origin.copy(name = "Admiralty")
         assertFalse(SearchResultSaveEligibility.isVisible(origin, destination, replacement, destination, 2, false, false))
-        assertFalse(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 2, true, false))
-        assertFalse(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 2, false, true))
         assertFalse(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 0, false, false))
+    }
+
+    @Test
+    fun `save remains available while matching nonempty results refresh or a refresh fails`() {
+        assertTrue(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 2, true, false))
+        assertTrue(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 2, false, true))
     }
 
     @Test

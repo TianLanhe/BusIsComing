@@ -25,7 +25,9 @@ object SearchQueryUiPolicy {
         refreshFeedbackVisible: Boolean = false,
         refreshFeedbackBlocksQueries: Boolean = false
     ): SearchQueryUiModel {
-        val isQuerying = queryState.isQueryInProgress ||
+        val isQuerying = !queryState.isRefreshing &&
+            (queryState.isQueryInProgress || displayMode == SearchDisplayMode.QUERYING)
+        val blocksQueries = queryState.isQueryInProgress ||
             displayMode == SearchDisplayMode.QUERYING ||
             refreshFeedbackBlocksQueries
         val isRefreshing = queryState.isRefreshing && queryState.results.isNotEmpty()
@@ -38,7 +40,7 @@ object SearchQueryUiPolicy {
             else -> SearchQueryStatusCard.HIDDEN
         }
         return SearchQueryUiModel(
-            isQueryEnabled = hasValidPlaces && !isQuerying,
+            isQueryEnabled = hasValidPlaces && !blocksQueries,
             isQuerying = isQuerying,
             isRefreshing = isRefreshing,
             statusCard = statusCard

@@ -124,6 +124,18 @@ class SearchPresentationStateTest {
         assertFalse(state.completeWithResults())
     }
 
+    @Test
+    fun `empty refresh keeps results during confirmation then returns to editing`() {
+        val state = SearchPresentationState()
+        state.beginQuery(origin, destination)
+        state.completeWithResults()
+
+        assertEquals(SearchDisplayMode.RESULTS, state.mode)
+        assertTrue(state.completeRefreshEmpty())
+
+        assertEditingWithoutQueryContext(state)
+    }
+
     private fun assertEditingWithoutQueryContext(state: SearchPresentationState) {
         assertEquals(SearchDisplayMode.EDITING, state.mode)
         assertNull(state.querySnapshot)

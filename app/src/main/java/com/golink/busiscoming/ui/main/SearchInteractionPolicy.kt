@@ -3,6 +3,7 @@ package com.golink.busiscoming.ui.main
 import com.golink.busiscoming.data.model.Place
 
 object SearchResultSaveEligibility {
+    @Suppress("UNUSED_PARAMETER")
     fun isVisible(
         queryOrigin: Place?,
         queryDestination: Place?,
@@ -13,8 +14,6 @@ object SearchResultSaveEligibility {
         queryFailed: Boolean
     ): Boolean {
         return resultCount > 0 &&
-            !queryInProgress &&
-            !queryFailed &&
             queryOrigin != null &&
             queryDestination != null &&
             queryOrigin == currentOrigin &&

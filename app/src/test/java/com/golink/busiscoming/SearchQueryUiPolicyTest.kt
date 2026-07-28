@@ -54,6 +54,7 @@ class SearchQueryUiPolicyTest {
         val ui = SearchQueryUiPolicy.resolve(state, hasSubmittedQuery = true, hasValidPlaces = true)
 
         assertFalse(ui.isQueryEnabled)
+        assertFalse(ui.isQuerying)
         assertTrue(ui.isRefreshing)
         assertEquals(SearchQueryStatusCard.HIDDEN, ui.statusCard)
     }
@@ -73,6 +74,7 @@ class SearchQueryUiPolicyTest {
         )
 
         assertFalse(ui.isQueryEnabled)
+        assertFalse(ui.isQuerying)
         assertEquals(SearchQueryStatusCard.HIDDEN, ui.statusCard)
         assertEquals(listOf("old"), state.results.map { it.routeName })
     }
