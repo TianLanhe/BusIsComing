@@ -4,6 +4,8 @@ import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.ui.main.SearchCandidateLocationSnapshotRequestState
 import com.golink.busiscoming.ui.main.SearchCurrentPlaceRequestState
 import com.golink.busiscoming.ui.main.SearchResultSaveEligibility
+import com.golink.busiscoming.ui.main.SearchQuerySnapshot
+import com.golink.busiscoming.ui.main.SearchPlacePairMutationPolicy
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -40,6 +42,31 @@ class SearchInteractionPolicyTest {
     fun `save remains available while matching nonempty results refresh or a refresh fails`() {
         assertTrue(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 2, true, false))
         assertTrue(SearchResultSaveEligibility.isVisible(origin, destination, origin, destination, 2, false, true))
+    }
+
+    @Test
+    fun `reselecting the same confirmed pair keeps the current result generation`() {
+        val snapshot = SearchQuerySnapshot(origin, destination)
+
+        assertFalse(
+            SearchPlacePairMutationPolicy.shouldInvalidate(
+                snapshot,
+                origin.copy(),
+                destination.copy()
+            )
+        )
+    }
+
+    @Test
+    fun `a new place clear text edit or changed swap invalidates the current result generation`() {
+        val snapshot = SearchQuerySnapshot(origin, destination)
+        val replacement = Place("Admiralty", 22.2798, 114.1647)
+
+        assertTrue(SearchPlacePairMutationPolicy.shouldInvalidate(snapshot, replacement, destination))
+        assertTrue(SearchPlacePairMutationPolicy.shouldInvalidate(snapshot, origin, null))
+        assertTrue(SearchPlacePairMutationPolicy.shouldInvalidate(snapshot, null, destination))
+        assertTrue(SearchPlacePairMutationPolicy.shouldInvalidate(snapshot, destination, origin))
+        assertTrue(SearchPlacePairMutationPolicy.shouldInvalidate(null, origin, destination))
     }
 
     @Test

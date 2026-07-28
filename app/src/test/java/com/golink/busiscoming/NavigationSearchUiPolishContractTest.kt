@@ -180,6 +180,11 @@ class NavigationSearchUiPolishContractTest {
         assertTrue(resultControlsLayout.indexOf("@+id/sortControls") <
             resultControlsLayout.indexOf("@+id/resultSummaryContainer"))
         assertTrue(searchFragment.contains("SearchTripContextVisibility"))
+        val tripRenderer = searchFragment
+            .substringAfter("private fun renderTripContext()")
+            .substringBefore("private fun renderRetainedResults()")
+        assertTrue(tripRenderer.contains("View.IMPORTANT_FOR_ACCESSIBILITY_AUTO"))
+        assertFalse(tripRenderer.contains("View.IMPORTANT_FOR_ACCESSIBILITY_YES"))
     }
 
     @Test

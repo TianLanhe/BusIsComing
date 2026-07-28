@@ -203,13 +203,13 @@ class SearchFragment : Fragment() {
                 invalidateCurrentPlaceRequest()
                 attributionState.clearOrigin()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onUserTextEdited = {
                 invalidateCurrentPlaceRequest()
                 attributionState.clearOrigin()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onMessageChanged = { message ->
                 originCaptionRenderer?.onPlaceInputMessage(message)
@@ -237,12 +237,12 @@ class SearchFragment : Fragment() {
             onPlaceSelected = {
                 attributionState.clearDestination()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onUserTextEdited = {
                 attributionState.clearDestination()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onMessageChanged = { message ->
                 destinationCaptionRenderer?.onPlaceInputMessage(message)
@@ -473,7 +473,7 @@ class SearchFragment : Fragment() {
                             result.attribution == PlaceAttribution.GOOGLE_MAPS
                         )
                         renderAttribution()
-                        onSearchSelectionChanged()
+                        onPotentialSearchSelectionChanged()
                     }
                     CurrentPlaceSelectionResult.Failure -> {
                         requestCandidateLocationSnapshotIfNeeded()
@@ -878,19 +878,11 @@ class SearchFragment : Fragment() {
     private fun swapSearchPlaces() {
         invalidateCurrentPlaceRequest()
         val destination = destinationController ?: return
-        val originBefore = originController?.selectedPlace
-        val destinationBefore = destination.selectedPlace
-        val originTextBefore = originController?.currentInputText()
-        val destinationTextBefore = destination.currentInputText()
         originController?.swapWith(destination)
         attributionState.swap()
         renderAttribution()
         hideCandidateLists()
-        val changed = originBefore != originController?.selectedPlace ||
-            destinationBefore != destination.selectedPlace ||
-            originTextBefore != originController?.currentInputText() ||
-            destinationTextBefore != destination.currentInputText()
-        if (changed) onSearchSelectionChanged()
+        onPotentialSearchSelectionChanged()
     }
 
     private fun hideCandidateLists() {
@@ -930,6 +922,21 @@ class SearchFragment : Fragment() {
         clearSuccessfulQuery()
         renderSearchUi()
         updateRefreshEnabled()
+    }
+
+    private fun onPotentialSearchSelectionChanged() {
+        if (
+            SearchPlacePairMutationPolicy.shouldInvalidate(
+                querySnapshot = presentationState.querySnapshot,
+                currentOrigin = originController?.selectedPlace,
+                currentDestination = destinationController?.selectedPlace
+            )
+        ) {
+            onSearchSelectionChanged()
+        } else {
+            renderSearchUi()
+            updateRefreshEnabled()
+        }
     }
 
     private fun beginEditingCurrentTrip() {
@@ -989,7 +996,7 @@ class SearchFragment : Fragment() {
         val showEditor = presentationState.mode != SearchDisplayMode.RESULTS
         inputContainer.visibility = if (showEditor) View.VISIBLE else View.GONE
         inputContainer.importantForAccessibility = if (showEditor) {
-            View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
         } else {
             View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
@@ -999,7 +1006,7 @@ class SearchFragment : Fragment() {
         }
         tripContext.visibility = if (showTripContext) View.VISIBLE else View.GONE
         tripContext.importantForAccessibility = if (showTripContext) {
-            View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
         } else {
             View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }

@@ -76,7 +76,10 @@ class SearchPresentationState {
     fun cancelQuery(): Boolean = completeWithoutResults()
 
     fun completeRefreshEmpty(): Boolean {
-        if (mode != SearchDisplayMode.RESULTS || querySnapshot == null) return false
+        if (
+            (mode != SearchDisplayMode.RESULTS && mode != SearchDisplayMode.EDITING_RESULTS) ||
+            querySnapshot == null
+        ) return false
         resetToEditing()
         return true
     }

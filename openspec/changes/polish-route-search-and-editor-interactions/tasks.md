@@ -38,6 +38,7 @@
 - [x] 6.3 實作編輯與取消編輯：展開時暫時保留原結果、控制器、刷新和保存資格，未修改可取消並重新折疊；隱藏輸入器不得接受觸控或無障礙焦點
 - [x] 6.4 將文字、已選 Place、清除及交換的實際改變統一接到失效流程，立即隱藏舊結果、摘要、上下文與保存入口，並作廢 query／刷新／ETA／站點預覽回呼
 - [x] 6.5 保持頂層 destination 切換後的有效折疊／編輯狀態；補充重建恢復策略，只有結果仍存在時才恢復折疊，否則只恢復起終點到完整編輯器
+- [ ] 6.6 擴充 `SearchInteractionPolicyTest`、`RouteQueryGenerationTest` 及 `SearchDestinationInstrumentedTest`，覆蓋折疊時機、編輯未改、取消、實際修改、過期 callback、destination 切換和系統重建
 
 ## 7. 接回保存流程與多配置布局
 

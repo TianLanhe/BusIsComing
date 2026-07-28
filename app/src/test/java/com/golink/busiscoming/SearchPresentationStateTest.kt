@@ -126,12 +126,24 @@ class SearchPresentationStateTest {
     }
 
     @Test
-    fun `empty refresh keeps results during confirmation then returns to editing`() {
+    fun `empty refresh from folded results clears snapshot and save state after confirmation`() {
         val state = SearchPresentationState()
         state.beginQuery(origin, destination)
         state.completeWithResults()
 
         assertEquals(SearchDisplayMode.RESULTS, state.mode)
+        assertTrue(state.completeRefreshEmpty())
+
+        assertEditingWithoutQueryContext(state)
+    }
+
+    @Test
+    fun `empty refresh while editing retained results also returns to clean editing`() {
+        val state = SearchPresentationState()
+        state.beginQuery(origin, destination)
+        state.completeWithResults()
+        state.beginEditingResults()
+
         assertTrue(state.completeRefreshEmpty())
 
         assertEditingWithoutQueryContext(state)

@@ -21,6 +21,18 @@ object SearchResultSaveEligibility {
     }
 }
 
+/** 以成功查詢的 Place pair 為身份，判斷潛在輸入事件是否真的令結果失效。 */
+object SearchPlacePairMutationPolicy {
+    fun shouldInvalidate(
+        querySnapshot: SearchQuerySnapshot?,
+        currentOrigin: Place?,
+        currentDestination: Place?
+    ): Boolean =
+        querySnapshot == null ||
+            querySnapshot.origin != currentOrigin ||
+            querySnapshot.destination != currentDestination
+}
+
 class SearchCurrentPlaceRequestState {
     private var generation = 0
     private var autoAttempted = false

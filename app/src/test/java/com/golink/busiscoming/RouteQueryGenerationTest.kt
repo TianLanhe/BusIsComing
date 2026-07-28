@@ -24,4 +24,15 @@ class RouteQueryGenerationTest {
 
         assertFalse(generation.isCurrent(active))
     }
+
+    @Test
+    fun `new generation after invalidation accepts only the new callback`() {
+        val generation = RouteQueryGeneration()
+        val stale = generation.begin()
+        generation.invalidate()
+        val active = generation.begin()
+
+        assertFalse(generation.isCurrent(stale))
+        assertTrue(generation.isCurrent(active))
+    }
 }
