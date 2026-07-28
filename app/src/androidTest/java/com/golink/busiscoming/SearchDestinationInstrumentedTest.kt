@@ -1,7 +1,10 @@
 package com.golink.busiscoming
 
 import android.Manifest
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -28,6 +31,7 @@ import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.matcher.ViewMatchers.isClickable
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
+import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
 import androidx.test.espresso.matcher.ViewMatchers.isNotEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withHint
@@ -310,7 +314,6 @@ class SearchDestinationInstrumentedTest {
                 }
                 closed
             }
-            onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
             scenario.onActivity { activity ->
                 val searchContent = activity.findViewById<View>(R.id.searchContent)
                 val preservedFlagsAfterClose = (searchContent.layoutParams as
@@ -327,7 +330,19 @@ class SearchDestinationInstrumentedTest {
                     .adapter?.itemCount)
                 assertOuterViewportUnchanged(expectedViewport, activity)
             }
-            onView(withId(R.id.searchResultList)).perform(swipeUp())
+            scenario.onActivity { activity ->
+                activity.findViewById<View>(R.id.placePairOriginInput).clearFocus()
+            }
+            onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
+            scenario.onActivity { activity ->
+                assertEquals(
+                    View.GONE,
+                    activity.findViewById<View>(R.id.placePairOriginCandidateList).visibility
+                )
+                assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                assertOuterViewportUnchanged(expectedViewport, activity)
+            }
+            onView(withId(R.id.searchResultList)).perform(swipeUpVisibleArea())
             waitUntil {
                 var outerScrollResumed = false
                 scenario.onActivity { activity ->
@@ -449,7 +464,7 @@ class SearchDestinationInstrumentedTest {
             pressBack()
             waitForAbsent("通知欄監控")
 
-            onView(withId(R.id.searchResultList)).perform(swipeDownVisibleArea())
+            onView(withId(R.id.searchSwipeRefresh)).perform(swipeDownVisibleArea())
             waitUntil { routeRepository.queryCount >= 2 }
 
             var saveDialogTitle = ""
@@ -536,12 +551,12 @@ class SearchDestinationInstrumentedTest {
 
             scenario.onActivity { activity ->
                 val save = activity.findViewById<MaterialButton>(R.id.searchSaveButton)
-                assertEquals(
-                    ContextCompat.getDrawable(activity, R.drawable.ic_bookmark_filled)
-                        ?.constantState,
-                    save.icon?.constantState
+                assertIconMatchesResource(
+                    button = save,
+                    expectedResource = R.drawable.ic_bookmark_filled,
+                    unexpectedResource = R.drawable.ic_bookmark_outline
                 )
-                assertFalse(save.performClick())
+                save.performClick()
             }
             assertEquals(3, gateway.insertCount)
         }
@@ -597,10 +612,10 @@ class SearchDestinationInstrumentedTest {
             onView(withText(R.string.save_as_frequent)).check(matches(isDisplayed()))
             onView(withId(R.id.searchSaveButton)).check { view, _ ->
                 val save = view as MaterialButton
-                assertEquals(
-                    ContextCompat.getDrawable(view.context, R.drawable.ic_bookmark_outline)
-                        ?.constantState,
-                    save.icon?.constantState
+                assertIconMatchesResource(
+                    button = save,
+                    expectedResource = R.drawable.ic_bookmark_outline,
+                    unexpectedResource = R.drawable.ic_bookmark_filled
                 )
             }
             assertEquals(1, gateway.insertCount)
@@ -796,17 +811,21 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.searchQueryButton)).perform(click())
             waitUntil { routeRepository.callbacks.size == 1 }
 
-            onView(withId(R.id.resultStatusCard)).check(matches(isDisplayed()))
-            onView(withId(R.id.resultStatusProgress)).check(matches(isDisplayed()))
+            onView(searchStatusCard()).check(matches(isDisplayed()))
+            onView(searchView(R.id.resultStatusProgress)).check(matches(isDisplayed()))
             onView(withId(R.id.searchQueryButton)).check(matches(isNotEnabled()))
 
             routeRepository.callbacks[0].onInitialRoutes(emptyList())
             waitUntil {
                 var emptyVisible = false
                 scenario.onActivity { activity ->
-                    emptyVisible = activity.findViewById<View>(R.id.resultStatusCard).visibility ==
-                        View.VISIBLE && activity.findViewById<View>(R.id.resultStatusProgress).visibility ==
-                        View.GONE
+                    val search =
+                        activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+                    emptyVisible = search.requireView().findViewById<View>(
+                        R.id.resultStatusCard
+                    ).visibility == View.VISIBLE && search.requireView().findViewById<View>(
+                        R.id.resultStatusProgress
+                    ).visibility == View.GONE
                 }
                 emptyVisible
             }
@@ -924,8 +943,8 @@ class SearchDestinationInstrumentedTest {
             waitUntil { routeRepository.callbacks.size == 1 }
 
             routeRepository.callbacks[0].onFailure(IllegalStateException("failed"))
-            onView(withId(R.id.resultStatusCard)).check(matches(isDisplayed()))
-            onView(withId(R.id.resultStatusProgress))
+            onView(searchStatusCard()).check(matches(isDisplayed()))
+            onView(searchView(R.id.resultStatusProgress))
                 .check(matches(withEffectiveVisibility(GONE)))
             onView(withId(R.id.placePairOriginInput)).check(matches(isDisplayed()))
             onView(withId(R.id.searchQueryButton)).check(matches(isEnabled()))
@@ -1442,6 +1461,21 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    private fun swipeUpVisibleArea(): ViewAction = object : ViewAction {
+        override fun getConstraints(): Matcher<View> = isDisplayed()
+
+        override fun getDescription(): String = "swipe up within the visible result area"
+
+        override fun perform(uiController: UiController, view: View) {
+            GeneralSwipeAction(
+                Swipe.FAST,
+                visibleCoordinates(verticalFraction = 0.8f),
+                visibleCoordinates(verticalFraction = 0.2f),
+                Press.FINGER
+            ).perform(uiController, view)
+        }
+    }
+
     private fun visibleCoordinates(verticalFraction: Float): CoordinatesProvider =
         CoordinatesProvider { view ->
             val visibleBounds = Rect()
@@ -1451,6 +1485,56 @@ class SearchDestinationInstrumentedTest {
                 visibleBounds.top + visibleBounds.height() * verticalFraction
             )
         }
+
+    private fun searchStatusCard(): Matcher<View> = allOf(
+        searchView(R.id.resultStatusCard),
+        isDisplayed()
+    )
+
+    private fun searchView(viewId: Int): Matcher<View> = allOf(
+        withId(viewId),
+        isDescendantOfA(allOf(withId(R.id.searchRoot), isDisplayed()))
+    )
+
+    private fun assertIconMatchesResource(
+        button: MaterialButton,
+        expectedResource: Int,
+        unexpectedResource: Int
+    ) {
+        val actual = requireNotNull(button.icon)
+        val width = button.iconSize.takeIf { it > 0 }
+            ?: actual.intrinsicWidth.coerceAtLeast(1)
+        val height = button.iconSize.takeIf { it > 0 }
+            ?: actual.intrinsicHeight.coerceAtLeast(1)
+        val actualPixels = drawablePixels(actual, width, height)
+        val expectedPixels = drawablePixels(
+            requireNotNull(ContextCompat.getDrawable(button.context, expectedResource)).apply {
+                setTintList(button.iconTint)
+                state = actual.state
+            },
+            width,
+            height
+        )
+        val unexpectedPixels = drawablePixels(
+            requireNotNull(ContextCompat.getDrawable(button.context, unexpectedResource)).apply {
+                setTintList(button.iconTint)
+                state = actual.state
+            },
+            width,
+            height
+        )
+        assertTrue(actualPixels.contentEquals(expectedPixels))
+        assertFalse(actualPixels.contentEquals(unexpectedPixels))
+    }
+
+    private fun drawablePixels(drawable: Drawable, width: Int, height: Int): IntArray {
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        drawable.bounds = android.graphics.Rect(0, 0, width, height)
+        drawable.draw(Canvas(bitmap))
+        return IntArray(width * height).also { pixels ->
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        }
+    }
 
     private fun dp(context: android.content.Context, value: Int): Int {
         return (value * context.resources.displayMetrics.density).toInt()

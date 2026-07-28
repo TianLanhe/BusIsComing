@@ -155,7 +155,7 @@ class PlaceInputInlineCandidatesContractTest {
             "The exclusive matcher must target candidateList's unique description",
             exclusiveTest.contains(
                 "onView(withContentDescription(\"$exclusiveDescription\"))" +
-                    ".perform(activeDrag)"
+                    ".perform("
             )
         )
         assertEquals(
@@ -167,26 +167,32 @@ class PlaceInputInlineCandidatesContractTest {
         )
         assertAppearsInOrder(
             exclusiveTest,
-            "startOffset = candidateList.computeVerticalScrollOffset()",
+            "root.addView(owner, 0)",
+            "input.requestFocus()",
+            "\"updatePlaceCandidates\"",
+            "candidateList.isShown",
+            "onView(withContentDescription(\"$exclusiveDescription\"))" +
+                ".perform(",
+            "object : ViewAction",
+            "assertTrue(recyclerView.getGlobalVisibleRect(visibleBounds))",
+            "val startOffset = recyclerView.computeVerticalScrollOffset()",
             "owner.disallowRequests.clear()",
-            "activeDrag = object : ViewAction",
             "MotionEvent.ACTION_DOWN",
             "recyclerView.dispatchTouchEvent(event)",
+            "(1..6).forEach",
             "MotionEvent.ACTION_MOVE",
             "recyclerView.dispatchTouchEvent(event)",
-            "onView(withContentDescription(\"$exclusiveDescription\"))" +
-                ".perform(activeDrag)",
-            "assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)",
+            "assertTrue(recyclerView.computeVerticalScrollOffset() > startOffset)",
             "assertTrue(owner.disallowRequests.last())",
             "controller.dispose()",
-            "assertEquals(View.GONE, candidateList.visibility)",
-            "assertTrue(candidateList.isNestedScrollingEnabled)",
+            "assertEquals(View.GONE, recyclerView.visibility)",
+            "assertTrue(recyclerView.isNestedScrollingEnabled)",
             "assertFalse(owner.disallowRequests.last())",
             "val requestCountAfterDispose = owner.disallowRequests.size",
-            "candidateList.visibility = View.VISIBLE",
+            "recyclerView.visibility = View.VISIBLE",
             "val postDisposeDown = MotionEvent.obtain(",
             "MotionEvent.ACTION_DOWN",
-            "candidateList.dispatchTouchEvent(postDisposeDown)",
+            "recyclerView.dispatchTouchEvent(postDisposeDown)",
             "postDisposeDown.recycle()",
             "assertEquals(requestCountAfterDispose, owner.disallowRequests.size)"
         )

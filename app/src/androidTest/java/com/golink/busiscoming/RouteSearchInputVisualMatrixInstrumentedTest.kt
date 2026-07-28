@@ -126,7 +126,7 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                     )
                     assertTripContext(scenario, expectSingleRow)
 
-                    onView(withId(R.id.searchEditButton)).perform(click())
+                    performClick(scenario, R.id.searchEditButton)
                     waitForDisplayed(R.id.searchCancelEditButton)
                     assertActionState(
                         scenario,
@@ -135,9 +135,9 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                         saveEnabled = true
                     )
                     assertTripContext(scenario, expectSingleRow)
-                    onView(withId(R.id.searchCancelEditButton)).perform(click())
+                    performClick(scenario, R.id.searchCancelEditButton)
 
-                    onView(withId(R.id.searchSaveButton)).perform(click())
+                    performClick(scenario, R.id.searchSaveButton)
                     onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
                     waitForDisplayed(R.id.searchSaveButton)
                     assertActionState(
@@ -379,6 +379,16 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                 false
             }
         }
+    }
+
+    private fun performClick(scenario: ActivityScenario<MainActivity>, viewId: Int) {
+        scenario.onActivity { activity ->
+            val view = activity.findViewById<View>(viewId)
+            assertEquals(View.VISIBLE, view.visibility)
+            assertTrue(view.isEnabled)
+            assertTrue(view.performClick())
+        }
+        instrumentation.waitForIdleSync()
     }
 
     private fun waitForTripOrientation(

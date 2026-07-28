@@ -435,7 +435,7 @@ class PlaceInputControllerInstrumentedTest {
                 }
                 owner.addView(inputLayout)
                 owner.addView(candidateList)
-                root.addView(owner)
+                root.addView(owner, 0)
                 controller = PlaceInputController(
                     context = activity,
                     input = input,
@@ -451,39 +451,50 @@ class PlaceInputControllerInstrumentedTest {
                     isActive = { true },
                     exclusiveVerticalScroll = true
                 )
+                input.requestFocus()
+                controller.javaClass.getDeclaredMethod(
+                    "updatePlaceCandidates",
+                    List::class.java
+                ).apply { isAccessible = true }.invoke(
+                    controller,
+                    (1..20).map { index -> place("獨占候選$index") }
+                )
             }
 
-            onView(androidx.test.espresso.matcher.ViewMatchers.withId(R.id.instrumentedPlaceInput))
-                .perform(scrollTo(), click())
-            scenario.onActivity { input.setText("候選") }
             waitUntil {
                 var ready = false
                 scenario.onActivity {
                     ready = candidateList.visibility == View.VISIBLE &&
-                        candidateList.adapter?.itemCount == 20
+                        candidateList.adapter?.itemCount == 20 &&
+                        candidateList.height > 0 &&
+                        candidateList.isShown
                 }
                 ready
             }
 
-            lateinit var activeDrag: ViewAction
-            var startOffset = 0
-            scenario.onActivity {
-                assertFalse(candidateList.isNestedScrollingEnabled)
-                startOffset = candidateList.computeVerticalScrollOffset()
-                assertTrue(owner.disallowRequests.last())
-                owner.disallowRequests.clear()
-                activeDrag = object : ViewAction {
+            onView(withContentDescription("instrumented exclusive candidate list")).perform(
+                object : ViewAction {
                     override fun getConstraints(): Matcher<View> = isDisplayed()
 
                     override fun getDescription(): String =
-                        "drag the candidate list without releasing the active gesture"
+                        "drag and dispose the candidate list without releasing the active gesture"
 
                     override fun perform(uiController: UiController, view: View) {
                         val recyclerView = view as RecyclerView
+                        val visibleBounds = android.graphics.Rect()
+                        assertTrue(recyclerView.getGlobalVisibleRect(visibleBounds))
+                        assertEquals(recyclerView.height, visibleBounds.height())
+                        assertFalse(recyclerView.isNestedScrollingEnabled)
+                        assertTrue(owner.disallowRequests.last())
+                        val startOffset = recyclerView.computeVerticalScrollOffset()
+                        assertTrue(
+                            recyclerView.computeVerticalScrollRange() >
+                                recyclerView.computeVerticalScrollExtent()
+                        )
+                        owner.disallowRequests.clear()
                         val downTime = SystemClock.uptimeMillis()
                         val x = recyclerView.width / 2f
-                        val downY = recyclerView.height * 0.75f
-                        val moveY = recyclerView.height * 0.15f
+                        val downY = recyclerView.height * 0.85f
                         MotionEvent.obtain(
                             downTime,
                             downTime,
@@ -495,53 +506,52 @@ class PlaceInputControllerInstrumentedTest {
                             assertTrue(recyclerView.dispatchTouchEvent(event))
                             event.recycle()
                         }
-                        uiController.loopMainThreadForAtLeast(32L)
-                        MotionEvent.obtain(
-                            downTime,
-                            SystemClock.uptimeMillis(),
-                            MotionEvent.ACTION_MOVE,
-                            x,
-                            moveY,
-                            0
-                        ).also { event ->
-                            assertTrue(recyclerView.dispatchTouchEvent(event))
-                            event.recycle()
+                        uiController.loopMainThreadForAtLeast(16L)
+                        (1..6).forEach { step ->
+                            MotionEvent.obtain(
+                                downTime,
+                                downTime + step * 16L,
+                                MotionEvent.ACTION_MOVE,
+                                x,
+                                downY - recyclerView.height * 0.12f * step,
+                                0
+                            ).also { event ->
+                                assertTrue(recyclerView.dispatchTouchEvent(event))
+                                event.recycle()
+                            }
+                            uiController.loopMainThreadForAtLeast(16L)
                         }
-                        uiController.loopMainThreadForAtLeast(32L)
+                        assertTrue(recyclerView.computeVerticalScrollOffset() > startOffset)
+                        assertEquals(View.VISIBLE, recyclerView.visibility)
+                        assertTrue(owner.disallowRequests.last())
+
+                        controller.dispose()
+                        assertEquals(View.GONE, recyclerView.visibility)
+                        assertTrue(recyclerView.isNestedScrollingEnabled)
+                        assertFalse(owner.disallowRequests.last())
+
+                        val requestCountAfterDispose = owner.disallowRequests.size
+                        recyclerView.visibility = View.VISIBLE
+                        val postDisposeTime = SystemClock.uptimeMillis()
+                        val postDisposeDown = MotionEvent.obtain(
+                            postDisposeTime,
+                            postDisposeTime,
+                            MotionEvent.ACTION_DOWN,
+                            recyclerView.width / 2f,
+                            recyclerView.height / 2f,
+                            0
+                        )
+                        try {
+                            recyclerView.dispatchTouchEvent(postDisposeDown)
+                        } finally {
+                            postDisposeDown.recycle()
+                        }
+                        assertEquals(requestCountAfterDispose, owner.disallowRequests.size)
+                        recyclerView.visibility = View.GONE
                     }
                 }
-            }
-            onView(withContentDescription("instrumented exclusive candidate list")).perform(activeDrag)
-            scenario.onActivity {
-                assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)
-                assertEquals(View.VISIBLE, candidateList.visibility)
-                assertTrue(owner.disallowRequests.last())
-
-                controller.dispose()
-                assertEquals(View.GONE, candidateList.visibility)
-                assertTrue(candidateList.isNestedScrollingEnabled)
-                assertFalse(owner.disallowRequests.last())
-
-                val requestCountAfterDispose = owner.disallowRequests.size
-                candidateList.visibility = View.VISIBLE
-                val postDisposeTime = SystemClock.uptimeMillis()
-                val postDisposeDown = MotionEvent.obtain(
-                    postDisposeTime,
-                    postDisposeTime,
-                    MotionEvent.ACTION_DOWN,
-                    candidateList.width / 2f,
-                    candidateList.height / 2f,
-                    0
-                )
-                try {
-                    candidateList.dispatchTouchEvent(postDisposeDown)
-                } finally {
-                    postDisposeDown.recycle()
-                }
-                assertEquals(requestCountAfterDispose, owner.disallowRequests.size)
-                candidateList.visibility = View.GONE
-                executor.shutdownNow()
-            }
+            )
+            executor.shutdownNow()
         }
     }
 
