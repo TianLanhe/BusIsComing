@@ -1,6 +1,6 @@
 ## Context
 
-目前新增／編輯／複製行程使用獨立 XML 表單，起點與終點的 `TextInputLayout` 以常駐 `helperText` 提示選擇候選，導致未發生任何狀態時亦佔用第二行。搜尋 destination 使用 `PlacePairEditorView`、兩個 `PlaceInputController`、`SearchFragment` 內的 `RouteQueryState` 與 `RouteResultControlsView`；候選高度被固定為 3 行，候選 RecyclerView 的 nested scroll 會先被帶有 `layout_scrollFlags="scroll"` 的 AppBar 消費。
+目前新增／編輯／複製行程使用獨立 XML 表單，起點與終點的 `TextInputLayout` 以常駐 `helperText` 提示選擇候選，導致未發生任何狀態時亦佔用第二行。搜尋 destination 使用 `PlacePairEditorView`、兩個 `PlaceInputController`、`SearchFragment` 內的 `RouteQueryCoordinator`、`RouteQueryState` 與 `RouteResultControlsView`；候選高度被固定為 3 行，候選 RecyclerView 的 nested scroll 會先被帶有 `layout_scrollFlags="scroll"` 的 AppBar 消費。
 
 搜尋查詢開始時，`SearchFragment` 雖會更新 `RouteQueryState`，但查詢按鈕可用性只依起終點選擇推導，裸 `ProgressBar` 與單行狀態文字亦未沿用常用頁的狀態卡。成功結果的保存按鈕放在完整輸入區下方，未形成清楚的「編輯 → 查詢 → 結果上下文」狀態轉換。
 
@@ -23,7 +23,7 @@
 **Non-Goals:**
 
 - 不修改外部接口、參數、header、解析、cache、route variant 或 stop id 對齊。
-- 不修改 `RouteQueryState` 的常用頁 query owner 語義，不把常用與搜尋重構為同一完整查詢控制器。
+- 不修改每個頁面既有 `RouteQueryCoordinator` 的 query id／generation／callback 驗證邊界，亦不把常用與搜尋重構為同一完整查詢控制器。
 - 不修改路線排序規則、ETA 補齊、結果卡片欄位或下拉刷新資料來源。
 - 不修改 SQLite schema、行程保存格式或既有行程資料。
 - 不回滾引入 helper 或搜尋流程的整個歷史 commit。
@@ -74,14 +74,14 @@
 - `DirtyEditing`
 - `Saved`
 
-狀態只描述 UI 模式、目前查詢快照與保存狀態；既有 `RouteQueryState` 繼續負責 query id、進行中狀態與 callback generation。`SearchFragment` 使用單一 `renderSearchUi()`（或等效入口）從兩者推導：
+狀態只描述 UI 模式、目前查詢快照與保存狀態；既有 `RouteQueryCoordinator` 繼續負責 query id、generation 與 callback 有效性驗證，`RouteQueryState` 繼續負責結果、查詢進行中與刷新狀態。`SearchFragment` 只在 coordinator 驗證 callback 後更新兩個 state，並使用單一 `renderSearchUi()`（或等效入口）推導：
 
 - 完整輸入器／「本次行程」欄可見性；
 - 查詢按鈕文字、enabled 和防重入；
 - 狀態卡、結果控制器、結果列表與刷新 eligibility；
 - 編輯、取消編輯、保存和已保存操作。
 
-查詢入口在更新狀態前再次檢查 `isQueryInProgress`，防止快速連點繞過 View enabled 狀態。輸入實際改變時增加 generation 並讓舊結果、ETA／站點補齊、摘要、刷新與保存資格同時失效。
+查詢入口在更新狀態前再次檢查 `RouteQueryState.isQueryInProgress`，防止快速連點繞過 View enabled 狀態。輸入實際改變時由 `RouteQueryCoordinator` 使 generation 失效，並讓舊結果、ETA／站點補齊、摘要、刷新與保存資格同時失效。
 
 不採用在 `SearchFragment` 追加更多獨立 boolean 的最小補丁，因為查詢、編輯、刷新、保存和生命週期組合容易互相矛盾；亦不抽取完整共用查詢 coordinator，以免擴大常用頁回歸範圍。
 
@@ -121,7 +121,7 @@
 
 - [Risk] `adjustNothing` 令主視窗不再因 IME 自動縮小，候選或輸入可能被覆蓋 → 以既有 IME Insets 計算候選高度，並在 API 25／36、常見 IME、手勢／三鍵導航驗證。
 - [Risk] 凍結 AppBar 與關閉 nested scroll propagation 可能影響候選關閉後的結果滾動 → 由單一候選可見性聚合函式保存／恢復 scroll flags，加入候選開關和列表位置 instrumentation。
-- [Risk] 展示狀態與 `RouteQueryState` 重複成為真相來源 → 展示狀態不保存 query id 或進行中布林值，所有 callback 仍以 `RouteQueryState` generation 為準，renderer 只組合兩者。
+- [Risk] 展示狀態與既有查詢 state 重複成為真相來源 → 展示狀態不保存 query id 或進行中布林值；所有 callback 仍由 `RouteQueryCoordinator` 以 generation 驗證，`RouteQueryState` 保存結果／進行中／刷新，renderer 只組合兩個 state。
 - [Risk] 抽取狀態卡可能令常用頁產生視覺回歸 → 保留既有 ID、尺寸、文案與動畫行為，使用 contract test 和常用頁 loading／空／失敗回歸。
 - [Risk] 「本次行程」欄在長地點和大字體下過高 → 以量度／font scale 切換雙行，不縮字；覆蓋三語、360dp 與 font scale 2.0。
 - [Trade-off] 保存後阻止同一查詢再次保存，犧牲搜尋頁直接建立同起終點多名稱的能力 → 使用行程管理的複製流程，換取更清楚的防重複回饋。
