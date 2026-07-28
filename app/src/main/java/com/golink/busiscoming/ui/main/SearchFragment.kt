@@ -86,6 +86,7 @@ class SearchFragment : Fragment() {
     private var hasSubmittedQuery: Boolean = false
     private var successfulQueryOrigin: Place? = null
     private var successfulQueryDestination: Place? = null
+    private var successfulQueryContext: SuccessfulSearchContext? = null
     private var isViewStateRestored: Boolean = false
     private var hasPendingDestinationSelection: Boolean = false
     private var pendingScrollPosition: Int? = null
@@ -591,7 +592,8 @@ class SearchFragment : Fragment() {
                         preserveSort = preserveSort,
                         origin = origin,
                         destination = destination,
-                        updatePresentation = true
+                        updatePresentation = true,
+                        queryId = queryId
                     )
                 }
             }
@@ -644,7 +646,8 @@ class SearchFragment : Fragment() {
         preserveSort: Boolean,
         origin: Place,
         destination: Place,
-        updatePresentation: Boolean
+        updatePresentation: Boolean,
+        queryId: Int? = null
     ) {
         routeQueryState.complete(
             routes = routes,
@@ -667,7 +670,12 @@ class SearchFragment : Fragment() {
         if (currentResults.isNotEmpty()) {
             successfulQueryOrigin = origin
             successfulQueryDestination = destination
-            if (updatePresentation) presentationState.completeWithResults()
+            if (updatePresentation) {
+                presentationState.completeWithResults()
+                successfulQueryContext = queryId?.let {
+                    SuccessfulSearchContext(it, SearchQuerySnapshot(origin, destination))
+                }
+            }
         } else if (updatePresentation) {
             presentationState.completeEmpty()
         }
@@ -811,17 +819,25 @@ class SearchFragment : Fragment() {
     }
 
     private fun saveCurrentRoute() {
-        if (saveButton.visibility != View.VISIBLE) return
-        val origin = originController?.selectedPlace ?: return
-        val destination = destinationController?.selectedPlace ?: return
+        val context = currentSavableContext() ?: return
         TemporaryRouteSaveDialog.show(
             context = requireContext(),
             routeConfigRepository = RouteConfigRepository(requireContext()),
-            origin = origin,
-            destination = destination
-        ) {
-            (activity as? MainActivity)?.refreshFrequentRoutes()
-        }
+            origin = context.snapshot.origin,
+            destination = context.snapshot.destination,
+            onSaved = {
+                val activeContext = currentSavableContext() ?: return@show
+                if (
+                    activeContext.queryId != context.queryId ||
+                    activeContext.snapshot != context.snapshot
+                ) {
+                    return@show
+                }
+                if (!presentationState.markSaved()) return@show
+                (activity as? MainActivity)?.refreshFrequentRoutes()
+                renderSearchUi()
+            }
+        )
     }
 
     private fun sortBy(field: SortField) {
@@ -954,6 +970,7 @@ class SearchFragment : Fragment() {
     private fun clearSuccessfulQuery() {
         successfulQueryOrigin = null
         successfulQueryDestination = null
+        successfulQueryContext = null
         renderSaveAction()
     }
 
@@ -1082,25 +1099,27 @@ class SearchFragment : Fragment() {
 
     private fun renderSaveAction() {
         if (!::saveButton.isInitialized) return
-        saveButton.visibility = if (
-            presentationState.saveState == SearchSaveState.AVAILABLE &&
-                SearchTripContextVisibility.isVisible(
-                    presentationState.mode,
-                    currentResults.size
-                ) && SearchResultSaveEligibility.isVisible(
-                queryOrigin = successfulQueryOrigin,
-                queryDestination = successfulQueryDestination,
-                currentOrigin = originController?.selectedPlace,
-                currentDestination = destinationController?.selectedPlace,
-                resultCount = currentResults.size,
-                queryInProgress = routeQueryState.isQueryInProgress,
-                queryFailed = routeQueryState.errorMessage != null
-                )
-        ) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        val savable = currentSavableContext() != null
+        val saved = presentationState.saveState == SearchSaveState.SAVED &&
+            successfulQueryContext != null &&
+            SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)
+        saveButton.visibility = if (savable || saved) View.VISIBLE else View.GONE
+        saveButton.isEnabled = savable
+        saveButton.setText(if (saved) R.string.search_trip_saved else R.string.save_as_frequent)
+        saveButton.setIconResource(if (saved) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark_outline)
+        saveButton.contentDescription = getString(
+            if (saved) R.string.search_trip_saved_description else R.string.search_trip_save_description
+        )
+    }
+
+    private fun currentSavableContext(): SuccessfulSearchContext? {
+        val context = successfulQueryContext ?: return null
+        if (presentationState.saveState != SearchSaveState.AVAILABLE) return null
+        if (!SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)) return null
+        val snapshot = presentationState.querySnapshot ?: return null
+        if (snapshot != context.snapshot) return null
+        if (successfulQueryOrigin != snapshot.origin || successfulQueryDestination != snapshot.destination) return null
+        return context
     }
 
     private fun invalidateCurrentPlaceRequest() {
@@ -1119,6 +1138,11 @@ class SearchFragment : Fragment() {
         val top: Int,
         val right: Int,
         val bottom: Int
+    )
+
+    private data class SuccessfulSearchContext(
+        val queryId: Int,
+        val snapshot: SearchQuerySnapshot
     )
 
     private fun dp(value: Int): Int =

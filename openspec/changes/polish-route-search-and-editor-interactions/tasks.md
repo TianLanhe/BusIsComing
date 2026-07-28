@@ -3,7 +3,7 @@
 - [x] 1.1 在 `app/src/test` 新增搜尋展示狀態的純邏輯測試，覆蓋 Editing／Querying／Results／EditingResults／DirtyEditing／Saved、空結果／失敗、取消編輯、輸入失效及新 generation 重設保存狀態
 - [x] 1.2 實作搜尋頁專用展示狀態與 reducer／policy，讓其只保存 UI 模式、查詢快照及保存狀態；保留 `RouteQueryCoordinator` 作為 query id、generation 與 callback 驗證的真相來源，並由 `RouteQueryState` 保存結果、進行中與刷新狀態
 - [x] 1.3 擴充 XML／Manifest contract tests，先固定地點靜態 helper、共用狀態卡、「本次行程」欄、搜尋頁舊保存入口移除及 `MainActivity` IME 策略
-- [ ] 1.4 擴充 locale resource contract tests，要求本 change 新增或修改的查詢、編輯、取消編輯、保存、已保存、狀態卡及無障礙文案同時存在於香港繁體、簡體及英文資源
+- [x] 1.4 擴充 locale resource contract tests，要求本 change 新增或修改的查詢、編輯、取消編輯、保存、已保存、狀態卡及無障礙文案同時存在於香港繁體、簡體及英文資源
 
 ## 2. 恢復緊湊地點欄位
 
@@ -42,9 +42,9 @@
 
 ## 7. 接回保存流程與多配置布局
 
-- [ ] 7.1 將「本次行程」保存操作接回既有命名對話框、空值／重名處理及行程 repository，並使用目前有效 generation 的起終點快照且不重做 Geocoding
-- [ ] 7.2 只在資料庫成功後把目前 generation 切換為填滿書籤與「已保存」停用狀態；失敗或取消時保留可操作入口，新成功查詢重設為可保存
-- [ ] 7.3 為新增 UI 文案與 content description 完成香港繁體、獨立簡體及自然英文資源，禁止在 XML／Kotlin 硬編碼 App 可見文字
+- [x] 7.1 將「本次行程」保存操作接回既有命名對話框、空值／重名處理及行程 repository，並使用目前有效 generation 的起終點快照且不重做 Geocoding
+- [x] 7.2 只在資料庫成功後把目前 generation 切換為填滿書籤與「已保存」停用狀態；失敗或取消時保留可操作入口，新成功查詢重設為可保存
+- [x] 7.3 為新增 UI 文案與 content description 完成香港繁體、獨立簡體及自然英文資源，禁止在 XML／Kotlin 硬編碼 App 可見文字
 - [ ] 7.4 更新 `RouteSearchInputVisualMatrixInstrumentedTest` 或等效布局測試，驗證正常字體且空間足夠時單列展示，`360dp`、英文及 font scale `1.3／2.0` 時路徑與操作可分兩列，核心文字不縮小、操作不裁切且各有至少 `48dp` 觸控目標
 - [ ] 7.5 補充保存流程 instrumentation，覆蓋成功後防重複、重名處理、取消／失敗可重試、編輯未改保留資格及新查詢重設狀態
 

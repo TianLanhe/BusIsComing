@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.test.core.app.ActivityScenario
@@ -460,6 +461,15 @@ class SearchDestinationInstrumentedTest {
                 RouteConfigRepository(InstrumentationRegistry.getInstrumentation().targetContext)
                     .getAll()
                     .any { it.name == "測試終點 -> 測試起點" }
+            }
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            scenario.onActivity { activity ->
+                val save = activity.findViewById<View>(R.id.searchSaveButton)
+                val route = activity.findViewById<TextView>(R.id.searchTripRouteText)
+                val actions = activity.findViewById<View>(R.id.searchTripActions)
+                assertTrue(save.measuredHeight >= dp(activity, 48))
+                assertTrue(route.textSize > 0f)
+                assertTrue(route.right <= actions.left || route.bottom < actions.top)
             }
 
             onView(withId(R.id.navigation_frequent_routes)).perform(click())

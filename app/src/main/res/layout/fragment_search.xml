@@ -66,7 +66,7 @@
                 app:strokeColor="@color/bus_divider"
                 app:strokeWidth="1dp">
 
-                <LinearLayout
+                <com.golink.busiscoming.ui.main.SearchTripContextLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
@@ -80,53 +80,66 @@
                         android:textColor="@color/bus_text_secondary"
                         android:textSize="12sp" />
 
-                    <TextView
-                        android:id="@+id/searchTripRouteText"
+                    <LinearLayout
+                        android:id="@+id/searchTripContextBody"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:ellipsize="end"
-                        android:maxLines="2"
-                        android:textColor="@color/bus_text_primary"
-                        android:textSize="16sp" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="end"
+                        android:gravity="center_vertical"
                         android:orientation="horizontal">
 
-                        <com.google.android.material.button.MaterialButton
+                        <TextView
+                            android:id="@+id/searchTripRouteText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:textColor="@color/bus_text_primary"
+                            android:textSize="16sp" />
+
+                        <LinearLayout
+                            android:id="@+id/searchTripActions"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="end"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
                             android:id="@+id/searchEditButton"
                             style="@style/StableShortText.Button.Tonal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:minHeight="48dp"
                             android:minWidth="48dp"
-                            android:text="@string/search_edit_trip" />
+                            android:ellipsize="none"
+                            android:singleLine="false"
+                                android:text="@string/search_edit_trip" />
 
-                        <com.google.android.material.button.MaterialButton
+                            <com.google.android.material.button.MaterialButton
                             android:id="@+id/searchCancelEditButton"
                             style="@style/StableShortText.Button.Tonal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:minHeight="48dp"
                             android:minWidth="48dp"
+                            android:ellipsize="none"
+                            android:singleLine="false"
                             android:text="@string/search_cancel_edit"
-                            android:visibility="gone" />
+                                android:visibility="gone" />
 
-                        <com.google.android.material.button.MaterialButton
+                            <com.google.android.material.button.MaterialButton
                             android:id="@+id/searchSaveButton"
                             style="@style/StableShortText.Button.Tonal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:minHeight="48dp"
                             android:minWidth="48dp"
-                            android:text="@string/save_as_frequent"
-                            android:visibility="gone" />
+                            android:ellipsize="none"
+                            android:singleLine="false"
+                                android:text="@string/save_as_frequent"
+                                android:visibility="gone" />
+                        </LinearLayout>
                     </LinearLayout>
-                </LinearLayout>
+                </com.golink.busiscoming.ui.main.SearchTripContextLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 

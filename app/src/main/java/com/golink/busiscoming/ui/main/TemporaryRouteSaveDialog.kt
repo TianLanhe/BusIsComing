@@ -28,7 +28,8 @@ object TemporaryRouteSaveDialog {
         routeConfigRepository: RouteConfigRepository,
         origin: Place,
         destination: Place,
-        onSaved: (Long) -> Unit
+        onSaved: (Long) -> Unit,
+        onSaveFailed: () -> Unit = {}
     ) {
         val nameInput = TextInputEditText(context).apply {
             setText(defaultName(origin, destination))
@@ -88,7 +89,16 @@ object TemporaryRouteSaveDialog {
                             nameLayout.error = context.getString(R.string.route_duplicate_detail)
                             return@setOnClickListener
                         }
-                        val id = routeConfigRepository.insert(name, origin, destination)
+                        val id = try {
+                            routeConfigRepository.insert(name, origin, destination)
+                        } catch (_: Exception) {
+                            -1L
+                        }
+                        if (id <= 0L) {
+                            nameLayout.error = context.getString(R.string.save_frequent_failed)
+                            onSaveFailed()
+                            return@setOnClickListener
+                        }
                         Toast.makeText(context, R.string.saved_as_frequent, Toast.LENGTH_SHORT).show()
                         dismiss()
                         onSaved(id)

@@ -74,6 +74,25 @@ class LocaleResourceContractTest {
         }
     }
 
+    @Test
+    fun tripContextSaveCopyAndFailureFeedbackExistInAllSupportedLanguages() {
+        val keys = listOf(
+            "search_current_trip",
+            "search_edit_trip",
+            "search_cancel_edit",
+            "save_as_frequent",
+            "search_trip_saved",
+            "search_trip_save_description",
+            "search_trip_saved_description",
+            "save_frequent_failed"
+        )
+        listOf(values(traditional), values(simplified), values(english)).forEach { language ->
+            keys.forEach { key ->
+                assertTrue("Missing trip context copy: $key", language[key]?.isNotBlank() == true)
+            }
+        }
+    }
+
     private fun values(directory: File): Map<String, String> =
         Regex("<string\\s+name=\"([^\"]+)\"(?:\\s+translatable=\"(?:true|false)\")?>(.*?)</string>", setOf(RegexOption.DOT_MATCHES_ALL))
             .findAll(

@@ -104,6 +104,19 @@ class SearchPresentationStateTest {
     }
 
     @Test
+    fun `a new successful query restores save availability after a saved query`() {
+        val state = SearchPresentationState()
+        state.beginQuery(origin, destination)
+        state.completeWithResults()
+        state.markSaved()
+
+        state.beginQuery(replacement, destination)
+        state.completeWithResults()
+
+        assertEquals(SearchSaveState.AVAILABLE, state.saveState)
+    }
+
+    @Test
     fun `input changes without retained results remain editing rather than inventing a result context`() {
         val state = SearchPresentationState()
 
