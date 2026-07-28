@@ -92,8 +92,7 @@
                             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:hint="@string/origin_search_hint"
-                            app:helperText="@string/place_search_helper">
+                            android:hint="@string/origin_search_hint">
 
                             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/originInput"
@@ -159,8 +158,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="14dp"
-                            android:hint="@string/destination_search_hint"
-                            app:helperText="@string/place_search_helper">
+                            android:hint="@string/destination_search_hint">
 
                             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/destinationInput"

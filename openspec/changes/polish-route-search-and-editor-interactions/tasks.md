@@ -7,9 +7,9 @@
 
 ## 2. 恢復緊湊地點欄位
 
-- [ ] 2.1 只移除 `activity_route_edit.xml` 起點與終點的常駐 `helperText`，保留行程名稱 helper、label／hint、錯誤位置及現有動態 helper 控件
-- [ ] 2.2 補充或更新 `PlaceInputController`／行程編輯 contract tests，驗證 loading、無結果、搜尋失敗、定位失敗、校驗及 Google attribution 仍在所屬欄位按狀態顯示並可清除
-- [ ] 2.3 回歸新增、編輯及複製行程，確認三種入口均為初始緊湊單行地點外觀，且行程名稱說明和保存校驗未改變
+- [x] 2.1 只移除 `activity_route_edit.xml` 起點與終點的常駐 `helperText`，保留行程名稱 helper、label／hint、錯誤位置及現有動態 helper 控件
+- [x] 2.2 補充或更新 `PlaceInputController`／行程編輯 contract tests，驗證 loading、無結果、搜尋失敗、定位失敗、校驗及 Google attribution 仍在所屬欄位按狀態顯示並可清除
+- [x] 2.3 回歸新增、編輯及複製行程，確認三種入口均為初始緊湊單行地點外觀，且行程名稱說明和保存校驗未改變
 
 ## 3. 擴充搜尋候選並修正手勢歸屬
 

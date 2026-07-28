@@ -36,6 +36,122 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class PlaceInputControllerInstrumentedTest {
     @Test
+    fun routeEditClearsOriginAttributionWhenTheOriginChanges() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            scenario.onActivity { activity ->
+                val attribution = activity.findViewById<TextView>(R.id.originAttributionText)
+                val originInput =
+                    activity.findViewById<MaterialAutoCompleteTextView>(R.id.originInput)
+
+                attribution.visibility = View.VISIBLE
+                originInput.setText("新的起點")
+
+                assertEquals(View.GONE, attribution.visibility)
+            }
+        }
+    }
+
+    @Test
+    fun defaultFieldFeedbackShowsDynamicStatesAndClearsAfterAValidSelection() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            lateinit var inputLayout: TextInputLayout
+            lateinit var loading: View
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                loading = View(activity)
+                val candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                root.addView(inputLayout)
+                root.addView(loading)
+                root.addView(candidateList)
+
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = loading,
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> = when (keyword) {
+                            "空" -> emptyList()
+                            "錯" -> error("expected search failure")
+                            else -> listOf(place("候選"))
+                        }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true }
+                )
+
+                assertEquals(null, inputLayout.helperText)
+                input.setText("空")
+                assertEquals(View.VISIBLE, loading.visibility)
+            }
+
+            waitUntil {
+                var matchesShown = false
+                scenario.onActivity {
+                    matchesShown = inputLayout.helperText ==
+                        inputLayout.context.getString(R.string.place_search_empty) &&
+                        inputLayout.error == null &&
+                        loading.visibility == View.GONE
+                }
+                matchesShown
+            }
+
+            scenario.onActivity {
+                input.setText("錯")
+            }
+            waitUntil {
+                var failureShown = false
+                scenario.onActivity {
+                    failureShown = inputLayout.error ==
+                        inputLayout.context.getString(R.string.place_search_failed) &&
+                        inputLayout.helperText == null
+                }
+                failureShown
+            }
+
+            scenario.onActivity { activity ->
+                controller.setHelperText(activity.getString(R.string.current_location_manual_origin))
+                assertEquals(
+                    activity.getString(R.string.current_location_manual_origin),
+                    inputLayout.helperText
+                )
+                controller.setError(activity.getString(R.string.validation_origin_required))
+                assertEquals(
+                    activity.getString(R.string.validation_origin_required),
+                    inputLayout.error
+                )
+
+                controller.setSelectedPlace(place("已選地點"))
+                assertEquals(null, inputLayout.helperText)
+                assertEquals(null, inputLayout.error)
+            }
+
+            scenario.onActivity {
+                controller.dispose()
+            }
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
     fun routeSearchMessageSinkReceivesSelectionInstructionEmptyAndFailureStates() {
         ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
             val executor = Executors.newSingleThreadExecutor()
@@ -127,14 +243,8 @@ class PlaceInputControllerInstrumentedTest {
                 assertTrue(destinationInput.height >= xmlDp(activity, 56))
                 assertEquals(xmlDp(activity, 16), originInput.paddingStart)
                 assertEquals(xmlDp(activity, 16), originInput.paddingEnd)
-                assertEquals(
-                    activity.getString(R.string.place_search_helper),
-                    originLayout.helperText
-                )
-                assertEquals(
-                    activity.getString(R.string.place_search_helper),
-                    destinationLayout.helperText
-                )
+                assertEquals(null, originLayout.helperText)
+                assertEquals(null, destinationLayout.helperText)
                 assertEquals(TextInputLayout.END_ICON_CUSTOM, originLayout.endIconMode)
                 assertTrue(originLayout.endIconDrawable != null)
                 assertEquals(

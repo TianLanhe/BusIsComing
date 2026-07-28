@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,6 +48,27 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(editLayoutXml.contains("android:id=\"@+id/originAttributionText\""))
         assertTrue(editLayoutXml.contains("android:id=\"@+id/routeEditScroll\""))
         assertTrue(editLayoutXml.contains("<androidx.core.widget.NestedScrollView"))
+    }
+
+    @Test
+    fun `route edit keeps place supporting rows state driven while preserving journey name guidance`() {
+        val document = DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder()
+            .parse(File("src/main/res/layout/activity_route_edit.xml"))
+        val helperTextById = document.getElementsByTagName("com.google.android.material.textfield.TextInputLayout")
+            .let { layouts ->
+                (0 until layouts.length).associate { index ->
+                    val layout = layouts.item(index).attributes
+                    layout.getNamedItem("android:id").nodeValue to
+                        (layout.getNamedItem("app:helperText")?.nodeValue ?: "")
+                }
+            }
+
+        assertTrue(
+            helperTextById["@+id/routeNameInputLayout"] == "@string/route_name_helper"
+        )
+        assertTrue(helperTextById["@+id/originInputLayout"].isNullOrEmpty())
+        assertTrue(helperTextById["@+id/destinationInputLayout"].isNullOrEmpty())
     }
 
     @Test
