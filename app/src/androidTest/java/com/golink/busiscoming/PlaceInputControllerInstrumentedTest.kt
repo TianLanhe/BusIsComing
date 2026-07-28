@@ -394,6 +394,72 @@ class PlaceInputControllerInstrumentedTest {
         }
     }
 
+    @Test
+    fun exclusiveCandidateScrollKeepsItsOwnRecyclerViewScrollableWithoutNestedHandoff() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            lateinit var candidateList: RecyclerView
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                val inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                root.addView(inputLayout)
+                root.addView(candidateList)
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = View(activity),
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> =
+                            (1..20).map { index -> place("獨占候選$index") }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true },
+                    exclusiveVerticalScroll = true
+                )
+            }
+
+            onView(androidx.test.espresso.matcher.ViewMatchers.withId(R.id.instrumentedPlaceInput))
+                .perform(scrollTo(), click())
+            scenario.onActivity { input.setText("候選") }
+            waitUntil {
+                var ready = false
+                scenario.onActivity {
+                    ready = candidateList.visibility == View.VISIBLE &&
+                        candidateList.adapter?.itemCount == 20
+                }
+                ready
+            }
+
+            scenario.onActivity { activity ->
+                assertFalse(candidateList.isNestedScrollingEnabled)
+                candidateList.scrollBy(0, dp(activity, 52) * 6)
+                assertTrue(candidateList.computeVerticalScrollOffset() > 0)
+                input.clearFocus()
+                assertTrue(candidateList.isNestedScrollingEnabled)
+                controller.dispose()
+                executor.shutdownNow()
+            }
+        }
+    }
+
     private fun waitUntil(timeoutMillis: Long = 3_000L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMillis
         while (System.currentTimeMillis() < deadline) {

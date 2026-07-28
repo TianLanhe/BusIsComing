@@ -19,6 +19,8 @@ import androidx.test.espresso.action.Swipe
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.replaceText
+import androidx.test.espresso.action.ViewActions.swipeDown
+import androidx.test.espresso.action.ViewActions.swipeUp
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.matcher.ViewMatchers.isClickable
@@ -60,6 +62,7 @@ import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.Matcher
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -188,6 +191,86 @@ class SearchDestinationInstrumentedTest {
                     abs(swapCenterBeforeCandidates - swapButton.centerYOnScreen()) <=
                         dp(activity, 1)
                 )
+            }
+        }
+    }
+
+    @Test
+    fun searchCandidatesShowSixRowsAndFreezeTheAppBarUntilTheyClose() {
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.currentPlaceRequestOverride = { _, callback ->
+            callback(CurrentPlaceSelectionResult.Failure)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            onView(withId(R.id.placePairOriginInput)).perform(
+                click(),
+                replaceText("many"),
+                closeSoftKeyboard()
+            )
+            waitUntil {
+                var visible = false
+                scenario.onActivity { activity ->
+                    visible = activity.findViewById<RecyclerView>(
+                        R.id.placePairOriginCandidateList
+                    ).visibility == View.VISIBLE
+                }
+                visible
+            }
+
+            var frozenAppBarTop = 0
+            scenario.onActivity { activity ->
+                val appBar = activity.findViewById<View>(R.id.searchAppBar)
+                val searchContent = activity.findViewById<View>(R.id.searchContent)
+                val candidates = activity.findViewById<RecyclerView>(
+                    R.id.placePairOriginCandidateList
+                )
+                val refresh = activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh)
+                val frozenScrollFlags = (searchContent.layoutParams as
+                    com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
+                assertEquals(0, frozenScrollFlags)
+                assertFalse(candidates.isNestedScrollingEnabled)
+                assertFalse(refresh.isEnabled)
+                assertEquals(0, candidates.height % dp(activity, 52))
+                assertEquals(6, candidates.height / dp(activity, 52))
+                frozenAppBarTop = appBar.top
+            }
+            onView(withId(R.id.placePairOriginCandidateList)).perform(swipeUp())
+            scenario.onActivity { activity ->
+                val appBar = activity.findViewById<View>(R.id.searchAppBar)
+                val candidates = activity.findViewById<RecyclerView>(
+                    R.id.placePairOriginCandidateList
+                )
+                assertTrue(candidates.computeVerticalScrollOffset() > 0)
+                assertEquals(frozenAppBarTop, appBar.top)
+                candidates.scrollToPosition(19)
+            }
+            onView(withId(R.id.placePairOriginCandidateList)).perform(swipeUp())
+            scenario.onActivity { activity ->
+                assertEquals(frozenAppBarTop, activity.findViewById<View>(R.id.searchAppBar).top)
+                activity.findViewById<RecyclerView>(R.id.placePairOriginCandidateList)
+                    .scrollToPosition(0)
+            }
+            onView(withId(R.id.placePairOriginCandidateList)).perform(swipeDown())
+            scenario.onActivity { activity ->
+                assertEquals(frozenAppBarTop, activity.findViewById<View>(R.id.searchAppBar).top)
+            }
+
+            onView(withId(R.id.searchContent)).perform(click())
+            waitUntil {
+                var closed = false
+                scenario.onActivity { activity ->
+                    closed = activity.findViewById<View>(R.id.placePairOriginCandidateList).visibility ==
+                        View.GONE
+                }
+                closed
+            }
+            scenario.onActivity { activity ->
+                val searchContent = activity.findViewById<View>(R.id.searchContent)
+                val restoredFlags = (searchContent.layoutParams as
+                    com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
+                assertEquals(1, restoredFlags)
             }
         }
     }
@@ -814,6 +897,7 @@ class SearchDestinationInstrumentedTest {
         override fun searchPlaces(keyword: String): List<Place> = when (keyword) {
             "o" -> listOf(Place("測試起點", 22.3, 114.1))
             "d2" -> listOf(Place("第二終點", 22.5, 114.3))
+            "many" -> (1..20).map { index -> Place("測試候選$index", 22.3, 114.1 + index) }
             else -> listOf(Place("測試終點", 22.4, 114.2))
         }
     }

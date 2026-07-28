@@ -106,6 +106,17 @@ class PlaceInputInlineCandidatesContractTest {
     }
 
     @Test
+    fun `search uses six candidate rows and locks outer scrolling while candidates are visible`() {
+        assertTrue(
+            searchFragmentKt.contains("private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 6")
+        )
+        assertTrue(searchFragmentKt.contains("SearchCandidateScrollLock"))
+        assertTrue(searchFragmentKt.contains("setCandidateScrollLock"))
+        assertTrue(controllerKt.contains("exclusiveVerticalScroll"))
+        assertTrue(controllerKt.contains("requestDisallowInterceptTouchEvent(true)"))
+    }
+
+    @Test
     fun searchKeepsSelectedPlacesAcrossViewRecreation() {
         assertTrue(searchFragmentKt.contains("restoredOrigin"))
         assertTrue(searchFragmentKt.contains("restoredDestination"))

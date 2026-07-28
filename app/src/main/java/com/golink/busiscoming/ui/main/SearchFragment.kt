@@ -15,6 +15,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.google.android.material.appbar.AppBarLayout
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
@@ -104,6 +105,8 @@ class SearchFragment : Fragment() {
     private var originCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var destinationCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var candidateBackCallback: OnBackPressedCallback? = null
+    private val candidateScrollLock = SearchCandidateScrollLock()
+    private lateinit var searchContent: View
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -142,6 +145,7 @@ class SearchFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val context = requireContext()
+        searchContent = view.findViewById(R.id.searchContent)
         val placeEditor = view.findViewById<PlacePairEditorView>(R.id.searchPlacePairEditor)
         val originInput = placeEditor.originInput
         val destinationInput = placeEditor.destinationInput
@@ -174,9 +178,11 @@ class SearchFragment : Fragment() {
             maxVisibleRows = SEARCH_MAX_VISIBLE_CANDIDATE_ROWS,
             idleToolView = currentLocationButton,
             instructionText = getString(R.string.place_search_helper),
+            exclusiveVerticalScroll = true,
             onCandidateVisibilityChanged = { visible ->
                 if (visible) destinationController?.hideCandidates()
                 placeEditor.requestToolAlignment()
+                setCandidateScrollLock()
                 updateRefreshEnabled()
             },
             onPlaceSelected = {
@@ -207,9 +213,11 @@ class SearchFragment : Fragment() {
             isActive = ::isViewActive,
             maxVisibleRows = SEARCH_MAX_VISIBLE_CANDIDATE_ROWS,
             instructionText = getString(R.string.place_search_helper),
+            exclusiveVerticalScroll = true,
             onCandidateVisibilityChanged = { visible ->
                 if (visible) originController?.hideCandidates()
                 placeEditor.requestToolAlignment()
+                setCandidateScrollLock()
                 updateRefreshEnabled()
             },
             onPlaceSelected = {
@@ -342,6 +350,7 @@ class SearchFragment : Fragment() {
         isViewStateRestored = false
         hasPendingDestinationSelection = false
         candidateBackCallback = null
+        candidateScrollLock.reset()
         detailSheet.dispose()
         etaSheet.dispose()
         super.onDestroyView()
@@ -661,6 +670,20 @@ class SearchFragment : Fragment() {
             (!routeQueryState.isQueryInProgress || routeQueryState.isRefreshing)
     }
 
+    private fun setCandidateScrollLock() {
+        if (!::searchContent.isInitialized) return
+        val appBarLayoutParams = searchContent.layoutParams as? AppBarLayout.LayoutParams ?: return
+        val state = candidateScrollLock.update(
+            originCandidatesVisible = originController?.isCandidateVisible() == true,
+            destinationCandidatesVisible = destinationController?.isCandidateVisible() == true,
+            currentScrollFlags = appBarLayoutParams.scrollFlags
+        )
+        state.scrollFlagsToApply?.let { scrollFlags ->
+            appBarLayoutParams.scrollFlags = scrollFlags
+            searchContent.layoutParams = appBarLayoutParams
+        }
+    }
+
     private fun formatUpdatedAt(value: Long?): String {
         val timestamp = value ?: return "--:--"
         return SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
@@ -809,7 +832,7 @@ class SearchFragment : Fragment() {
         const val STATE_HAS_SUBMITTED_QUERY = "search_has_submitted_query"
         const val STATE_SEARCH_SCROLL_POSITION = "search_scroll_position"
         const val STATE_SEARCH_SCROLL_OFFSET = "search_scroll_offset"
-        private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 3
+        private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 6
         private const val CANDIDATE_LOCATION_SNAPSHOT_MAX_AGE_MS = 30_000L
     }
 }

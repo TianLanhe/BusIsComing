@@ -40,6 +40,7 @@ class PlaceInputController(
     private val maxVisibleRows: Int = PlaceCandidatePresentationPolicy.DEFAULT_MAX_VISIBLE_ROWS,
     private val idleToolView: View? = null,
     instructionText: CharSequence? = null,
+    private val exclusiveVerticalScroll: Boolean = false,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
     private val onPlaceSelected: (Place) -> Unit = {},
     private val onUserTextEdited: () -> Unit = {},
@@ -69,6 +70,13 @@ class PlaceInputController(
         candidateList.background = ContextCompat.getDrawable(context, R.drawable.place_candidate_list_background)
         candidateList.elevation = dp(context, 2).toFloat()
         candidateList.visibility = View.GONE
+        candidateList.setOnTouchListener { _, _ ->
+            if (exclusiveVerticalScroll && candidateList.visibility == View.VISIBLE) {
+                candidateList.parent?.requestDisallowInterceptTouchEvent(true)
+                candidateList.stopNestedScroll()
+            }
+            false
+        }
         ViewCompat.setOnApplyWindowInsetsListener(candidateList) { view, insets ->
             val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
             imeTopPx = (view.rootView.height - imeBottom).coerceAtLeast(rowHeightPx * MIN_VISIBLE_ROWS)
@@ -162,6 +170,7 @@ class PlaceInputController(
 
     fun hideCandidates(): Boolean {
         if (candidateList.visibility != View.VISIBLE) return false
+        setCandidateScrollLock(false)
         candidateList.visibility = View.GONE
         onCandidateVisibilityChanged(false)
         return true
@@ -317,10 +326,20 @@ class PlaceInputController(
         if (adapter.itemCount == 0 || !input.hasFocus()) return
         updateCandidateHeight()
         if (candidateList.visibility != View.VISIBLE) {
+            setCandidateScrollLock(true)
             candidateList.visibility = View.VISIBLE
             onCandidateVisibilityChanged(true)
         }
         ViewCompat.requestApplyInsets(candidateList)
+    }
+
+    private fun setCandidateScrollLock(visible: Boolean) {
+        if (!exclusiveVerticalScroll) return
+        candidateList.isNestedScrollingEnabled = !visible
+        if (visible) {
+            candidateList.parent?.requestDisallowInterceptTouchEvent(true)
+            candidateList.stopNestedScroll()
+        }
     }
 
     private fun updateCandidateHeight() {
