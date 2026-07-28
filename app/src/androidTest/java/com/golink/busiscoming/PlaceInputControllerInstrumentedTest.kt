@@ -14,9 +14,11 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.scrollTo
-import androidx.test.espresso.action.ViewActions.swipeUp
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -31,6 +33,7 @@ import com.google.android.material.textfield.TextInputLayout
 import java.util.concurrent.Executors
 import java.io.FileInputStream
 import kotlin.math.roundToInt
+import org.hamcrest.Matcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -462,32 +465,56 @@ class PlaceInputControllerInstrumentedTest {
                 ready
             }
 
+            lateinit var activeDrag: ViewAction
             var startOffset = 0
             scenario.onActivity {
                 assertFalse(candidateList.isNestedScrollingEnabled)
                 startOffset = candidateList.computeVerticalScrollOffset()
                 assertTrue(owner.disallowRequests.last())
+                owner.disallowRequests.clear()
+                activeDrag = object : ViewAction {
+                    override fun getConstraints(): Matcher<View> = isDisplayed()
+
+                    override fun getDescription(): String =
+                        "drag the candidate list without releasing the active gesture"
+
+                    override fun perform(uiController: UiController, view: View) {
+                        val recyclerView = view as RecyclerView
+                        val downTime = SystemClock.uptimeMillis()
+                        val x = recyclerView.width / 2f
+                        val downY = recyclerView.height * 0.75f
+                        val moveY = recyclerView.height * 0.15f
+                        MotionEvent.obtain(
+                            downTime,
+                            downTime,
+                            MotionEvent.ACTION_DOWN,
+                            x,
+                            downY,
+                            0
+                        ).also { event ->
+                            assertTrue(recyclerView.dispatchTouchEvent(event))
+                            event.recycle()
+                        }
+                        uiController.loopMainThreadForAtLeast(32L)
+                        MotionEvent.obtain(
+                            downTime,
+                            SystemClock.uptimeMillis(),
+                            MotionEvent.ACTION_MOVE,
+                            x,
+                            moveY,
+                            0
+                        ).also { event ->
+                            assertTrue(recyclerView.dispatchTouchEvent(event))
+                            event.recycle()
+                        }
+                        uiController.loopMainThreadForAtLeast(32L)
+                    }
+                }
             }
-            onView(withContentDescription("instrumented exclusive candidate list")).perform(swipeUp())
+            onView(withContentDescription("instrumented exclusive candidate list")).perform(activeDrag)
             scenario.onActivity {
                 assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)
                 assertEquals(View.VISIBLE, candidateList.visibility)
-
-                owner.disallowRequests.clear()
-                val activeOwnershipTime = SystemClock.uptimeMillis()
-                val activeOwnershipDown = MotionEvent.obtain(
-                    activeOwnershipTime,
-                    activeOwnershipTime,
-                    MotionEvent.ACTION_DOWN,
-                    candidateList.width / 2f,
-                    candidateList.height / 2f,
-                    0
-                )
-                try {
-                    candidateList.dispatchTouchEvent(activeOwnershipDown)
-                } finally {
-                    activeOwnershipDown.recycle()
-                }
                 assertTrue(owner.disallowRequests.last())
 
                 controller.dispose()

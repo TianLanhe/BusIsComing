@@ -153,21 +153,29 @@ class PlaceInputInlineCandidatesContractTest {
         )
         assertTrue(
             "The exclusive matcher must target candidateList's unique description",
-            exclusiveTest.contains("onView(withContentDescription(\"$exclusiveDescription\"))")
+            exclusiveTest.contains(
+                "onView(withContentDescription(\"$exclusiveDescription\"))" +
+                    ".perform(activeDrag)"
+            )
         )
         assertEquals(
-            "The exclusive candidate description must not identify another list",
+            "The exclusive candidate description evidence must stay inside the exclusive test",
             2,
             Regex(Regex.escape(exclusiveDescription))
-                .findAll(controllerInstrumentationTest)
+                .findAll(exclusiveTest)
                 .count()
         )
         assertAppearsInOrder(
             exclusiveTest,
+            "startOffset = candidateList.computeVerticalScrollOffset()",
             "owner.disallowRequests.clear()",
+            "activeDrag = object : ViewAction",
             "MotionEvent.ACTION_DOWN",
-            "candidateList.dispatchTouchEvent(activeOwnershipDown)",
-            "activeOwnershipDown.recycle()",
+            "recyclerView.dispatchTouchEvent(event)",
+            "MotionEvent.ACTION_MOVE",
+            "onView(withContentDescription(\"$exclusiveDescription\"))" +
+                ".perform(activeDrag)",
+            "assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)",
             "assertTrue(owner.disallowRequests.last())",
             "controller.dispose()",
             "assertEquals(View.GONE, candidateList.visibility)",
@@ -181,8 +189,13 @@ class PlaceInputInlineCandidatesContractTest {
             "postDisposeDown.recycle()",
             "assertEquals(requestCountAfterDispose, owner.disallowRequests.size)"
         )
-        assertFalse(exclusiveTest.contains("MotionEvent.ACTION_UP"))
-        assertFalse(exclusiveTest.contains("MotionEvent.ACTION_CANCEL"))
+        val beforeDispose = exclusiveTest.substringBefore("controller.dispose()")
+        assertFalse(
+            "The active gesture must not complete before dispose",
+            beforeDispose.contains("swipeUp()")
+        )
+        assertFalse(beforeDispose.contains("MotionEvent.ACTION_UP"))
+        assertFalse(beforeDispose.contains("MotionEvent.ACTION_CANCEL"))
     }
 
     @Test
