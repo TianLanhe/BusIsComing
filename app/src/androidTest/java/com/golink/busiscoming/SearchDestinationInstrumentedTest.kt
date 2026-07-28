@@ -30,6 +30,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.isNotEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
+import androidx.test.espresso.matcher.ViewMatchers.withHint
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.espresso.matcher.RootMatchers.isDialog
@@ -38,6 +39,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
@@ -61,7 +63,9 @@ import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.main.MainActivity
+import com.golink.busiscoming.ui.main.RouteConfigSaveGateway
 import com.golink.busiscoming.ui.main.SearchFragment
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputLayout
 import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.Matcher
@@ -488,6 +492,164 @@ class SearchDestinationInstrumentedTest {
             .filter { it.name == "測試終點 -> 測試起點" }
             .forEach { repository.delete(it.id) }
         repository.close()
+    }
+
+    @Test
+    fun saveDialogKeepsAvailabilityAcrossDuplicateFailuresAndRetryThenPreventsRepeatInsert() {
+        val gateway = RecordingSaveGateway().apply {
+            duplicateNames += "測試起點 -> 測試終點"
+            insertOutcomes += { -1L }
+            insertOutcomes += { throw IllegalStateException("injected") }
+            insertOutcomes += { 42L }
+        }
+        installDependencies(ImmediateRouteRepository())
+        SearchFragment.routeConfigSaveGatewayFactory = { gateway }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitForText("測試路線")
+
+            onView(withId(R.id.searchSaveButton)).perform(click())
+            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+            waitForTextInDialog(
+                InstrumentationRegistry.getInstrumentation().targetContext
+                    .getString(R.string.route_duplicate_detail)
+            )
+            onView(withHint(R.string.frequent_route_name_hint))
+                .inRoot(isDialog())
+                .perform(replaceText("可重試行程"))
+
+            repeat(2) {
+                onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+                waitForTextInDialog(
+                    InstrumentationRegistry.getInstrumentation().targetContext
+                        .getString(R.string.save_frequent_failed)
+                )
+            }
+            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+            assertEquals(3, gateway.insertCount)
+
+            scenario.onActivity { activity ->
+                val save = activity.findViewById<MaterialButton>(R.id.searchSaveButton)
+                assertEquals(
+                    ContextCompat.getDrawable(activity, R.drawable.ic_bookmark_filled)
+                        ?.constantState,
+                    save.icon?.constantState
+                )
+                assertFalse(save.performClick())
+            }
+            assertEquals(3, gateway.insertCount)
+        }
+    }
+
+    @Test
+    fun cancelAndEditingResultsSaveKeepTheCurrentGenerationWhileANewQueryResetsIt() {
+        val gateway = RecordingSaveGateway().apply {
+            insertOutcomes += { 51L }
+        }
+        val routeRepository = ImmediateRouteRepository()
+        installDependencies(routeRepository)
+        SearchFragment.routeConfigSaveGatewayFactory = { gateway }
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitForText("測試路線")
+
+            onView(withId(R.id.searchSaveButton)).perform(click())
+            onView(withText(R.string.action_cancel)).inRoot(isDialog()).perform(click())
+            onView(withId(R.id.searchSaveButton)).check(matches(isEnabled()))
+            assertEquals(0, gateway.insertCount)
+
+            onView(withId(R.id.searchEditButton)).perform(click())
+            onView(withId(R.id.searchCancelEditButton)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchSaveButton)).perform(click())
+            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchCancelEditButton)).perform(click())
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.navigation_frequent_routes)).perform(click())
+            onView(withId(R.id.navigation_search)).perform(click())
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchResultList)).perform(swipeDownVisibleArea())
+            waitUntil { routeRepository.queryCount >= 2 }
+            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
+            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.searchEditButton)).perform(click())
+            selectPlace(R.id.placePairDestinationInput, "d2", "第二終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitForText("測試路線")
+            onView(withId(R.id.searchSaveButton)).check(matches(isEnabled()))
+            onView(withText(R.string.save_as_frequent)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchSaveButton)).check { view, _ ->
+                val save = view as MaterialButton
+                assertEquals(
+                    ContextCompat.getDrawable(view.context, R.drawable.ic_bookmark_outline)
+                        ?.constantState,
+                    save.icon?.constantState
+                )
+            }
+            assertEquals(1, gateway.insertCount)
+        }
+    }
+
+    @Test
+    fun staleSaveDialogRejectsInsertAfterItsSuccessfulContextIsInvalidated() {
+        val routeRepository = CapturingRouteRepository()
+        val gateway = RecordingSaveGateway()
+        installDependencies(routeRepository)
+        SearchFragment.routeConfigSaveGatewayFactory = { gateway }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil { routeRepository.callbacks.size == 1 }
+            routeRepository.callbacks[0].onInitialRoutes(listOf(route("原查詢")))
+            waitForText("原查詢")
+
+            onView(withId(R.id.searchSaveButton)).perform(click())
+            scenario.onActivity { activity ->
+                val fragment =
+                    activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+                SearchFragment::class.java.getDeclaredMethod(
+                    "query",
+                    Boolean::class.javaPrimitiveType
+                ).apply { isAccessible = true }
+                    .invoke(fragment, true)
+            }
+            waitUntil { routeRepository.callbacks.size == 2 }
+            routeRepository.callbacks[1].onInitialRoutes(emptyList())
+            waitUntil {
+                var hidden = false
+                scenario.onActivity { activity ->
+                    hidden = activity.findViewById<View>(R.id.searchTripContext).visibility == View.GONE
+                }
+                hidden
+            }
+
+            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+            waitForTextInDialog(
+                InstrumentationRegistry.getInstrumentation().targetContext
+                    .getString(R.string.save_query_changed)
+            )
+            assertEquals(0, gateway.insertCount)
+        }
     }
 
     @Test
@@ -1369,6 +1531,20 @@ class SearchDestinationInstrumentedTest {
         ) {
             queryCount += 1
             callbacks += callback
+        }
+    }
+
+    private class RecordingSaveGateway : RouteConfigSaveGateway {
+        val duplicateNames = mutableSetOf<String>()
+        val insertOutcomes = ArrayDeque<() -> Long>()
+        var insertCount: Int = 0
+
+        override fun hasDuplicate(name: String, origin: Place, destination: Place): Boolean =
+            name in duplicateNames
+
+        override fun insert(name: String, origin: Place, destination: Place): Long {
+            insertCount += 1
+            return insertOutcomes.removeFirstOrNull()?.invoke() ?: insertCount.toLong()
         }
     }
 

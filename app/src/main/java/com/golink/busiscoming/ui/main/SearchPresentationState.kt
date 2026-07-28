@@ -26,6 +26,43 @@ data class SearchQuerySnapshot(
     val destination: Place
 )
 
+/**
+ * 成功查詢結果的擁有權；token 在同一 Fragment 實例內單調遞增，即使 Place 相同，
+ * 新查詢亦不會被舊保存對話框誤認為同一結果。
+ */
+data class SuccessfulSearchContext(
+    val token: Long,
+    val queryId: Int,
+    val snapshot: SearchQuerySnapshot
+)
+
+class SuccessfulSearchContextState {
+    private var nextToken = 0L
+    private var current: SuccessfulSearchContext? = null
+
+    fun recordSuccess(queryId: Int, snapshot: SearchQuerySnapshot): SuccessfulSearchContext {
+        val context = SuccessfulSearchContext(
+            token = ++nextToken,
+            queryId = queryId,
+            snapshot = snapshot
+        )
+        current = context
+        return context
+    }
+
+    fun retainForRefresh(snapshot: SearchQuerySnapshot): Boolean =
+        current?.snapshot == snapshot
+
+    fun isCurrent(context: SuccessfulSearchContext): Boolean = current == context
+
+    fun currentFor(snapshot: SearchQuerySnapshot, resultCount: Int): SuccessfulSearchContext? =
+        current?.takeIf { resultCount > 0 && it.snapshot == snapshot }
+
+    fun invalidate() {
+        current = null
+    }
+}
+
 /** 「本次行程」上下文僅能由仍在記憶體中的有效非空結果顯示。 */
 object SearchTripContextVisibility {
     fun isVisible(mode: SearchDisplayMode, resultCount: Int): Boolean =
@@ -113,7 +150,11 @@ class SearchPresentationState {
     }
 
     fun markSaved(): Boolean {
-        if (mode != SearchDisplayMode.RESULTS || saveState != SearchSaveState.AVAILABLE) return false
+        if (
+            (mode != SearchDisplayMode.RESULTS && mode != SearchDisplayMode.EDITING_RESULTS) ||
+            querySnapshot == null ||
+            saveState != SearchSaveState.AVAILABLE
+        ) return false
         saveState = SearchSaveState.SAVED
         return true
     }

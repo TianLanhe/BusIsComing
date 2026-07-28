@@ -84,7 +84,8 @@ class LocaleResourceContractTest {
             "search_trip_saved",
             "search_trip_save_description",
             "search_trip_saved_description",
-            "save_frequent_failed"
+            "save_frequent_failed",
+            "save_query_changed"
         )
         listOf(values(traditional), values(simplified), values(english)).forEach { language ->
             keys.forEach { key ->

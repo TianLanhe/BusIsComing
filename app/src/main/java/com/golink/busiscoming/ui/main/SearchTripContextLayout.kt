@@ -36,18 +36,34 @@ class SearchTripContextLayout @JvmOverloads constructor(
         val actions = actions ?: return
         val availableWidth = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
         if (availableWidth <= 0) return
-        actions.measure(
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        val actionRow = actions as? LinearLayout ?: return
+        val buttonWidths = mutableListOf<Int>()
+        val buttonMargins = mutableListOf<Int>()
+        repeat(actionRow.childCount) { index ->
+            val button = actionRow.getChildAt(index)
+            if (button.visibility == View.VISIBLE) {
+                button.measure(
+                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                )
+                val params = button.layoutParams as? LinearLayout.LayoutParams
+                buttonWidths += button.measuredWidth
+                buttonMargins += (params?.leftMargin ?: 0) + (params?.rightMargin ?: 0)
+            }
+        }
+        val preferredActionsWidth = SearchTripActionWidthPolicy.totalWidth(
+            visibleButtonWidthsPx = buttonWidths,
+            horizontalMarginsPx = buttonMargins
         )
         val routeWidth = route.paint.measureText(route.text?.toString().orEmpty()).toInt() +
             route.compoundPaddingLeft + route.compoundPaddingRight
         val singleRow = SearchTripContextLayoutPolicy.usesSingleRow(
             availableWidthPx = availableWidth,
             routeWidthPx = routeWidth,
-            actionsWidthPx = actions.measuredWidth,
+            actionsWidthPx = preferredActionsWidth,
             fontScale = resources.configuration.fontScale,
-            gapPx = dp(8)
+            gapPx = dp(8),
+            minimumSingleRowWidthPx = dp(400)
         )
         if (showingSingleRow == singleRow) return
         showingSingleRow = singleRow
@@ -87,6 +103,17 @@ object SearchTripContextLayoutPolicy {
         routeWidthPx: Int,
         actionsWidthPx: Int,
         fontScale: Float,
-        gapPx: Int = 0
-    ): Boolean = fontScale <= 1f && routeWidthPx + actionsWidthPx + gapPx <= availableWidthPx
+        gapPx: Int = 0,
+        minimumSingleRowWidthPx: Int = 0
+    ): Boolean =
+        fontScale <= 1f &&
+            availableWidthPx >= minimumSingleRowWidthPx &&
+            routeWidthPx + actionsWidthPx + gapPx <= availableWidthPx
+}
+
+object SearchTripActionWidthPolicy {
+    fun totalWidth(
+        visibleButtonWidthsPx: List<Int>,
+        horizontalMarginsPx: List<Int>
+    ): Int = visibleButtonWidthsPx.sum() + horizontalMarginsPx.sum()
 }

@@ -35,7 +35,6 @@ import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
-import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.PlacePairEditorView
@@ -67,6 +66,7 @@ class SearchFragment : Fragment() {
     private val attributionState = SearchPlaceAttributionState()
     private val routeQueryState = RouteQueryState()
     private val presentationState = SearchPresentationState()
+    private val successfulQueryContextState = SuccessfulSearchContextState()
     private val refreshFeedbackState = RouteRefreshFeedbackState()
     private val currentResults: List<BusRouteOption>
         get() = routeQueryState.results
@@ -86,7 +86,6 @@ class SearchFragment : Fragment() {
     private var hasSubmittedQuery: Boolean = false
     private var successfulQueryOrigin: Place? = null
     private var successfulQueryDestination: Place? = null
-    private var successfulQueryContext: SuccessfulSearchContext? = null
     private var isViewStateRestored: Boolean = false
     private var hasPendingDestinationSelection: Boolean = false
     private var pendingScrollPosition: Int? = null
@@ -672,9 +671,16 @@ class SearchFragment : Fragment() {
             successfulQueryDestination = destination
             if (updatePresentation) {
                 presentationState.completeWithResults()
-                successfulQueryContext = queryId?.let {
-                    SuccessfulSearchContext(it, SearchQuerySnapshot(origin, destination))
-                }
+                successfulQueryContextState.recordSuccess(
+                    queryId = requireNotNull(queryId),
+                    snapshot = SearchQuerySnapshot(origin, destination)
+                )
+            } else if (
+                !successfulQueryContextState.retainForRefresh(
+                    SearchQuerySnapshot(origin, destination)
+                )
+            ) {
+                successfulQueryContextState.invalidate()
             }
         } else if (updatePresentation) {
             presentationState.completeEmpty()
@@ -740,6 +746,7 @@ class SearchFragment : Fragment() {
         refreshFinishRunnable = null
         if (action == RouteRefreshFinishAction.SHOW_EMPTY_RESULTS) {
             presentationState.completeRefreshEmpty()
+            clearSuccessfulQuery()
             displayInitialResults(
                 routes = emptyList(),
                 preserveSort = preserveSort,
@@ -822,9 +829,9 @@ class SearchFragment : Fragment() {
         val context = currentSavableContext() ?: return
         TemporaryRouteSaveDialog.show(
             context = requireContext(),
-            routeConfigRepository = RouteConfigRepository(requireContext()),
-            origin = context.snapshot.origin,
-            destination = context.snapshot.destination,
+            saveGateway = routeConfigSaveGatewayFactory(requireContext()),
+            capturedContext = context,
+            canSave = ::isCurrentSavableContext,
             onSaved = {
                 val activeContext = currentSavableContext() ?: return@show
                 if (
@@ -970,7 +977,7 @@ class SearchFragment : Fragment() {
     private fun clearSuccessfulQuery() {
         successfulQueryOrigin = null
         successfulQueryDestination = null
-        successfulQueryContext = null
+        successfulQueryContextState.invalidate()
         renderSaveAction()
     }
 
@@ -1100,8 +1107,10 @@ class SearchFragment : Fragment() {
     private fun renderSaveAction() {
         if (!::saveButton.isInitialized) return
         val savable = currentSavableContext() != null
+        val snapshot = presentationState.querySnapshot
         val saved = presentationState.saveState == SearchSaveState.SAVED &&
-            successfulQueryContext != null &&
+            snapshot != null &&
+            successfulQueryContextState.currentFor(snapshot, currentResults.size) != null &&
             SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)
         saveButton.visibility = if (savable || saved) View.VISIBLE else View.GONE
         saveButton.isEnabled = savable
@@ -1113,14 +1122,16 @@ class SearchFragment : Fragment() {
     }
 
     private fun currentSavableContext(): SuccessfulSearchContext? {
-        val context = successfulQueryContext ?: return null
         if (presentationState.saveState != SearchSaveState.AVAILABLE) return null
         if (!SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)) return null
         val snapshot = presentationState.querySnapshot ?: return null
-        if (snapshot != context.snapshot) return null
+        val context = successfulQueryContextState.currentFor(snapshot, currentResults.size) ?: return null
         if (successfulQueryOrigin != snapshot.origin || successfulQueryDestination != snapshot.destination) return null
         return context
     }
+
+    private fun isCurrentSavableContext(context: SuccessfulSearchContext): Boolean =
+        successfulQueryContextState.isCurrent(context) && currentSavableContext() == context
 
     private fun invalidateCurrentPlaceRequest() {
         currentPlaceRequestState.invalidate()
@@ -1138,11 +1149,6 @@ class SearchFragment : Fragment() {
         val top: Int,
         val right: Int,
         val bottom: Int
-    )
-
-    private data class SuccessfulSearchContext(
-        val queryId: Int,
-        val snapshot: SearchQuerySnapshot
     )
 
     private fun dp(value: Int): Int =
@@ -1177,6 +1183,10 @@ class SearchFragment : Fragment() {
             { CitybusRouteDetailRepository() }
 
         @Volatile
+        internal var routeConfigSaveGatewayFactory: (android.content.Context) -> RouteConfigSaveGateway =
+            { context -> RouteConfigRepositorySaveGateway(context) }
+
+        @Volatile
         internal var currentPlaceRequestOverride:
             ((Boolean, (CurrentPlaceSelectionResult) -> Unit) -> Unit)? = null
 
@@ -1188,6 +1198,7 @@ class SearchFragment : Fragment() {
             busRouteRepositoryFactory = { CitybusBusRouteRepository() }
             placeSearchRepositoryFactory = { CitybusPlaceSearchRepository() }
             routeDetailRepositoryFactory = { CitybusRouteDetailRepository() }
+            routeConfigSaveGatewayFactory = { context -> RouteConfigRepositorySaveGateway(context) }
             currentPlaceRequestOverride = null
             currentLocationSnapshotRequestOverride = null
         }

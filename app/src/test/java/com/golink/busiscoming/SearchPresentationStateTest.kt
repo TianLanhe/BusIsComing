@@ -104,6 +104,21 @@ class SearchPresentationStateTest {
     }
 
     @Test
+    fun `saving while editing unchanged results remains saved after cancel editing`() {
+        val state = SearchPresentationState()
+        state.beginQuery(origin, destination)
+        state.completeWithResults()
+        state.beginEditingResults()
+
+        assertTrue(state.markSaved())
+        assertEquals(SearchSaveState.SAVED, state.saveState)
+        assertFalse(state.markSaved())
+        assertTrue(state.cancelEditing())
+        assertEquals(SearchDisplayMode.RESULTS, state.mode)
+        assertEquals(SearchSaveState.SAVED, state.saveState)
+    }
+
+    @Test
     fun `a new successful query restores save availability after a saved query`() {
         val state = SearchPresentationState()
         state.beginQuery(origin, destination)
