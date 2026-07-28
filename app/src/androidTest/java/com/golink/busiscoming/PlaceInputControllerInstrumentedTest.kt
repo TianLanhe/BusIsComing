@@ -287,7 +287,6 @@ class PlaceInputControllerInstrumentedTest {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
                     )
-                    contentDescription = "instrumented exclusive candidates"
                 }
                 root.addView(inputLayout)
                 root.addView(loading)
@@ -404,9 +403,17 @@ class PlaceInputControllerInstrumentedTest {
             lateinit var controller: PlaceInputController
             lateinit var input: MaterialAutoCompleteTextView
             lateinit var candidateList: RecyclerView
+            lateinit var owner: RecordingLinearLayout
 
             scenario.onActivity { activity ->
                 val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                owner = RecordingLinearLayout(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                    orientation = LinearLayout.VERTICAL
+                }
                 val inputLayout = TextInputLayout(activity).apply {
                     boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
                 }
@@ -419,9 +426,11 @@ class PlaceInputControllerInstrumentedTest {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT
                     )
+                    contentDescription = "instrumented exclusive candidate list"
                 }
-                root.addView(inputLayout)
-                root.addView(candidateList)
+                owner.addView(inputLayout)
+                owner.addView(candidateList)
+                root.addView(owner)
                 controller = PlaceInputController(
                     context = activity,
                     input = input,
@@ -455,13 +464,16 @@ class PlaceInputControllerInstrumentedTest {
             scenario.onActivity {
                 assertFalse(candidateList.isNestedScrollingEnabled)
                 startOffset = candidateList.computeVerticalScrollOffset()
+                assertTrue(owner.disallowRequests.last())
             }
-            onView(withContentDescription("instrumented exclusive candidates")).perform(swipeUp())
+            onView(withContentDescription("instrumented exclusive candidate list")).perform(swipeUp())
             scenario.onActivity {
                 assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)
-                input.clearFocus()
-                assertTrue(candidateList.isNestedScrollingEnabled)
+                assertEquals(View.VISIBLE, candidateList.visibility)
                 controller.dispose()
+                assertEquals(View.GONE, candidateList.visibility)
+                assertTrue(candidateList.isNestedScrollingEnabled)
+                assertFalse(owner.disallowRequests.last())
                 executor.shutdownNow()
             }
         }
@@ -503,6 +515,15 @@ class PlaceInputControllerInstrumentedTest {
 
     private fun View.marginTop(): Int {
         return (layoutParams as ViewGroup.MarginLayoutParams).topMargin
+    }
+
+    private class RecordingLinearLayout(context: Context) : LinearLayout(context) {
+        val disallowRequests = mutableListOf<Boolean>()
+
+        override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+            disallowRequests += disallowIntercept
+            super.requestDisallowInterceptTouchEvent(disallowIntercept)
+        }
     }
 
     private fun saveScreenshot(name: String) {

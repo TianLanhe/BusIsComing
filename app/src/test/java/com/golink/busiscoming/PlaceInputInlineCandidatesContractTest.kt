@@ -129,9 +129,14 @@ class PlaceInputInlineCandidatesContractTest {
     fun `candidate instrumentation preserves a refreshable result viewport and uses real swipes`() {
         assertTrue(searchInstrumentationTest.contains("refresh.isEnabled"))
         assertTrue(searchInstrumentationTest.contains("findFirstVisibleItemPosition"))
+        assertTrue(searchInstrumentationTest.contains("scrollToPositionWithOffset"))
+        assertTrue(searchInstrumentationTest.contains("firstResultPosition > 0"))
         assertTrue(searchInstrumentationTest.contains("showOriginCandidatesForExistingResult"))
         assertTrue(searchInstrumentationTest.contains("assertOuterViewportUnchanged"))
-        assertTrue(controllerInstrumentationTest.contains("perform(swipeUp())"))
+        assertTrue(searchInstrumentationTest.contains("onBackPressedDispatcher.onBackPressed()"))
+        assertTrue(controllerInstrumentationTest.contains("instrumented exclusive candidate list"))
+        assertTrue(controllerInstrumentationTest.contains("owner.disallowRequests.last()"))
+        assertTrue(controllerInstrumentationTest.contains("controller.dispose()"))
     }
 
     @Test

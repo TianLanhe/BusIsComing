@@ -219,6 +219,21 @@ class SearchDestinationInstrumentedTest {
             var resultViewport: OuterViewport? = null
             scenario.onActivity { activity ->
                 assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                val resultList = activity.findViewById<RecyclerView>(R.id.searchResultList)
+                (resultList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(
+                    4,
+                    dp(activity, 24)
+                )
+            }
+            waitUntil {
+                var positioned = false
+                scenario.onActivity { activity ->
+                    val viewport = outerViewport(activity)
+                    positioned = viewport.firstResultPosition > 0 && viewport.firstResultTop != 0
+                }
+                positioned
+            }
+            scenario.onActivity { activity ->
                 resultViewport = outerViewport(activity)
             }
             onView(withId(R.id.placePairOriginInput)).perform(
@@ -275,7 +290,9 @@ class SearchDestinationInstrumentedTest {
                 assertOuterViewportUnchanged(expectedViewport, activity)
             }
 
-            onView(withId(R.id.searchContent)).perform(click(), closeSoftKeyboard())
+            scenario.onActivity { activity ->
+                activity.onBackPressedDispatcher.onBackPressed()
+            }
             waitUntil {
                 var closed = false
                 scenario.onActivity { activity ->
@@ -284,12 +301,21 @@ class SearchDestinationInstrumentedTest {
                 }
                 closed
             }
+            onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
             scenario.onActivity { activity ->
                 val searchContent = activity.findViewById<View>(R.id.searchContent)
                 val preservedFlagsAfterClose = (searchContent.layoutParams as
                     com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
                 assertEquals(1, preservedFlagsAfterClose)
                 assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                assertEquals("測試起點", activity.findViewById<TextInputLayout>(
+                    R.id.placePairOriginLayout
+                ).editText?.text?.toString())
+                assertEquals("測試終點", activity.findViewById<TextInputLayout>(
+                    R.id.placePairDestinationLayout
+                ).editText?.text?.toString())
+                assertEquals(20, activity.findViewById<RecyclerView>(R.id.searchResultList)
+                    .adapter?.itemCount)
                 assertOuterViewportUnchanged(expectedViewport, activity)
             }
             onView(withId(R.id.searchResultList)).perform(swipeUp())
