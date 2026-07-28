@@ -1,26 +1,64 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.ui.main.MainActivityImeNavigationPolicy
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import com.golink.busiscoming.ui.main.MainActivityImeNavigationSnapshot
+import com.golink.busiscoming.ui.main.MainActivityImeNavigationTransition
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MainActivityImeNavigationPolicyTest {
     @Test
-    fun `visible IME makes the covered navigation unavailable to touch and accessibility`() {
-        val policy = MainActivityImeNavigationPolicy.resolve(imeVisible = true)
+    fun `repeated visible Insets keep the first snapshot for exact restoration`() {
+        val policy = MainActivityImeNavigationPolicy()
+        val original = MainActivityImeNavigationSnapshot(
+            isEnabled = true,
+            isClickable = false,
+            importantForAccessibility = 4,
+            menuItemEnabledStates = listOf(true, false, true)
+        )
+        val guarded = MainActivityImeNavigationSnapshot(
+            isEnabled = false,
+            isClickable = false,
+            importantForAccessibility = 8,
+            menuItemEnabledStates = listOf(false, false, false)
+        )
 
-        assertFalse(policy.isEnabled)
-        assertFalse(policy.isClickable)
-        assertTrue(policy.hidesDescendantsFromAccessibility)
+        assertEquals(
+            MainActivityImeNavigationTransition.ApplyGuard,
+            policy.update(imeVisible = true, current = original)
+        )
+        assertNull(policy.update(imeVisible = true, current = guarded))
+        assertEquals(
+            MainActivityImeNavigationTransition.Restore(original),
+            policy.update(imeVisible = false, current = guarded)
+        )
+        assertNull(policy.update(imeVisible = false, current = original))
     }
 
     @Test
-    fun `hidden IME restores navigation interaction and accessibility`() {
-        val policy = MainActivityImeNavigationPolicy.resolve(imeVisible = false)
+    fun `a later IME session captures a fresh navigation snapshot`() {
+        val policy = MainActivityImeNavigationPolicy()
+        val first = MainActivityImeNavigationSnapshot(
+            isEnabled = true,
+            isClickable = true,
+            importantForAccessibility = 0,
+            menuItemEnabledStates = listOf(true, true, false)
+        )
+        val later = MainActivityImeNavigationSnapshot(
+            isEnabled = false,
+            isClickable = true,
+            importantForAccessibility = 2,
+            menuItemEnabledStates = listOf(false, true, true)
+        )
 
-        assertTrue(policy.isEnabled)
-        assertTrue(policy.isClickable)
-        assertFalse(policy.hidesDescendantsFromAccessibility)
+        policy.update(imeVisible = true, current = first)
+        policy.update(imeVisible = false, current = first)
+        policy.update(imeVisible = true, current = later)
+
+        assertEquals(
+            MainActivityImeNavigationTransition.Restore(later),
+            policy.update(imeVisible = false, current = first)
+        )
     }
 }

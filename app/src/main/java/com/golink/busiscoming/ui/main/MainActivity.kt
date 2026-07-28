@@ -142,6 +142,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var transitCodePaymentLauncher: TransitCodePaymentLaunchAction
     private lateinit var topLevelNav: BottomNavigationView
     private val destinationState = TopLevelDestinationState()
+    private val topLevelNavImePolicy = MainActivityImeNavigationPolicy()
 
     private var routeConfigs: List<RouteConfig> = emptyList()
     private var selectedRoute: RouteConfig? = null
@@ -576,13 +577,48 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyTopLevelNavigationImePolicy(imeVisible: Boolean) {
-        val policy = MainActivityImeNavigationPolicy.resolve(imeVisible)
-        topLevelNav.isEnabled = policy.isEnabled
-        topLevelNav.isClickable = policy.isClickable
-        topLevelNav.importantForAccessibility = if (policy.hidesDescendantsFromAccessibility) {
-            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        } else {
-            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        when (
+            val transition = topLevelNavImePolicy.update(
+                imeVisible = imeVisible,
+                current = captureTopLevelNavigationSnapshot()
+            )
+        ) {
+            MainActivityImeNavigationTransition.ApplyGuard -> {
+                topLevelNav.isEnabled = false
+                topLevelNav.isClickable = false
+                topLevelNav.importantForAccessibility =
+                    View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                val disabledStates = List(topLevelNav.menu.size()) { false }
+                applyTopLevelMenuItemEnabledStates(disabledStates)
+            }
+            is MainActivityImeNavigationTransition.Restore -> {
+                val snapshot = transition.snapshot
+                applyTopLevelMenuItemEnabledStates(snapshot.menuItemEnabledStates)
+                topLevelNav.isEnabled = snapshot.isEnabled
+                topLevelNav.isClickable = snapshot.isClickable
+                topLevelNav.importantForAccessibility = snapshot.importantForAccessibility
+            }
+            null -> Unit
+        }
+    }
+
+    private fun captureTopLevelNavigationSnapshot(): MainActivityImeNavigationSnapshot {
+        return MainActivityImeNavigationSnapshot(
+            isEnabled = topLevelNav.isEnabled,
+            isClickable = topLevelNav.isClickable,
+            importantForAccessibility = topLevelNav.importantForAccessibility,
+            menuItemEnabledStates = (0 until topLevelNav.menu.size())
+                .map { topLevelNav.menu.getItem(it).isEnabled }
+        )
+    }
+
+    private fun applyTopLevelMenuItemEnabledStates(enabledStates: List<Boolean>) {
+        (0 until topLevelNav.menu.size()).forEach { index ->
+            topLevelNav.menu.getItem(index).isEnabled = enabledStates.getOrElse(index) { false }
+        }
+        val menuView = topLevelNav.getChildAt(0) as? ViewGroup ?: return
+        (0 until menuView.childCount).forEach { index ->
+            menuView.getChildAt(index).isEnabled = enabledStates.getOrElse(index) { false }
         }
     }
 

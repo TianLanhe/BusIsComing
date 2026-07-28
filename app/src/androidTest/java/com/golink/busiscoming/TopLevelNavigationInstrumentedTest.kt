@@ -1,7 +1,10 @@
 package com.golink.busiscoming
 
 import android.Manifest
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
@@ -94,10 +97,16 @@ class TopLevelNavigationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_search)).perform(click())
             var navigationBoundsBeforeIme: android.graphics.Rect? = null
+            var originalParentEnabled = false
+            var originalParentClickable = false
             scenario.onActivity { activity ->
-                navigationBoundsBeforeIme = screenBounds(
-                    activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
-                )
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                navigation.isClickable = false
+                navigation.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                navigation.menu.findItem(R.id.navigation_settings).isEnabled = false
+                originalParentEnabled = navigation.isEnabled
+                originalParentClickable = navigation.isClickable
+                navigationBoundsBeforeIme = screenBounds(navigation)
             }
 
             onView(withId(R.id.placePairOriginInput)).perform(click())
@@ -112,6 +121,15 @@ class TopLevelNavigationInstrumentedTest {
                     View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,
                     navigation.importantForAccessibility
                 )
+                val menuItemEnabledStates = (0 until navigation.menu.size())
+                    .map { navigation.menu.getItem(it).isEnabled }
+                assertEquals(listOf(false, false, false), menuItemEnabledStates)
+                val menuView = navigation.getChildAt(0) as ViewGroup
+                assertTrue(
+                    (0 until menuView.childCount).all { !menuView.getChildAt(it).isEnabled }
+                )
+                dispatchTap(menuView.getChildAt(0))
+                assertEquals(R.id.navigation_search, navigation.selectedItemId)
             }
 
             onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
@@ -120,9 +138,20 @@ class TopLevelNavigationInstrumentedTest {
                 val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
                 assertEquals(navigationBoundsBeforeIme, screenBounds(navigation))
                 assertEquals(R.id.navigation_search, navigation.selectedItemId)
-                assertTrue(navigation.isEnabled)
-                assertTrue(navigation.isClickable)
-                assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO, navigation.importantForAccessibility)
+                assertEquals(originalParentEnabled, navigation.isEnabled)
+                assertEquals(originalParentClickable, navigation.isClickable)
+                assertEquals(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_YES,
+                    navigation.importantForAccessibility
+                )
+                val menuItemEnabledStates = (0 until navigation.menu.size())
+                    .map { navigation.menu.getItem(it).isEnabled }
+                assertEquals(listOf(true, true, false), menuItemEnabledStates)
+                val menuView = navigation.getChildAt(0) as ViewGroup
+                assertEquals(
+                    listOf(true, true, false),
+                    (0 until menuView.childCount).map { menuView.getChildAt(it).isEnabled }
+                )
             }
         }
     }
@@ -259,6 +288,23 @@ class TopLevelNavigationInstrumentedTest {
             Thread.sleep(50)
         }
         assertTrue("Timed out waiting for IME visibility=$visible", false)
+    }
+
+    private fun dispatchTap(view: View) {
+        val eventTime = SystemClock.uptimeMillis()
+        listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEach { action ->
+            MotionEvent.obtain(
+                eventTime,
+                eventTime,
+                action,
+                view.width / 2f,
+                view.height / 2f,
+                0
+            ).also { event ->
+                view.dispatchTouchEvent(event)
+                event.recycle()
+            }
+        }
     }
 
     private fun dp(activity: MainActivity, value: Int): Int {
