@@ -173,6 +173,7 @@ class PlaceInputInlineCandidatesContractTest {
             "MotionEvent.ACTION_DOWN",
             "recyclerView.dispatchTouchEvent(event)",
             "MotionEvent.ACTION_MOVE",
+            "recyclerView.dispatchTouchEvent(event)",
             "onView(withContentDescription(\"$exclusiveDescription\"))" +
                 ".perform(activeDrag)",
             "assertTrue(candidateList.computeVerticalScrollOffset() > startOffset)",
