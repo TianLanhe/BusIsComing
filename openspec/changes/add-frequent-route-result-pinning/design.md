@@ -37,7 +37,7 @@
 - `UNPINNED` 向右滑動後成為 `TEMPORARY`。
 - `TEMPORARY` 再次向右滑動，或點擊首次置頂 Snackbar 的「長期置頂」，成為 `PERSISTENT`。
 - `TEMPORARY` 或 `PERSISTENT` 向左滑動後直接成為 `UNPINNED`；不設長期降級為本次置頂的中間步驟。
-- `PERSISTENT` 再次向右只展示「已長期置頂」的滑動背景並回彈，不更新時間、不寫入、不震動、不展示 Snackbar。
+- `PERSISTENT` 再次向右只露出「已長期置頂」文字並回彈，不更新時間、不寫入、不震動、不展示 Snackbar。
 
 取消置頂 Snackbar 的「撤銷」保存完整狀態快照，包括原等級、排序 token 與原相對位置，因此撤銷長期取消會直接恢復長期置頂。
 
@@ -181,15 +181,19 @@ ON route_result_pins(route_config_id, pinned_at DESC);
 
 `MainActivity` 為常用結果 RecyclerView 附加 `ItemTouchHelper`；`SearchFragment` 繼續使用相同 adapter/card binder，但不附加置頂手勢且只提交卡片 item。ItemTouchHelper 只允許可置頂、身份唯一的 `RouteCardItem`。
 
-卡片水平跟手比例為 1:1，必須以水平主導手勢達到約卡片寬度 40% 才觸發，不設速度 fling 捷徑。跨過門檻時只震動一次；未達門檻、已長期置頂再次右滑或禁止方向都以 180–240ms 回彈。系統動畫比例為 0 時立即完成最終狀態。
+卡片手勢採用 pull-to-action，而不是 RecyclerView 的 swipe-to-dismiss。水平主導拖動在門檻前維持接近 1:1 跟手；每個方向按目前卡片狀態選取本地化動作文字，觸發距離由「卡片邊緣 16dp 留白 + 實際字型量測文字寬度」動態計算。可見最大位移為觸發距離再加 8dp；超出後卡片停在盡頭，不再跟隨手指離開畫面。門檻只看實際拖動距離，不設速度 fling 捷徑。
 
-候車文字可點擊區與 48dp 鈴鐺觸控區在手勢起點命中時排除卡片滑動，保持 ETA 彈層與監控入口。普通卡左滑不位移。置頂或取消後透過 DiffUtil move 動畫更新，但保存目前第一個可見 item 與 offset，不主動 `scrollToPosition(0)`。
+單次拖動首次跨過有效方向門檻時只震動一次。釋放後卡片一律先以約 180–240ms 回到零位移：未達門檻時不執行動作；達門檻時只在回彈完成後執行置頂、升級、取消或不可用提示。ItemTouchHelper 不得把路線卡當作已移除項目，也不得留下 pending cleanup；`clearView`、重新綁定及狀態更新均保證 `translationX = 0`，避免本次置頂升級為長期置頂時因相同穩定 identity 沿用已滑出畫面的 ViewHolder。
+
+候車文字可點擊區與 48dp 鈴鐺觸控區在手勢起點命中時排除卡片滑動，保持 ETA 彈層與監控入口。普通卡左滑不位移。首次把普通卡設為本次置頂後，DiffUtil 先把同一穩定卡片移至 LIFO 置頂區第 1 項，再以短距離平滑方式顯示清單頂部，讓用戶看到新置頂卡片並感知原有內容向下推移。本次升級長期不改 token、不改位置、不強制回頂；取消置頂、排序、刷新、ETA 及站點預覽更新保存目前第一個可見 item 與 offset。
 
 否決繼續使用 `notifyDataSetChanged()`，因為它無法可靠表達卡片跨區域移動、會重綁所有卡片且難以保持視口。
 
 ### 10. 視覺、Snackbar 與無障礙
 
 本次置頂卡片只使用現有語意強調色描邊，不增加卡片尺寸。長期置頂沿用同一描邊，並在卡片既有左側約 14dp 內容 inset 內加入約 10dp × 25dp 的短書籤角標；角標不侵入右側候車／鈴鐺區，亦不改變卡片高度。
+
+卡片被水平拉開時不繪製任何彩色、灰色或警示色底塊；露出的區域就是 RecyclerView 所在頁面的既有背景，只在其中繪製目前語言的動作文字。文字使用主題語意主要文字色，在淺色與深色主題下自動適配；置頂、升級、取消、已長期置頂與不可置頂均沿用同一透明底層規則。
 
 只有置頂與未置頂兩區同時非空才插入橫向分隔列，文案按目前排序產生，例如「以下 10 條按耗時 ↑ 排序」。分隔列不 sticky、不可滑動；全部結果已置頂、沒有置頂或沒有結果時不展示。
 
@@ -224,6 +228,8 @@ ON route_result_pins(route_config_id, pinned_at DESC);
 - [不限制置頂數量可能令普通區域很小] → 這是已確認的用戶控制選擇；全部置頂時隱藏無意義分隔列並保留取消入口。
 - [樂觀寫入遇到快速取消／撤銷可能產生競態] → 專用單線程 executor、每指紋 generation、原狀態快照與最後意圖勝出規則共同約束。
 - [ListAdapter 改造同時影響搜尋頁] → 搜尋頁不附加 ItemTouchHelper，只使用卡片 item；以既有 card binder 回歸測試詳情、ETA 與鈴鐺點擊。
+- [同一穩定 identity 在本次升級長期時沿用已滑出畫面的 ViewHolder] → 禁止 swipe-to-dismiss，所有釋放均先回彈，`clearView` 與 bind 雙重歸零位移，並以連續兩次右滑回歸測試確保卡片仍可見。
+- [三語、字型比例或系統字體令動作文字寬度不同] → 每次按實際 Paint 與本地化字串量測門檻，最大位移以門檻加固定 8dp 推導，不使用卡片寬度百分比或硬編碼像素。
 - [外鍵若未啟用會留下孤兒置頂] → 在 `onConfigure` 明確啟用並以 instrumentation 測試 `PRAGMA foreign_keys` 與級聯刪除。
 - [Activity task 恢復與真正全新啟動邊界依賴 Android saved state] → 只從有效 `savedInstanceState` 恢復本次置頂；SharedPreferences／SQLite 不保存本次狀態。
 - [舊版 App 二進位直接降級無法打開 v4 database] → schema 變更保持純新增；如需產品版本回退，回退版本仍保留 database version 4 及相容 helper，不以 v3 二進位直接降級。
@@ -236,6 +242,8 @@ ON route_result_pins(route_config_id, pinned_at DESC);
 4. 把 `BusRouteAdapter` 遷移到 ListAdapter 與兩種 item，先保持現有卡片展示及 SearchFragment 行為。
 5. 在 MainActivity 接入 session、並行載入、投影、ItemTouchHelper、Snackbar、視覺與 saved state。
 6. 補齊 RouteEditActivity 清除確認、三語資源、TalkBack action 及完整驗收。
+7. 將既有 swipe-to-dismiss 改為有限 pull-to-action，加入動態文字門檻、透明底層、回彈後執行與 ViewHolder 位移歸零。
+8. 將首次本次置頂改為移動後顯示置頂區頂部；升級、取消及背景更新使用各自的視口策略，並補充連續右滑與長列表回歸驗證。
 
 遷移失敗時 SQLiteOpenHelper transaction 不提交 v4 schema，既有 `route_configs` 保持不變；App 對置頂讀取失敗採用無置頂降級。已成功建立的 v4 表為附加資料，不改寫行程欄位；回退功能可停止讀寫該表但保留資料，正式二進位回退必須維持 database version 4 相容性。
 

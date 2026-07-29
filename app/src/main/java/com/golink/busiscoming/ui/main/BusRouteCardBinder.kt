@@ -122,6 +122,7 @@ class BusRouteCardBinder(private val itemView: View) {
     }
 
     private fun resetPinPresentation() {
+        itemView.translationX = 0f
         card.strokeWidth = itemView.resources.getDimensionPixelSize(R.dimen.route_card_stroke_width)
         card.strokeColor = ContextCompat.getColor(itemView.context, R.color.bus_divider)
         bookmark.visibility = View.GONE

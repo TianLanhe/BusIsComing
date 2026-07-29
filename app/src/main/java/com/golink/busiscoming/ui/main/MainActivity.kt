@@ -658,11 +658,11 @@ class MainActivity : AppCompatActivity() {
             }
         })
         val thresholdTracker = RoutePinSwipeThresholdTracker()
+        val releaseTracker = RoutePinSwipeReleaseTracker()
         val callback = object : ItemTouchHelper.SimpleCallback(
             0,
             ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
         ) {
-            private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
             private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = ContextCompat.getColor(this@MainActivity, R.color.bus_text_primary)
                 textSize = resources.getDimension(R.dimen.route_pin_swipe_label_size)
@@ -694,35 +694,17 @@ class MainActivity : AppCompatActivity() {
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
-                val item = busRouteAdapter.routeCardAt(position) ?: return
-                when (
-                    RoutePinSwipePolicy.action(
-                        pinLevel = item.pinLevel,
-                        eligible = item.isPinEligible,
-                        deltaX = if (direction == ItemTouchHelper.RIGHT) {
-                            viewHolder.itemView.width.toFloat()
-                        } else {
-                            -viewHolder.itemView.width.toFloat()
-                        },
-                        width = viewHolder.itemView.width.toFloat()
-                    )
-                ) {
-                    RoutePinSwipeAction.PIN_TEMPORARY ->
-                        handlePinAction(item, RoutePinAction.PIN_TEMPORARY)
-                    RoutePinSwipeAction.PIN_PERSISTENT ->
-                        handlePinAction(item, RoutePinAction.PIN_PERSISTENT)
-                    RoutePinSwipeAction.CANCEL ->
-                        handlePinAction(item, RoutePinAction.CANCEL)
-                    RoutePinSwipeAction.UNAVAILABLE -> {
-                        showPinSnackbar(getString(R.string.route_pin_unavailable))
-                        reboundItem(position, item.stableId)
-                    }
-                    RoutePinSwipeAction.REBOUND -> reboundItem(position, item.stableId)
+                val item = busRouteAdapter.routeCardAt(position)
+                viewHolder.itemView.translationX = 0f
+                releaseTracker.reset()
+                thresholdTracker.reset()
+                if (item != null) {
+                    reboundItem(position, item.stableId)
                 }
             }
 
             override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float =
-                RoutePinSwipePolicy.SWIPE_THRESHOLD
+                RoutePinSwipePolicy.dismissThreshold
 
             override fun getSwipeEscapeVelocity(defaultValue: Float): Float = Float.MAX_VALUE
 
@@ -745,15 +727,34 @@ class MainActivity : AppCompatActivity() {
                 isCurrentlyActive: Boolean
             ) {
                 val item = busRouteAdapter.routeCardAt(viewHolder.adapterPosition)
-                if (item != null && dX != 0f) {
-                    drawPinSwipeBackground(canvas, viewHolder.itemView, item, dX, backgroundPaint, labelPaint)
+                val geometry = item?.let {
+                    pinSwipeGeometry(it, dX, labelPaint)
+                }
+                val visibleDeltaX = geometry?.clamp(dX) ?: 0f
+                if (item != null && dX != 0f && geometry != null) {
+                    drawPinSwipeLabel(
+                        canvas = canvas,
+                        cardView = viewHolder.itemView,
+                        item = item,
+                        deltaX = visibleDeltaX,
+                        labelPaint = labelPaint
+                    )
+                    if (isCurrentlyActive) {
+                        releaseTracker.update(
+                            stableId = item.stableId,
+                            pinLevel = item.pinLevel,
+                            eligible = item.isPinEligible,
+                            deltaX = dX,
+                            triggerDistance = geometry.triggerDistance
+                        )
+                    }
                     if (
                         isCurrentlyActive &&
                         thresholdTracker.shouldHaptic(
                             item.pinLevel,
                             item.isPinEligible,
                             dX,
-                            viewHolder.itemView.width.toFloat()
+                            geometry.triggerDistance
                         )
                     ) {
                         viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -763,7 +764,7 @@ class MainActivity : AppCompatActivity() {
                     canvas,
                     recyclerView,
                     viewHolder,
-                    dX,
+                    visibleDeltaX,
                     dY,
                     actionState,
                     isCurrentlyActive
@@ -774,29 +775,65 @@ class MainActivity : AppCompatActivity() {
                 recyclerView: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder
             ) {
+                val item = busRouteAdapter.routeCardAt(viewHolder.adapterPosition)
                 super.clearView(recyclerView, viewHolder)
+                viewHolder.itemView.translationX = 0f
                 thresholdTracker.reset()
+                val action = item?.let { releaseTracker.consume(it.stableId) }
+                if (item == null) {
+                    releaseTracker.reset()
+                    return
+                }
+                when (action) {
+                    RoutePinSwipeAction.PIN_TEMPORARY ->
+                        handlePinAction(item, RoutePinAction.PIN_TEMPORARY)
+                    RoutePinSwipeAction.PIN_PERSISTENT ->
+                        handlePinAction(item, RoutePinAction.PIN_PERSISTENT)
+                    RoutePinSwipeAction.CANCEL ->
+                        handlePinAction(item, RoutePinAction.CANCEL)
+                    RoutePinSwipeAction.UNAVAILABLE ->
+                        showPinSnackbar(getString(R.string.route_pin_unavailable))
+                    RoutePinSwipeAction.REBOUND,
+                    null -> Unit
+                }
             }
         }
         ItemTouchHelper(callback).attachToRecyclerView(resultList)
     }
 
-    private fun drawPinSwipeBackground(
+    private fun pinSwipeGeometry(
+        item: RouteCardItem,
+        deltaX: Float,
+        labelPaint: Paint
+    ): RoutePinSwipeGeometry {
+        val label = pinSwipeLabel(item, deltaX)
+        return RoutePinSwipeGeometry.fromLabel(
+            labelWidth = labelPaint.measureText(label),
+            edgePadding = dp(PIN_SWIPE_EDGE_PADDING_DP).toFloat(),
+            overshoot = dp(PIN_SWIPE_MAX_OVERSHOOT_DP).toFloat()
+        )
+    }
+
+    private fun drawPinSwipeLabel(
         canvas: Canvas,
         cardView: View,
         item: RouteCardItem,
         deltaX: Float,
-        backgroundPaint: Paint,
         labelPaint: Paint
     ) {
-        backgroundPaint.color = ContextCompat.getColor(
-            this,
-            if (deltaX > 0f) R.color.bus_surface_variant else R.color.bus_wait_unavailable_surface
+        val label = pinSwipeLabel(item, deltaX)
+        RoutePinSwipeLabelRenderer.draw(
+            canvas = canvas,
+            cardView = cardView,
+            label = label,
+            deltaX = deltaX,
+            edgePadding = dp(PIN_SWIPE_EDGE_PADDING_DP).toFloat(),
+            labelPaint = labelPaint
         )
-        val left = if (deltaX > 0f) cardView.left.toFloat() else cardView.right + deltaX
-        val right = if (deltaX > 0f) cardView.left + deltaX else cardView.right.toFloat()
-        canvas.drawRect(left, cardView.top.toFloat(), right, cardView.bottom.toFloat(), backgroundPaint)
-        val label = getString(
+    }
+
+    private fun pinSwipeLabel(item: RouteCardItem, deltaX: Float): String {
+        return getString(
             when {
                 !item.isPinEligible -> R.string.route_pin_unavailable_short
                 deltaX < 0f -> R.string.route_pin_action_cancel
@@ -805,15 +842,6 @@ class MainActivity : AppCompatActivity() {
                 else -> R.string.route_pin_already_persistent
             }
         )
-        val textWidth = labelPaint.measureText(label)
-        val x = if (deltaX > 0f) {
-            cardView.left + dp(16).toFloat()
-        } else {
-            cardView.right - dp(16).toFloat() - textWidth
-        }
-        val y = cardView.top + cardView.height / 2f -
-            (labelPaint.descent() + labelPaint.ascent()) / 2f
-        canvas.drawText(label, x, y, labelPaint)
     }
 
     private fun reboundItem(position: Int, stableId: String) {
@@ -1395,6 +1423,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderProjectedResultsRevealingPinnedTop() {
+        if (!::busRouteAdapter.isInitialized || routeQueryState.rawResults.isEmpty()) return
+        busRouteAdapter.submitList(projectFrequentRouteItems()) {
+            RouteListViewportController.revealPinnedTopAfterAnimations(
+                recyclerView = resultList,
+                animate = areSystemAnimationsEnabled()
+            )
+        }
+    }
+
     private fun handlePinAction(item: RouteCardItem, action: RoutePinAction) {
         val journeyId = activeSavedJourneyId() ?: return
         val fingerprint = item.fingerprint
@@ -1410,7 +1448,7 @@ class MainActivity : AppCompatActivity() {
                     System.currentTimeMillis()
                 )
                 routePinSessionState.nextMutationGeneration(journeyId, fingerprint)
-                renderProjectedResultsPreservingViewport()
+                renderProjectedResultsRevealingPinnedTop()
                 showPinSnackbar(
                     message = getString(
                         R.string.route_pin_temporary_success,
@@ -2249,6 +2287,8 @@ class MainActivity : AppCompatActivity() {
         private const val FIRST_RUN_INTRO_DURATION_MS = 180L
         private const val FIRST_RUN_INTRO_STAGGER_MS = 45L
         private const val PIN_SWIPE_RETURN_DURATION_MS = 210L
+        private const val PIN_SWIPE_EDGE_PADDING_DP = 16
+        private const val PIN_SWIPE_MAX_OVERSHOOT_DP = 8
         private const val STATE_SELECTED_ROUTE_ID = "selected_route_id"
         private const val STATE_RECORDED_USAGE_ROUTE_ID = "recorded_usage_route_id"
         private const val STATE_SELECTED_DESTINATION = "selected_destination"

@@ -76,3 +76,14 @@
 - [x] 9.5 更新 `docs/overview-design.md`、`docs/specification.md` 與 `docs/implementation-plan.md` 的現行置頂行為、資料表、生命週期及驗證說明，不改寫歷史 change artifacts。
 - [x] 9.6 運行 `./gradlew build`，修復與本 change 有關的 compile、unit test、lint 及 assemble 問題。
 - [x] 9.7 依專案規則核對 `tasks.md` 勾選、`git status --short`、驗證結果及提交範圍，完成 `/opsx-apply` 後以簡潔英文 conventional commit 自動提交。
+
+## 10. 有限拉動與首次置頂視口修訂
+
+- [x] 10.1 先新增失敗的滑動幾何與釋放 policy 單元測試，覆蓋「16dp + 本地化文字寬度」門檻、最多再加 8dp、無 fling 捷徑、未達門檻不執行及跨門檻只震動一次。
+- [x] 10.2 先新增失敗的連續右滑回歸測試，確認本次置頂升級長期後相同穩定 identity 的卡片回到零水平位移、保持可見並顯示書籤，不留下空白卡位。
+- [x] 10.3 將 `ItemTouchHelper` 的 swipe-to-dismiss 改為有限 pull-to-action：視覺位移夾在動態最大值內、所有釋放先回彈、回彈完成才執行動作，並在 `clearView` 與卡片 bind 歸零位移。
+- [x] 10.4 移除所有滑動彩色底塊，只露出頁面既有背景並以主題主要文字色繪製本地化動作文字；驗證繁體／簡體／英文與明暗主題下門檻依實際文字量測。
+- [x] 10.5 先新增失敗的視口 policy 測試，再實作首次普通卡置頂後顯示 LIFO 置頂區第一項；本次升級長期、取消、排序、刷新、ETA 與站點預覽更新保留目前閱讀位置。
+- [x] 10.6 更新 `docs/overview-design.md`、`docs/specification.md` 與 `docs/implementation-plan.md`，移除 40% 卡寬與首次置頂保持深處視口的舊說明。
+- [x] 10.7 運行相關 JVM 與 instrumentation 測試，並使用未啟動的獨立模擬器驗證有限盡頭、透明底層、連續兩次右滑、首次置頂回頂及取消；完成後關閉該模擬器。
+- [x] 10.8 運行 OpenSpec 嚴格校驗與 `./gradlew build`，核對 tasks、工作區及提交範圍，完成後按專案規則自動提交。

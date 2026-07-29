@@ -74,7 +74,13 @@ class RoutePinAccessibilityInstrumentedTest {
                 assertEquals(RoutePinAction.PIN_PERSISTENT, performedAction)
 
                 performedAction = null
+                card.translationX = card.resources.displayMetrics.widthPixels.toFloat()
                 binder.bind(item(PinLevel.PERSISTENT), actions)
+                assertEquals(0f, card.translationX)
+                assertEquals(
+                    View.VISIBLE,
+                    card.findViewById<View>(R.id.busPersistentPinBookmark).visibility
+                )
                 assertEquals(
                     activity.getString(R.string.route_pin_state_persistent),
                     ViewCompat.getStateDescription(card)

@@ -2,6 +2,7 @@ package com.golink.busiscoming.ui.main
 
 import com.golink.busiscoming.data.model.PinLevel
 import kotlin.math.abs
+import kotlin.math.min
 
 enum class RoutePinSwipeAction {
     PIN_TEMPORARY,
@@ -12,22 +13,22 @@ enum class RoutePinSwipeAction {
 }
 
 object RoutePinSwipePolicy {
-    const val SWIPE_THRESHOLD = 0.4f
     const val hasFlingShortcut = false
+    const val dismissThreshold = Float.MAX_VALUE
 
     fun action(
         pinLevel: PinLevel,
         eligible: Boolean,
         deltaX: Float,
-        width: Float,
+        triggerDistance: Float,
         velocityX: Float = 0f
     ): RoutePinSwipeAction {
         @Suppress("UNUSED_VARIABLE")
         val ignoredVelocity = velocityX
-        if (!eligible) return RoutePinSwipeAction.UNAVAILABLE
-        if (width <= 0f || abs(deltaX) < width * SWIPE_THRESHOLD) {
+        if (triggerDistance <= 0f || abs(deltaX) < triggerDistance) {
             return RoutePinSwipeAction.REBOUND
         }
+        if (!eligible) return RoutePinSwipeAction.UNAVAILABLE
         return if (deltaX > 0f) {
             when (pinLevel) {
                 PinLevel.UNPINNED -> RoutePinSwipeAction.PIN_TEMPORARY
@@ -53,6 +54,31 @@ object RoutePinSwipePolicy {
     }
 }
 
+data class RoutePinSwipeGeometry(
+    val triggerDistance: Float,
+    val maxDistance: Float
+) {
+    fun clamp(deltaX: Float): Float {
+        val magnitude = min(abs(deltaX), maxDistance)
+        return if (deltaX < 0f) -magnitude else magnitude
+    }
+
+    companion object {
+        fun fromLabel(
+            labelWidth: Float,
+            edgePadding: Float,
+            overshoot: Float
+        ): RoutePinSwipeGeometry {
+            val triggerDistance = labelWidth.coerceAtLeast(0f) +
+                edgePadding.coerceAtLeast(0f)
+            return RoutePinSwipeGeometry(
+                triggerDistance = triggerDistance,
+                maxDistance = triggerDistance + overshoot.coerceAtLeast(0f)
+            )
+        }
+    }
+}
+
 class RoutePinSwipeThresholdTracker {
     private var hapticSent = false
 
@@ -60,10 +86,10 @@ class RoutePinSwipeThresholdTracker {
         pinLevel: PinLevel,
         eligible: Boolean,
         deltaX: Float,
-        width: Float
+        triggerDistance: Float
     ): Boolean {
-        if (hapticSent || width <= 0f) return false
-        val crossed = abs(deltaX) >= width * RoutePinSwipePolicy.SWIPE_THRESHOLD
+        if (hapticSent || triggerDistance <= 0f) return false
+        val crossed = abs(deltaX) >= triggerDistance
         if (!crossed || !RoutePinSwipePolicy.isMutatingDirection(pinLevel, eligible, deltaX)) {
             return false
         }
@@ -73,5 +99,37 @@ class RoutePinSwipeThresholdTracker {
 
     fun reset() {
         hapticSent = false
+    }
+}
+
+class RoutePinSwipeReleaseTracker {
+    private var stableId: String? = null
+    private var action: RoutePinSwipeAction? = null
+
+    fun update(
+        stableId: String,
+        pinLevel: PinLevel,
+        eligible: Boolean,
+        deltaX: Float,
+        triggerDistance: Float
+    ) {
+        this.stableId = stableId
+        action = RoutePinSwipePolicy.action(
+            pinLevel = pinLevel,
+            eligible = eligible,
+            deltaX = deltaX,
+            triggerDistance = triggerDistance
+        )
+    }
+
+    fun consume(stableId: String): RoutePinSwipeAction? {
+        val result = action.takeIf { this.stableId == stableId }
+        reset()
+        return result
+    }
+
+    fun reset() {
+        stableId = null
+        action = null
     }
 }
