@@ -12,7 +12,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.doOnNextLayout
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -38,8 +40,10 @@ import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.PlacePairEditorView
+import com.golink.busiscoming.ui.common.ResultListDrivenAppBar
 import com.golink.busiscoming.ui.common.RouteResultControlsView
 import com.golink.busiscoming.ui.common.localizedText
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -115,9 +119,10 @@ class SearchFragment : Fragment() {
     private lateinit var tripContext: View
     private lateinit var tripRouteText: TextView
     private lateinit var editButton: MaterialButton
-    private lateinit var cancelEditButton: MaterialButton
     private lateinit var saveButton: MaterialButton
     private lateinit var queryButton: MaterialButton
+    private lateinit var appBar: AppBarLayout
+    private lateinit var tripEditorTransitionController: SearchTripEditorTransitionController
     private var originCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var destinationCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var candidateBackCallback: OnBackPressedCallback? = null
@@ -159,6 +164,8 @@ class SearchFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        appBar = view.findViewById(R.id.searchAppBar)
+        ResultListDrivenAppBar.install(appBar)
         val context = requireContext()
         val placeEditor = view.findViewById<PlacePairEditorView>(R.id.searchPlacePairEditor)
         val originInput = placeEditor.originInput
@@ -272,9 +279,16 @@ class SearchFragment : Fragment() {
         tripContext = view.findViewById(R.id.searchTripContext)
         tripRouteText = view.findViewById(R.id.searchTripRouteText)
         editButton = view.findViewById(R.id.searchEditButton)
-        cancelEditButton = view.findViewById(R.id.searchCancelEditButton)
         saveButton = view.findViewById(R.id.searchSaveButton)
         queryButton = view.findViewById(R.id.searchQueryButton)
+        tripEditorTransitionController = SearchTripEditorTransitionController(
+            parent = view as ViewGroup,
+            editor = inputContainer,
+            tripContext = tripContext,
+            lifecycleStarted = {
+                viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            }
+        )
         detailSheet = RouteDetailBottomSheet(
             requireActivity() as androidx.appcompat.app.AppCompatActivity,
             routeDetailRepositoryFactory()
@@ -284,7 +298,9 @@ class SearchFragment : Fragment() {
             onRouteClick = detailSheet::show,
             onEtaClick = etaSheet::show,
             onMonitorClick = { route ->
-                (activity as? MainActivity)?.showMonitorSettings(route, originController?.selectedPlace)
+                successfulQueryOrigin?.let { origin ->
+                    (activity as? MainActivity)?.showMonitorSettings(route, origin)
+                }
             }
         )
         resultList.layoutManager = LinearLayoutManager(context)
@@ -323,7 +339,6 @@ class SearchFragment : Fragment() {
         }
         queryButton.setOnClickListener { query() }
         editButton.setOnClickListener { beginEditingCurrentTrip() }
-        cancelEditButton.setOnClickListener { cancelEditingCurrentTrip() }
         saveButton.setOnClickListener { saveCurrentRoute() }
         originInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId != EditorInfo.IME_ACTION_SEARCH && actionId != EditorInfo.IME_ACTION_DONE) {
@@ -878,7 +893,8 @@ class SearchFragment : Fragment() {
         if (!::swipeRefresh.isInitialized) return
         val candidatesVisible = candidateScrollLock.isOuterScrollLocked()
         candidateBackCallback?.isEnabled = candidatesVisible
-        swipeRefresh.isEnabled = currentResults.isNotEmpty() &&
+        swipeRefresh.isEnabled = presentationState.mode == SearchDisplayMode.RESULTS &&
+            currentResults.isNotEmpty() &&
             !candidatesVisible &&
             !routeQueryState.isQueryInProgress &&
             !refreshFeedbackState.blocksQueries
@@ -930,6 +946,12 @@ class SearchFragment : Fragment() {
     }
 
     private fun onSearchSelectionChanged() {
+        if (presentationState.mode == SearchDisplayMode.EDITING_RESULTS) {
+            presentationState.onInputChanged()
+            renderSearchUi()
+            updateRefreshEnabled()
+            return
+        }
         hasSubmittedQuery = false
         suppressCancelledQueryStatus = false
         routeQueryCoordinator.invalidate()
@@ -964,13 +986,18 @@ class SearchFragment : Fragment() {
 
     private fun beginEditingCurrentTrip() {
         if (!presentationState.beginEditingResults()) return
+        if (routeQueryState.isRefreshing) {
+            routeQueryCoordinator.invalidate()
+            routeQueryState.cancel()
+            cancelRefreshFeedback()
+            swipeRefresh.isRefreshing = false
+        }
         renderSearchUi()
-        updateRefreshEnabled()
-    }
-
-    private fun cancelEditingCurrentTrip() {
-        if (!presentationState.cancelEditing()) return
-        renderSearchUi()
+        appBar.doOnNextLayout {
+            if (presentationState.mode == SearchDisplayMode.EDITING_RESULTS) {
+                appBar.setExpanded(true, false)
+            }
+        }
         updateRefreshEnabled()
     }
 
@@ -1017,22 +1044,10 @@ class SearchFragment : Fragment() {
 
             else -> false
         }
-        val showEditor = presentationState.mode != SearchDisplayMode.RESULTS
-        inputContainer.visibility = if (showEditor) View.VISIBLE else View.GONE
-        inputContainer.importantForAccessibility = if (showEditor) {
-            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-        } else {
-            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        }
+        val showEditor = !showTripContext
         if (!showEditor) {
             originController?.clearFocusAndHideCandidates()
             destinationController?.clearFocusAndHideCandidates()
-        }
-        tripContext.visibility = if (showTripContext) View.VISIBLE else View.GONE
-        tripContext.importantForAccessibility = if (showTripContext) {
-            View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
-        } else {
-            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
         val snapshot = presentationState.querySnapshot
         if (showTripContext && snapshot != null) {
@@ -1044,18 +1059,8 @@ class SearchFragment : Fragment() {
         } else {
             tripRouteText.text = null
         }
-        editButton.visibility = if (presentationState.mode == SearchDisplayMode.RESULTS) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
-        cancelEditButton.visibility = if (
-            SearchTripContextVisibility.showCancelEditing(presentationState.mode)
-        ) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        editButton.visibility = if (showTripContext) View.VISIBLE else View.GONE
+        tripEditorTransitionController.render(showEditor = showEditor, animate = true)
     }
 
     private fun renderRetainedResults() {
@@ -1114,7 +1119,7 @@ class SearchFragment : Fragment() {
             SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)
         saveButton.visibility = if (savable || saved) View.VISIBLE else View.GONE
         saveButton.isEnabled = savable
-        saveButton.setText(if (saved) R.string.search_trip_saved else R.string.save_as_frequent)
+        saveButton.setText(if (saved) R.string.search_trip_saved else R.string.search_trip_save)
         saveButton.setIconResource(if (saved) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark_outline)
         saveButton.contentDescription = getString(
             if (saved) R.string.search_trip_saved_description else R.string.search_trip_save_description

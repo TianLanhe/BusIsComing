@@ -66,10 +66,7 @@ class SuccessfulSearchContextState {
 /** 「本次行程」上下文僅能由仍在記憶體中的有效非空結果顯示。 */
 object SearchTripContextVisibility {
     fun isVisible(mode: SearchDisplayMode, resultCount: Int): Boolean =
-        resultCount > 0 && (mode == SearchDisplayMode.RESULTS || mode == SearchDisplayMode.EDITING_RESULTS)
-
-    fun showCancelEditing(mode: SearchDisplayMode): Boolean =
-        mode == SearchDisplayMode.EDITING_RESULTS
+        resultCount > 0 && mode == SearchDisplayMode.RESULTS
 
     fun shouldRestoreFoldedContext(
         savedMode: SearchDisplayMode,
@@ -113,10 +110,7 @@ class SearchPresentationState {
     fun cancelQuery(): Boolean = completeWithoutResults()
 
     fun completeRefreshEmpty(): Boolean {
-        if (
-            (mode != SearchDisplayMode.RESULTS && mode != SearchDisplayMode.EDITING_RESULTS) ||
-            querySnapshot == null
-        ) return false
+        if (mode != SearchDisplayMode.RESULTS || querySnapshot == null) return false
         resetToEditing()
         return true
     }
@@ -124,26 +118,21 @@ class SearchPresentationState {
     fun beginEditingResults(): Boolean {
         if (mode != SearchDisplayMode.RESULTS || querySnapshot == null) return false
         mode = SearchDisplayMode.EDITING_RESULTS
-        return true
-    }
-
-    fun cancelEditing(): Boolean {
-        if (mode != SearchDisplayMode.EDITING_RESULTS || querySnapshot == null) return false
-        mode = SearchDisplayMode.RESULTS
+        saveState = SearchSaveState.UNAVAILABLE
         return true
     }
 
     fun onInputChanged(): Boolean {
         when (mode) {
             SearchDisplayMode.QUERYING -> resetToEditing()
-            SearchDisplayMode.RESULTS,
-            SearchDisplayMode.EDITING_RESULTS -> {
+            SearchDisplayMode.RESULTS -> {
                 mode = SearchDisplayMode.DIRTY_EDITING
                 querySnapshot = null
                 saveState = SearchSaveState.UNAVAILABLE
             }
 
             SearchDisplayMode.EDITING,
+            SearchDisplayMode.EDITING_RESULTS,
             SearchDisplayMode.DIRTY_EDITING -> return false
         }
         return true
@@ -151,7 +140,7 @@ class SearchPresentationState {
 
     fun markSaved(): Boolean {
         if (
-            (mode != SearchDisplayMode.RESULTS && mode != SearchDisplayMode.EDITING_RESULTS) ||
+            mode != SearchDisplayMode.RESULTS ||
             querySnapshot == null ||
             saveState != SearchSaveState.AVAILABLE
         ) return false

@@ -2,7 +2,7 @@
     <string name="search_current_trip">This trip</string>
     <string name="search_trip_route">%1$s → %2$s</string>
     <string name="search_edit_trip">Edit</string>
-    <string name="search_cancel_edit">Cancel editing</string>
+    <string name="search_trip_save">Save</string>
     <string name="search_trip_saved">Saved</string>
     <string name="search_trip_save_description">Save this trip as a regular journey</string>
     <string name="search_trip_saved_description">This trip is saved as a regular journey</string>

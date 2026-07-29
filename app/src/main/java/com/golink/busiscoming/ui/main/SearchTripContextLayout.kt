@@ -5,10 +5,9 @@ import android.util.AttributeSet
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.google.android.material.button.MaterialButton
 import com.golink.busiscoming.R
 
-/** 依實際量度結果安排「本次行程」路徑與操作，避免以固定螢幕寬度猜測。 */
+/** 依操作區實際寬度安排「本次行程」，正常字體優先讓路徑單行尾部省略。 */
 class SearchTripContextLayout @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -55,15 +54,12 @@ class SearchTripContextLayout @JvmOverloads constructor(
             visibleButtonWidthsPx = buttonWidths,
             horizontalMarginsPx = buttonMargins
         )
-        val routeWidth = route.paint.measureText(route.text?.toString().orEmpty()).toInt() +
-            route.compoundPaddingLeft + route.compoundPaddingRight
         val singleRow = SearchTripContextLayoutPolicy.usesSingleRow(
             availableWidthPx = availableWidth,
-            routeWidthPx = routeWidth,
             actionsWidthPx = preferredActionsWidth,
             fontScale = resources.configuration.fontScale,
             gapPx = dp(8),
-            minimumSingleRowWidthPx = dp(400)
+            minimumRouteWidthPx = dp(60)
         )
         if (showingSingleRow == singleRow) return
         showingSingleRow = singleRow
@@ -74,21 +70,24 @@ class SearchTripContextLayout @JvmOverloads constructor(
             marginEnd = if (singleRow) dp(8) else 0
         }
         (actions.layoutParams as? LinearLayout.LayoutParams)?.apply {
-            width = if (singleRow) LayoutParams.WRAP_CONTENT else LayoutParams.MATCH_PARENT
-            gravity = if (singleRow) android.view.Gravity.CENTER_VERTICAL else android.view.Gravity.END
+            width = LayoutParams.WRAP_CONTENT
+            weight = 0f
+            gravity = if (singleRow) {
+                android.view.Gravity.CENTER_VERTICAL
+            } else {
+                android.view.Gravity.END
+            }
             topMargin = if (singleRow) 0 else dp(8)
         }
         (actions as? LinearLayout)?.let { actionRow ->
-            actionRow.gravity = if (singleRow) android.view.Gravity.END else android.view.Gravity.CENTER
+            actionRow.gravity =
+                android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+            actionRow.isBaselineAligned = false
             repeat(actionRow.childCount) { index ->
                 val button = actionRow.getChildAt(index)
                 (button.layoutParams as? LinearLayout.LayoutParams)?.apply {
-                    width = if (singleRow) LayoutParams.WRAP_CONTENT else 0
-                    weight = if (singleRow) 0f else 1f
-                }
-                if (button is MaterialButton) {
-                    button.isSingleLine = false
-                    button.ellipsize = null
+                    width = LayoutParams.WRAP_CONTENT
+                    weight = 0f
                 }
             }
         }
@@ -100,15 +99,13 @@ class SearchTripContextLayout @JvmOverloads constructor(
 object SearchTripContextLayoutPolicy {
     fun usesSingleRow(
         availableWidthPx: Int,
-        routeWidthPx: Int,
         actionsWidthPx: Int,
         fontScale: Float,
         gapPx: Int = 0,
-        minimumSingleRowWidthPx: Int = 0
+        minimumRouteWidthPx: Int = 0
     ): Boolean =
         fontScale <= 1f &&
-            availableWidthPx >= minimumSingleRowWidthPx &&
-            routeWidthPx + actionsWidthPx + gapPx <= availableWidthPx
+            minimumRouteWidthPx + actionsWidthPx + gapPx <= availableWidthPx
 }
 
 object SearchTripActionWidthPolicy {

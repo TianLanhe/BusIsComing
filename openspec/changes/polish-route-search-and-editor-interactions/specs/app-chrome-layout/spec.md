@@ -36,3 +36,22 @@
 - **WHEN** App 在受支援的舊版與新版 Android，以及手勢導航或三按鍵導航模式下顯示軟鍵盤
 - **THEN** 頂層底部導航 SHALL 保持同一個「固定於物理底部並被鍵盤覆蓋」語義
 - **AND** 系統導航 Insets SHALL NOT 令底部導航浮到鍵盤上方
+
+### Requirement: 頂層查詢區只由結果列表帶動捲動
+系統 SHALL 禁止用戶直接拖動常用行程或搜尋頁的頂部查詢區；只有有效結果列表發起的 nested scroll SHALL 可帶動頂部查詢區捲出或恢復。
+
+#### Scenario: 直接拖動頂部不改變位置
+- **WHEN** 用戶在常用行程快捷區、查詢按鈕、搜尋編輯器或折疊「本次行程」欄內上下滑動
+- **THEN** 對應 AppBar offset SHALL 保持不變
+- **AND** 此規則 SHALL 同時適用於有結果與無結果狀態
+
+#### Scenario: 無結果時頂部固定
+- **WHEN** 常用行程或搜尋頁沒有有效結果列表
+- **THEN** 初始、查詢中、空結果及無保留結果的失敗狀態 SHALL NOT 產生頁面級 AppBar 位移
+- **AND** 空狀態內容若需要內部捲動 SHALL NOT 把 nested scroll 傳給 AppBar
+
+#### Scenario: 結果列表保留既有收折能力
+- **WHEN** 頁面存在有效結果
+- **AND** 用戶從結果列表開始上下滑動
+- **THEN** 結果列表 SHALL 可帶動頂部查詢區捲出或恢復
+- **AND** 結果控制器 SHALL 繼續按既有規則吸頂

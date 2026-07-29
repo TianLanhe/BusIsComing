@@ -34,6 +34,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
 import androidx.test.espresso.matcher.ViewMatchers.isNotEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withHint
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
@@ -72,6 +73,7 @@ import com.golink.busiscoming.ui.main.SearchFragment
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputLayout
 import org.hamcrest.CoreMatchers.allOf
+import org.hamcrest.CoreMatchers.startsWith
 import org.hamcrest.Matcher
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -231,7 +233,7 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.searchEditButton)).perform(click())
             var resultViewport: OuterViewport? = null
             scenario.onActivity { activity ->
-                assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                assertFalse(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
                 val resultList = activity.findViewById<RecyclerView>(R.id.searchResultList)
                 (resultList.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(
                     4,
@@ -319,7 +321,7 @@ class SearchDestinationInstrumentedTest {
                 val preservedFlagsAfterClose = (searchContent.layoutParams as
                     com.google.android.material.appbar.AppBarLayout.LayoutParams).scrollFlags
                 assertEquals(1, preservedFlagsAfterClose)
-                assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                assertFalse(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
                 assertEquals("測試起點", activity.findViewById<TextInputLayout>(
                     R.id.placePairOriginLayout
                 ).editText?.text?.toString())
@@ -339,7 +341,7 @@ class SearchDestinationInstrumentedTest {
                     View.GONE,
                     activity.findViewById<View>(R.id.placePairOriginCandidateList).visibility
                 )
-                assertTrue(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
+                assertFalse(activity.findViewById<SwipeRefreshLayout>(R.id.searchSwipeRefresh).isEnabled)
                 assertOuterViewportUnchanged(expectedViewport, activity)
             }
             onView(withId(R.id.searchResultList)).perform(swipeUpVisibleArea())
@@ -351,6 +353,136 @@ class SearchDestinationInstrumentedTest {
                         viewport.firstResultPosition > expectedViewport.firstResultPosition
                 }
                 outerScrollResumed
+            }
+        }
+    }
+
+    @Test
+    fun searchAppBarMovesOnlyFromTheResultListEvenWhileEditingRetainedResults() {
+        installDependencies(MultipleRouteRepository())
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+
+            var expandedTop = 0
+            scenario.onActivity { activity ->
+                val appBar = activity.findViewById<com.google.android.material.appbar.AppBarLayout>(
+                    R.id.searchAppBar
+                )
+                appBar.setExpanded(true, false)
+            }
+            waitUntil {
+                var expanded = false
+                scenario.onActivity { activity ->
+                    expanded = activity.findViewById<View>(R.id.searchAppBar).top == 0
+                }
+                expanded
+            }
+            scenario.onActivity { activity ->
+                expandedTop = activity.findViewById<View>(R.id.searchAppBar).top
+            }
+            onView(withId(R.id.searchContent)).perform(swipeUpVisibleArea())
+            scenario.onActivity { activity ->
+                assertEquals(expandedTop, activity.findViewById<View>(R.id.searchAppBar).top)
+            }
+
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil {
+                var ready = false
+                scenario.onActivity { activity ->
+                    val list = activity.findViewById<RecyclerView>(R.id.searchResultList)
+                    ready = list.visibility == View.VISIBLE && list.adapter?.itemCount == 20
+                }
+                ready
+            }
+            Thread.sleep(300)
+            scenario.onActivity { activity ->
+                activity.findViewById<com.google.android.material.appbar.AppBarLayout>(
+                    R.id.searchAppBar
+                ).setExpanded(true, false)
+            }
+            waitUntil {
+                var expanded = false
+                scenario.onActivity { activity ->
+                    expanded = activity.findViewById<View>(R.id.searchAppBar).top == 0
+                }
+                expanded
+            }
+            scenario.onActivity { activity ->
+                expandedTop = activity.findViewById<View>(R.id.searchAppBar).top
+            }
+            onView(withId(R.id.searchContent)).perform(swipeUpVisibleArea())
+            scenario.onActivity { activity ->
+                assertEquals(expandedTop, activity.findViewById<View>(R.id.searchAppBar).top)
+            }
+            onView(withId(R.id.searchResultList)).perform(swipeUpVisibleArea())
+            waitUntil {
+                var collapsed = false
+                scenario.onActivity { activity ->
+                    collapsed = activity.findViewById<View>(R.id.searchAppBar).top < expandedTop
+                }
+                collapsed
+            }
+
+            scenario.onActivity { activity ->
+                activity.findViewById<com.google.android.material.appbar.AppBarLayout>(
+                    R.id.searchAppBar
+                ).setExpanded(true, false)
+            }
+            waitUntil {
+                var expanded = false
+                scenario.onActivity { activity ->
+                    expanded = activity.findViewById<View>(R.id.searchAppBar).top == 0
+                }
+                expanded
+            }
+            waitUntil {
+                var ready = false
+                scenario.onActivity { activity ->
+                    val tripContext = activity.findViewById<View>(R.id.searchTripContext)
+                    val edit = activity.findViewById<View>(R.id.searchEditButton)
+                    ready = tripContext.visibility == View.VISIBLE &&
+                        tripContext.isEnabled &&
+                        edit.visibility == View.VISIBLE
+                }
+                ready
+            }
+            scenario.onActivity { activity ->
+                assertTrue(activity.findViewById<View>(R.id.searchEditButton).performClick())
+            }
+            waitUntil {
+                var visible = false
+                scenario.onActivity { activity ->
+                    visible = activity.findViewById<View>(
+                        R.id.searchInputContainer
+                    ).visibility == View.VISIBLE
+                }
+                visible
+            }
+            Thread.sleep(350)
+            waitUntil {
+                var expanded = false
+                scenario.onActivity { activity ->
+                    expanded = activity.findViewById<View>(R.id.searchAppBar).top == 0
+                }
+                expanded
+            }
+            scenario.onActivity { activity ->
+                expandedTop = activity.findViewById<View>(R.id.searchAppBar).top
+            }
+            onView(withId(R.id.searchInputContainer)).perform(swipeUpVisibleArea())
+            scenario.onActivity { activity ->
+                assertEquals(expandedTop, activity.findViewById<View>(R.id.searchAppBar).top)
+            }
+            onView(withId(R.id.searchResultList)).perform(swipeUpVisibleArea())
+            waitUntil {
+                var collapsed = false
+                scenario.onActivity { activity ->
+                    collapsed = activity.findViewById<View>(R.id.searchAppBar).top < expandedTop
+                }
+                collapsed
             }
         }
     }
@@ -389,7 +521,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
-    fun searchFlowSupportsFallbackSwapQueryActionsRefreshAndSave() {
+    fun searchFlowSupportsFallbackSwapQueryActionsAndSave() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val routeRepository = ImmediateRouteRepository()
         val detailRepository = installDependencies(routeRepository)
@@ -463,9 +595,6 @@ class SearchDestinationInstrumentedTest {
             waitForTextInDialog("通知欄監控")
             pressBack()
             waitForAbsent("通知欄監控")
-
-            onView(withId(R.id.searchSwipeRefresh)).perform(swipeDownVisibleArea())
-            waitUntil { routeRepository.queryCount >= 2 }
 
             var saveDialogTitle = ""
             var saveAction = ""
@@ -563,6 +692,35 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
+    fun editingRetainedResultsKeepsMonitorOriginFromTheLastSuccessfulQuery() {
+        val routeRepository = ImmediateRouteRepository()
+        installDependencies(routeRepository)
+        val monitorRequest = AtomicReference<Pair<BusRouteOption, Place?>?>()
+        MainActivity.monitorSettingsRequestObserver = { route, origin ->
+            monitorRequest.set(route to origin)
+        }
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitForText("測試路線")
+
+            onView(withId(R.id.searchEditButton)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "d", "測試終點")
+            onView(withText("測試路線")).check(matches(isDisplayed()))
+            scenario.onActivity { activity ->
+                val search = activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+                assertTrue(search.requireView().findViewById<View>(R.id.busMonitorButton).performClick())
+            }
+
+            waitUntil { monitorRequest.get() != null }
+            assertEquals("測試起點", monitorRequest.get()?.second?.name)
+        }
+    }
+
+    @Test
     fun duplicateLookupFailureKeepsDialogOpenAndRetryInsertsExactlyOnce() {
         val gateway = RecordingSaveGateway().apply {
             duplicateOutcomes += { throw IllegalStateException("injected duplicate lookup failure") }
@@ -597,7 +755,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
-    fun cancelAndEditingResultsSaveKeepTheCurrentGenerationWhileANewQueryResetsIt() {
+    fun editingRevokesSaveAndAnewSuccessfulQueryCreatesTheNextSaveGeneration() {
         val gateway = RecordingSaveGateway().apply {
             insertOutcomes += { 51L }
         }
@@ -618,32 +776,26 @@ class SearchDestinationInstrumentedTest {
             assertEquals(0, gateway.insertCount)
 
             onView(withId(R.id.searchEditButton)).perform(click())
-            onView(withId(R.id.searchCancelEditButton)).check(matches(isDisplayed()))
-            onView(withId(R.id.searchSaveButton)).perform(click())
-            onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
-            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
-            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
-
-            onView(withId(R.id.searchCancelEditButton)).perform(click())
-            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
-            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchTripContext))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchSaveButton))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withText("測試路線")).check(matches(isDisplayed()))
 
             onView(withId(R.id.navigation_frequent_routes)).perform(click())
             onView(withId(R.id.navigation_search)).perform(click())
-            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
-            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchInputContainer)).check(matches(isDisplayed()))
+            onView(withText("測試路線")).check(matches(isDisplayed()))
 
             onView(withId(R.id.searchResultList)).perform(swipeDownVisibleArea())
-            waitUntil { routeRepository.queryCount >= 2 }
-            onView(withId(R.id.searchSaveButton)).check(matches(isNotEnabled()))
-            onView(withText(R.string.search_trip_saved)).check(matches(isDisplayed()))
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            assertEquals(1, routeRepository.queryCount)
 
-            onView(withId(R.id.searchEditButton)).perform(click())
             selectPlace(R.id.placePairDestinationInput, "d2", "第二終點")
             onView(withId(R.id.searchQueryButton)).perform(click())
             waitForText("測試路線")
             onView(withId(R.id.searchSaveButton)).check(matches(isEnabled()))
-            onView(withText(R.string.save_as_frequent)).check(matches(isDisplayed()))
+            onView(withText(R.string.search_trip_save)).check(matches(isDisplayed()))
             onView(withId(R.id.searchSaveButton)).check { view, _ ->
                 val save = view as MaterialButton
                 assertIconMatchesResource(
@@ -652,7 +804,7 @@ class SearchDestinationInstrumentedTest {
                     unexpectedResource = R.drawable.ic_bookmark_filled
                 )
             }
-            assertEquals(1, gateway.insertCount)
+            assertEquals(0, gateway.insertCount)
         }
     }
 
@@ -702,7 +854,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
-    fun successfulSearchFoldsToTripContextAndOnlyActualEditInvalidatesRetainedResults() {
+    fun editingReplacesTripContextAndKeepsOldResultsUntilTheNextQueryStarts() {
         val routeRepository = CapturingRouteRepository()
         installDependencies(routeRepository)
 
@@ -738,45 +890,39 @@ class SearchDestinationInstrumentedTest {
             }
             onView(withId(R.id.searchEditButton)).perform(click())
             onView(withId(R.id.searchInputContainer)).check(matches(isDisplayed()))
-            onView(withId(R.id.searchCancelEditButton)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchTripContext))
+                .check(matches(withEffectiveVisibility(GONE)))
             onView(withText("折疊路線")).check(matches(isDisplayed()))
+            onView(withId(R.id.searchRouteResultControls)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchSaveButton))
+                .check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.searchSwipeRefresh)).check(matches(isNotEnabled()))
             scenario.onActivity { activity ->
                 assertEquals(
                     View.IMPORTANT_FOR_ACCESSIBILITY_AUTO,
                     activity.findViewById<View>(R.id.searchInputContainer)
                         .importantForAccessibility
                 )
+                assertFalse(activity.findViewById<View>(R.id.placePairOriginInput).hasFocus())
+                assertFalse(activity.findViewById<View>(R.id.placePairDestinationInput).hasFocus())
             }
-            SearchFragment.currentPlaceRequestOverride = { _, callback ->
-                callback(
-                    CurrentPlaceSelectionResult.Success(
-                        place = Place("測試起點", 22.3, 114.1),
-                        snapshot = CurrentLocationSnapshot(
-                            latitude = 22.3,
-                            longitude = 114.1,
-                            accuracyMeters = 10f,
-                            elapsedRealtimeMillis = android.os.SystemClock.elapsedRealtime()
-                        ),
-                        attribution = PlaceAttribution.GOOGLE_MAPS
-                    )
-                )
-            }
-            onView(withId(R.id.placePairCurrentLocationButton)).perform(click())
-            onView(withId(R.id.searchCancelEditButton)).check(matches(isDisplayed()))
-            onView(withText("折疊路線")).check(matches(isDisplayed()))
 
-            onView(withId(R.id.searchCancelEditButton)).perform(click())
-            onView(withId(R.id.searchInputContainer))
-                .check(matches(withEffectiveVisibility(GONE)))
-            onView(withId(R.id.searchTripContext)).check(matches(isDisplayed()))
-
-            onView(withId(R.id.searchEditButton)).perform(click())
-            onView(withId(R.id.placePairDestinationInput)).perform(replaceText("實際修改"))
+            selectPlace(R.id.placePairDestinationInput, "d2", "第二終點")
             onView(withId(R.id.searchTripContext))
                 .check(matches(withEffectiveVisibility(GONE)))
-            onView(withId(R.id.searchResultList))
-                .check(matches(withEffectiveVisibility(GONE)))
-            onView(withId(R.id.searchRouteResultControls))
+            onView(withText("折疊路線")).check(matches(isDisplayed()))
+            onView(withId(R.id.searchRouteResultControls)).check(matches(isDisplayed()))
+            assertEquals(1, routeRepository.queryCount)
+
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil { routeRepository.callbacks.size == 2 }
+            assertViewAbsent("折疊路線")
+            onView(searchView(R.id.resultStatusCard)).check(matches(isDisplayed()))
+
+            routeRepository.callbacks[1].onInitialRoutes(listOf(route("新查詢路線")))
+            waitForText("新查詢路線")
+            onView(withId(R.id.searchTripContext)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchInputContainer))
                 .check(matches(withEffectiveVisibility(GONE)))
         }
     }
@@ -804,7 +950,8 @@ class SearchDestinationInstrumentedTest {
             onView(withId(R.id.navigation_frequent_routes)).perform(click())
             onView(withId(R.id.navigation_search)).perform(click())
             onView(withId(R.id.searchInputContainer)).check(matches(isDisplayed()))
-            onView(withId(R.id.searchCancelEditButton)).check(matches(isDisplayed()))
+            onView(withId(R.id.searchTripContext))
+                .check(matches(withEffectiveVisibility(GONE)))
             onView(withText("保留路線")).check(matches(isDisplayed()))
         }
     }
@@ -1338,8 +1485,27 @@ class SearchDestinationInstrumentedTest {
 
     private fun selectPlace(inputId: Int, keyword: String, expected: String) {
         onView(withId(inputId)).perform(click(), replaceText(keyword), closeSoftKeyboard())
-        waitForText(expected)
-        onView(withText(expected)).perform(click())
+        val candidateListId = when (inputId) {
+            R.id.placePairOriginInput -> R.id.placePairOriginCandidateList
+            R.id.placePairDestinationInput -> R.id.placePairDestinationCandidateList
+            else -> error("Unsupported place input id: $inputId")
+        }
+        val candidate = allOf(
+            withContentDescription(startsWith(expected)),
+            isDescendantOfA(withId(candidateListId)),
+            isDisplayed()
+        )
+        waitUntil {
+            try {
+                onView(candidate).check(matches(isDisplayed()))
+                true
+            } catch (_: NoMatchingViewException) {
+                false
+            } catch (_: AssertionError) {
+                false
+            }
+        }
+        onView(candidate).perform(click())
     }
 
     private fun waitForText(text: String) {

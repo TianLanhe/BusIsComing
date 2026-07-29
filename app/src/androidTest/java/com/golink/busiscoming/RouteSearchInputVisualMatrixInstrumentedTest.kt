@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import android.content.res.Configuration
 import android.os.ParcelFileDescriptor
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.View
 import android.widget.LinearLayout
@@ -34,6 +35,7 @@ import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.RouteConfigSaveGateway
 import com.golink.busiscoming.ui.main.SearchFragment
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import java.io.FileInputStream
@@ -116,26 +118,43 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                     onView(withId(R.id.searchQueryButton)).perform(click())
                     waitForDisplayed(R.id.searchTripContext)
 
-                    val expectSingleRow =
-                        resolvedFontScale <= 1f && language != AppLanguageChoice.ENGLISH
+                    val expectSingleRow = resolvedFontScale <= 1f
                     assertActionState(
                         scenario,
                         editVisible = true,
-                        cancelVisible = false,
+                        saveVisible = true,
                         saveEnabled = true
                     )
                     assertTripContext(scenario, expectSingleRow)
 
                     performClick(scenario, R.id.searchEditButton)
-                    waitForDisplayed(R.id.searchCancelEditButton)
+                    waitForDisplayed(R.id.searchInputContainer)
                     assertActionState(
                         scenario,
                         editVisible = false,
-                        cancelVisible = true,
+                        saveVisible = false,
+                        saveEnabled = false
+                    )
+                    scenario.onActivity { activity ->
+                        assertEquals(
+                            View.GONE,
+                            activity.findViewById<View>(R.id.searchTripContext).visibility
+                        )
+                        assertEquals(
+                            View.VISIBLE,
+                            activity.findViewById<View>(R.id.searchResultList).visibility
+                        )
+                    }
+
+                    performClick(scenario, R.id.searchQueryButton)
+                    waitForDisplayed(R.id.searchTripContext)
+                    assertActionState(
+                        scenario,
+                        editVisible = true,
+                        saveVisible = true,
                         saveEnabled = true
                     )
                     assertTripContext(scenario, expectSingleRow)
-                    performClick(scenario, R.id.searchCancelEditButton)
 
                     performClick(scenario, R.id.searchSaveButton)
                     onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
@@ -143,7 +162,7 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                     assertActionState(
                         scenario,
                         editVisible = true,
-                        cancelVisible = false,
+                        saveVisible = true,
                         saveEnabled = false
                     )
                     assertTripContext(scenario, expectSingleRow)
@@ -160,8 +179,13 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                                 requestLayout()
                             }
                         }
-                        waitForTripOrientation(scenario, LinearLayout.VERTICAL)
-                        assertTripContext(scenario, expectSingleRow = false)
+                        waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
+                        assertTripContext(scenario, expectSingleRow = true)
+                        scenario.onActivity { activity ->
+                            val route =
+                                activity.findViewById<TextView>(R.id.searchTripRouteText)
+                            assertTrue(route.layout.getEllipsisCount(0) > 0)
+                        }
                         scenario.onActivity { activity ->
                             activity.findViewById<TextView>(R.id.searchTripRouteText).apply {
                                 text = "短起點 → 短終點"
@@ -172,8 +196,8 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                         assertTripContext(scenario, expectSingleRow = true)
 
                         executeShell("wm size 945x2100")
-                        waitForTripOrientation(scenario, LinearLayout.VERTICAL)
-                        assertTripContext(scenario, expectSingleRow = false)
+                        waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
+                        assertTripContext(scenario, expectSingleRow = true)
                         executeShell("wm size 1440x2100")
                         waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
                         assertTripContext(scenario, expectSingleRow = true)
@@ -379,6 +403,8 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                 false
             }
         }
+        Thread.sleep(300)
+        instrumentation.waitForIdleSync()
     }
 
     private fun performClick(scenario: ActivityScenario<MainActivity>, viewId: Int) {
@@ -426,28 +452,31 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                 route.textSize,
                 0.5f
             )
-            assertNull(route.ellipsize)
-            route.layout?.let { layout ->
-                repeat(layout.lineCount) { line ->
-                    assertEquals(0, layout.getEllipsisCount(line))
-                }
-            }
+            assertFalse(card is MaterialCardView)
+            assertEquals(TextUtils.TruncateAt.END, route.ellipsize)
+            assertEquals(1, route.maxLines)
             assertInside(route, card)
             assertInside(actions, card)
+            if (expectSingleRow) {
+                assertTrue(route.width > 0)
+            } else {
+                assertTrue(actions.width < body.width)
+                assertTrue(abs(actions.right - body.width) <= dp(activity, 1))
+            }
             repeat(actions.childCount) { index ->
                 val button = actions.getChildAt(index)
                 if (button.visibility == View.VISIBLE) {
                     assertTrue(button is MaterialButton)
                     button as MaterialButton
                     assertTrue(button.measuredHeight >= dp(activity, 48))
-                    assertNull(button.ellipsize)
-                    button.layout?.let { layout ->
-                        repeat(layout.lineCount) { line ->
-                            assertEquals(0, layout.getEllipsisCount(line))
-                        }
-                    }
                     assertInside(button, actions)
-                    assertFalse(button.text.isNullOrBlank())
+                    if (button.id == R.id.searchEditButton) {
+                        assertTrue(button.text.isNullOrBlank())
+                        assertFalse(button.contentDescription.isNullOrBlank())
+                    } else {
+                        assertFalse(button.text.isNullOrBlank())
+                        assertTrue(button.strokeWidth > 0)
+                    }
                 }
             }
         }
@@ -456,7 +485,7 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
     private fun assertActionState(
         scenario: ActivityScenario<MainActivity>,
         editVisible: Boolean,
-        cancelVisible: Boolean,
+        saveVisible: Boolean,
         saveEnabled: Boolean
     ) {
         scenario.onActivity { activity ->
@@ -464,22 +493,24 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                 if (editVisible) View.VISIBLE else View.GONE,
                 activity.findViewById<View>(R.id.searchEditButton).visibility
             )
-            assertEquals(
-                if (cancelVisible) View.VISIBLE else View.GONE,
-                activity.findViewById<View>(R.id.searchCancelEditButton).visibility
-            )
+            val saveButton = activity.findViewById<View>(R.id.searchSaveButton)
+            assertEquals(if (saveVisible) View.VISIBLE else View.GONE, saveButton.visibility)
             assertEquals(
                 saveEnabled,
-                activity.findViewById<View>(R.id.searchSaveButton).isEnabled
+                saveButton.isEnabled
             )
         }
     }
 
     private fun assertInside(child: View, parent: View) {
-        assertTrue(child.left >= 0)
-        assertTrue(child.top >= 0)
-        assertTrue(child.right <= parent.width)
-        assertTrue(child.bottom <= parent.height)
+        val details =
+            "child=${child.resources.getResourceEntryName(child.id)} " +
+                "bounds=${child.left},${child.top},${child.right},${child.bottom} " +
+                "parent=${parent.width}x${parent.height}"
+        assertTrue(details, child.left >= 0)
+        assertTrue(details, child.top >= 0)
+        assertTrue(details, child.right <= parent.width)
+        assertTrue(details, child.bottom <= parent.height)
     }
 
     private fun AppLanguageChoice.localeTag(): String = when (this) {

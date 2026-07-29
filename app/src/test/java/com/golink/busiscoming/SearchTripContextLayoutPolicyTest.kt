@@ -9,39 +9,27 @@ import org.junit.Test
 
 class SearchTripContextLayoutPolicyTest {
     @Test
-    fun `uses one row only when normal text has enough measured width`() {
+    fun `normal font keeps one row by ellipsizing the route at 360dp`() {
         assertTrue(
             SearchTripContextLayoutPolicy.usesSingleRow(
-                availableWidthPx = 800,
-                routeWidthPx = 420,
-                actionsWidthPx = 300,
+                availableWidthPx = 1080,
+                actionsWidthPx = 420,
                 fontScale = 1f,
                 gapPx = 24,
-                minimumSingleRowWidthPx = 720
-            )
-        )
-        assertFalse(
-            SearchTripContextLayoutPolicy.usesSingleRow(
-                availableWidthPx = 700,
-                routeWidthPx = 420,
-                actionsWidthPx = 300,
-                fontScale = 1f,
-                gapPx = 24,
-                minimumSingleRowWidthPx = 720
+                minimumRouteWidthPx = 180
             )
         )
     }
 
     @Test
-    fun `narrow layout uses two rows even when short text would technically fit`() {
+    fun `normal font reflows only when actions would consume the minimum route slot`() {
         assertFalse(
             SearchTripContextLayoutPolicy.usesSingleRow(
-                availableWidthPx = 1080,
-                routeWidthPx = 120,
-                actionsWidthPx = 380,
+                availableWidthPx = 600,
+                actionsWidthPx = 420,
                 fontScale = 1f,
                 gapPx = 24,
-                minimumSingleRowWidthPx = 1200
+                minimumRouteWidthPx = 180
             )
         )
     }
@@ -51,19 +39,19 @@ class SearchTripContextLayoutPolicyTest {
         assertFalse(
             SearchTripContextLayoutPolicy.usesSingleRow(
                 availableWidthPx = 1600,
-                routeWidthPx = 420,
                 actionsWidthPx = 300,
                 fontScale = 1.3f,
-                gapPx = 24
+                gapPx = 24,
+                minimumRouteWidthPx = 180
             )
         )
         assertFalse(
             SearchTripContextLayoutPolicy.usesSingleRow(
                 availableWidthPx = 1600,
-                routeWidthPx = 420,
                 actionsWidthPx = 300,
                 fontScale = 2f,
-                gapPx = 24
+                gapPx = 24,
+                minimumRouteWidthPx = 180
             )
         )
     }

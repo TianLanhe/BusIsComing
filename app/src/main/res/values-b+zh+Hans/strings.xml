@@ -2,7 +2,7 @@
     <string name="search_current_trip">本次行程</string>
     <string name="search_trip_route">%1$s → %2$s</string>
     <string name="search_edit_trip">编辑</string>
-    <string name="search_cancel_edit">取消编辑</string>
+    <string name="search_trip_save">保存</string>
     <string name="search_trip_saved">已保存</string>
     <string name="search_trip_save_description">将本次行程保存为常用行程</string>
     <string name="search_trip_saved_description">本次行程已保存为常用行程</string>

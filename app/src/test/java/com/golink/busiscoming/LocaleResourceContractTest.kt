@@ -79,8 +79,7 @@ class LocaleResourceContractTest {
         val keys = listOf(
             "search_current_trip",
             "search_edit_trip",
-            "search_cancel_edit",
-            "save_as_frequent",
+            "search_trip_save",
             "search_trip_saved",
             "search_trip_save_description",
             "search_trip_saved_description",

@@ -62,7 +62,7 @@ class SearchPresentationStateTest {
     }
 
     @Test
-    fun `cancel editing unchanged results restores the folded result state and saved marker`() {
+    fun `editing retained results preserves the successful snapshot but revokes save qualification`() {
         val state = SearchPresentationState()
         state.beginQuery(origin, destination)
         state.completeWithResults()
@@ -70,26 +70,23 @@ class SearchPresentationStateTest {
 
         assertTrue(state.beginEditingResults())
         assertEquals(SearchDisplayMode.EDITING_RESULTS, state.mode)
-        assertTrue(state.cancelEditing())
-
-        assertEquals(SearchDisplayMode.RESULTS, state.mode)
-        assertEquals(SearchSaveState.SAVED, state.saveState)
+        assertEquals(SearchSaveState.UNAVAILABLE, state.saveState)
         assertEquals(origin, state.querySnapshot?.origin)
     }
 
     @Test
-    fun `actual input change while editing results invalidates the old results snapshot and save action`() {
+    fun `input changes while editing retained results keep the old results snapshot`() {
         val state = SearchPresentationState()
         state.beginQuery(origin, destination)
         state.completeWithResults()
         state.beginEditingResults()
 
-        assertTrue(state.onInputChanged())
+        assertFalse(state.onInputChanged())
 
-        assertEquals(SearchDisplayMode.DIRTY_EDITING, state.mode)
-        assertNull(state.querySnapshot)
+        assertEquals(SearchDisplayMode.EDITING_RESULTS, state.mode)
+        assertEquals(origin, state.querySnapshot?.origin)
+        assertEquals(destination, state.querySnapshot?.destination)
         assertEquals(SearchSaveState.UNAVAILABLE, state.saveState)
-        assertFalse(state.cancelEditing())
     }
 
     @Test
@@ -104,18 +101,15 @@ class SearchPresentationStateTest {
     }
 
     @Test
-    fun `saving while editing unchanged results remains saved after cancel editing`() {
+    fun `editing retained results cannot be saved until another successful query`() {
         val state = SearchPresentationState()
         state.beginQuery(origin, destination)
         state.completeWithResults()
         state.beginEditingResults()
 
-        assertTrue(state.markSaved())
-        assertEquals(SearchSaveState.SAVED, state.saveState)
         assertFalse(state.markSaved())
-        assertTrue(state.cancelEditing())
-        assertEquals(SearchDisplayMode.RESULTS, state.mode)
-        assertEquals(SearchSaveState.SAVED, state.saveState)
+        assertEquals(SearchSaveState.UNAVAILABLE, state.saveState)
+        assertEquals(SearchDisplayMode.EDITING_RESULTS, state.mode)
     }
 
     @Test
@@ -166,19 +160,20 @@ class SearchPresentationStateTest {
     }
 
     @Test
-    fun `empty refresh while editing retained results also returns to clean editing`() {
+    fun `empty refresh callback is ignored while editing retained results`() {
         val state = SearchPresentationState()
         state.beginQuery(origin, destination)
         state.completeWithResults()
         state.beginEditingResults()
 
-        assertTrue(state.completeRefreshEmpty())
+        assertFalse(state.completeRefreshEmpty())
 
-        assertEditingWithoutQueryContext(state)
+        assertEquals(SearchDisplayMode.EDITING_RESULTS, state.mode)
+        assertEquals(origin, state.querySnapshot?.origin)
     }
 
     @Test
-    fun `trip context only folds a nonempty successful result and keeps it while editing unchanged`() {
+    fun `trip context is replaced by the editor while retained results remain`() {
         val state = SearchPresentationState()
 
         state.beginQuery(origin, destination)
@@ -189,8 +184,7 @@ class SearchPresentationStateTest {
         assertTrue(SearchTripContextVisibility.isVisible(state.mode, resultCount = 1))
 
         state.beginEditingResults()
-        assertTrue(SearchTripContextVisibility.isVisible(state.mode, resultCount = 1))
-        assertTrue(SearchTripContextVisibility.showCancelEditing(state.mode))
+        assertFalse(SearchTripContextVisibility.isVisible(state.mode, resultCount = 1))
     }
 
     @Test

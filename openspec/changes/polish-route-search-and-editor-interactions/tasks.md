@@ -1,15 +1,15 @@
 ## 1. 固定展示狀態與資源契約
 
-- [x] 1.1 在 `app/src/test` 新增搜尋展示狀態的純邏輯測試，覆蓋 Editing／Querying／Results／EditingResults／DirtyEditing／Saved、空結果／失敗、取消編輯、輸入失效及新 generation 重設保存狀態
-- [x] 1.2 實作搜尋頁專用展示狀態與 reducer／policy，讓其只保存 UI 模式、查詢快照及保存狀態；保留 `RouteQueryCoordinator` 作為 query id、generation 與 callback 驗證的真相來源，並由 `RouteQueryState` 保存結果、進行中與刷新狀態
-- [x] 1.3 擴充 XML／Manifest contract tests，先固定地點靜態 helper、共用狀態卡、「本次行程」欄、搜尋頁舊保存入口移除及 `MainActivity` IME 策略
-- [x] 1.4 擴充 locale resource contract tests，要求本 change 新增或修改的查詢、編輯、取消編輯、保存、已保存、狀態卡及無障礙文案同時存在於香港繁體、簡體及英文資源
+- [x] 1.1 更新搜尋展示狀態純邏輯測試，覆蓋 Editing／Querying／Results／EditingRetainedResults／Saved、鉛筆點擊清除保存資格、輸入改變保留舊結果、提交新查詢才失效，以及新成功 generation 重設保存狀態
+- [x] 1.2 調整搜尋頁展示狀態與 reducer／policy，分離正在編輯的輸入與上一次成功結果快照；保留 `RouteQueryCoordinator` 作為 query id、generation 與 callback 驗證的真相來源，並由 `RouteQueryState` 保存結果、進行中與刷新狀態
+- [x] 1.3 更新 XML／Manifest contract tests，固定輕量「本次行程」欄、編輯器互斥替換、短保存入口、搜尋頁舊保存入口移除及 `MainActivity` IME 策略
+- [x] 1.4 更新 locale resource contract tests，要求鉛筆編輯、短保存／已保存、狀態卡及無障礙文案同時存在於香港繁體、簡體及英文資源，並移除對取消編輯文案的本 change 依賴
 
 ## 2. 恢復緊湊地點欄位
 
 - [x] 2.1 只移除 `activity_route_edit.xml` 起點與終點的常駐 `helperText`，保留行程名稱 helper、label／hint、錯誤位置及現有動態 helper 控件
 - [x] 2.2 補充或更新 `PlaceInputController`／行程編輯 contract tests，驗證 loading、無結果、搜尋失敗、定位失敗、校驗及 Google attribution 仍在所屬欄位按狀態顯示並可清除
-- [ ] 2.3 回歸新增、編輯及複製行程，確認三種入口均為初始緊湊單行地點外觀，且行程名稱說明和保存校驗未改變
+- [x] 2.3 回歸新增、編輯及複製行程，確認三種入口均為初始緊湊單行地點外觀，且行程名稱說明和保存校驗未改變
 
 ## 3. 擴充搜尋候選並修正手勢歸屬
 
@@ -33,25 +33,33 @@
 
 ## 6. 實作「本次行程」折疊與編輯流程
 
-- [x] 6.1 在 `fragment_search.xml` 加入搜尋專用「本次行程」上下文列與自適應容器，展示起點至終點、編輯及保存操作，並移除完整輸入區下方的常駐保存入口
+- [x] 6.1 把 `fragment_search.xml` 的「本次行程」改為扁平輕量 surface：正常字體單行省略、48dp 鉛筆圖示、緊湊描邊保存、底部分隔，移除大型圓角卡片及整行等寬 tonal 操作帶
 - [x] 6.2 在 `SearchFragment` 接入展示狀態 renderer：只有相符 generation 的非空成功結果進入折疊 Results；查詢中、空結果、失敗及取消均保持 Editing
-- [x] 6.3 實作編輯與取消編輯：展開時暫時保留原結果、控制器、刷新和保存資格，未修改可取消並重新折疊；隱藏輸入器不得接受觸控或無障礙焦點
-- [x] 6.4 將文字、已選 Place、清除及交換的實際改變統一接到失效流程，立即隱藏舊結果、摘要、上下文與保存入口，並作廢 query／刷新／ETA／站點預覽回呼
-- [x] 6.5 保持頂層 destination 切換後的有效折疊／編輯狀態；補充重建恢復策略，只有結果仍存在時才恢復折疊，否則只恢復起終點到完整編輯器
-- [x] 6.6 擴充 `SearchInteractionPolicyTest`、`RouteQueryGenerationTest` 及 `SearchDestinationInstrumentedTest`，覆蓋折疊時機、編輯未改、取消、實際修改、過期 callback、destination 切換和系統重建
+- [x] 6.3 實作鉛筆編輯：完整編輯器整體替換行程欄，不提供取消編輯、不自動聚焦或彈出鍵盤；保存資格與刷新立即失效，但原結果、控制器、排序、詳情及成功快照保留
+- [x] 6.4 讓文字、已選 Place、清除及交換的實際改變繼續保留舊結果；只有提交新查詢時才隱藏舊結果與摘要並作廢 query／刷新／ETA／站點預覽回呼
+- [x] 6.5 保持頂層 destination 切換後的有效折疊／編輯保留結果狀態；補充重建恢復策略，只有結果仍存在時才恢復相符模式，否則只恢復起終點到完整編輯器
+- [x] 6.6 擴充 `SearchInteractionPolicyTest`、`RouteQueryGenerationTest` 及 `SearchDestinationInstrumentedTest`，覆蓋折疊時機、無取消編輯、修改保留舊結果、提交才失效、過期 callback、destination 切換和系統重建
 
 ## 7. 接回保存流程與多配置布局
 
 - [x] 7.1 將「本次行程」保存操作接回既有命名對話框、空值／重名處理及行程 repository，並使用目前有效 generation 的起終點快照且不重做 Geocoding
-- [x] 7.2 只在資料庫成功後把目前 generation 切換為填滿書籤與「已保存」停用狀態；失敗或取消時保留可操作入口，新成功查詢重設為可保存
-- [x] 7.3 為新增 UI 文案與 content description 完成香港繁體、獨立簡體及自然英文資源，禁止在 XML／Kotlin 硬編碼 App 可見文字
-- [x] 7.4 更新 `RouteSearchInputVisualMatrixInstrumentedTest` 或等效布局測試，驗證正常字體且空間足夠時單列展示，`360dp`、英文及 font scale `1.3／2.0` 時路徑與操作可分兩列，核心文字不縮小、操作不裁切且各有至少 `48dp` 觸控目標
-- [x] 7.5 補充保存流程 instrumentation，覆蓋成功後防重複、重名處理、取消／失敗可重試、編輯未改保留資格及新查詢重設狀態
+- [x] 7.2 只在資料庫成功後把目前 generation 切換為填滿書籤與「已保存」停用狀態；鉛筆點擊立即清除保存／已保存資格，只有新成功查詢才重設為可保存
+- [x] 7.3 為短保存文字、鉛筆及保存 content description 完成香港繁體、獨立簡體及自然英文資源，禁止在 XML／Kotlin 硬編碼 App 可見文字
+- [x] 7.4 更新 `RouteSearchInputVisualMatrixInstrumentedTest` 或等效布局測試，驗證正常字體在 `360dp` 以單行尾部省略展示，font scale `1.3／2.0` 必要時分兩列且操作保持靠尾端內容寬度，不出現大型卡片、等寬按鈕帶、縮字或裁切
+- [x] 7.5 補充保存流程 instrumentation，覆蓋成功後防重複、重名處理、取消／失敗可重試、鉛筆點擊清除資格及新查詢重設狀態
 
 ## 8. 文件、回歸與交付驗證
 
-- [x] 8.1 更新 `docs/ui-style-guide.md` 與 `docs/localization-validation-matrix.md`，記錄動態 helper、候選 5 至 6 行與手勢 ownership、IME 覆蓋導航、共用狀態卡及「本次行程」響應式行為
+- [x] 8.1 更新 `docs/ui-style-guide.md` 與 `docs/localization-validation-matrix.md`，記錄動態 helper、候選 5 至 6 行與手勢 ownership、IME 覆蓋導航、共用狀態卡、輕量行程欄、雙向動效及僅結果列表驅動頁面捲動
 - [x] 8.2 執行相關 JVM contract／policy／generation 測試及可用的 instrumentation 測試，修正本 change 引入的失敗且不改動外部 API、SQLite schema、排序、ETA 或結果卡片語義
-- [x] 8.3 在模擬器或實機以繁體／簡體／英文、淺／深色、360dp、font scale `1.0／1.3／2.0` 驗證主要編輯、候選、查詢、失敗、折疊、保存和無障礙流程
+- [x] 8.3 在模擬器或實機以繁體／簡體／英文、淺／深色、360dp、font scale `1.0／1.3／2.0` 驗證主要編輯、候選、查詢、失敗、折疊、雙向動效、保存和無障礙流程
 - [ ] 8.4 在可用裝置覆蓋 API 25／36、手勢／三按鍵導航、常見 IME 及真實 Citybus 地點／路線查詢；若沒有相應裝置，記錄未完成矩陣及剩餘風險
 - [x] 8.5 執行 `./gradlew build`，再檢查 `git status --short` 與 staged 範圍，確認沒有構建產物或無關改動後依專案規則建立簡潔 conventional commit
+
+## 9. 雙向動效與結果列表專屬頁面捲動
+
+- [x] 9.1 先新增失敗測試，固定行程欄／編輯器互斥可見性、約 `240ms` 雙向高度加交叉淡化、系統停用動畫直接切換，以及動畫取消／生命週期改變後落到最終狀態
+- [x] 9.2 實作單一切換協調器，讓鉛筆點擊時行程欄平滑展開為編輯器，新查詢成功時反向收攏；動畫期間阻止隱藏組件觸控與無障礙焦點
+- [x] 9.3 為常用與搜尋 AppBar 安裝共用 direct drag 禁止行為，只保留有效結果 RecyclerView 的 nested scroll；常用空狀態只允許內部捲動且不得帶動 AppBar
+- [x] 9.4 擴充兩頁 instrumentation，驗證無結果、有結果及編輯保留結果時頂部手勢不動，結果列表仍可收折／恢復頂部，候選列表邊界不轉交，編輯期間下拉刷新停用
+- [x] 9.5 驗證舊結果的排序、詳情與監控使用成功查詢快照，不讀取編輯器新輸入；新查詢提交時才清除舊結果與過期回呼
