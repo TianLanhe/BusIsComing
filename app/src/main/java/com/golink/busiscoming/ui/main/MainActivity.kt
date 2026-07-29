@@ -16,6 +16,8 @@ import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -180,9 +182,13 @@ class MainActivity : AppCompatActivity() {
     private var restoredFrequentSortField: SortField? = null
     private var restoredFrequentSortDirection: SortDirection = SortDirection.ASC
     private var pendingFrequentViewport: RefreshViewport? = null
+    private var legacyImeLayoutRoot: View? = null
+    private var legacyImeLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var legacyImeExpandedRootHeight: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureLegacyImeWindow()
         restoreSavedRouteUsageSession(savedInstanceState)
         restoreFrequentQueryState(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -243,6 +249,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        removeLegacyImeNavigationListener()
         appUpdateSubscription?.close()
         appUpdateSubscription = null
         updatePromptDialog?.dismiss()
@@ -556,11 +563,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupTopLevelNavigation(savedInstanceState: Bundle?) {
         topLevelNav = findViewById(R.id.topLevelNav)
-        findViewById<View>(R.id.mainRoot).applyStatusBarPadding { insets ->
-            applyTopLevelNavigationImePolicy(
-                imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
-            )
+        val mainRoot = findViewById<View>(R.id.mainRoot)
+        mainRoot.applyStatusBarPadding { insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                applyTopLevelNavigationImePolicy(
+                    imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+                )
+            }
         }
+        installLegacyImeNavigationListener(mainRoot)
         val restored = savedInstanceState
             ?.getString(STATE_SELECTED_DESTINATION)
             ?.let { runCatching { TopLevelDestination.valueOf(it) }.getOrNull() }
@@ -574,6 +585,44 @@ class MainActivity : AppCompatActivity() {
             }
         }
         topLevelNav.selectedItemId = restored.menuItemId()
+    }
+
+    private fun installLegacyImeNavigationListener(mainRoot: View) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            if (mainRoot.height <= 0) return@OnGlobalLayoutListener
+            legacyImeExpandedRootHeight = maxOf(legacyImeExpandedRootHeight, mainRoot.height)
+            val coveredHeight = (legacyImeExpandedRootHeight - mainRoot.height).coerceAtLeast(0)
+            val imeVisible = coveredHeight > dp(100)
+            topLevelNav.translationY = if (imeVisible) coveredHeight.toFloat() else 0f
+            applyTopLevelNavigationImePolicy(
+                imeVisible = imeVisible
+            )
+        }
+        legacyImeLayoutRoot = mainRoot
+        legacyImeLayoutListener = listener
+        mainRoot.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        mainRoot.post { listener.onGlobalLayout() }
+    }
+
+    private fun removeLegacyImeNavigationListener() {
+        if (::topLevelNav.isInitialized) topLevelNav.translationY = 0f
+        val root = legacyImeLayoutRoot
+        val listener = legacyImeLayoutListener
+        if (root != null && listener != null) {
+            root.viewTreeObserver
+                .takeIf { it.isAlive }
+                ?.removeOnGlobalLayoutListener(listener)
+        }
+        legacyImeLayoutRoot = null
+        legacyImeLayoutListener = null
+        legacyImeExpandedRootHeight = 0
+    }
+
+    private fun configureLegacyImeWindow() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
     }
 
     private fun applyTopLevelNavigationImePolicy(imeVisible: Boolean) {

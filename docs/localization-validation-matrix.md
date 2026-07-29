@@ -43,8 +43,10 @@
 | Pixel 9 API 36 模擬器；約 `360dp` portrait | 香港繁體／簡體／英文 × 淺／深色 × font scale `1.0／1.3／2.0`；緊湊行程欄、單行省略、大字體雙列、鉛筆／保存觸控框與雙向切換 | `RouteSearchInputVisualMatrixInstrumentedTest` 三檔通過 |
 | 同一模擬器；搜尋展示狀態 | 成功折疊、鉛筆整體替換、無取消、修改保留舊結果、刷新停用、提交時才清空、跨 destination 保留 | 搜尋頁定向 instrumentation 通過 |
 | 同一模擬器；捲動 ownership | 常用／搜尋無結果與有結果的頂部拖動、編輯器拖動、結果列表收折、候選頂／底邊界 | AppBar 與候選定向 instrumentation 通過 |
+| Pixel 9 API 36 模擬器；手勢導航；Gboard | IME 覆蓋底部導航、導航停用／恢復、候選 5 至 6 個完整項目、候選獨佔手勢；真實 Citybus `Central` → `Tsim Sha Tsui` 地點及路線查詢 | 定向 instrumentation 與人工查詢通過；載入卡、按鈕防重入、折疊行程欄及真實路線結果均可見 |
+| Android 7.1／API 25 模擬器；三按鍵導航；AOSP LatinIME；`1080×1920` | 舊系統 IME 可視區回退、底部導航保持物理位置並由鍵盤覆蓋、候選只顯示完整項目及獨佔手勢；真實 Citybus `Central Government Offices` → `Area:Tsim Sha Tsui (East) / Hung Hom Station` 查詢 | 定向 instrumentation 通過；受較矮畫面與較高 IME 限制，起點／終點分別降級為 3／2 個完整候選且可獨立滾動，沒有半項；真實查詢返回 4 條路線、2 條直達 |
 
-本輪未覆蓋 API 25、三按鍵導航、多款實體 IME、實機 TalkBack 及真實 Citybus 查詢；這些項目不得由上述模擬器證據替代。
+本輪未覆蓋實體裝置、多款第三方實體 IME、實機 TalkBack，以及 API 25 的香港繁體／簡體輸入法外觀；上述缺口不得由兩台模擬器證據替代。
 
 ## 動態資料
 

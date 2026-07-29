@@ -378,7 +378,7 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
     }
 
     private fun selectPlace(inputId: Int, keyword: String, expected: String) {
-        onView(withId(inputId)).perform(click(), replaceText(keyword), closeSoftKeyboard())
+        onView(withId(inputId)).perform(click(), replaceText(keyword))
         waitUntil {
             try {
                 onView(withText(expected)).check(matches(isDisplayed()))
@@ -390,6 +390,7 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
             }
         }
         onView(withText(expected)).perform(click())
+        onView(withId(inputId)).perform(closeSoftKeyboard())
     }
 
     private fun waitForDisplayed(viewId: Int) {

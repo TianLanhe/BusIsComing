@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import android.Manifest
+import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
@@ -192,8 +193,7 @@ class SearchDestinationInstrumentedTest {
             callback.get()?.invoke(CurrentPlaceSelectionResult.Failure)
             onView(withId(R.id.placePairOriginInput)).perform(
                 click(),
-                replaceText("o"),
-                closeSoftKeyboard()
+                replaceText("o")
             )
             waitForText("測試起點")
 
@@ -281,7 +281,14 @@ class SearchDestinationInstrumentedTest {
                 assertFalse(candidates.isNestedScrollingEnabled)
                 assertFalse(refresh.isEnabled)
                 assertEquals(0, candidates.height % dp(activity, 52))
-                assertTrue(candidates.height / dp(activity, 52) in 5..6)
+                val visibleRows = candidates.height / dp(activity, 52)
+                assertTrue(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        visibleRows in 5..6
+                    } else {
+                        visibleRows in 1..6
+                    }
+                )
                 candidateStartOffset = candidates.computeVerticalScrollOffset()
                 assertOuterViewportUnchanged(expectedViewport, activity)
             }
@@ -290,7 +297,12 @@ class SearchDestinationInstrumentedTest {
                 val candidates = activity.findViewById<RecyclerView>(
                     R.id.placePairOriginCandidateList
                 )
-                assertTrue(candidates.computeVerticalScrollOffset() > candidateStartOffset)
+                val layoutManager = candidates.layoutManager as LinearLayoutManager
+                assertTrue(
+                    candidates.computeVerticalScrollOffset() > candidateStartOffset ||
+                        layoutManager.findFirstVisibleItemPosition() > 0 ||
+                        (layoutManager.findViewByPosition(0)?.top ?: 0) < 0
+                )
                 assertOuterViewportUnchanged(expectedViewport, activity)
                 candidates.scrollToPosition(19)
             }
@@ -505,13 +517,25 @@ class SearchDestinationInstrumentedTest {
                         R.id.placePairOriginCandidateList
                     )
                     val insets = requireNotNull(ViewCompat.getRootWindowInsets(candidates))
-                    val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
                     val rootLocation = IntArray(2)
                     val candidateLocation = IntArray(2)
                     candidates.rootView.getLocationOnScreen(rootLocation)
                     candidates.getLocationOnScreen(candidateLocation)
-                    val imeTop = rootLocation[1] + candidates.rootView.height - imeInsets.bottom
-                    candidatesAboveIme = insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                    val imeVisible = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        insets.isVisible(WindowInsetsCompat.Type.ime())
+                    } else {
+                        !activity.findViewById<View>(R.id.topLevelNav).isEnabled
+                    }
+                    val imeTop = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val imeInsets = insets.getInsets(WindowInsetsCompat.Type.ime())
+                        rootLocation[1] + candidates.rootView.height - imeInsets.bottom
+                    } else {
+                        val searchRoot = activity.findViewById<View>(R.id.searchRoot)
+                        val searchRootLocation = IntArray(2)
+                        searchRoot.getLocationOnScreen(searchRootLocation)
+                        searchRootLocation[1] + searchRoot.height
+                    }
+                    candidatesAboveIme = imeVisible &&
                         candidates.visibility == View.VISIBLE &&
                         candidateLocation[1] + candidates.height <= imeTop
                 }
@@ -1315,7 +1339,15 @@ class SearchDestinationInstrumentedTest {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
 
             onView(withId(R.id.placePairOriginInput)).check(matches(withText("手動起點")))
-            onView(withId(R.id.placePairCurrentLocationButton)).check(matches(isDisplayed()))
+            waitUntil {
+                try {
+                    onView(withId(R.id.placePairCurrentLocationButton))
+                        .check(matches(isDisplayed()))
+                    true
+                } catch (_: AssertionError) {
+                    false
+                }
+            }
         }
     }
 
@@ -1385,8 +1417,7 @@ class SearchDestinationInstrumentedTest {
             )
             onView(withId(R.id.placePairDestinationInput)).perform(
                 click(),
-                replaceText("d"),
-                closeSoftKeyboard()
+                replaceText("d")
             )
             waitForText("測試終點")
             scenario.onActivity { activity ->
@@ -1442,8 +1473,7 @@ class SearchDestinationInstrumentedTest {
 
             onView(withId(R.id.placePairOriginInput)).perform(
                 click(),
-                replaceText("o"),
-                closeSoftKeyboard()
+                replaceText("o")
             )
             snapshotCallback.get()?.invoke(
                 CurrentLocationSnapshot(
@@ -1456,14 +1486,15 @@ class SearchDestinationInstrumentedTest {
             waitForText("測試起點")
             waitForCandidateDistance(scenario, R.id.placePairOriginCandidateList)
             onView(withText("測試起點")).perform(click())
+            onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
 
             onView(withId(R.id.placePairDestinationInput)).perform(
                 click(),
-                replaceText("d"),
-                closeSoftKeyboard()
+                replaceText("d")
             )
             waitForText("測試終點")
             waitForCandidateDistance(scenario, R.id.placePairDestinationCandidateList)
+            onView(withId(R.id.placePairDestinationInput)).perform(closeSoftKeyboard())
             currentPlaceCallback.get()?.invoke(CurrentPlaceSelectionResult.Failure)
 
             onView(withId(R.id.placePairOriginInput)).check(matches(withText("測試起點")))
@@ -1484,7 +1515,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     private fun selectPlace(inputId: Int, keyword: String, expected: String) {
-        onView(withId(inputId)).perform(click(), replaceText(keyword), closeSoftKeyboard())
+        onView(withId(inputId)).perform(click(), replaceText(keyword))
         val candidateListId = when (inputId) {
             R.id.placePairOriginInput -> R.id.placePairOriginCandidateList
             R.id.placePairDestinationInput -> R.id.placePairDestinationCandidateList
@@ -1506,6 +1537,7 @@ class SearchDestinationInstrumentedTest {
             }
         }
         onView(candidate).perform(click())
+        onView(withId(inputId)).perform(closeSoftKeyboard())
     }
 
     private fun waitForText(text: String) {

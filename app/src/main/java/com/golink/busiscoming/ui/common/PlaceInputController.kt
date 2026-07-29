@@ -1,6 +1,7 @@
 package com.golink.busiscoming.ui.common
 
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.text.TextUtils
 import android.text.Editable
@@ -9,6 +10,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -61,6 +63,22 @@ class PlaceInputController(
     private var searchLoading = false
     private var externalLoading = false
     private var candidateSpaceRequestPending = false
+    private var candidatesExplicitlyDismissed = false
+    private var legacyImeViewTreeObserver: ViewTreeObserver? = null
+    private val legacyImeLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            updateImeTop(LegacyImeViewport.visibleBottomInRoot(candidateList))
+        }
+    }
+    private val legacyImeAttachListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) {
+            registerLegacyImeLayoutListener()
+        }
+
+        override fun onViewDetachedFromWindow(view: View) {
+            unregisterLegacyImeLayoutListener()
+        }
+    }
     private val candidateGestureOwnership = object : RecyclerView.SimpleOnItemTouchListener() {
         override fun onInterceptTouchEvent(recyclerView: RecyclerView, event: MotionEvent): Boolean {
             if (!exclusiveVerticalScroll || candidateList.visibility != View.VISIBLE) return false
@@ -86,23 +104,24 @@ class PlaceInputController(
         candidateList.elevation = dp(context, 2).toFloat()
         candidateList.visibility = View.GONE
         if (exclusiveVerticalScroll) candidateList.addOnItemTouchListener(candidateGestureOwnership)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            candidateList.addOnAttachStateChangeListener(legacyImeAttachListener)
+            if (ViewCompat.isAttachedToWindow(candidateList)) {
+                registerLegacyImeLayoutListener()
+            }
+        }
         ViewCompat.setOnApplyWindowInsetsListener(candidateList) { view, insets ->
-            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            imeTopPx = (view.rootView.height - imeBottom).coerceAtLeast(0)
-            val hasCompleteRows = updateCandidateHeight()
-            if (
-                hasCompleteRows &&
-                candidateList.visibility != View.VISIBLE &&
-                input.hasFocus() &&
-                adapter.itemCount > 0
-            ) {
-                showCandidates()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                updateImeTop((view.rootView.height - imeBottom).coerceAtLeast(0))
+            } else {
+                updateImeTop(LegacyImeViewport.visibleBottomInRoot(view))
             }
             insets
         }
         input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
             if (hasFocus && adapter.itemCount > 0) {
-                showCandidates()
+                if (!candidatesExplicitlyDismissed) showCandidates()
             } else if (
                 hasFocus &&
                 selectedPlace == null &&
@@ -112,6 +131,12 @@ class PlaceInputController(
                 showInstruction()
             } else if (!hasFocus) {
                 hideCandidates()
+            }
+        }
+        input.setOnClickListener {
+            if (adapter.itemCount > 0) {
+                candidatesExplicitlyDismissed = false
+                showCandidates()
             }
         }
         input.addTextChangedListener(object : TextWatcher {
@@ -186,6 +211,7 @@ class PlaceInputController(
     }
 
     fun hideCandidates(): Boolean {
+        candidatesExplicitlyDismissed = true
         val hadCandidatePresentation =
             candidateList.visibility != View.GONE || candidateList.layoutParams.height > 0
         if (!hadCandidatePresentation) return false
@@ -231,6 +257,25 @@ class PlaceInputController(
         hideCandidates()
         ViewCompat.setOnApplyWindowInsetsListener(candidateList, null)
         if (exclusiveVerticalScroll) candidateList.removeOnItemTouchListener(candidateGestureOwnership)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            candidateList.removeOnAttachStateChangeListener(legacyImeAttachListener)
+            unregisterLegacyImeLayoutListener()
+        }
+    }
+
+    private fun registerLegacyImeLayoutListener() {
+        unregisterLegacyImeLayoutListener()
+        val observer = candidateList.rootView.viewTreeObserver
+        if (!observer.isAlive) return
+        observer.addOnGlobalLayoutListener(legacyImeLayoutListener)
+        legacyImeViewTreeObserver = observer
+    }
+
+    private fun unregisterLegacyImeLayoutListener() {
+        legacyImeViewTreeObserver
+            ?.takeIf { it.isAlive }
+            ?.removeOnGlobalLayoutListener(legacyImeLayoutListener)
+        legacyImeViewTreeObserver = null
     }
 
     private fun handleTextChanged(keyword: String) {
@@ -302,6 +347,7 @@ class PlaceInputController(
                 onMessageChanged.invoke(PlaceInputMessage.INSTRUCTION)
             }
             if (input.hasFocus()) {
+                candidatesExplicitlyDismissed = false
                 showCandidates()
             }
         }
@@ -351,6 +397,7 @@ class PlaceInputController(
     private fun showCandidates() {
         if (adapter.itemCount == 0 || !input.hasFocus()) return
         if (!updateCandidateHeight()) return
+        candidatesExplicitlyDismissed = false
         candidateSpaceRequestPending = false
         if (candidateList.visibility != View.VISIBLE) {
             setCandidateScrollLock(true)
@@ -408,21 +455,43 @@ class PlaceInputController(
             }
             return false
         }
-        candidateList.layoutParams = candidateList.layoutParams.apply {
-            this.height = height
+        if (candidateList.layoutParams.height != height) {
+            candidateList.layoutParams = candidateList.layoutParams.apply {
+                this.height = height
+            }
         }
         return true
     }
 
+    private fun updateImeTop(newImeTopPx: Int) {
+        if (newImeTopPx <= 0) return
+        imeTopPx = newImeTopPx
+        val hasCompleteRows = updateCandidateHeight()
+        if (
+            hasCompleteRows &&
+            !candidatesExplicitlyDismissed &&
+            candidateList.visibility != View.VISIBLE &&
+            input.hasFocus() &&
+            adapter.itemCount > 0
+        ) {
+            showCandidates()
+        }
+    }
+
     private fun setCandidatePresentation(visibility: Int, height: Int) {
         val wasVisible = candidateList.visibility == View.VISIBLE
+        val heightChanged = candidateList.layoutParams.height != height
+        val visibilityChanged = candidateList.visibility != visibility
+        if (!heightChanged && !visibilityChanged) return
         if (wasVisible && visibility != View.VISIBLE) {
             setCandidateScrollLock(false)
         }
-        candidateList.layoutParams = candidateList.layoutParams.apply {
-            this.height = height
+        if (heightChanged) {
+            candidateList.layoutParams = candidateList.layoutParams.apply {
+                this.height = height
+            }
         }
-        candidateList.visibility = visibility
+        if (visibilityChanged) candidateList.visibility = visibility
         if (wasVisible && visibility != View.VISIBLE) {
             onCandidateVisibilityChanged(false)
         }

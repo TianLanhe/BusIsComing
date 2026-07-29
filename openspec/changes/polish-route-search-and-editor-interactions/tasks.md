@@ -53,7 +53,7 @@
 - [x] 8.1 更新 `docs/ui-style-guide.md` 與 `docs/localization-validation-matrix.md`，記錄動態 helper、候選 5 至 6 行與手勢 ownership、IME 覆蓋導航、共用狀態卡、輕量行程欄、雙向動效及僅結果列表驅動頁面捲動
 - [x] 8.2 執行相關 JVM contract／policy／generation 測試及可用的 instrumentation 測試，修正本 change 引入的失敗且不改動外部 API、SQLite schema、排序、ETA 或結果卡片語義
 - [x] 8.3 在模擬器或實機以繁體／簡體／英文、淺／深色、360dp、font scale `1.0／1.3／2.0` 驗證主要編輯、候選、查詢、失敗、折疊、雙向動效、保存和無障礙流程
-- [ ] 8.4 在可用裝置覆蓋 API 25／36、手勢／三按鍵導航、常見 IME 及真實 Citybus 地點／路線查詢；若沒有相應裝置，記錄未完成矩陣及剩餘風險
+- [x] 8.4 在可用裝置覆蓋 API 25／36、手勢／三按鍵導航、常見 IME 及真實 Citybus 地點／路線查詢；若沒有相應裝置，記錄未完成矩陣及剩餘風險
 - [x] 8.5 執行 `./gradlew build`，再檢查 `git status --short` 與 staged 範圍，確認沒有構建產物或無關改動後依專案規則建立簡潔 conventional commit
 
 ## 9. 雙向動效與結果列表專屬頁面捲動

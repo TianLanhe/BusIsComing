@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import android.Manifest
+import android.os.Build
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
@@ -281,8 +282,12 @@ class TopLevelNavigationInstrumentedTest {
             var currentVisibility: Boolean? = null
             scenario.onActivity { activity ->
                 val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
-                currentVisibility = ViewCompat.getRootWindowInsets(navigation)
-                    ?.isVisible(WindowInsetsCompat.Type.ime())
+                currentVisibility = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    ViewCompat.getRootWindowInsets(navigation)
+                        ?.isVisible(WindowInsetsCompat.Type.ime())
+                } else {
+                    !navigation.isEnabled
+                }
             }
             if (currentVisibility == visible) return
             Thread.sleep(50)

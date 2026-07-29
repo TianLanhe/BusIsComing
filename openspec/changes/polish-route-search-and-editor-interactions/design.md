@@ -62,11 +62,11 @@
 
 只設定 `nestedScrollingEnabled=true` 的替代方案無法避免 AppBar 在 nested pre-scroll 階段先移動；把 AppBar flags 設為 `0` 則會重算 total scroll range 並可能重置部分捲動 offset，故不採用。把候選改成 overlay／bottom sheet 會破壞現有欄位級內嵌語義，亦不採用。
 
-### 4. `MainActivity` 使用不 resize 的 IME 策略
+### 4. `MainActivity` 使用不 resize 或等效的 IME 策略
 
-只為承載三個頂層 destination 的 `MainActivity` 設定 `windowSoftInputMode="adjustNothing"` 或等效不 resize 策略。IME 顯示後覆蓋仍位於物理底部的導航；IME 收起後導航在原位置重新可見，不執行平移或補償動畫。
+只為承載三個頂層 destination 的 `MainActivity` 設定 `windowSoftInputMode="adjustNothing"` 或等效策略。Android 11 以上直接使用 IME Insets；Android 10 以下因 `adjustNothing` 無法可靠回報 IME 可視區，改用 `adjustResize` 取得舊系統可見視窗高度，並以相反位移把底部導航保持在原物理座標及鍵盤後方。IME 收起後導航恢復原量度、位置、destination 與可操作狀態。
 
-搜尋輸入與候選繼續依 `WindowInsetsCompat.Type.ime()` 計算可視區；IME 覆蓋期間，底部導航不可被觸控或無障礙焦點誤操作。`RouteEditActivity` 等次級頁保留既有 IME 行為。
+搜尋輸入與候選在 Android 11 以上依 `WindowInsetsCompat.Type.ime()` 計算可視區，舊系統則依視窗可見區及頂層內容容器計算，只展示可完整容納的候選項。舊系統的全局佈局回呼不得在用戶已按返回、點擊空白或完成選擇後重新拉起候選；只有新候選結果或用戶再次點擊輸入框才可重新展示。IME 覆蓋期間，底部導航不可被觸控或無障礙焦點誤操作。`RouteEditActivity` 等次級頁保留既有 IME 行為。
 
 替代方案「IME 顯示時把導航移到鍵盤上方」正是目前問題；「主動隱藏再重新建立導航」會引入額外佈局變化和 destination 狀態風險，因此不採用。
 
