@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -12,8 +14,12 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.scrollTo
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
@@ -27,6 +33,7 @@ import com.google.android.material.textfield.TextInputLayout
 import java.util.concurrent.Executors
 import java.io.FileInputStream
 import kotlin.math.roundToInt
+import org.hamcrest.Matcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -35,6 +42,122 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class PlaceInputControllerInstrumentedTest {
+    @Test
+    fun routeEditClearsOriginAttributionWhenTheOriginChanges() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            scenario.onActivity { activity ->
+                val attribution = activity.findViewById<TextView>(R.id.originAttributionText)
+                val originInput =
+                    activity.findViewById<MaterialAutoCompleteTextView>(R.id.originInput)
+
+                attribution.visibility = View.VISIBLE
+                originInput.setText("新的起點")
+
+                assertEquals(View.GONE, attribution.visibility)
+            }
+        }
+    }
+
+    @Test
+    fun defaultFieldFeedbackShowsDynamicStatesAndClearsAfterAValidSelection() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            lateinit var inputLayout: TextInputLayout
+            lateinit var loading: View
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                loading = View(activity)
+                val candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                root.addView(inputLayout)
+                root.addView(loading)
+                root.addView(candidateList)
+
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = loading,
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> = when (keyword) {
+                            "空" -> emptyList()
+                            "錯" -> error("expected search failure")
+                            else -> listOf(place("候選"))
+                        }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true }
+                )
+
+                assertEquals(null, inputLayout.helperText)
+                input.setText("空")
+                assertEquals(View.VISIBLE, loading.visibility)
+            }
+
+            waitUntil {
+                var matchesShown = false
+                scenario.onActivity {
+                    matchesShown = inputLayout.helperText ==
+                        inputLayout.context.getString(R.string.place_search_empty) &&
+                        inputLayout.error == null &&
+                        loading.visibility == View.GONE
+                }
+                matchesShown
+            }
+
+            scenario.onActivity {
+                input.setText("錯")
+            }
+            waitUntil {
+                var failureShown = false
+                scenario.onActivity {
+                    failureShown = inputLayout.error ==
+                        inputLayout.context.getString(R.string.place_search_failed) &&
+                        inputLayout.helperText == null
+                }
+                failureShown
+            }
+
+            scenario.onActivity { activity ->
+                controller.setHelperText(activity.getString(R.string.current_location_manual_origin))
+                assertEquals(
+                    activity.getString(R.string.current_location_manual_origin),
+                    inputLayout.helperText
+                )
+                controller.setError(activity.getString(R.string.validation_origin_required))
+                assertEquals(
+                    activity.getString(R.string.validation_origin_required),
+                    inputLayout.error
+                )
+
+                controller.setSelectedPlace(place("已選地點"))
+                assertEquals(null, inputLayout.helperText)
+                assertEquals(null, inputLayout.error)
+            }
+
+            scenario.onActivity {
+                controller.dispose()
+            }
+            executor.shutdownNow()
+        }
+    }
+
     @Test
     fun routeSearchMessageSinkReceivesSelectionInstructionEmptyAndFailureStates() {
         ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
@@ -127,14 +250,8 @@ class PlaceInputControllerInstrumentedTest {
                 assertTrue(destinationInput.height >= xmlDp(activity, 56))
                 assertEquals(xmlDp(activity, 16), originInput.paddingStart)
                 assertEquals(xmlDp(activity, 16), originInput.paddingEnd)
-                assertEquals(
-                    activity.getString(R.string.place_search_helper),
-                    originLayout.helperText
-                )
-                assertEquals(
-                    activity.getString(R.string.place_search_helper),
-                    destinationLayout.helperText
-                )
+                assertEquals(null, originLayout.helperText)
+                assertEquals(null, destinationLayout.helperText)
                 assertEquals(TextInputLayout.END_ICON_CUSTOM, originLayout.endIconMode)
                 assertTrue(originLayout.endIconDrawable != null)
                 assertEquals(
@@ -284,6 +401,246 @@ class PlaceInputControllerInstrumentedTest {
         }
     }
 
+    @Test
+    fun editorBootstrapRequestsOuterSpaceAndShowsACompleteRowAfterRemeasurement() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            lateinit var candidateList: RecyclerView
+            var requestedHeight = 0
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                val inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                }
+                root.addView(inputLayout)
+                root.addView(candidateList)
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = View(activity),
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> =
+                            (1..4).map { index -> place("啟動候選$index") }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true },
+                    onCandidateSpaceRequired = { minimumHeightPx ->
+                        requestedHeight = minimumHeightPx
+                        activity.javaClass.getDeclaredMethod(
+                            "requestCandidateSpace",
+                            TextInputLayout::class.java,
+                            RecyclerView::class.java,
+                            Int::class.javaPrimitiveType
+                        ).apply { isAccessible = true }
+                            .invoke(activity, inputLayout, candidateList, minimumHeightPx)
+                    }
+                )
+                input.requestFocus()
+                controller.javaClass.getDeclaredField("imeTopPx")
+                    .apply { isAccessible = true }
+                    .setInt(controller, 0)
+                controller.javaClass.getDeclaredMethod(
+                    "updatePlaceCandidates",
+                    List::class.java
+                ).apply { isAccessible = true }.invoke(
+                    controller,
+                    (1..4).map { index -> place("啟動候選$index") }
+                )
+
+                assertEquals(dp(activity, 52), requestedHeight)
+                assertEquals(View.INVISIBLE, candidateList.visibility)
+                assertEquals(dp(activity, 52), candidateList.layoutParams.height)
+            }
+
+            waitUntil {
+                var visibleWithCompleteRows = false
+                scenario.onActivity { activity ->
+                    val rowHeight = dp(activity, 52)
+                    visibleWithCompleteRows =
+                        candidateList.visibility == View.VISIBLE &&
+                            candidateList.height >= rowHeight &&
+                            candidateList.height % rowHeight == 0
+                }
+                visibleWithCompleteRows
+            }
+
+            scenario.onActivity {
+                controller.dispose()
+            }
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun exclusiveCandidateScrollKeepsItsOwnRecyclerViewScrollableWithoutNestedHandoff() {
+        ActivityScenario.launch<RouteEditActivity>(prefilledRouteEditIntent()).use { scenario ->
+            val executor = Executors.newSingleThreadExecutor()
+            lateinit var controller: PlaceInputController
+            lateinit var input: MaterialAutoCompleteTextView
+            lateinit var candidateList: RecyclerView
+            lateinit var owner: RecordingLinearLayout
+
+            scenario.onActivity { activity ->
+                val root = activity.findViewById<ViewGroup>(R.id.routeEditContent)
+                owner = RecordingLinearLayout(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                    orientation = LinearLayout.VERTICAL
+                }
+                val inputLayout = TextInputLayout(activity).apply {
+                    boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                }
+                input = MaterialAutoCompleteTextView(activity).apply {
+                    id = R.id.instrumentedPlaceInput
+                }
+                inputLayout.addView(input)
+                candidateList = RecyclerView(activity).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+                    contentDescription = "instrumented exclusive candidate list"
+                }
+                owner.addView(inputLayout)
+                owner.addView(candidateList)
+                root.addView(owner, 0)
+                controller = PlaceInputController(
+                    context = activity,
+                    input = input,
+                    inputLayout = inputLayout,
+                    loadingView = View(activity),
+                    candidateList = candidateList,
+                    placeSearchRepository = object : PlaceSearchRepository {
+                        override fun searchPlaces(keyword: String): List<Place> =
+                            (1..20).map { index -> place("獨占候選$index") }
+                    },
+                    mainHandler = Handler(Looper.getMainLooper()),
+                    searchExecutor = executor,
+                    isActive = { true },
+                    exclusiveVerticalScroll = true
+                )
+                input.requestFocus()
+                controller.javaClass.getDeclaredMethod(
+                    "updatePlaceCandidates",
+                    List::class.java
+                ).apply { isAccessible = true }.invoke(
+                    controller,
+                    (1..20).map { index -> place("獨占候選$index") }
+                )
+            }
+
+            waitUntil {
+                var ready = false
+                scenario.onActivity {
+                    ready = candidateList.visibility == View.VISIBLE &&
+                        candidateList.adapter?.itemCount == 20 &&
+                        candidateList.height > 0 &&
+                        candidateList.isShown
+                }
+                ready
+            }
+
+            onView(withContentDescription("instrumented exclusive candidate list")).perform(
+                object : ViewAction {
+                    override fun getConstraints(): Matcher<View> = isDisplayed()
+
+                    override fun getDescription(): String =
+                        "drag and dispose the candidate list without releasing the active gesture"
+
+                    override fun perform(uiController: UiController, view: View) {
+                        val recyclerView = view as RecyclerView
+                        val visibleBounds = android.graphics.Rect()
+                        assertTrue(recyclerView.getGlobalVisibleRect(visibleBounds))
+                        assertEquals(recyclerView.height, visibleBounds.height())
+                        assertFalse(recyclerView.isNestedScrollingEnabled)
+                        assertTrue(owner.disallowRequests.last())
+                        val startOffset = recyclerView.computeVerticalScrollOffset()
+                        assertTrue(
+                            recyclerView.computeVerticalScrollRange() >
+                                recyclerView.computeVerticalScrollExtent()
+                        )
+                        owner.disallowRequests.clear()
+                        val downTime = SystemClock.uptimeMillis()
+                        val x = recyclerView.width / 2f
+                        val downY = recyclerView.height * 0.85f
+                        MotionEvent.obtain(
+                            downTime,
+                            downTime,
+                            MotionEvent.ACTION_DOWN,
+                            x,
+                            downY,
+                            0
+                        ).also { event ->
+                            assertTrue(recyclerView.dispatchTouchEvent(event))
+                            event.recycle()
+                        }
+                        uiController.loopMainThreadForAtLeast(16L)
+                        (1..6).forEach { step ->
+                            MotionEvent.obtain(
+                                downTime,
+                                downTime + step * 16L,
+                                MotionEvent.ACTION_MOVE,
+                                x,
+                                downY - recyclerView.height * 0.12f * step,
+                                0
+                            ).also { event ->
+                                assertTrue(recyclerView.dispatchTouchEvent(event))
+                                event.recycle()
+                            }
+                            uiController.loopMainThreadForAtLeast(16L)
+                        }
+                        assertTrue(recyclerView.computeVerticalScrollOffset() > startOffset)
+                        assertEquals(View.VISIBLE, recyclerView.visibility)
+                        assertTrue(owner.disallowRequests.last())
+
+                        controller.dispose()
+                        assertEquals(View.GONE, recyclerView.visibility)
+                        assertTrue(recyclerView.isNestedScrollingEnabled)
+                        assertFalse(owner.disallowRequests.last())
+
+                        val requestCountAfterDispose = owner.disallowRequests.size
+                        recyclerView.visibility = View.VISIBLE
+                        val postDisposeTime = SystemClock.uptimeMillis()
+                        val postDisposeDown = MotionEvent.obtain(
+                            postDisposeTime,
+                            postDisposeTime,
+                            MotionEvent.ACTION_DOWN,
+                            recyclerView.width / 2f,
+                            recyclerView.height / 2f,
+                            0
+                        )
+                        try {
+                            recyclerView.dispatchTouchEvent(postDisposeDown)
+                        } finally {
+                            postDisposeDown.recycle()
+                        }
+                        assertEquals(requestCountAfterDispose, owner.disallowRequests.size)
+                        recyclerView.visibility = View.GONE
+                    }
+                }
+            )
+            executor.shutdownNow()
+        }
+    }
+
     private fun waitUntil(timeoutMillis: Long = 3_000L, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMillis
         while (System.currentTimeMillis() < deadline) {
@@ -320,6 +677,15 @@ class PlaceInputControllerInstrumentedTest {
 
     private fun View.marginTop(): Int {
         return (layoutParams as ViewGroup.MarginLayoutParams).topMargin
+    }
+
+    private class RecordingLinearLayout(context: Context) : LinearLayout(context) {
+        val disallowRequests = mutableListOf<Boolean>()
+
+        override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
+            disallowRequests += disallowIntercept
+            super.requestDisallowInterceptTouchEvent(disallowIntercept)
+        }
     }
 
     private fun saveScreenshot(name: String) {

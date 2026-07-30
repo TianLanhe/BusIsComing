@@ -3,6 +3,7 @@ package com.golink.busiscoming.ui.main
 import com.golink.busiscoming.data.model.Place
 
 object SearchResultSaveEligibility {
+    @Suppress("UNUSED_PARAMETER")
     fun isVisible(
         queryOrigin: Place?,
         queryDestination: Place?,
@@ -13,13 +14,23 @@ object SearchResultSaveEligibility {
         queryFailed: Boolean
     ): Boolean {
         return resultCount > 0 &&
-            !queryInProgress &&
-            !queryFailed &&
             queryOrigin != null &&
             queryDestination != null &&
             queryOrigin == currentOrigin &&
             queryDestination == currentDestination
     }
+}
+
+/** 以成功查詢的 Place pair 為身份，判斷潛在輸入事件是否真的令結果失效。 */
+object SearchPlacePairMutationPolicy {
+    fun shouldInvalidate(
+        querySnapshot: SearchQuerySnapshot?,
+        currentOrigin: Place?,
+        currentDestination: Place?
+    ): Boolean =
+        querySnapshot == null ||
+            querySnapshot.origin != currentOrigin ||
+            querySnapshot.destination != currentDestination
 }
 
 class SearchCurrentPlaceRequestState {

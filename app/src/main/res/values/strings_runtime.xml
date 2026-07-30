@@ -99,11 +99,15 @@
     <string name="route_query_loading_message">正在配對可用巴士方案和候車時間。</string>
     <string name="route_query_failure_message">請稍後重試，或換一個常用行程再查詢路線。</string>
     <string name="search_no_routes">找不到可用路線</string>
+    <string name="search_no_routes_message">請檢查起點和終點，或稍後再試。</string>
     <string name="search_failed">搜尋失敗，請稍後重試</string>
+    <string name="search_route_query_failure_message">請稍後重試，或調整起點和終點後重新查詢。</string>
     <string name="frequent_route_name_hint">常用行程名稱</string>
     <string name="route_preview">行程預覽</string>
     <string name="save_frequent_title">儲存為常用行程</string>
     <string name="saved_as_frequent">已儲存為常用行程</string>
+    <string name="save_frequent_failed">暫時未能儲存行程，請重試</string>
+    <string name="save_query_changed">查詢已變更，請關閉後重新儲存</string>
     <string name="eta_arrivals_content_description">查看首程候車班次，%1$s</string>
     <string name="monitor_title">通知欄監控</string>
     <string name="monitor_explanation">啟動後會每分鐘嘗試更新；省電、鎖屏或網絡限制可能導致延遲。\n鎖屏會顯示路線與 ETA；開啟語音後，狀態變更可能在鎖屏時播報。</string>

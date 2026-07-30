@@ -20,6 +20,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.ViewTreeObserver
+import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -30,6 +32,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -157,6 +160,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var transitCodePaymentLauncher: TransitCodePaymentLaunchAction
     private lateinit var topLevelNav: BottomNavigationView
     private val destinationState = TopLevelDestinationState()
+    private val topLevelNavImePolicy = MainActivityImeNavigationPolicy()
 
     private var routeConfigs: List<RouteConfig> = emptyList()
     private var selectedRoute: RouteConfig? = null
@@ -199,14 +203,17 @@ class MainActivity : AppCompatActivity() {
     private var frequentProjectionGeneration: Int = 0
     private var pinReadFailureShown: Boolean = false
     private var pinGestureStartsInExcludedArea: Boolean = false
+    private var legacyImeLayoutRoot: View? = null
+    private var legacyImeLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var legacyImeExpandedRootHeight: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureLegacyImeWindow()
         restoreSavedRouteUsageSession(savedInstanceState)
         restoreFrequentQueryState(savedInstanceState)
         setContentView(R.layout.activity_main)
         title = "BusIsComing"
-        findViewById<View>(R.id.mainRoot).applyStatusBarPadding()
 
         routeConfigRepository = RouteConfigRepository(this)
         pinnedRouteRepository = PinnedRouteRepository(this)
@@ -269,6 +276,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        removeLegacyImeNavigationListener()
         appUpdateSubscription?.close()
         appUpdateSubscription = null
         updatePromptDialog?.dismiss()
@@ -890,6 +898,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupTopLevelNavigation(savedInstanceState: Bundle?) {
         topLevelNav = findViewById(R.id.topLevelNav)
+        val mainRoot = findViewById<View>(R.id.mainRoot)
+        mainRoot.applyStatusBarPadding { insets ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                applyTopLevelNavigationImePolicy(
+                    imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+                )
+            }
+        }
+        installLegacyImeNavigationListener(mainRoot)
         val restored = savedInstanceState
             ?.getString(STATE_SELECTED_DESTINATION)
             ?.let { runCatching { TopLevelDestination.valueOf(it) }.getOrNull() }
@@ -903,6 +920,90 @@ class MainActivity : AppCompatActivity() {
             }
         }
         topLevelNav.selectedItemId = restored.menuItemId()
+    }
+
+    private fun installLegacyImeNavigationListener(mainRoot: View) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            if (mainRoot.height <= 0) return@OnGlobalLayoutListener
+            legacyImeExpandedRootHeight = maxOf(legacyImeExpandedRootHeight, mainRoot.height)
+            val coveredHeight = (legacyImeExpandedRootHeight - mainRoot.height).coerceAtLeast(0)
+            val imeVisible = coveredHeight > dp(100)
+            topLevelNav.translationY = if (imeVisible) coveredHeight.toFloat() else 0f
+            applyTopLevelNavigationImePolicy(
+                imeVisible = imeVisible
+            )
+        }
+        legacyImeLayoutRoot = mainRoot
+        legacyImeLayoutListener = listener
+        mainRoot.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        mainRoot.post { listener.onGlobalLayout() }
+    }
+
+    private fun removeLegacyImeNavigationListener() {
+        if (::topLevelNav.isInitialized) topLevelNav.translationY = 0f
+        val root = legacyImeLayoutRoot
+        val listener = legacyImeLayoutListener
+        if (root != null && listener != null) {
+            root.viewTreeObserver
+                .takeIf { it.isAlive }
+                ?.removeOnGlobalLayoutListener(listener)
+        }
+        legacyImeLayoutRoot = null
+        legacyImeLayoutListener = null
+        legacyImeExpandedRootHeight = 0
+    }
+
+    private fun configureLegacyImeWindow() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+    }
+
+    private fun applyTopLevelNavigationImePolicy(imeVisible: Boolean) {
+        when (
+            val transition = topLevelNavImePolicy.update(
+                imeVisible = imeVisible,
+                current = captureTopLevelNavigationSnapshot()
+            )
+        ) {
+            MainActivityImeNavigationTransition.ApplyGuard -> {
+                topLevelNav.isEnabled = false
+                topLevelNav.isClickable = false
+                topLevelNav.importantForAccessibility =
+                    View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                val disabledStates = List(topLevelNav.menu.size()) { false }
+                applyTopLevelMenuItemEnabledStates(disabledStates)
+            }
+            is MainActivityImeNavigationTransition.Restore -> {
+                val snapshot = transition.snapshot
+                applyTopLevelMenuItemEnabledStates(snapshot.menuItemEnabledStates)
+                topLevelNav.isEnabled = snapshot.isEnabled
+                topLevelNav.isClickable = snapshot.isClickable
+                topLevelNav.importantForAccessibility = snapshot.importantForAccessibility
+            }
+            null -> Unit
+        }
+    }
+
+    private fun captureTopLevelNavigationSnapshot(): MainActivityImeNavigationSnapshot {
+        return MainActivityImeNavigationSnapshot(
+            isEnabled = topLevelNav.isEnabled,
+            isClickable = topLevelNav.isClickable,
+            importantForAccessibility = topLevelNav.importantForAccessibility,
+            menuItemEnabledStates = (0 until topLevelNav.menu.size())
+                .map { topLevelNav.menu.getItem(it).isEnabled }
+        )
+    }
+
+    private fun applyTopLevelMenuItemEnabledStates(enabledStates: List<Boolean>) {
+        (0 until topLevelNav.menu.size()).forEach { index ->
+            topLevelNav.menu.getItem(index).isEnabled = enabledStates.getOrElse(index) { false }
+        }
+        val menuView = topLevelNav.getChildAt(0) as? ViewGroup ?: return
+        (0 until menuView.childCount).forEach { index ->
+            menuView.getChildAt(index).isEnabled = enabledStates.getOrElse(index) { false }
+        }
     }
 
     private fun selectDestination(destination: TopLevelDestination): Boolean {

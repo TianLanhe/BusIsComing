@@ -1,6 +1,8 @@
 package com.golink.busiscoming
 
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,6 +16,12 @@ class PlaceInputInlineCandidatesContractTest {
     private val searchFragmentKt =
         File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
     private val searchLayoutXml = File("src/main/res/layout/fragment_search.xml").readText()
+    private val searchInstrumentationTest = File(
+        "src/androidTest/java/com/golink/busiscoming/SearchDestinationInstrumentedTest.kt"
+    ).readText()
+    private val controllerInstrumentationTest = File(
+        "src/androidTest/java/com/golink/busiscoming/PlaceInputControllerInstrumentedTest.kt"
+    ).readText()
 
     @Test
     fun `route edit restores historical geometry while search keeps compact editor`() {
@@ -47,6 +55,27 @@ class PlaceInputInlineCandidatesContractTest {
         assertTrue(editLayoutXml.contains("android:id=\"@+id/originAttributionText\""))
         assertTrue(editLayoutXml.contains("android:id=\"@+id/routeEditScroll\""))
         assertTrue(editLayoutXml.contains("<androidx.core.widget.NestedScrollView"))
+    }
+
+    @Test
+    fun `route edit keeps place supporting rows state driven while preserving journey name guidance`() {
+        val document = DocumentBuilderFactory.newInstance()
+            .newDocumentBuilder()
+            .parse(File("src/main/res/layout/activity_route_edit.xml"))
+        val helperTextById = document.getElementsByTagName("com.google.android.material.textfield.TextInputLayout")
+            .let { layouts ->
+                (0 until layouts.length).associate { index ->
+                    val layout = layouts.item(index).attributes
+                    layout.getNamedItem("android:id").nodeValue to
+                        (layout.getNamedItem("app:helperText")?.nodeValue ?: "")
+                }
+            }
+
+        assertTrue(
+            helperTextById["@+id/routeNameInputLayout"] == "@string/route_name_helper"
+        )
+        assertTrue(helperTextById["@+id/originInputLayout"].isNullOrEmpty())
+        assertTrue(helperTextById["@+id/destinationInputLayout"].isNullOrEmpty())
     }
 
     @Test
@@ -84,10 +113,143 @@ class PlaceInputInlineCandidatesContractTest {
     }
 
     @Test
+    fun `route editor requests candidate space before visibility while search keeps zero-height fallback`() {
+        assertTrue(controllerKt.contains("onCandidateSpaceRequired"))
+        assertTrue(controllerKt.contains("editorBootstrapHeightPx"))
+        assertTrue(editActivityKt.contains("onCandidateSpaceRequired = { minimumHeightPx ->"))
+        assertTrue(editActivityKt.contains("requestCandidateSpace("))
+        assertFalse(searchFragmentKt.contains("onCandidateSpaceRequired"))
+    }
+
+    @Test
+    fun `search uses six candidate rows and locks outer scrolling while candidates are visible`() {
+        assertTrue(
+            searchFragmentKt.contains("private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 6")
+        )
+        assertTrue(searchFragmentKt.contains("SearchCandidateScrollLock"))
+        assertTrue(searchFragmentKt.contains("setCandidateScrollLock"))
+        assertTrue(controllerKt.contains("exclusiveVerticalScroll"))
+        assertTrue(controllerKt.contains("addOnItemTouchListener"))
+        assertTrue(controllerKt.contains("RecyclerView.SimpleOnItemTouchListener"))
+        assertTrue(controllerKt.contains("MotionEvent.ACTION_DOWN"))
+        assertFalse(searchFragmentKt.contains("scrollFlags ="))
+    }
+
+    @Test
+    fun `candidate instrumentation preserves a refreshable result viewport and uses real swipes`() {
+        assertTrue(searchInstrumentationTest.contains("refresh.isEnabled"))
+        assertTrue(searchInstrumentationTest.contains("findFirstVisibleItemPosition"))
+        assertTrue(searchInstrumentationTest.contains("scrollToPositionWithOffset"))
+        assertTrue(searchInstrumentationTest.contains("firstResultPosition > 0"))
+        assertTrue(searchInstrumentationTest.contains("showOriginCandidatesForExistingResult"))
+        assertTrue(searchInstrumentationTest.contains("assertOuterViewportUnchanged"))
+        assertTrue(searchInstrumentationTest.contains("onBackPressedDispatcher.onBackPressed()"))
+
+        val exclusiveTest = extractFunction(
+            controllerInstrumentationTest,
+            "exclusiveCandidateScrollKeepsItsOwnRecyclerViewScrollableWithoutNestedHandoff"
+        )
+        val candidateInitializer = extractBlock(
+            exclusiveTest,
+            "candidateList = RecyclerView(activity).apply {"
+        )
+        val exclusiveDescription = "instrumented exclusive candidate list"
+        assertTrue(
+            "The exclusive matcher description must be assigned to candidateList",
+            Regex(
+                """(?m)^\s*contentDescription\s*=\s*"${Regex.escape(exclusiveDescription)}"\s*$"""
+            ).containsMatchIn(candidateInitializer)
+        )
+        assertTrue(
+            "The exclusive matcher must target candidateList's unique description",
+            exclusiveTest.contains(
+                "onView(withContentDescription(\"$exclusiveDescription\"))" +
+                    ".perform("
+            )
+        )
+        assertEquals(
+            "The exclusive candidate description evidence must stay inside the exclusive test",
+            2,
+            Regex(Regex.escape(exclusiveDescription))
+                .findAll(exclusiveTest)
+                .count()
+        )
+        assertAppearsInOrder(
+            exclusiveTest,
+            "root.addView(owner, 0)",
+            "input.requestFocus()",
+            "\"updatePlaceCandidates\"",
+            "candidateList.isShown",
+            "onView(withContentDescription(\"$exclusiveDescription\"))" +
+                ".perform(",
+            "object : ViewAction",
+            "assertTrue(recyclerView.getGlobalVisibleRect(visibleBounds))",
+            "val startOffset = recyclerView.computeVerticalScrollOffset()",
+            "owner.disallowRequests.clear()",
+            "MotionEvent.ACTION_DOWN",
+            "recyclerView.dispatchTouchEvent(event)",
+            "(1..6).forEach",
+            "MotionEvent.ACTION_MOVE",
+            "recyclerView.dispatchTouchEvent(event)",
+            "assertTrue(recyclerView.computeVerticalScrollOffset() > startOffset)",
+            "assertTrue(owner.disallowRequests.last())",
+            "controller.dispose()",
+            "assertEquals(View.GONE, recyclerView.visibility)",
+            "assertTrue(recyclerView.isNestedScrollingEnabled)",
+            "assertFalse(owner.disallowRequests.last())",
+            "val requestCountAfterDispose = owner.disallowRequests.size",
+            "recyclerView.visibility = View.VISIBLE",
+            "val postDisposeDown = MotionEvent.obtain(",
+            "MotionEvent.ACTION_DOWN",
+            "recyclerView.dispatchTouchEvent(postDisposeDown)",
+            "postDisposeDown.recycle()",
+            "assertEquals(requestCountAfterDispose, owner.disallowRequests.size)"
+        )
+        val beforeDispose = exclusiveTest.substringBefore("controller.dispose()")
+        assertFalse(
+            "The active gesture must not complete before dispose",
+            beforeDispose.contains("swipeUp()")
+        )
+        assertFalse(beforeDispose.contains("MotionEvent.ACTION_UP"))
+        assertFalse(beforeDispose.contains("MotionEvent.ACTION_CANCEL"))
+    }
+
+    @Test
     fun searchKeepsSelectedPlacesAcrossViewRecreation() {
         assertTrue(searchFragmentKt.contains("restoredOrigin"))
         assertTrue(searchFragmentKt.contains("restoredDestination"))
         assertTrue(searchFragmentKt.contains("onSaveInstanceState"))
         assertTrue(searchFragmentKt.contains("currentPlaceRequestState.beginAutoRequest"))
+    }
+
+    private fun extractFunction(source: String, name: String): String {
+        return extractBlock(source, "fun $name(")
+    }
+
+    private fun extractBlock(source: String, marker: String): String {
+        val start = source.indexOf(marker)
+        assertTrue("Missing source block: $marker", start >= 0)
+        val bodyStart = source.indexOf('{', start)
+        assertTrue("Missing body for source block: $marker", bodyStart >= 0)
+        var depth = 0
+        for (index in bodyStart until source.length) {
+            when (source[index]) {
+                '{' -> depth += 1
+                '}' -> {
+                    depth -= 1
+                    if (depth == 0) return source.substring(start, index + 1)
+                }
+            }
+        }
+        error("Unterminated source block: $marker")
+    }
+
+    private fun assertAppearsInOrder(source: String, vararg expected: String) {
+        var cursor = 0
+        expected.forEach { fragment ->
+            val index = source.indexOf(fragment, cursor)
+            assertTrue("Missing or out-of-order instrumentation evidence: $fragment", index >= 0)
+            cursor = index + fragment.length
+        }
     }
 }

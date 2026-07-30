@@ -18,6 +18,29 @@ class NavigationSearchUiPolishContractTest {
         File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val searchFragment =
         File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
+    private val frequentFragment =
+        File("src/main/java/com/golink/busiscoming/ui/main/FrequentRoutesFragment.kt").readText()
+    private val resultListDrivenAppBar =
+        File("src/main/java/com/golink/busiscoming/ui/common/ResultListDrivenAppBar.kt").readText()
+
+    @Test
+    fun `frequent and search include the same route query status card`() {
+        val statusCard = File("src/main/res/layout/view_route_query_status_card.xml")
+        assertTrue("Missing shared query status card", statusCard.isFile)
+        val card = statusCard.readText()
+        assertTrue(card.contains("@+id/resultStatusCard"))
+        assertTrue(card.contains("@+id/resultStatusProgress"))
+        assertTrue(card.contains("@+id/resultStatusTitle"))
+        assertTrue(card.contains("@+id/resultStatusMessage"))
+        assertTrue(frequentLayout.contains("@layout/view_route_query_status_card"))
+        assertTrue(searchLayout.contains("@layout/view_route_query_status_card"))
+        assertFalse(searchLayout.contains("@+id/searchResultLoading"))
+        assertFalse(searchLayout.contains("@+id/searchResultStatus"))
+        assertTrue(searchLayout.contains("@+id/searchResultRefreshOverlay"))
+        assertTrue(searchLayout.contains("@+id/searchResultRefreshProgress"))
+        assertTrue(searchLayout.contains("@+id/searchResultRefreshSuccess"))
+        assertTrue(searchFragment.contains("renderSearchUi()"))
+    }
 
     @Test
     fun `bottom navigation preserves indicator size with a dedicated label gap`() {
@@ -133,39 +156,60 @@ class NavigationSearchUiPolishContractTest {
     }
 
     @Test
-    fun `search save belongs to the input column and results use sort then metadata`() {
+    fun `search uses a compact exclusive trip context with icon edit and outlined save`() {
         assertFalse(searchLayout.contains("android:id=\"@+id/searchResultSummaryContainer\""))
-        assertFalse(searchLayout.contains("android:id=\"@+id/searchEditButton\""))
         assertFalse(searchLayout.contains("android:id=\"@+id/searchResultActions\""))
         assertFalse(searchFragment.contains("configureResultSummaryLayout"))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchInputContainer\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchTripContext\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchTripRouteText\""))
+        assertTrue(searchLayout.contains("android:id=\"@+id/searchEditButton\""))
+        assertFalse(searchLayout.contains("android:id=\"@+id/searchCancelEditButton\""))
+        assertTrue(searchLayout.contains("app:icon=\"@drawable/ic_edit\""))
+        assertTrue(searchLayout.contains("android:ellipsize=\"end\""))
+        assertTrue(searchLayout.contains("android:maxLines=\"1\""))
         val saveButton = searchLayout.substringAfter("@+id/searchSaveButton").substringBefore("/>")
-        assertTrue(saveButton.contains("style=\"@style/StableShortText.Button.Tonal\""))
+        assertTrue(saveButton.contains("style=\"@style/StableShortText.Button.Outlined\""))
         assertTrue(saveButton.contains("android:layout_height=\"wrap_content\""))
         assertTrue(saveButton.contains("android:minHeight=\"48dp\""))
+        assertTrue(saveButton.contains("android:text=\"@string/search_trip_save\""))
         assertTrue(saveButton.contains("android:visibility=\"gone\""))
 
-        val placeColumnStart = searchLayout.indexOf("@+id/searchPlacePairEditor")
+        val inputContainerStart = searchLayout.indexOf("@+id/searchInputContainer")
         val saveIndex = searchLayout.indexOf("@+id/searchSaveButton")
-        assertTrue(placeColumnStart < saveIndex)
+        val inputContainerEnd = searchLayout.indexOf("</LinearLayout>", inputContainerStart)
+        val subtitleIndex = searchLayout.indexOf("@string/search_subtitle")
+        assertTrue(subtitleIndex > inputContainerStart)
+        assertTrue(subtitleIndex < inputContainerEnd)
+        assertTrue(saveIndex > inputContainerEnd)
         val sortIndex = searchLayout.indexOf("@+id/searchRouteResultControls")
         val listIndex = searchLayout.indexOf("@+id/searchResultList")
         assertTrue(sortIndex < listIndex)
         assertTrue(resultControlsLayout.indexOf("@+id/sortControls") <
             resultControlsLayout.indexOf("@+id/resultSummaryContainer"))
-        assertTrue(searchFragment.contains("SearchResultSaveEligibility.isVisible"))
+        assertTrue(searchFragment.contains("SearchTripContextVisibility"))
+        assertTrue(searchFragment.contains("SearchTripEditorTransitionController"))
+        assertTrue(searchFragment.contains("render(showEditor = showEditor, animate = true)"))
     }
 
     @Test
-    fun `search uses coordinator scrolling and invalidates stale results after editing`() {
+    fun `search retains old results while editing and clears them only outside that state`() {
         assertTrue(searchLayout.contains("<androidx.coordinatorlayout.widget.CoordinatorLayout"))
         assertTrue(searchLayout.contains("<com.google.android.material.appbar.AppBarLayout"))
         assertTrue(searchLayout.contains("app:layout_scrollFlags=\"scroll\""))
         assertTrue(searchLayout.contains("app:layout_behavior=\"@string/appbar_scrolling_view_behavior\""))
+        assertTrue(resultListDrivenAppBar.contains("canDrag(appBarLayout: AppBarLayout): Boolean = false"))
+        assertTrue(searchFragment.contains("ResultListDrivenAppBar.install"))
+        assertTrue(frequentFragment.contains("ResultListDrivenAppBar.install"))
+        assertTrue(frequentFragment.contains("isNestedScrollingEnabled = false"))
         val changedBlock = searchFragment
             .substringAfter("private fun onSearchSelectionChanged()")
             .substringBefore("private fun clearSuccessfulQuery()")
+        assertTrue(changedBlock.contains("SearchDisplayMode.EDITING_RESULTS"))
+        assertTrue(changedBlock.contains("return"))
         assertTrue(changedBlock.contains("routeQueryCoordinator.invalidate()"))
         assertTrue(changedBlock.contains("routeQueryState.clear()"))
+        assertTrue(changedBlock.contains("cancelRefreshFeedback()"))
         assertTrue(changedBlock.contains("routeResultControls.visibility = View.GONE"))
     }
 

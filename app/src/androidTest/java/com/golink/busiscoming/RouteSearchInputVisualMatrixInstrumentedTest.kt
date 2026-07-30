@@ -2,10 +2,24 @@ package com.golink.busiscoming
 
 import android.content.res.Configuration
 import android.os.ParcelFileDescriptor
+import android.text.TextUtils
+import android.util.TypedValue
 import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.NoMatchingViewException
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
+import androidx.test.espresso.action.ViewActions.replaceText
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withId
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.AppLanguageRepository
@@ -13,8 +27,15 @@ import com.golink.busiscoming.data.local.AppThemePreferenceStore
 import com.golink.busiscoming.data.localization.AppLanguageChoice
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.model.AppThemeMode
+import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.repository.BusRouteRepository
+import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.ui.main.MainActivity
+import com.golink.busiscoming.ui.main.RouteConfigSaveGateway
 import com.golink.busiscoming.ui.main.SearchFragment
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import java.io.FileInputStream
@@ -22,6 +43,7 @@ import kotlin.math.abs
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,8 +74,9 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
             AppLanguageChoice.ENGLISH
         )
         val themes = listOf(AppThemeMode.LIGHT, AppThemeMode.DARK)
+        val resolvedFontScale = fontScale.toFloat()
 
-        executeShell("wm size 945x2100")
+        executeShell("wm size ${if (resolvedFontScale <= 1f) 1440 else 945}x2100")
         executeShell("settings put system font_scale $fontScale")
         SearchFragment.currentPlaceRequestOverride = { _, callback ->
             callback(CurrentPlaceSelectionResult.Failure)
@@ -61,6 +84,10 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
 
         languages.forEach { language ->
             themes.forEach { theme ->
+                val placeRepository = MatrixPlaceRepository(language)
+                SearchFragment.placeSearchRepositoryFactory = { placeRepository }
+                SearchFragment.busRouteRepositoryFactory = { MatrixRouteRepository() }
+                SearchFragment.routeConfigSaveGatewayFactory = { MatrixSaveGateway() }
                 AppThemePreferenceStore(context).setMode(theme)
                 AppCompatDelegate.setDefaultNightMode(theme.nightMode)
                 AppLanguageRepository(context).setChoice(language)
@@ -78,6 +105,103 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
                     instrumentation.waitForIdleSync()
                     waitForLocationFailure(scenario)
                     assertCase(scenario, language, theme)
+                    selectPlace(
+                        R.id.placePairOriginInput,
+                        "o",
+                        placeRepository.origin.name
+                    )
+                    selectPlace(
+                        R.id.placePairDestinationInput,
+                        "d",
+                        placeRepository.destination.name
+                    )
+                    onView(withId(R.id.searchQueryButton)).perform(click())
+                    waitForDisplayed(R.id.searchTripContext)
+
+                    val expectSingleRow = resolvedFontScale <= 1f
+                    assertActionState(
+                        scenario,
+                        editVisible = true,
+                        saveVisible = true,
+                        saveEnabled = true
+                    )
+                    assertTripContext(scenario, expectSingleRow)
+
+                    performClick(scenario, R.id.searchEditButton)
+                    waitForDisplayed(R.id.searchInputContainer)
+                    assertActionState(
+                        scenario,
+                        editVisible = false,
+                        saveVisible = false,
+                        saveEnabled = false
+                    )
+                    scenario.onActivity { activity ->
+                        assertEquals(
+                            View.GONE,
+                            activity.findViewById<View>(R.id.searchTripContext).visibility
+                        )
+                        assertEquals(
+                            View.VISIBLE,
+                            activity.findViewById<View>(R.id.searchResultList).visibility
+                        )
+                    }
+
+                    performClick(scenario, R.id.searchQueryButton)
+                    waitForDisplayed(R.id.searchTripContext)
+                    assertActionState(
+                        scenario,
+                        editVisible = true,
+                        saveVisible = true,
+                        saveEnabled = true
+                    )
+                    assertTripContext(scenario, expectSingleRow)
+
+                    performClick(scenario, R.id.searchSaveButton)
+                    onView(withText(R.string.action_save)).inRoot(isDialog()).perform(click())
+                    waitForDisplayed(R.id.searchSaveButton)
+                    assertActionState(
+                        scenario,
+                        editVisible = true,
+                        saveVisible = true,
+                        saveEnabled = false
+                    )
+                    assertTripContext(scenario, expectSingleRow)
+
+                    if (
+                        resolvedFontScale <= 1f &&
+                        language == AppLanguageChoice.TRADITIONAL_CHINESE &&
+                        theme == AppThemeMode.LIGHT
+                    ) {
+                        scenario.onActivity { activity ->
+                            activity.findViewById<TextView>(R.id.searchTripRouteText).apply {
+                                text = "非常長的起點名稱".repeat(12) + " → " +
+                                    "非常長的終點名稱".repeat(12)
+                                requestLayout()
+                            }
+                        }
+                        waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
+                        assertTripContext(scenario, expectSingleRow = true)
+                        scenario.onActivity { activity ->
+                            val route =
+                                activity.findViewById<TextView>(R.id.searchTripRouteText)
+                            assertTrue(route.layout.getEllipsisCount(0) > 0)
+                        }
+                        scenario.onActivity { activity ->
+                            activity.findViewById<TextView>(R.id.searchTripRouteText).apply {
+                                text = "短起點 → 短終點"
+                                requestLayout()
+                            }
+                        }
+                        waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
+                        assertTripContext(scenario, expectSingleRow = true)
+
+                        executeShell("wm size 945x2100")
+                        waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
+                        assertTripContext(scenario, expectSingleRow = true)
+                        executeShell("wm size 1440x2100")
+                        waitForTripOrientation(scenario, LinearLayout.HORIZONTAL)
+                        assertTripContext(scenario, expectSingleRow = true)
+                    }
                 }
             }
         }
@@ -253,6 +377,143 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
         }
     }
 
+    private fun selectPlace(inputId: Int, keyword: String, expected: String) {
+        onView(withId(inputId)).perform(click(), replaceText(keyword))
+        waitUntil {
+            try {
+                onView(withText(expected)).check(matches(isDisplayed()))
+                true
+            } catch (_: NoMatchingViewException) {
+                false
+            } catch (_: AssertionError) {
+                false
+            }
+        }
+        onView(withText(expected)).perform(click())
+        onView(withId(inputId)).perform(closeSoftKeyboard())
+    }
+
+    private fun waitForDisplayed(viewId: Int) {
+        waitUntil {
+            try {
+                onView(withId(viewId)).check(matches(isDisplayed()))
+                true
+            } catch (_: NoMatchingViewException) {
+                false
+            } catch (_: AssertionError) {
+                false
+            }
+        }
+        Thread.sleep(300)
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun performClick(scenario: ActivityScenario<MainActivity>, viewId: Int) {
+        scenario.onActivity { activity ->
+            val view = activity.findViewById<View>(viewId)
+            assertEquals(View.VISIBLE, view.visibility)
+            assertTrue(view.isEnabled)
+            assertTrue(view.performClick())
+        }
+        instrumentation.waitForIdleSync()
+    }
+
+    private fun waitForTripOrientation(
+        scenario: ActivityScenario<MainActivity>,
+        orientation: Int
+    ) {
+        waitUntil {
+            var actual = -1
+            scenario.onActivity { activity ->
+                actual = activity.findViewById<LinearLayout>(R.id.searchTripContextBody).orientation
+            }
+            actual == orientation
+        }
+    }
+
+    private fun assertTripContext(
+        scenario: ActivityScenario<MainActivity>,
+        expectSingleRow: Boolean
+    ) {
+        scenario.onActivity { activity ->
+            val card = activity.findViewById<View>(R.id.searchTripContext)
+            val body = activity.findViewById<LinearLayout>(R.id.searchTripContextBody)
+            val route = activity.findViewById<TextView>(R.id.searchTripRouteText)
+            val actions = activity.findViewById<LinearLayout>(R.id.searchTripActions)
+            assertEquals(
+                if (expectSingleRow) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL,
+                body.orientation
+            )
+            assertEquals(
+                TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_SP,
+                    16f,
+                    activity.resources.displayMetrics
+                ),
+                route.textSize,
+                0.5f
+            )
+            assertFalse(card is MaterialCardView)
+            assertEquals(TextUtils.TruncateAt.END, route.ellipsize)
+            assertEquals(1, route.maxLines)
+            assertInside(route, card)
+            assertInside(actions, card)
+            if (expectSingleRow) {
+                assertTrue(route.width > 0)
+            } else {
+                assertTrue(actions.width < body.width)
+                assertTrue(abs(actions.right - body.width) <= dp(activity, 1))
+            }
+            repeat(actions.childCount) { index ->
+                val button = actions.getChildAt(index)
+                if (button.visibility == View.VISIBLE) {
+                    assertTrue(button is MaterialButton)
+                    button as MaterialButton
+                    assertTrue(button.measuredHeight >= dp(activity, 48))
+                    assertInside(button, actions)
+                    if (button.id == R.id.searchEditButton) {
+                        assertTrue(button.text.isNullOrBlank())
+                        assertFalse(button.contentDescription.isNullOrBlank())
+                    } else {
+                        assertFalse(button.text.isNullOrBlank())
+                        assertTrue(button.strokeWidth > 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun assertActionState(
+        scenario: ActivityScenario<MainActivity>,
+        editVisible: Boolean,
+        saveVisible: Boolean,
+        saveEnabled: Boolean
+    ) {
+        scenario.onActivity { activity ->
+            assertEquals(
+                if (editVisible) View.VISIBLE else View.GONE,
+                activity.findViewById<View>(R.id.searchEditButton).visibility
+            )
+            val saveButton = activity.findViewById<View>(R.id.searchSaveButton)
+            assertEquals(if (saveVisible) View.VISIBLE else View.GONE, saveButton.visibility)
+            assertEquals(
+                saveEnabled,
+                saveButton.isEnabled
+            )
+        }
+    }
+
+    private fun assertInside(child: View, parent: View) {
+        val details =
+            "child=${child.resources.getResourceEntryName(child.id)} " +
+                "bounds=${child.left},${child.top},${child.right},${child.bottom} " +
+                "parent=${parent.width}x${parent.height}"
+        assertTrue(details, child.left >= 0)
+        assertTrue(details, child.top >= 0)
+        assertTrue(details, child.right <= parent.width)
+        assertTrue(details, child.bottom <= parent.height)
+    }
+
     private fun AppLanguageChoice.localeTag(): String = when (this) {
         AppLanguageChoice.FOLLOW_SYSTEM -> "zh-Hant-HK"
         AppLanguageChoice.TRADITIONAL_CHINESE -> "zh-Hant-HK"
@@ -288,6 +549,44 @@ class RouteSearchInputVisualMatrixInstrumentedTest {
             Thread.sleep(50)
         }
         assertTrue("Timed out waiting for route search state", condition())
+    }
+
+    private class MatrixPlaceRepository(language: AppLanguageChoice) : PlaceSearchRepository {
+        val origin = if (language == AppLanguageChoice.ENGLISH) {
+            Place("Convention and Exhibition Centre Harbour Entrance", 22.28, 114.17)
+        } else {
+            Place("中環", 22.28, 114.17)
+        }
+        val destination = if (language == AppLanguageChoice.ENGLISH) {
+            Place("International Commerce Centre Transportation Interchange", 22.30, 114.16)
+        } else {
+            Place("灣仔", 22.27, 114.18)
+        }
+
+        override fun searchPlaces(keyword: String): List<Place> =
+            if (keyword == "o") listOf(origin) else listOf(destination)
+    }
+
+    private class MatrixRouteRepository : BusRouteRepository {
+        override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> =
+            listOf(
+                BusRouteOption(
+                    routeName = "88",
+                    routeSegments = listOf("88"),
+                    priceHkd = 8.8,
+                    durationMinutes = 25,
+                    arrivalMinutes = 4,
+                    transferCount = 0,
+                    walkingDistanceMeters = 120,
+                    resultId = "matrix-route"
+                )
+            )
+    }
+
+    private class MatrixSaveGateway : RouteConfigSaveGateway {
+        override fun hasDuplicate(name: String, origin: Place, destination: Place): Boolean = false
+
+        override fun insert(name: String, origin: Place, destination: Place): Long = 1L
     }
 
     private companion object {

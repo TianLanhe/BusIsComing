@@ -1,10 +1,16 @@
 package com.golink.busiscoming
 
 import android.Manifest
+import android.os.Build
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.action.ViewActions.scrollTo
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -14,11 +20,14 @@ import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.main.MainActivity
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.Rule
@@ -80,6 +89,70 @@ class TopLevelNavigationInstrumentedTest {
             scenario.recreate()
             scenario.onActivity { activity ->
                 assertNavigationState(activity, R.id.navigation_settings)
+            }
+        }
+    }
+
+    @Test
+    fun imeCoversBottomNavigationWithoutMovingItAndRestoresItsSelectedDestination() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            var navigationBoundsBeforeIme: android.graphics.Rect? = null
+            var originalParentEnabled = false
+            var originalParentClickable = false
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                navigation.isClickable = false
+                navigation.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                navigation.menu.findItem(R.id.navigation_settings).isEnabled = false
+                originalParentEnabled = navigation.isEnabled
+                originalParentClickable = navigation.isClickable
+                navigationBoundsBeforeIme = screenBounds(navigation)
+            }
+
+            onView(withId(R.id.placePairOriginInput)).perform(click())
+            waitForImeVisibility(scenario, visible = true)
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                assertEquals(navigationBoundsBeforeIme, screenBounds(navigation))
+                assertEquals(R.id.navigation_search, navigation.selectedItemId)
+                assertFalse(navigation.isEnabled)
+                assertFalse(navigation.isClickable)
+                assertEquals(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS,
+                    navigation.importantForAccessibility
+                )
+                val menuItemEnabledStates = (0 until navigation.menu.size())
+                    .map { navigation.menu.getItem(it).isEnabled }
+                assertEquals(listOf(false, false, false), menuItemEnabledStates)
+                val menuView = navigation.getChildAt(0) as ViewGroup
+                assertTrue(
+                    (0 until menuView.childCount).all { !menuView.getChildAt(it).isEnabled }
+                )
+                dispatchTap(menuView.getChildAt(0))
+                assertEquals(R.id.navigation_search, navigation.selectedItemId)
+            }
+
+            onView(withId(R.id.placePairOriginInput)).perform(closeSoftKeyboard())
+            waitForImeVisibility(scenario, visible = false)
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                assertEquals(navigationBoundsBeforeIme, screenBounds(navigation))
+                assertEquals(R.id.navigation_search, navigation.selectedItemId)
+                assertEquals(originalParentEnabled, navigation.isEnabled)
+                assertEquals(originalParentClickable, navigation.isClickable)
+                assertEquals(
+                    View.IMPORTANT_FOR_ACCESSIBILITY_YES,
+                    navigation.importantForAccessibility
+                )
+                val menuItemEnabledStates = (0 until navigation.menu.size())
+                    .map { navigation.menu.getItem(it).isEnabled }
+                assertEquals(listOf(true, true, false), menuItemEnabledStates)
+                val menuView = navigation.getChildAt(0) as ViewGroup
+                assertEquals(
+                    listOf(true, true, false),
+                    (0 until menuView.childCount).map { menuView.getChildAt(it).isEnabled }
+                )
             }
         }
     }
@@ -198,6 +271,45 @@ class TopLevelNavigationInstrumentedTest {
             location[0] + view.width,
             location[1] + view.height
         )
+    }
+
+    private fun waitForImeVisibility(
+        scenario: ActivityScenario<MainActivity>,
+        visible: Boolean
+    ) {
+        val deadline = System.currentTimeMillis() + 10_000L
+        while (System.currentTimeMillis() < deadline) {
+            var currentVisibility: Boolean? = null
+            scenario.onActivity { activity ->
+                val navigation = activity.findViewById<BottomNavigationView>(R.id.topLevelNav)
+                currentVisibility = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    ViewCompat.getRootWindowInsets(navigation)
+                        ?.isVisible(WindowInsetsCompat.Type.ime())
+                } else {
+                    !navigation.isEnabled
+                }
+            }
+            if (currentVisibility == visible) return
+            Thread.sleep(50)
+        }
+        assertTrue("Timed out waiting for IME visibility=$visible", false)
+    }
+
+    private fun dispatchTap(view: View) {
+        val eventTime = SystemClock.uptimeMillis()
+        listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEach { action ->
+            MotionEvent.obtain(
+                eventTime,
+                eventTime,
+                action,
+                view.width / 2f,
+                view.height / 2f,
+                0
+            ).also { event ->
+                view.dispatchTouchEvent(event)
+                event.recycle()
+            }
+        }
     }
 
     private fun dp(activity: MainActivity, value: Int): Int {

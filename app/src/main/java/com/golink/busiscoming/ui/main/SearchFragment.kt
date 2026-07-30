@@ -7,11 +7,14 @@ import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.doOnNextLayout
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -34,12 +37,13 @@ import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
-import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.PlacePairEditorView
+import com.golink.busiscoming.ui.common.ResultListDrivenAppBar
 import com.golink.busiscoming.ui.common.RouteResultControlsView
 import com.golink.busiscoming.ui.common.localizedText
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.button.MaterialButton
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -65,6 +69,9 @@ class SearchFragment : Fragment() {
     private var destinationController: PlaceInputController? = null
     private val attributionState = SearchPlaceAttributionState()
     private val routeQueryState = RouteQueryState()
+    private val presentationState = SearchPresentationState()
+    private val successfulQueryContextState = SuccessfulSearchContextState()
+    private val refreshFeedbackState = RouteRefreshFeedbackState()
     private val currentResults: List<BusRouteOption>
         get() = routeQueryState.results
     private val sortField: SortField?
@@ -78,6 +85,7 @@ class SearchFragment : Fragment() {
     private var restoredOriginGoogleAttribution: Boolean = false
     private var restoredDestinationGoogleAttribution: Boolean = false
     private var restoredShouldRequery: Boolean = false
+    private var suppressCancelledQueryStatus: Boolean = false
     private var candidateLocationSnapshot: CurrentLocationSnapshot? = null
     private var hasSubmittedQuery: Boolean = false
     private var successfulQueryOrigin: Place? = null
@@ -86,6 +94,8 @@ class SearchFragment : Fragment() {
     private var hasPendingDestinationSelection: Boolean = false
     private var pendingScrollPosition: Int? = null
     private var pendingScrollOffset: Int = 0
+    private var refreshFeedbackGeneration: Int = 0
+    private var refreshFinishRunnable: Runnable? = null
     private lateinit var resultAdapter: BusRouteAdapter
     private lateinit var detailSheet: RouteDetailBottomSheet
     private lateinit var etaSheet: EtaArrivalsBottomSheet
@@ -94,16 +104,29 @@ class SearchFragment : Fragment() {
     private lateinit var routeResultControls: View
     private lateinit var sortControls: View
     private lateinit var sortButtons: Map<SortField, MaterialButton>
-    private lateinit var resultLoading: ProgressBar
-    private lateinit var resultStatus: TextView
+    private lateinit var resultStatusCard: View
+    private lateinit var resultStatusProgress: ProgressBar
+    private lateinit var resultStatusTitle: TextView
+    private lateinit var resultStatusMessage: TextView
+    private lateinit var resultRefreshOverlay: View
+    private lateinit var resultRefreshProgress: View
+    private lateinit var resultRefreshSuccess: View
+    private lateinit var resultListBasePadding: SearchResultListPadding
     private lateinit var resultMetaContainer: View
     private lateinit var resultCount: TextView
     private lateinit var resultUpdatedAt: TextView
+    private lateinit var inputContainer: View
+    private lateinit var tripContext: View
+    private lateinit var tripRouteText: TextView
+    private lateinit var editButton: MaterialButton
     private lateinit var saveButton: MaterialButton
     private lateinit var queryButton: MaterialButton
+    private lateinit var appBar: AppBarLayout
+    private lateinit var tripEditorTransitionController: SearchTripEditorTransitionController
     private var originCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var destinationCaptionRenderer: SearchFieldCaptionRenderer? = null
     private var candidateBackCallback: OnBackPressedCallback? = null
+    private val candidateScrollLock = SearchCandidateScrollLock()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -141,6 +164,8 @@ class SearchFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        appBar = view.findViewById(R.id.searchAppBar)
+        ResultListDrivenAppBar.install(appBar)
         val context = requireContext()
         val placeEditor = view.findViewById<PlacePairEditorView>(R.id.searchPlacePairEditor)
         val originInput = placeEditor.originInput
@@ -174,22 +199,24 @@ class SearchFragment : Fragment() {
             maxVisibleRows = SEARCH_MAX_VISIBLE_CANDIDATE_ROWS,
             idleToolView = currentLocationButton,
             instructionText = getString(R.string.place_search_helper),
+            exclusiveVerticalScroll = true,
             onCandidateVisibilityChanged = { visible ->
                 if (visible) destinationController?.hideCandidates()
                 placeEditor.requestToolAlignment()
+                setCandidateScrollLock()
                 updateRefreshEnabled()
             },
             onPlaceSelected = {
                 invalidateCurrentPlaceRequest()
                 attributionState.clearOrigin()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onUserTextEdited = {
                 invalidateCurrentPlaceRequest()
                 attributionState.clearOrigin()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onMessageChanged = { message ->
                 originCaptionRenderer?.onPlaceInputMessage(message)
@@ -207,20 +234,22 @@ class SearchFragment : Fragment() {
             isActive = ::isViewActive,
             maxVisibleRows = SEARCH_MAX_VISIBLE_CANDIDATE_ROWS,
             instructionText = getString(R.string.place_search_helper),
+            exclusiveVerticalScroll = true,
             onCandidateVisibilityChanged = { visible ->
                 if (visible) originController?.hideCandidates()
                 placeEditor.requestToolAlignment()
+                setCandidateScrollLock()
                 updateRefreshEnabled()
             },
             onPlaceSelected = {
                 attributionState.clearDestination()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onUserTextEdited = {
                 attributionState.clearDestination()
                 renderAttribution()
-                onSearchSelectionChanged()
+                onPotentialSearchSelectionChanged()
             },
             onMessageChanged = { message ->
                 destinationCaptionRenderer?.onPlaceInputMessage(message)
@@ -236,13 +265,30 @@ class SearchFragment : Fragment() {
         )
         routeResultControls = resultControls
         sortControls = resultControls.sortControls
-        resultLoading = view.findViewById(R.id.searchResultLoading)
-        resultStatus = view.findViewById(R.id.searchResultStatus)
+        resultStatusCard = view.findViewById(R.id.resultStatusCard)
+        resultStatusProgress = view.findViewById(R.id.resultStatusProgress)
+        resultStatusTitle = view.findViewById(R.id.resultStatusTitle)
+        resultStatusMessage = view.findViewById(R.id.resultStatusMessage)
+        resultRefreshOverlay = view.findViewById(R.id.searchResultRefreshOverlay)
+        resultRefreshProgress = view.findViewById(R.id.searchResultRefreshProgress)
+        resultRefreshSuccess = view.findViewById(R.id.searchResultRefreshSuccess)
         resultMetaContainer = resultControls.summaryContainer
         resultCount = resultControls.summaryText
         resultUpdatedAt = resultControls.updatedAtText
+        inputContainer = view.findViewById(R.id.searchInputContainer)
+        tripContext = view.findViewById(R.id.searchTripContext)
+        tripRouteText = view.findViewById(R.id.searchTripRouteText)
+        editButton = view.findViewById(R.id.searchEditButton)
         saveButton = view.findViewById(R.id.searchSaveButton)
         queryButton = view.findViewById(R.id.searchQueryButton)
+        tripEditorTransitionController = SearchTripEditorTransitionController(
+            parent = view as ViewGroup,
+            editor = inputContainer,
+            tripContext = tripContext,
+            lifecycleStarted = {
+                viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            }
+        )
         detailSheet = RouteDetailBottomSheet(
             requireActivity() as androidx.appcompat.app.AppCompatActivity,
             routeDetailRepositoryFactory()
@@ -252,19 +298,27 @@ class SearchFragment : Fragment() {
             onRouteClick = detailSheet::show,
             onEtaClick = etaSheet::show,
             onMonitorClick = { route ->
-                (activity as? MainActivity)?.showMonitorSettings(route, originController?.selectedPlace)
+                successfulQueryOrigin?.let { origin ->
+                    (activity as? MainActivity)?.showMonitorSettings(route, origin)
+                }
             }
         )
         resultList.layoutManager = LinearLayoutManager(context)
         resultList.adapter = resultAdapter
         resultList.isNestedScrollingEnabled = true
+        resultListBasePadding = SearchResultListPadding(
+            left = resultList.paddingLeft,
+            top = resultList.paddingTop,
+            right = resultList.paddingRight,
+            bottom = resultList.paddingBottom
+        )
         swipeRefresh.setColorSchemeResources(R.color.bus_chip_selected)
         swipeRefresh.setOnRefreshListener { query(preserveSort = true) }
         updateRefreshEnabled()
         sortButtons = resultControls.sortButtons
         sortButtons.forEach { (field, button) -> button.setOnClickListener { sortBy(field) } }
         updateSortControls()
-        renderSearchActions()
+        renderSearchUi()
 
         candidateBackCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
@@ -284,7 +338,24 @@ class SearchFragment : Fragment() {
             hideCandidateLists()
         }
         queryButton.setOnClickListener { query() }
+        editButton.setOnClickListener { beginEditingCurrentTrip() }
         saveButton.setOnClickListener { saveCurrentRoute() }
+        originInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId != EditorInfo.IME_ACTION_SEARCH && actionId != EditorInfo.IME_ACTION_DONE) {
+                false
+            } else {
+                query()
+                true
+            }
+        }
+        destinationInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId != EditorInfo.IME_ACTION_SEARCH && actionId != EditorInfo.IME_ACTION_DONE) {
+                false
+            } else {
+                query()
+                true
+            }
+        }
     }
 
     override fun onViewStateRestored(savedInstanceState: Bundle?) {
@@ -296,7 +367,7 @@ class SearchFragment : Fragment() {
         attributionState.setOriginGoogleMaps(restoredOriginGoogleAttribution)
         attributionState.setDestinationGoogleMaps(restoredDestinationGoogleAttribution)
         renderAttribution()
-        renderSearchActions()
+        renderSearchUi()
         restoreSubmittedQueryIfNeeded()
         isViewStateRestored = true
         if (hasPendingDestinationSelection) {
@@ -324,7 +395,11 @@ class SearchFragment : Fragment() {
         candidateLocationSnapshotRequestState.resetForNextGeneration()
         routeQueryCoordinator.invalidate()
         routeQueryState.cancel()
+        presentationState.cancelQuery()
+        suppressCancelledQueryStatus = true
+        cancelRefreshFeedback()
         swipeRefresh.isRefreshing = false
+        renderSearchUi()
         updateRefreshEnabled()
     }
 
@@ -333,6 +408,7 @@ class SearchFragment : Fragment() {
         candidateLocationSnapshotRequestState.resetForNextGeneration()
         routeQueryCoordinator.invalidate()
         routeQueryState.cancel()
+        cancelRefreshFeedback()
         originController?.dispose()
         destinationController?.dispose()
         originController = null
@@ -342,6 +418,7 @@ class SearchFragment : Fragment() {
         isViewStateRestored = false
         hasPendingDestinationSelection = false
         candidateBackCallback = null
+        candidateScrollLock.reset()
         detailSheet.dispose()
         etaSheet.dispose()
         super.onDestroyView()
@@ -411,7 +488,7 @@ class SearchFragment : Fragment() {
                             result.attribution == PlaceAttribution.GOOGLE_MAPS
                         )
                         renderAttribution()
-                        onSearchSelectionChanged()
+                        onPotentialSearchSelectionChanged()
                     }
                     CurrentPlaceSelectionResult.Failure -> {
                         requestCandidateLocationSnapshotIfNeeded()
@@ -485,6 +562,7 @@ class SearchFragment : Fragment() {
     }
 
     private fun query(preserveSort: Boolean = false) {
+        if (routeQueryState.isQueryInProgress || refreshFeedbackState.blocksQueries) return
         val origin = originController?.selectedPlace
         val destination = destinationController?.selectedPlace
         val validation = RouteConfigValidator.validate(getString(R.string.search_title), origin, destination)
@@ -493,10 +571,14 @@ class SearchFragment : Fragment() {
         if (!validation.isValid || origin == null || destination == null) return
 
         hasSubmittedQuery = true
+        suppressCancelledQueryStatus = false
         invalidateCurrentPlaceRequest()
-        clearSuccessfulQuery()
         val isRefresh = preserveSort && currentResults.isNotEmpty()
+        if (!isRefresh) clearSuccessfulQuery()
         routeQueryState.begin(refresh = isRefresh)
+        if (!isRefresh) {
+            presentationState.beginQuery(origin, destination)
+        }
         if (!isRefresh) {
             resultAdapter.submitList(emptyList())
             resultList.visibility = View.GONE
@@ -504,41 +586,30 @@ class SearchFragment : Fragment() {
             sortControls.visibility = View.GONE
             resultMetaContainer.visibility = View.GONE
         }
-        resultLoading.visibility = if (isRefresh) View.GONE else View.VISIBLE
-        showStatus(null)
+        val refreshToken = if (isRefresh) beginRefreshFeedback() else null
+        renderSearchUi()
         updateRefreshEnabled()
         routeQueryCoordinator.query(origin, destination, object : RouteQueryCoordinator.Callback {
             override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
-                resultLoading.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                routeQueryState.complete(
-                    routes = routes,
-                    preserveSort = preserveSort,
-                    updatedAtMillis = System.currentTimeMillis()
-                )
-                resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
-                resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
-                routeResultControls.visibility =
-                    if (currentResults.isEmpty()) View.GONE else View.VISIBLE
-                sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
-                resultCount.text = RouteResultCardFormatter.resultSummary(
-                    currentResults,
-                    requireContext().localizedText()
-                )
-                resultUpdatedAt.text = getString(
-                    R.string.updated_at,
-                    formatUpdatedAt(routeQueryState.updatedAtMillis)
-                )
-                resultMetaContainer.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
-                if (currentResults.isNotEmpty()) {
-                    successfulQueryOrigin = origin
-                    successfulQueryDestination = destination
+                if (isRefresh) {
+                    handleRefreshSuccess(
+                        refreshToken = requireNotNull(refreshToken),
+                        routes = routes,
+                        origin = origin,
+                        destination = destination,
+                        preserveSort = preserveSort
+                    )
+                } else {
+                    displayInitialResults(
+                        routes = routes,
+                        preserveSort = preserveSort,
+                        origin = origin,
+                        destination = destination,
+                        updatePresentation = true,
+                        queryId = queryId
+                    )
                 }
-                renderSearchActions()
-                updateSortControls()
-                restoreSearchViewportIfNeeded()
-                showStatus(if (currentResults.isEmpty()) getString(R.string.search_no_routes) else null)
-                updateRefreshEnabled()
             }
 
             override fun onRouteWaitTimeUpdated(
@@ -558,24 +629,20 @@ class SearchFragment : Fragment() {
             }
 
             override fun onFailure(queryId: Int, error: Throwable) {
-                resultLoading.visibility = View.GONE
                 swipeRefresh.isRefreshing = false
-                routeQueryState.fail(getString(R.string.search_failed), preserveResults = isRefresh)
-                clearSuccessfulQuery()
                 if (isRefresh) {
-                    resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
-                    resultList.visibility = View.VISIBLE
-                    routeResultControls.visibility = View.VISIBLE
-                    sortControls.visibility = View.VISIBLE
-                    Toast.makeText(requireContext(), R.string.refresh_failed, Toast.LENGTH_SHORT).show()
+                    handleRefreshFailure(requireNotNull(refreshToken))
                 } else {
+                    routeQueryState.fail(getString(R.string.search_failed), preserveResults = false)
+                    presentationState.failQuery()
+                    clearSuccessfulQuery()
                     resultAdapter.submitList(emptyList())
                     resultList.visibility = View.GONE
                     routeResultControls.visibility = View.GONE
                     sortControls.visibility = View.GONE
-                    showStatus(getString(R.string.search_failed))
+                    renderSearchUi()
+                    updateRefreshEnabled()
                 }
-                updateRefreshEnabled()
             }
         })
     }
@@ -586,6 +653,174 @@ class SearchFragment : Fragment() {
         if (originController?.selectedPlace != null && destinationController?.selectedPlace != null) {
             query(preserveSort = true)
         }
+    }
+
+    private fun displayInitialResults(
+        routes: List<BusRouteOption>,
+        preserveSort: Boolean,
+        origin: Place,
+        destination: Place,
+        updatePresentation: Boolean,
+        queryId: Int? = null
+    ) {
+        routeQueryState.complete(
+            routes = routes,
+            preserveSort = preserveSort,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
+        resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        routeResultControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        resultCount.text = RouteResultCardFormatter.resultSummary(
+            currentResults,
+            requireContext().localizedText()
+        )
+        resultUpdatedAt.text = getString(
+            R.string.updated_at,
+            formatUpdatedAt(routeQueryState.updatedAtMillis)
+        )
+        resultMetaContainer.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        if (currentResults.isNotEmpty()) {
+            successfulQueryOrigin = origin
+            successfulQueryDestination = destination
+            if (updatePresentation) {
+                presentationState.completeWithResults()
+                successfulQueryContextState.recordSuccess(
+                    queryId = requireNotNull(queryId),
+                    snapshot = SearchQuerySnapshot(origin, destination)
+                )
+            } else if (
+                !successfulQueryContextState.retainForRefresh(
+                    SearchQuerySnapshot(origin, destination)
+                )
+            ) {
+                successfulQueryContextState.invalidate()
+            }
+        } else if (updatePresentation) {
+            presentationState.completeEmpty()
+        }
+        renderSearchUi()
+        updateSortControls()
+        restoreSearchViewportIfNeeded()
+        updateRefreshEnabled()
+    }
+
+    private fun beginRefreshFeedback(): Int {
+        val token = ++refreshFeedbackGeneration
+        check(refreshFeedbackState.start(token))
+        renderRefreshFeedback()
+        return token
+    }
+
+    private fun handleRefreshSuccess(
+        refreshToken: Int,
+        routes: List<BusRouteOption>,
+        origin: Place,
+        destination: Place,
+        preserveSort: Boolean
+    ) {
+        val result = if (routes.isEmpty()) RouteRefreshResult.EMPTY else RouteRefreshResult.NON_EMPTY
+        if (!refreshFeedbackState.succeed(refreshToken, result)) return
+        if (routes.isNotEmpty()) {
+            displayInitialResults(
+                routes = routes,
+                preserveSort = preserveSort,
+                origin = origin,
+                destination = destination,
+                updatePresentation = false
+            )
+            resultList.scrollToPosition(0)
+        }
+        renderRefreshFeedback()
+        renderSearchUi()
+        scheduleRefreshSuccessFinish(refreshToken, origin, destination, preserveSort)
+    }
+
+    private fun scheduleRefreshSuccessFinish(
+        refreshToken: Int,
+        origin: Place,
+        destination: Place,
+        preserveSort: Boolean
+    ) {
+        refreshFinishRunnable?.let(mainHandler::removeCallbacks)
+        val runnable = Runnable {
+            finishRefreshSuccess(refreshToken, origin, destination, preserveSort)
+        }
+        refreshFinishRunnable = runnable
+        mainHandler.postDelayed(runnable, SEARCH_REFRESH_SUCCESS_DURATION_MS)
+    }
+
+    private fun finishRefreshSuccess(
+        refreshToken: Int,
+        origin: Place,
+        destination: Place,
+        preserveSort: Boolean
+    ) {
+        val action = refreshFeedbackState.finishSuccess(refreshToken) ?: return
+        refreshFinishRunnable = null
+        if (action == RouteRefreshFinishAction.SHOW_EMPTY_RESULTS) {
+            presentationState.completeRefreshEmpty()
+            clearSuccessfulQuery()
+            displayInitialResults(
+                routes = emptyList(),
+                preserveSort = preserveSort,
+                origin = origin,
+                destination = destination,
+                updatePresentation = false
+            )
+        }
+        renderRefreshFeedback()
+        renderSearchUi()
+        updateRefreshEnabled()
+    }
+
+    private fun handleRefreshFailure(refreshToken: Int) {
+        if (!refreshFeedbackState.fail(refreshToken)) return
+        routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
+        refreshFinishRunnable?.let(mainHandler::removeCallbacks)
+        refreshFinishRunnable = null
+        renderRefreshFeedback()
+        renderSearchUi()
+        updateRefreshEnabled()
+        Toast.makeText(requireContext(), R.string.refresh_failed, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun cancelRefreshFeedback() {
+        refreshFinishRunnable?.let(mainHandler::removeCallbacks)
+        refreshFinishRunnable = null
+        refreshFeedbackState.cancel()
+        if (::resultRefreshOverlay.isInitialized) renderRefreshFeedback()
+    }
+
+    private fun renderRefreshFeedback() {
+        if (!::resultRefreshOverlay.isInitialized || !::resultListBasePadding.isInitialized) return
+        val visualState = refreshFeedbackState.visualState
+        val isVisible = visualState != RouteRefreshVisualState.IDLE
+        resultRefreshOverlay.visibility = if (isVisible) View.VISIBLE else View.GONE
+        resultRefreshProgress.visibility = if (visualState == RouteRefreshVisualState.REFRESHING) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        resultRefreshSuccess.visibility = if (visualState == RouteRefreshVisualState.SUCCESS) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        resultRefreshOverlay.contentDescription = getString(
+            if (visualState == RouteRefreshVisualState.SUCCESS) {
+                R.string.route_refresh_complete
+            } else {
+                R.string.route_refreshing
+            }
+        )
+        resultList.setPadding(
+            resultListBasePadding.left,
+            resultListBasePadding.top + if (isVisible) dp(SEARCH_REFRESH_LIST_TOP_INSET_DP) else 0,
+            resultListBasePadding.right,
+            resultListBasePadding.bottom
+        )
     }
 
     private fun restoreSearchViewportIfNeeded() {
@@ -606,17 +841,25 @@ class SearchFragment : Fragment() {
     }
 
     private fun saveCurrentRoute() {
-        if (saveButton.visibility != View.VISIBLE) return
-        val origin = originController?.selectedPlace ?: return
-        val destination = destinationController?.selectedPlace ?: return
+        val context = currentSavableContext() ?: return
         TemporaryRouteSaveDialog.show(
             context = requireContext(),
-            routeConfigRepository = RouteConfigRepository(requireContext()),
-            origin = origin,
-            destination = destination
-        ) {
-            (activity as? MainActivity)?.refreshFrequentRoutes()
-        }
+            saveGateway = routeConfigSaveGatewayFactory(requireContext()),
+            capturedContext = context,
+            canSave = ::isCurrentSavableContext,
+            onSaved = {
+                val activeContext = currentSavableContext() ?: return@show
+                if (
+                    activeContext.queryId != context.queryId ||
+                    activeContext.snapshot != context.snapshot
+                ) {
+                    return@show
+                }
+                if (!presentationState.markSaved()) return@show
+                (activity as? MainActivity)?.refreshFrequentRoutes()
+                renderSearchUi()
+            }
+        )
     }
 
     private fun sortBy(field: SortField) {
@@ -646,19 +889,22 @@ class SearchFragment : Fragment() {
         SortField.WALKING_DISTANCE -> getString(R.string.sort_walking)
     }
 
-    private fun showStatus(message: String?) {
-        resultStatus.text = message.orEmpty()
-        resultStatus.visibility = if (message == null) View.GONE else View.VISIBLE
-    }
-
     private fun updateRefreshEnabled() {
         if (!::swipeRefresh.isInitialized) return
-        val candidatesVisible = originController?.isCandidateVisible() == true ||
-            destinationController?.isCandidateVisible() == true
+        val candidatesVisible = candidateScrollLock.isOuterScrollLocked()
         candidateBackCallback?.isEnabled = candidatesVisible
-        swipeRefresh.isEnabled = currentResults.isNotEmpty() &&
+        swipeRefresh.isEnabled = presentationState.mode == SearchDisplayMode.RESULTS &&
+            currentResults.isNotEmpty() &&
             !candidatesVisible &&
-            (!routeQueryState.isQueryInProgress || routeQueryState.isRefreshing)
+            !routeQueryState.isQueryInProgress &&
+            !refreshFeedbackState.blocksQueries
+    }
+
+    private fun setCandidateScrollLock() {
+        candidateScrollLock.update(
+            originCandidatesVisible = originController?.isCandidateVisible() == true,
+            destinationCandidatesVisible = destinationController?.isCandidateVisible() == true
+        )
     }
 
     private fun formatUpdatedAt(value: Long?): String {
@@ -675,7 +921,7 @@ class SearchFragment : Fragment() {
         attributionState.swap()
         renderAttribution()
         hideCandidateLists()
-        onSearchSelectionChanged()
+        onPotentialSearchSelectionChanged()
     }
 
     private fun hideCandidateLists() {
@@ -700,59 +946,218 @@ class SearchFragment : Fragment() {
     }
 
     private fun onSearchSelectionChanged() {
+        if (presentationState.mode == SearchDisplayMode.EDITING_RESULTS) {
+            presentationState.onInputChanged()
+            renderSearchUi()
+            updateRefreshEnabled()
+            return
+        }
         hasSubmittedQuery = false
+        suppressCancelledQueryStatus = false
         routeQueryCoordinator.invalidate()
         routeQueryState.clear()
+        presentationState.onInputChanged()
+        cancelRefreshFeedback()
         swipeRefresh.isRefreshing = false
         resultAdapter.submitList(emptyList())
         resultList.visibility = View.GONE
         routeResultControls.visibility = View.GONE
         sortControls.visibility = View.GONE
         resultMetaContainer.visibility = View.GONE
-        resultLoading.visibility = View.GONE
-        showStatus(null)
         clearSuccessfulQuery()
-        renderSearchActions()
+        renderSearchUi()
+        updateRefreshEnabled()
+    }
+
+    private fun onPotentialSearchSelectionChanged() {
+        if (
+            SearchPlacePairMutationPolicy.shouldInvalidate(
+                querySnapshot = presentationState.querySnapshot,
+                currentOrigin = originController?.selectedPlace,
+                currentDestination = destinationController?.selectedPlace
+            )
+        ) {
+            onSearchSelectionChanged()
+        } else {
+            renderSearchUi()
+            updateRefreshEnabled()
+        }
+    }
+
+    private fun beginEditingCurrentTrip() {
+        if (!presentationState.beginEditingResults()) return
+        if (routeQueryState.isRefreshing) {
+            routeQueryCoordinator.invalidate()
+            routeQueryState.cancel()
+            cancelRefreshFeedback()
+            swipeRefresh.isRefreshing = false
+        }
+        renderSearchUi()
+        appBar.doOnNextLayout {
+            if (presentationState.mode == SearchDisplayMode.EDITING_RESULTS) {
+                appBar.setExpanded(true, false)
+            }
+        }
         updateRefreshEnabled()
     }
 
     private fun clearSuccessfulQuery() {
         successfulQueryOrigin = null
         successfulQueryDestination = null
+        successfulQueryContextState.invalidate()
         renderSaveAction()
     }
 
-    private fun renderSearchActions() {
-        if (::queryButton.isInitialized) {
-            queryButton.isEnabled = originController?.selectedPlace != null &&
-                destinationController?.selectedPlace != null
-        }
+    private fun renderSearchUi() {
+        if (!::queryButton.isInitialized) return
+        val ui = SearchQueryUiPolicy.resolve(
+            queryState = routeQueryState,
+            hasSubmittedQuery = hasSubmittedQuery && !suppressCancelledQueryStatus,
+            hasValidPlaces = originController?.selectedPlace != null &&
+                destinationController?.selectedPlace != null,
+            displayMode = presentationState.mode,
+            refreshFeedbackVisible = refreshFeedbackState.visualState != RouteRefreshVisualState.IDLE,
+            refreshFeedbackBlocksQueries = refreshFeedbackState.blocksQueries
+        )
+        queryButton.isEnabled = ui.isQueryEnabled
+        queryButton.setText(if (ui.isQuerying) R.string.action_querying else R.string.search_routes)
+        renderTripContext()
+        renderRetainedResults()
+        renderStatusCard(ui.statusCard)
         renderSaveAction()
+    }
+
+    private fun renderTripContext() {
+        val hasSnapshot = presentationState.querySnapshot != null
+        val showTripContext = when (presentationState.mode) {
+            SearchDisplayMode.RESULTS -> SearchTripContextVisibility.shouldRestoreFoldedContext(
+                savedMode = presentationState.mode,
+                retainedResultCount = currentResults.size,
+                hasValidSnapshot = hasSnapshot
+            )
+
+            SearchDisplayMode.EDITING_RESULTS ->
+                SearchTripContextVisibility.isVisible(
+                    mode = presentationState.mode,
+                    resultCount = currentResults.size
+                ) && hasSnapshot
+
+            else -> false
+        }
+        val showEditor = !showTripContext
+        if (!showEditor) {
+            originController?.clearFocusAndHideCandidates()
+            destinationController?.clearFocusAndHideCandidates()
+        }
+        val snapshot = presentationState.querySnapshot
+        if (showTripContext && snapshot != null) {
+            tripRouteText.text = getString(
+                R.string.search_trip_route,
+                snapshot.origin.name,
+                snapshot.destination.name
+            )
+        } else {
+            tripRouteText.text = null
+        }
+        editButton.visibility = if (showTripContext) View.VISIBLE else View.GONE
+        tripEditorTransitionController.render(showEditor = showEditor, animate = true)
+    }
+
+    private fun renderRetainedResults() {
+        val showResults = currentResults.isNotEmpty() &&
+            (presentationState.mode == SearchDisplayMode.RESULTS ||
+                presentationState.mode == SearchDisplayMode.EDITING_RESULTS)
+        if (showResults) resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
+        resultList.visibility = if (showResults) View.VISIBLE else View.GONE
+        routeResultControls.visibility = if (showResults) View.VISIBLE else View.GONE
+        sortControls.visibility = if (showResults) View.VISIBLE else View.GONE
+        resultMetaContainer.visibility = if (showResults) View.VISIBLE else View.GONE
+    }
+
+    private fun renderStatusCard(status: SearchQueryStatusCard) {
+        if (!::resultStatusCard.isInitialized) return
+        val content = when (status) {
+            SearchQueryStatusCard.LOADING -> StatusCardContent(
+                title = R.string.route_query_loading_title,
+                message = R.string.route_query_loading_message,
+                showProgress = true
+            )
+
+            SearchQueryStatusCard.EMPTY -> StatusCardContent(
+                title = R.string.search_no_routes,
+                message = R.string.search_no_routes_message,
+                showProgress = false
+            )
+
+            SearchQueryStatusCard.FAILURE -> StatusCardContent(
+                title = R.string.route_query_failed,
+                message = R.string.search_route_query_failure_message,
+                showProgress = false
+            )
+
+            SearchQueryStatusCard.HIDDEN -> null
+        }
+        if (content == null) {
+            resultStatusCard.visibility = View.GONE
+            resultStatusProgress.visibility = View.GONE
+            return
+        }
+        resultStatusTitle.setText(content.title)
+        resultStatusMessage.setText(content.message)
+        resultStatusMessage.visibility = View.VISIBLE
+        resultStatusProgress.visibility = if (content.showProgress) View.VISIBLE else View.GONE
+        resultStatusCard.visibility = View.VISIBLE
     }
 
     private fun renderSaveAction() {
         if (!::saveButton.isInitialized) return
-        saveButton.visibility = if (
-            SearchResultSaveEligibility.isVisible(
-                queryOrigin = successfulQueryOrigin,
-                queryDestination = successfulQueryDestination,
-                currentOrigin = originController?.selectedPlace,
-                currentDestination = destinationController?.selectedPlace,
-                resultCount = currentResults.size,
-                queryInProgress = routeQueryState.isQueryInProgress,
-                queryFailed = routeQueryState.errorMessage != null
-            )
-        ) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        val savable = currentSavableContext() != null
+        val snapshot = presentationState.querySnapshot
+        val saved = presentationState.saveState == SearchSaveState.SAVED &&
+            snapshot != null &&
+            successfulQueryContextState.currentFor(snapshot, currentResults.size) != null &&
+            SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)
+        saveButton.visibility = if (savable || saved) View.VISIBLE else View.GONE
+        saveButton.isEnabled = savable
+        saveButton.setText(if (saved) R.string.search_trip_saved else R.string.search_trip_save)
+        saveButton.setIconResource(if (saved) R.drawable.ic_bookmark_filled else R.drawable.ic_bookmark_outline)
+        saveButton.contentDescription = getString(
+            if (saved) R.string.search_trip_saved_description else R.string.search_trip_save_description
+        )
     }
+
+    private fun currentSavableContext(): SuccessfulSearchContext? {
+        if (presentationState.saveState != SearchSaveState.AVAILABLE) return null
+        if (!SearchTripContextVisibility.isVisible(presentationState.mode, currentResults.size)) return null
+        val snapshot = presentationState.querySnapshot ?: return null
+        val context = successfulQueryContextState.currentFor(snapshot, currentResults.size) ?: return null
+        if (successfulQueryOrigin != snapshot.origin || successfulQueryDestination != snapshot.destination) return null
+        return context
+    }
+
+    private fun isCurrentSavableContext(context: SuccessfulSearchContext): Boolean =
+        successfulQueryContextState.isCurrent(context) && currentSavableContext() == context
 
     private fun invalidateCurrentPlaceRequest() {
         currentPlaceRequestState.invalidate()
         originController?.setExternalLoading(false)
     }
+
+    private data class StatusCardContent(
+        val title: Int,
+        val message: Int,
+        val showProgress: Boolean
+    )
+
+    private data class SearchResultListPadding(
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int
+    )
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     private fun Place.writeTo(bundle: Bundle, prefix: String) {
         bundle.putString("${prefix}_name", name)
@@ -783,6 +1188,10 @@ class SearchFragment : Fragment() {
             { CitybusRouteDetailRepository() }
 
         @Volatile
+        internal var routeConfigSaveGatewayFactory: (android.content.Context) -> RouteConfigSaveGateway =
+            { context -> RouteConfigRepositorySaveGateway(context) }
+
+        @Volatile
         internal var currentPlaceRequestOverride:
             ((Boolean, (CurrentPlaceSelectionResult) -> Unit) -> Unit)? = null
 
@@ -794,6 +1203,7 @@ class SearchFragment : Fragment() {
             busRouteRepositoryFactory = { CitybusBusRouteRepository() }
             placeSearchRepositoryFactory = { CitybusPlaceSearchRepository() }
             routeDetailRepositoryFactory = { CitybusRouteDetailRepository() }
+            routeConfigSaveGatewayFactory = { context -> RouteConfigRepositorySaveGateway(context) }
             currentPlaceRequestOverride = null
             currentLocationSnapshotRequestOverride = null
         }
@@ -806,10 +1216,12 @@ class SearchFragment : Fragment() {
         const val STATE_DESTINATION_INPUT = "search_destination_input"
         const val STATE_ORIGIN_GOOGLE_ATTRIBUTION = "search_origin_google_attribution"
         const val STATE_DESTINATION_GOOGLE_ATTRIBUTION = "search_destination_google_attribution"
+        private const val SEARCH_REFRESH_LIST_TOP_INSET_DP = 44
+        private const val SEARCH_REFRESH_SUCCESS_DURATION_MS = 500L
         const val STATE_HAS_SUBMITTED_QUERY = "search_has_submitted_query"
         const val STATE_SEARCH_SCROLL_POSITION = "search_scroll_position"
         const val STATE_SEARCH_SCROLL_OFFSET = "search_scroll_offset"
-        private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 3
+        private const val SEARCH_MAX_VISIBLE_CANDIDATE_ROWS = 6
         private const val CANDIDATE_LOCATION_SNAPSHOT_MAX_AGE_MS = 30_000L
     }
 }

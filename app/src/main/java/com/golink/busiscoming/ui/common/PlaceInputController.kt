@@ -1,13 +1,16 @@
 package com.golink.busiscoming.ui.common
 
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.text.TextUtils
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -40,6 +43,8 @@ class PlaceInputController(
     private val maxVisibleRows: Int = PlaceCandidatePresentationPolicy.DEFAULT_MAX_VISIBLE_ROWS,
     private val idleToolView: View? = null,
     instructionText: CharSequence? = null,
+    private val exclusiveVerticalScroll: Boolean = false,
+    private val onCandidateSpaceRequired: ((Int) -> Unit)? = null,
     private val onCandidateVisibilityChanged: (Boolean) -> Unit = {},
     private val onPlaceSelected: (Place) -> Unit = {},
     private val onUserTextEdited: () -> Unit = {},
@@ -57,6 +62,35 @@ class PlaceInputController(
     private var imeTopPx = context.resources.displayMetrics.heightPixels
     private var searchLoading = false
     private var externalLoading = false
+    private var candidateSpaceRequestPending = false
+    private var candidatesExplicitlyDismissed = false
+    private var legacyImeViewTreeObserver: ViewTreeObserver? = null
+    private val legacyImeLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            updateImeTop(LegacyImeViewport.visibleBottomInRoot(candidateList))
+        }
+    }
+    private val legacyImeAttachListener = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) {
+            registerLegacyImeLayoutListener()
+        }
+
+        override fun onViewDetachedFromWindow(view: View) {
+            unregisterLegacyImeLayoutListener()
+        }
+    }
+    private val candidateGestureOwnership = object : RecyclerView.SimpleOnItemTouchListener() {
+        override fun onInterceptTouchEvent(recyclerView: RecyclerView, event: MotionEvent): Boolean {
+            if (!exclusiveVerticalScroll || candidateList.visibility != View.VISIBLE) return false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN,
+                MotionEvent.ACTION_MOVE -> claimCandidateGesture(recyclerView)
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> releaseCandidateGesture(recyclerView)
+            }
+            return false
+        }
+    }
 
     var selectedPlace: Place? = null
         private set
@@ -69,15 +103,25 @@ class PlaceInputController(
         candidateList.background = ContextCompat.getDrawable(context, R.drawable.place_candidate_list_background)
         candidateList.elevation = dp(context, 2).toFloat()
         candidateList.visibility = View.GONE
+        if (exclusiveVerticalScroll) candidateList.addOnItemTouchListener(candidateGestureOwnership)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            candidateList.addOnAttachStateChangeListener(legacyImeAttachListener)
+            if (ViewCompat.isAttachedToWindow(candidateList)) {
+                registerLegacyImeLayoutListener()
+            }
+        }
         ViewCompat.setOnApplyWindowInsetsListener(candidateList) { view, insets ->
-            val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            imeTopPx = (view.rootView.height - imeBottom).coerceAtLeast(rowHeightPx * MIN_VISIBLE_ROWS)
-            updateCandidateHeight()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                updateImeTop((view.rootView.height - imeBottom).coerceAtLeast(0))
+            } else {
+                updateImeTop(LegacyImeViewport.visibleBottomInRoot(view))
+            }
             insets
         }
         input.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
             if (hasFocus && adapter.itemCount > 0) {
-                showCandidates()
+                if (!candidatesExplicitlyDismissed) showCandidates()
             } else if (
                 hasFocus &&
                 selectedPlace == null &&
@@ -87,6 +131,12 @@ class PlaceInputController(
                 showInstruction()
             } else if (!hasFocus) {
                 hideCandidates()
+            }
+        }
+        input.setOnClickListener {
+            if (adapter.itemCount > 0) {
+                candidatesExplicitlyDismissed = false
+                showCandidates()
             }
         }
         input.addTextChangedListener(object : TextWatcher {
@@ -161,10 +211,19 @@ class PlaceInputController(
     }
 
     fun hideCandidates(): Boolean {
-        if (candidateList.visibility != View.VISIBLE) return false
-        candidateList.visibility = View.GONE
-        onCandidateVisibilityChanged(false)
-        return true
+        candidatesExplicitlyDismissed = true
+        val hadCandidatePresentation =
+            candidateList.visibility != View.GONE || candidateList.layoutParams.height > 0
+        if (!hadCandidatePresentation) return false
+        setCandidatePresentation(View.GONE, 0)
+        candidateSpaceRequestPending = false
+        return hadCandidatePresentation
+    }
+
+    /** 搜尋輸入器折疊時，同步清除焦點與欄位級候選，避免隱藏控制項繼續接收操作。 */
+    fun clearFocusAndHideCandidates() {
+        input.clearFocus()
+        hideCandidates()
     }
 
     fun setError(message: String?) {
@@ -197,6 +256,26 @@ class PlaceInputController(
         setSearchLoading(false)
         hideCandidates()
         ViewCompat.setOnApplyWindowInsetsListener(candidateList, null)
+        if (exclusiveVerticalScroll) candidateList.removeOnItemTouchListener(candidateGestureOwnership)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            candidateList.removeOnAttachStateChangeListener(legacyImeAttachListener)
+            unregisterLegacyImeLayoutListener()
+        }
+    }
+
+    private fun registerLegacyImeLayoutListener() {
+        unregisterLegacyImeLayoutListener()
+        val observer = candidateList.rootView.viewTreeObserver
+        if (!observer.isAlive) return
+        observer.addOnGlobalLayoutListener(legacyImeLayoutListener)
+        legacyImeViewTreeObserver = observer
+    }
+
+    private fun unregisterLegacyImeLayoutListener() {
+        legacyImeViewTreeObserver
+            ?.takeIf { it.isAlive }
+            ?.removeOnGlobalLayoutListener(legacyImeLayoutListener)
+        legacyImeViewTreeObserver = null
     }
 
     private fun handleTextChanged(keyword: String) {
@@ -254,6 +333,7 @@ class PlaceInputController(
     }
 
     private fun updatePlaceCandidates(places: List<Place>) {
+        candidateSpaceRequestPending = false
         adapter.submitPlaces(places)
         inputLayout.error = null
         if (places.isEmpty()) {
@@ -267,6 +347,7 @@ class PlaceInputController(
                 onMessageChanged.invoke(PlaceInputMessage.INSTRUCTION)
             }
             if (input.hasFocus()) {
+                candidatesExplicitlyDismissed = false
                 showCandidates()
             }
         }
@@ -315,15 +396,37 @@ class PlaceInputController(
 
     private fun showCandidates() {
         if (adapter.itemCount == 0 || !input.hasFocus()) return
-        updateCandidateHeight()
+        if (!updateCandidateHeight()) return
+        candidatesExplicitlyDismissed = false
+        candidateSpaceRequestPending = false
         if (candidateList.visibility != View.VISIBLE) {
+            setCandidateScrollLock(true)
             candidateList.visibility = View.VISIBLE
             onCandidateVisibilityChanged(true)
         }
         ViewCompat.requestApplyInsets(candidateList)
     }
 
-    private fun updateCandidateHeight() {
+    private fun setCandidateScrollLock(visible: Boolean) {
+        if (!exclusiveVerticalScroll) return
+        candidateList.isNestedScrollingEnabled = !visible
+        if (visible) {
+            claimCandidateGesture(candidateList)
+        } else {
+            releaseCandidateGesture(candidateList)
+        }
+    }
+
+    private fun claimCandidateGesture(recyclerView: RecyclerView) {
+        recyclerView.parent?.requestDisallowInterceptTouchEvent(true)
+        recyclerView.stopNestedScroll()
+    }
+
+    private fun releaseCandidateGesture(recyclerView: RecyclerView) {
+        recyclerView.parent?.requestDisallowInterceptTouchEvent(false)
+    }
+
+    private fun updateCandidateHeight(): Boolean {
         val candidateTop = candidateTopInRoot()
         val availableHeight = (imeTopPx - candidateTop - dp(candidateList.context, CANDIDATE_BOTTOM_SAFE_INSET_DP))
             .coerceAtLeast(0)
@@ -333,9 +436,64 @@ class PlaceInputController(
             itemCount = adapter.itemCount,
             maxVisibleRows = maxVisibleRows
         )
-        if (height <= 0) return
-        candidateList.layoutParams = candidateList.layoutParams.apply {
-            this.height = height
+        if (height <= 0) {
+            val bootstrapHeight = onCandidateSpaceRequired?.let {
+                PlaceCandidatePresentationPolicy.editorBootstrapHeightPx(
+                    availableHeightPx = availableHeight,
+                    rowHeightPx = rowHeightPx,
+                    itemCount = adapter.itemCount
+                )
+            } ?: 0
+            if (bootstrapHeight > 0) {
+                setCandidatePresentation(View.INVISIBLE, bootstrapHeight)
+                if (!candidateSpaceRequestPending) {
+                    candidateSpaceRequestPending = true
+                    onCandidateSpaceRequired?.invoke(bootstrapHeight)
+                }
+            } else {
+                setCandidatePresentation(View.GONE, 0)
+            }
+            return false
+        }
+        if (candidateList.layoutParams.height != height) {
+            candidateList.layoutParams = candidateList.layoutParams.apply {
+                this.height = height
+            }
+        }
+        return true
+    }
+
+    private fun updateImeTop(newImeTopPx: Int) {
+        if (newImeTopPx <= 0) return
+        imeTopPx = newImeTopPx
+        val hasCompleteRows = updateCandidateHeight()
+        if (
+            hasCompleteRows &&
+            !candidatesExplicitlyDismissed &&
+            candidateList.visibility != View.VISIBLE &&
+            input.hasFocus() &&
+            adapter.itemCount > 0
+        ) {
+            showCandidates()
+        }
+    }
+
+    private fun setCandidatePresentation(visibility: Int, height: Int) {
+        val wasVisible = candidateList.visibility == View.VISIBLE
+        val heightChanged = candidateList.layoutParams.height != height
+        val visibilityChanged = candidateList.visibility != visibility
+        if (!heightChanged && !visibilityChanged) return
+        if (wasVisible && visibility != View.VISIBLE) {
+            setCandidateScrollLock(false)
+        }
+        if (heightChanged) {
+            candidateList.layoutParams = candidateList.layoutParams.apply {
+                this.height = height
+            }
+        }
+        if (visibilityChanged) candidateList.visibility = visibility
+        if (wasVisible && visibility != View.VISIBLE) {
+            onCandidateVisibilityChanged(false)
         }
     }
 
@@ -484,7 +642,6 @@ class PlaceInputController(
         private const val MIN_SEARCH_LENGTH = 1
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val CANDIDATE_ROW_HEIGHT_DP = 52
-        private const val MIN_VISIBLE_ROWS = 3
         private const val CANDIDATE_BOTTOM_SAFE_INSET_DP = 8
 
         private fun dp(context: Context, value: Int): Int {

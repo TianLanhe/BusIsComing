@@ -12,7 +12,6 @@ import androidx.core.content.ContextCompat
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteConfigValidator
-import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.golink.busiscoming.ui.common.localizedMessage
 import com.google.android.material.textfield.TextInputEditText
@@ -25,11 +24,14 @@ object TemporaryRouteSaveDialog {
 
     fun show(
         context: Context,
-        routeConfigRepository: RouteConfigRepository,
-        origin: Place,
-        destination: Place,
-        onSaved: (Long) -> Unit
+        saveGateway: RouteConfigSaveGateway,
+        capturedContext: SuccessfulSearchContext,
+        canSave: (SuccessfulSearchContext) -> Boolean,
+        onSaved: (Long) -> Unit,
+        onSaveFailed: () -> Unit = {}
     ) {
+        val origin = capturedContext.snapshot.origin
+        val destination = capturedContext.snapshot.destination
         val nameInput = TextInputEditText(context).apply {
             setText(defaultName(origin, destination))
             setSelectAllOnFocus(true)
@@ -84,11 +86,27 @@ object TemporaryRouteSaveDialog {
                         val validation = RouteConfigValidator.validate(name, origin, destination)
                         nameLayout.error = validation.nameError.localizedMessage(context)
                         if (!validation.isValid) return@setOnClickListener
-                        if (routeConfigRepository.hasDuplicate(name, origin, destination)) {
-                            nameLayout.error = context.getString(R.string.route_duplicate_detail)
+                        if (!canSave(capturedContext)) {
+                            nameLayout.error = context.getString(R.string.save_query_changed)
                             return@setOnClickListener
                         }
-                        val id = routeConfigRepository.insert(name, origin, destination)
+                        val id = try {
+                            if (saveGateway.hasDuplicate(name, origin, destination)) {
+                                nameLayout.error =
+                                    context.getString(R.string.route_duplicate_detail)
+                                return@setOnClickListener
+                            }
+                            // Main-thread synchronous insert keeps the freshness check and write
+                            // contiguous; the Fragment rechecks after insert only before changing UI.
+                            saveGateway.insert(name, origin, destination)
+                        } catch (_: Exception) {
+                            -1L
+                        }
+                        if (id <= 0L) {
+                            nameLayout.error = context.getString(R.string.save_frequent_failed)
+                            onSaveFailed()
+                            return@setOnClickListener
+                        }
                         Toast.makeText(context, R.string.saved_as_frequent, Toast.LENGTH_SHORT).show()
                         dismiss()
                         onSaved(id)

@@ -5,7 +5,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.golink.busiscoming.R
 
-fun View.applyStatusBarPadding() {
+fun View.applyStatusBarPadding(
+    onInsetsApplied: (WindowInsetsCompat) -> Unit = {}
+) {
     val initialPadding = getTag(R.id.tag_initial_padding) as? InitialPadding
         ?: InitialPadding(paddingLeft, paddingTop, paddingRight, paddingBottom).also {
             setTag(R.id.tag_initial_padding, it)
@@ -19,6 +21,7 @@ fun View.applyStatusBarPadding() {
             initialPadding.right,
             initialPadding.bottom
         )
+        onInsetsApplied(insets)
         insets
     }
 
