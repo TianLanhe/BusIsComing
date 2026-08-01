@@ -8,6 +8,8 @@ import org.junit.Test
 class BusMonitorSpeechControllerContractTest {
     private val controllerKt = File("src/main/java/com/golink/busiscoming/service/BusMonitorSpeechController.kt").readText()
     private val bottomSheetKt = File("src/main/java/com/golink/busiscoming/ui/main/MonitorSettingsBottomSheet.kt").readText()
+    private val bottomSheetLayout =
+        File("src/main/res/layout/bottom_sheet_monitor_settings.xml").readText()
 
     @Test
     fun speechControllerUsesUtteranceCallbacksAndDiagnosticFailures() {
@@ -31,8 +33,9 @@ class BusMonitorSpeechControllerContractTest {
 
     @Test
     fun monitorSettingsKeepsVoiceSwitchButRemovesPreviewEntry() {
-        assertTrue(bottomSheetKt.contains("R.string.monitor_voice"))
-        assertTrue(bottomSheetKt.contains("isChecked = true"))
+        assertTrue(bottomSheetLayout.contains("@string/monitor_voice"))
+        assertTrue(bottomSheetLayout.contains("android:id=\"@+id/monitor_voice_switch\""))
+        assertTrue(bottomSheetLayout.contains("android:checked=\"true\""))
         assertFalse(bottomSheetKt.contains("preview"))
         assertFalse(bottomSheetKt.contains("ACTION_TTS_SETTINGS"))
         assertFalse(bottomSheetKt.contains("ACTION_INSTALL_TTS_DATA"))
