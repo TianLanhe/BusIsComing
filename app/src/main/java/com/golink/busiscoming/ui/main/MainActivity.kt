@@ -1630,7 +1630,6 @@ class MainActivity : AppCompatActivity() {
             mainHandler.post {
                 if (isFinishing || isDestroyed) return@post
                 monitorSettingsBottomSheet.show(
-                    route = route,
                     inputs = MonitorWalkingInputs(
                         interfaceDistanceMeters = interfaceDistanceMeters,
                         straightLineDistanceMeters = straightLineDistanceMeters

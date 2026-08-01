@@ -13,6 +13,8 @@ class BusMonitorNotificationContractTest {
     private val serviceKt = File("src/main/java/com/golink/busiscoming/service/BusMonitorService.kt").readText()
     private val schedulerKt = File("src/main/java/com/golink/busiscoming/service/BusMonitorRefreshScheduler.kt").readText()
     private val monitorSheetKt = File("src/main/java/com/golink/busiscoming/ui/main/MonitorSettingsBottomSheet.kt").readText()
+    private val monitorSheetLayout =
+        File("src/main/res/layout/bottom_sheet_monitor_settings.xml").readText()
     private val manifestXml = File("src/main/AndroidManifest.xml").readText()
 
     @Test
@@ -109,9 +111,10 @@ class BusMonitorNotificationContractTest {
     }
 
     @Test
-    fun monitorStartSheetDisclosesLockscreenNotificationAndSpeechBehavior() {
-        assertTrue(monitorSheetKt.contains("R.string.monitor_explanation"))
-        assertTrue(monitorSheetKt.contains("R.string.monitor_voice"))
-        assertTrue(monitorSheetKt.contains("R.string.monitor_start"))
+    fun monitorStartSheetKeepsCoreActionsWithoutRouteSubtitleOrExplanation() {
+        assertFalse(monitorSheetKt.contains("R.string.monitor_explanation"))
+        assertFalse(monitorSheetKt.contains("subtitle(route)"))
+        assertTrue(monitorSheetLayout.contains("@string/monitor_voice"))
+        assertTrue(monitorSheetLayout.contains("@string/monitor_start"))
     }
 }
