@@ -154,7 +154,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var resultRefreshSuccess: ImageView
     private lateinit var sortButtons: Map<SortField, MaterialButton>
     private lateinit var busRouteAdapter: BusRouteAdapter
-    private lateinit var routeDetailBottomSheet: RouteDetailBottomSheet
     private lateinit var etaArrivalsBottomSheet: EtaArrivalsBottomSheet
     private lateinit var monitorSettingsBottomSheet: MonitorSettingsBottomSheet
     private lateinit var transitCodePaymentLauncher: TransitCodePaymentLaunchAction
@@ -222,7 +221,6 @@ class MainActivity : AppCompatActivity() {
         locationPermissionStateStore = LocationPermissionStateStore(this)
         placeNameResolver = GoogleReverseGeocodingPlaceNameResolver(this)
         clearExpiredMonitorSession()
-        routeDetailBottomSheet = RouteDetailBottomSheet(this, routeDetailRepository)
         etaArrivalsBottomSheet = EtaArrivalsBottomSheet(this)
         monitorSettingsBottomSheet = MonitorSettingsBottomSheet(
             context = this,
@@ -285,7 +283,6 @@ class MainActivity : AppCompatActivity() {
         updateDownloadedSnackbar = null
         invalidateActiveQuery()
         mainHandler.removeCallbacksAndMessages(null)
-        routeDetailBottomSheet.dispose()
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
         queryExecutor.shutdownNow()
@@ -1591,7 +1588,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRouteDetail(route: BusRouteOption) {
-        routeDetailBottomSheet.show(route)
+        RouteDetailNavigator.open(this, route)
     }
 
     private fun showEtaArrivals(route: BusRouteOption) {

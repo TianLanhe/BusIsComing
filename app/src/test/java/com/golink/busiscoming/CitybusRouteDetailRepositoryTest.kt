@@ -5,6 +5,7 @@ import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.RouteDetailDisplayFormatter
 import com.golink.busiscoming.data.model.RouteDetailExpansionState
 import com.golink.busiscoming.data.model.RouteDetailStopRole
+import com.golink.busiscoming.data.model.RouteDetailTransferType
 import com.golink.busiscoming.data.repository.CitybusRouteDetailParseException
 import com.golink.busiscoming.data.repository.CitybusRouteDetailParser
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
@@ -86,6 +87,18 @@ class CitybusRouteDetailRepositoryTest {
     }
 
     @Test
+    fun doesNotReuseOriginDistanceWhenDestinationMarkerIsMissing() {
+        val distance = CitybusRouteDetailParser.parseDestinationWalkingDistanceMeters(
+            """
+            <div>步行距離(約) 236米</div>
+            <table class="p2proutetitle"><tr><td>82X 往 小西灣</td></tr></table>
+            """.trimIndent()
+        )
+
+        assertEquals(null, distance)
+    }
+
+    @Test
     fun hidesDirectionWhenItIsBlank() {
         assertEquals(null, RouteDetailDisplayFormatter.directionLabel(""))
         assertEquals(null, RouteDetailDisplayFormatter.directionLabel(null))
@@ -112,7 +125,9 @@ class CitybusRouteDetailRepositoryTest {
             }
         )
 
-        assertEquals(1, repository.loadRouteDetail(route).legs.size)
+        val firstDetail = repository.loadRouteDetail(route)
+        assertEquals(1, firstDetail.legs.size)
+        assertEquals("12:00", firstDetail.plannedArrivalTime)
         assertEquals(1, repository.loadRouteDetail(route).legs.size)
         assertEquals(1, fetchCount)
 
@@ -167,6 +182,22 @@ class CitybusRouteDetailRepositoryTest {
         assertEquals("利源東街", detail.legs[1].alightingStop.displayName)
         assertEquals(8, detail.legs.first().viaStops.size)
         assertEquals(6, detail.legs[1].viaStops.size)
+        assertEquals(14, detail.totalViaStopCount)
+        assertEquals(378, detail.walkingDistanceMeters)
+        assertEquals(403, detail.completeWalkingDistanceMeters)
+        assertTrue(detail.hasCompleteWalkingDistance)
+        assertEquals(243, detail.originWalking?.distanceMeters)
+        assertEquals(25, detail.transfers.single().walking?.distanceMeters)
+        assertEquals(RouteDetailTransferType.WALK_TO_TRANSFER_STOP, detail.transfers.single().type)
+        assertEquals(135, detail.destinationWalking?.distanceMeters)
+        assertEquals("00:32", detail.plannedDepartureTime)
+        assertEquals("01:21", detail.plannedArrivalTime)
+        assertEquals(9.7, detail.legs[0].fareHkd!!, 0.0)
+        assertEquals("00:42", detail.legs[0].plannedBoardingTime)
+        assertEquals("01:03", detail.legs[0].plannedAlightingTime)
+        assertEquals(41.5, detail.legs[1].fareHkd!!, 0.0)
+        assertEquals("01:09", detail.legs[1].plannedBoardingTime)
+        assertEquals("01:18", detail.legs[1].plannedAlightingTime)
     }
 
     @Test
@@ -195,6 +226,50 @@ class CitybusRouteDetailRepositoryTest {
         assertEquals("樂軒臺", leg.boardingStop.displayName)
         assertEquals(listOf("環翠商場", "環翠邨澤翠樓", "興華邨卓華樓"), leg.viaStops.map { it.displayName })
         assertEquals("興華邨豐興樓", leg.alightingStop.displayName)
+        assertEquals(262, detail.completeWalkingDistanceMeters)
+        assertTrue(detail.hasCompleteWalkingDistance)
+        assertEquals(17.8, leg.fareHkd!!, 0.0)
+        assertEquals("02:01", leg.plannedBoardingTime)
+        assertEquals("02:04", leg.plannedAlightingTime)
+        assertEquals("02:04", detail.plannedArrivalTime)
+    }
+
+    @Test
+    fun parsesSameStopTransferWithoutInventingWalkingDistanceWhenOptionalFieldsAreMissing() {
+        val detail = repositoryForFixture("citybus/getp2pstopinroute-same-stop-missing.html").loadRouteDetail(
+            route(
+                query("2|*|CTB||82X-ISR-1||6||7||O|*|CTB||102-MEF-1||12||13||O|*|"),
+                routeName = "82X → 102",
+                walkingDistanceMeters = 150
+            )
+        )
+
+        assertEquals(2, detail.legs.size)
+        assertEquals(RouteDetailTransferType.SAME_STOP, detail.transfers.single().type)
+        assertEquals(null, detail.transfers.single().walking)
+        assertEquals(150, detail.completeWalkingDistanceMeters)
+        assertTrue(detail.hasCompleteWalkingDistance)
+        assertEquals(null, detail.legs.first().fareHkd)
+        assertEquals(null, detail.legs[1].plannedBoardingTime)
+    }
+
+    @Test
+    fun incompleteWalkingRowsFallBackToCardDistanceWithoutLosingStationStructure() {
+        val detail = repositoryForFixture("citybus/getp2pstopinroute-partial-missing.html").loadRouteDetail(
+            route(
+                query("2|*|CTB||82X-ISR-1||6||7||O|*|CTB||102-MEF-1||12||13||O|*|"),
+                routeName = "82X → 102",
+                walkingDistanceMeters = 378
+            )
+        )
+
+        assertEquals(2, detail.legs.size)
+        assertFalse(detail.hasCompleteWalkingDistance)
+        assertEquals(null, detail.completeWalkingDistanceMeters)
+        assertEquals(378, detail.displayWalkingDistanceMeters)
+        assertEquals(RouteDetailTransferType.WALK_TO_TRANSFER_STOP, detail.transfers.single().type)
+        assertEquals(null, detail.transfers.single().walking?.distanceMeters)
+        assertEquals("12:30", detail.plannedArrivalTime)
     }
 
     @Test
@@ -266,6 +341,10 @@ class CitybusRouteDetailRepositoryTest {
         return requireNotNull(javaClass.classLoader?.getResource(path)) {
             "Missing test resource $path"
         }.readText()
+    }
+
+    private fun repositoryForFixture(path: String): CitybusRouteDetailRepository {
+        return CitybusRouteDetailRepository(detailFetcher = { _, _ -> resourceText(path) })
     }
 
     companion object {

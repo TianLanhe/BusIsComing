@@ -58,6 +58,9 @@
             android:name=".ui.manage.RouteManageActivity"
             android:exported="false" />
         <activity
+            android:name=".ui.main.RouteDetailActivity"
+            android:exported="false" />
+        <activity
             android:name=".ui.settings.AboutActivity"
             android:exported="false" />
         <activity

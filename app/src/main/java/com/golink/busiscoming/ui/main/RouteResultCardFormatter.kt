@@ -46,6 +46,19 @@ object RouteResultCardFormatter {
         )
     }
 
+    fun duration(durationMinutes: Int, text: LocalizedText): String =
+        text.get(R.string.route_card_duration_value, arrayOf(durationMinutes))
+
+    fun walking(walkingDistanceMeters: Int, text: LocalizedText): String =
+        text.get(R.string.route_card_walking_value, arrayOf(walkingDistanceMeters))
+
+    fun infoAccessibility(route: BusRouteOption, text: LocalizedText): String {
+        return text.get(
+            R.string.route_card_info_content_description,
+            arrayOf<Any>(price(route.priceHkd, text), route.durationMinutes, route.walkingDistanceMeters)
+        )
+    }
+
     fun resultSummary(routes: List<BusRouteOption>, text: LocalizedText): String {
         return text.get(
             R.string.route_results_summary,

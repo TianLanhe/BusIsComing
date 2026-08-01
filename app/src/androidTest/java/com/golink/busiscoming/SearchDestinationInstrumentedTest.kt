@@ -1889,7 +1889,10 @@ class SearchDestinationInstrumentedTest {
                         alightingStop = stop("測試終點站", 3, RouteDetailStopRole.ALIGHTING)
                     )
                 ),
-                originWalkingDistanceMeters = 120
+                originWalking = com.golink.busiscoming.data.model.RouteDetailWalkingSegment(
+                    com.golink.busiscoming.data.model.RouteDetailWalkingKind.ORIGIN,
+                    120
+                )
             )
         }
     }

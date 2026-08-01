@@ -25,7 +25,10 @@ class BusRouteCardBinder(private val itemView: View) {
     private val stopPreviewLayout: View = itemView.findViewById(R.id.busStopPreviewLayout)
     private val stopOriginText: TextView = itemView.findViewById(R.id.busStopOriginText)
     private val stopDestinationText: TextView = itemView.findViewById(R.id.busStopDestinationText)
-    private val routeInfoText: TextView = itemView.findViewById(R.id.busRouteInfoText)
+    private val routeInfoLayout: View = itemView.findViewById(R.id.busRouteInfoLayout)
+    private val routePriceText: TextView = itemView.findViewById(R.id.busRoutePriceText)
+    private val routeDurationText: TextView = itemView.findViewById(R.id.busRouteDurationText)
+    private val routeWalkingText: TextView = itemView.findViewById(R.id.busRouteWalkingText)
     private val bookmark: View = itemView.findViewById(R.id.busPersistentPinBookmark)
     private val card: MaterialCardView = itemView as MaterialCardView
     private val accessibilityActionIds = mutableListOf<Int>()
@@ -40,7 +43,10 @@ class BusRouteCardBinder(private val itemView: View) {
         val shouldShowNextArrival = nextArrival != null &&
             itemView.resources.configuration.fontScale <= LARGE_FONT_SCALE_THRESHOLD
         nextArrivalText.visibility = if (shouldShowNextArrival) View.VISIBLE else View.GONE
-        routeInfoText.text = RouteResultCardFormatter.info(route, localizedText)
+        routePriceText.text = RouteResultCardFormatter.price(route.priceHkd, localizedText)
+        routeDurationText.text = RouteResultCardFormatter.duration(route.durationMinutes, localizedText)
+        routeWalkingText.text = RouteResultCardFormatter.walking(route.walkingDistanceMeters, localizedText)
+        routeInfoLayout.contentDescription = RouteResultCardFormatter.infoAccessibility(route, localizedText)
 
         val preview = route.stopPreview
         if (preview == null) {

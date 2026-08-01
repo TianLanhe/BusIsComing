@@ -13,6 +13,10 @@ import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
 import com.golink.busiscoming.data.model.RouteDetailStopRole
+import com.golink.busiscoming.data.model.RouteDetailTransfer
+import com.golink.busiscoming.data.model.RouteDetailTransferType
+import com.golink.busiscoming.data.model.RouteDetailWalkingKind
+import com.golink.busiscoming.data.model.RouteDetailWalkingSegment
 import com.golink.busiscoming.data.model.WaitTimeState
 
 object DemoScreenshotFixtures {
@@ -103,29 +107,46 @@ object DemoScreenshotFixtures {
             priceHkd = 10.2,
             durationMinutes = 34,
             walkingDistanceMeters = 180,
-            originWalkingDistanceMeters = 180,
+            originWalking = RouteDetailWalkingSegment(RouteDetailWalkingKind.ORIGIN, 120),
+            transfers = listOf(
+                RouteDetailTransfer(
+                    RouteDetailTransferType.WALK_TO_TRANSFER_STOP,
+                    RouteDetailWalkingSegment(RouteDetailWalkingKind.TRANSFER, 60)
+                )
+            ),
+            destinationWalking = RouteDetailWalkingSegment(RouteDetailWalkingKind.DESTINATION, 0),
+            plannedDepartureTime = "08:20",
+            plannedArrivalTime = "08:54",
+            originName = "海庭苑",
+            destinationName = "松嶺邨",
             legs = listOf(
                 RouteDetailLeg(
                     route = "28X",
                     routeVariant = "28X-DEMO-1",
-                    directionText = "往景澄站方向",
+                    directionText = "景澄站",
                     boardingStop = stop("海庭苑平台", 1, "28X-DEMO-1", RouteDetailStopRole.BOARDING),
                     viaStops = listOf(
                         stop("翠明街花園", 2, "28X-DEMO-1", RouteDetailStopRole.VIA),
                         stop("雅湖里", 3, "28X-DEMO-1", RouteDetailStopRole.VIA)
                     ),
-                    alightingStop = stop("景澄站北", 4, "28X-DEMO-1", RouteDetailStopRole.ALIGHTING)
+                    alightingStop = stop("景澄站北", 4, "28X-DEMO-1", RouteDetailStopRole.ALIGHTING),
+                    fareHkd = 7.8,
+                    plannedBoardingTime = "08:24",
+                    plannedAlightingTime = "08:38"
                 ),
                 RouteDetailLeg(
                     route = "86",
                     routeVariant = "86-DEMO-1",
-                    directionText = "往松嶺邨方向",
+                    directionText = "松嶺邨",
                     boardingStop = stop("景澄站南", 1, "86-DEMO-1", RouteDetailStopRole.BOARDING),
                     viaStops = listOf(
                         stop("雲海路口", 2, "86-DEMO-1", RouteDetailStopRole.VIA),
                         stop("柏岸廣場", 3, "86-DEMO-1", RouteDetailStopRole.VIA)
                     ),
-                    alightingStop = stop("松嶺邨總站", 4, "86-DEMO-1", RouteDetailStopRole.ALIGHTING)
+                    alightingStop = stop("松嶺邨總站", 4, "86-DEMO-1", RouteDetailStopRole.ALIGHTING),
+                    fareHkd = 2.4,
+                    plannedBoardingTime = "08:42",
+                    plannedAlightingTime = "08:52"
                 )
             )
         )

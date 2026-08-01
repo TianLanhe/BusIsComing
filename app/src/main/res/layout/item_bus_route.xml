@@ -152,17 +152,67 @@
                 android:background="@color/bus_divider" />
 
             <LinearLayout
+                android:id="@+id/busRouteInfoLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="14dp"
                 android:layout_marginTop="8dp"
                 android:gravity="center_vertical"
+                android:importantForAccessibility="yes"
                 android:orientation="horizontal">
 
                 <TextView
-                    android:id="@+id/busRouteInfoText"
-                    android:layout_width="match_parent"
+                    android:id="@+id/busRoutePriceText"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="7dp"
+                    android:importantForAccessibility="no"
+                    android:text="·"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_alarm_clock"
+                    app:tint="@color/bus_text_secondary" />
+
+                <TextView
+                    android:id="@+id/busRouteDurationText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="7dp"
+                    android:importantForAccessibility="no"
+                    android:text="·"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_walking_person"
+                    app:tint="@color/bus_text_secondary" />
+
+                <TextView
+                    android:id="@+id/busRouteWalkingText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
                     android:textColor="@color/bus_text_secondary"
                     android:textSize="14sp" />
             </LinearLayout>
