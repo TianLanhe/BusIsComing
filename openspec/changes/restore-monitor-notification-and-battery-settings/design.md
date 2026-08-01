@@ -169,7 +169,7 @@ channel 不存在時先建立再查詢；建立後普通 channel 仍不存在視
 5. 加入 notification settings navigator、面板狀態行與返回重查。
 6. 恢復電池豁免 manifest 權限、能力 helper、三語說明及啟動順序。
 7. 運行窄單測與 `./gradlew build`，再做 task-owned 裝置驗證。
-6. 若直接豁免造成無法接受的政策或耗電影響，可只反向移除 manifest 權限與直接請求步驟；channel 診斷與設定導航保持獨立可用。
+8. 若直接豁免造成無法接受的政策或耗電影響，可只反向移除 manifest 權限與直接請求步驟；channel 診斷與設定導航保持獨立可用。
 
 ## Open Questions
 
