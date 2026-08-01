@@ -27,7 +27,7 @@ enum class BusMonitorStatus { PREPARE, LEAVE_NOW, LATE }
 data class WalkingTimeEstimate(
     val interfaceDistanceMinutes: Int?,
     val straightLineMinutes: Int?,
-    val userAdjustedMinutes: Int,
+    val manualAdjustmentMinutes: Int,
     val finalMinutes: Int
 )
 
@@ -35,7 +35,7 @@ object WalkingTimeCalculator {
     fun estimate(
         interfaceDistanceMeters: Int?,
         straightLineDistanceMeters: Int?,
-        userAdjustedMinutes: Int,
+        manualAdjustmentMinutes: Int,
         speedPreset: WalkingSpeedPreset,
         modifiers: Set<WalkingScenarioModifier>
     ): WalkingTimeEstimate {
@@ -45,16 +45,18 @@ object WalkingTimeCalculator {
         val interfaceMinutes = interfaceDistanceMeters?.let { minutesForDistance(it, effectiveSpeedKmh) }
         val straightLineMinutes = straightLineDistanceMeters?.let { minutesForDistance(it, effectiveSpeedKmh) }
         val extraMinutes = modifiers.sumOf { it.extraMinutes }
-        val baseMinutes = listOfNotNull(
+        val distanceBaseline = listOfNotNull(
             interfaceMinutes,
             straightLineMinutes,
-            userAdjustedMinutes.coerceAtLeast(1)
-        ).maxOrNull() ?: userAdjustedMinutes.coerceAtLeast(1)
+            1
+        ).maxOrNull() ?: 1
         return WalkingTimeEstimate(
             interfaceDistanceMinutes = interfaceMinutes,
             straightLineMinutes = straightLineMinutes,
-            userAdjustedMinutes = userAdjustedMinutes.coerceAtLeast(1),
-            finalMinutes = baseMinutes + extraMinutes
+            manualAdjustmentMinutes = manualAdjustmentMinutes,
+            finalMinutes = (
+                distanceBaseline + extraMinutes + manualAdjustmentMinutes
+            ).coerceAtLeast(1)
         )
     }
 

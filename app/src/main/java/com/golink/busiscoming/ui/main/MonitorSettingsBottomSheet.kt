@@ -316,7 +316,7 @@ class MonitorSettingsBottomSheet(
         return WalkingTimeCalculator.estimate(
             interfaceDistanceMeters = inputs.interfaceDistanceMeters,
             straightLineDistanceMeters = inputs.straightLineDistanceMeters,
-            userAdjustedMinutes = manualBaseMinutes ?: 1,
+            manualAdjustmentMinutes = manualBaseMinutes ?: 0,
             speedPreset = selectedSpeedPreset,
             modifiers = selectedModifiers
         )
@@ -331,7 +331,7 @@ class MonitorSettingsBottomSheet(
                 add(context.getString(R.string.monitor_source_straight, it))
             }
             if (manualBaseMinutes != null) {
-                add(context.getString(R.string.monitor_source_manual, userAdjustedMinutes))
+                add(context.getString(R.string.monitor_source_manual, manualAdjustmentMinutes))
             }
         }
         return sources.ifEmpty {

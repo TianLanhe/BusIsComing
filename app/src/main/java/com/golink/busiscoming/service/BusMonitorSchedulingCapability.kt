@@ -35,6 +35,17 @@ object BusMonitorSchedulingCapability {
             data = Uri.parse("package:${context.packageName}")
         }
     }
+
+    fun shouldRequestBatteryOptimizationExemption(
+        sdkInt: Int,
+        isIgnoringBatteryOptimizations: Boolean
+    ): Boolean {
+        return sdkInt >= Build.VERSION_CODES.M && !isIgnoringBatteryOptimizations
+    }
+
+    fun batteryOptimizationPackageUri(packageName: String): String {
+        return "package:$packageName"
+    }
 }
 
 object BusMonitorWakeLockPolicy {

@@ -51,18 +51,47 @@ class BusMonitorModelsTest {
         }
     }
     @Test
-    fun walkingEstimateUsesMaxDistanceEstimateAndUserAdjustmentThenAddsModifiers() {
+    fun walkingEstimateUsesDistanceBaselineManualAdjustmentAndFixedModifiers() {
         val estimate = WalkingTimeCalculator.estimate(
             interfaceDistanceMeters = 420,
             straightLineDistanceMeters = 350,
-            userAdjustedMinutes = 7,
+            manualAdjustmentMinutes = 1,
             speedPreset = WalkingSpeedPreset.NORMAL,
             modifiers = setOf(WalkingScenarioModifier.ELEVATOR, WalkingScenarioModifier.CROSSING)
         )
 
         assertEquals(6, estimate.interfaceDistanceMinutes)
         assertEquals(5, estimate.straightLineMinutes)
+        assertEquals(1, estimate.manualAdjustmentMinutes)
         assertEquals(11, estimate.finalMinutes)
+    }
+
+    @Test
+    fun walkingEstimateSupportsNegativeManualAdjustmentBelowDistanceEstimate() {
+        val estimate = WalkingTimeCalculator.estimate(
+            interfaceDistanceMeters = 420,
+            straightLineDistanceMeters = 350,
+            manualAdjustmentMinutes = -2,
+            speedPreset = WalkingSpeedPreset.NORMAL,
+            modifiers = emptySet()
+        )
+
+        assertEquals(6, estimate.interfaceDistanceMinutes)
+        assertEquals(-2, estimate.manualAdjustmentMinutes)
+        assertEquals(4, estimate.finalMinutes)
+    }
+
+    @Test
+    fun walkingEstimateNeverFallsBelowOneMinute() {
+        val estimate = WalkingTimeCalculator.estimate(
+            interfaceDistanceMeters = 420,
+            straightLineDistanceMeters = null,
+            manualAdjustmentMinutes = -99,
+            speedPreset = WalkingSpeedPreset.NORMAL,
+            modifiers = emptySet()
+        )
+
+        assertEquals(1, estimate.finalMinutes)
     }
 
     @Test
@@ -70,14 +99,14 @@ class BusMonitorModelsTest {
         val normal = WalkingTimeCalculator.estimate(
             interfaceDistanceMeters = 400,
             straightLineDistanceMeters = null,
-            userAdjustedMinutes = 1,
+            manualAdjustmentMinutes = 0,
             speedPreset = WalkingSpeedPreset.NORMAL,
             modifiers = emptySet()
         )
         val rain = WalkingTimeCalculator.estimate(
             interfaceDistanceMeters = 400,
             straightLineDistanceMeters = null,
-            userAdjustedMinutes = 1,
+            manualAdjustmentMinutes = 0,
             speedPreset = WalkingSpeedPreset.NORMAL,
             modifiers = setOf(WalkingScenarioModifier.RAIN)
         )

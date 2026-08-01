@@ -19,6 +19,32 @@ class BusMonitorSchedulingPolicyTest {
     }
 
     @Test
+    fun batteryOptimizationExemptionIsRequestedOnlyWhenSupportedAndMissing() {
+        assertFalse(
+            BusMonitorSchedulingCapability.shouldRequestBatteryOptimizationExemption(
+                sdkInt = 22,
+                isIgnoringBatteryOptimizations = false
+            )
+        )
+        assertTrue(
+            BusMonitorSchedulingCapability.shouldRequestBatteryOptimizationExemption(
+                sdkInt = 23,
+                isIgnoringBatteryOptimizations = false
+            )
+        )
+        assertFalse(
+            BusMonitorSchedulingCapability.shouldRequestBatteryOptimizationExemption(
+                sdkInt = 36,
+                isIgnoringBatteryOptimizations = true
+            )
+        )
+        assertEquals(
+            "package:com.golink.busiscoming",
+            BusMonitorSchedulingCapability.batteryOptimizationPackageUri("com.golink.busiscoming")
+        )
+    }
+
+    @Test
     fun wakeLockTimeoutIsCappedByStopTargetProtectionWindowAndSessionExpiry() {
         assertEquals(
             240_000L,
