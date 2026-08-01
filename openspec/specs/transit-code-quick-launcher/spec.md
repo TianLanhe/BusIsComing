@@ -103,21 +103,32 @@
 - **AND** 系統 SHALL NOT 因 package 查詢失敗而讓 `乘車碼` 點擊崩潰
 
 ### Requirement: 正式乘車碼由系統快捷與候車情境提供
-系統 SHALL 完全移除常用頁乘車碼入口，並由長按 App 圖示的靜態 shortcut、用戶確認的桌面 pinned shortcut及候車監控通知 action 提供正式入口。
 
-#### Scenario: 長按 App 圖示顯示靜態入口
-- **WHEN** Android launcher 支援 App shortcuts 且用戶長按 BusIsComing 圖示
-- **THEN** 系統 SHALL 顯示本地化的「乘車碼」shortcut
-- **AND** 點擊後 SHALL 直接進入正式乘車碼候選鏈
+系統 MUST 只在設定頁提供桌面快捷方式管理入口，並由靜態或 pinned 桌面快捷方式及候車情境中的既有入口開啟正式乘車碼；常用頁及其他高頻主流程不得新增乘車碼按鈕。桌面快捷方式 MUST 使用無界面轉發入口，候車情境入口 MUST 保留既有畫面與互動，兩者均沿用正式乘車碼啟動與降級契約。
 
-#### Scenario: 桌面快捷方式直接開啟
-- **WHEN** 用戶已從設定頁固定乘車碼 shortcut 並點擊桌面圖示
-- **THEN** 系統 SHALL 直接進入與靜態 shortcut 相同的正式乘車碼候選鏈
-- **AND** 系統 SHALL NOT 要求先切換至常用頁
+#### Scenario: 常用頁不展示乘車碼入口
 
-#### Scenario: 常用頁不顯示乘車碼
-- **WHEN** 用戶查看常用頁的一般、首次空狀態或結果狀態
-- **THEN** 系統 SHALL NOT 顯示乘車碼按鈕、懸浮入口、固定工具區或 coachmark
+- **WHEN** 用戶進入常用頁、切換常用行程或瀏覽查詢結果
+- **THEN** 頁面 SHALL NOT 顯示乘車碼按鈕、浮動入口或頂部工具區
+- **AND** 路線結果的可視空間 SHALL 不被乘車碼入口佔用
+
+#### Scenario: 設定頁只管理桌面快捷方式
+
+- **WHEN** 用戶在設定頁查看乘車碼快捷方式項目
+- **THEN** 該項目 SHALL 用於建立、檢查或引導管理桌面快捷方式
+- **AND** 點擊該設定項 SHALL NOT 直接把設定頁作為正式乘車碼展示入口
+
+#### Scenario: 桌面快捷方式開啟正式乘車碼
+
+- **WHEN** 用戶點擊靜態或 pinned 乘車碼桌面快捷方式
+- **THEN** 系統 SHALL 經無界面轉發入口執行正式乘車碼啟動契約
+- **AND** 系統 SHALL NOT 先顯示 App 主頁或設定頁
+
+#### Scenario: 候車情境保留正式乘車碼入口
+
+- **WHEN** 用戶在既有候車或通知情境點擊乘車碼入口
+- **THEN** 系統 SHALL 保留該情境既有的交互與狀態
+- **AND** 系統 SHALL 使用與桌面快捷方式一致的正式支付 App 候選與降級順序
 
 ### Requirement: 乘車碼 pinned shortcut 使用可確認的建立流程
 系統 SHALL 透過 Android pinned shortcut 能力建立乘車碼桌面入口，並提供成功 callback 及結構化平台結果，使設定頁不需要推測請求是否完成。
@@ -143,18 +154,57 @@
 - **AND** 系統 SHALL 保留再次請求能力
 
 ### Requirement: 所有乘車碼快捷入口沿用正式啟動契約
-系統 SHALL 讓 pinned shortcut、長按 App 圖示的靜態 shortcut及候車監控通知 action 使用同一正式 `OPEN_TRANSIT_CODE` explicit intent 與既有支付工具候選鏈。
 
-#### Scenario: 從桌面 pinned shortcut 開啟乘車碼
-- **WHEN** 用戶點擊已固定至桌面的乘車碼 shortcut
-- **THEN** 系統 SHALL 進入正式乘車碼啟動流程
-- **AND** 系統 SHALL NOT 打開設定頁、搜尋頁或實驗性乘車碼面板
+系統 MUST 讓靜態桌面快捷方式、pinned 桌面快捷方式及候車情境中的乘車碼入口共用同一正式支付 App 候選與降級契約。桌面快捷方式可以使用專用無界面轉發 Activity，候車情境可以保留既有 Activity 或通知入口，但不得各自硬編碼不同 URI、候選順序或錯誤提示。
 
-#### Scenario: 從靜態 shortcut 開啟乘車碼
-- **WHEN** 用戶長按 App 圖示並點擊靜態 `乘車碼` shortcut
-- **THEN** 系統 SHALL 使用與 pinned shortcut 相同的正式乘車碼啟動流程
+#### Scenario: pinned 快捷方式沿用正式候選鏈
 
-#### Scenario: 快捷入口不改變巴士狀態
-- **WHEN** 用戶透過 pinned、靜態或通知入口開啟乘車碼後返回 App
-- **THEN** 系統 SHALL 保留既有常用行程選擇、搜尋上下文、排序及查詢結果
-- **AND** 系統 SHALL NOT 寫入支付工具偏好或修改已保存行程
+- **WHEN** 用戶從 pinned 桌面快捷方式啟動乘車碼
+- **THEN** 無界面轉發入口 SHALL 呼叫既有正式乘車碼啟動器
+- **AND** 候選與降級順序 SHALL 與 App 內正式入口一致
+
+#### Scenario: 靜態快捷方式沿用正式候選鏈
+
+- **WHEN** 用戶從靜態桌面快捷方式啟動乘車碼
+- **THEN** 無界面轉發入口 SHALL 呼叫既有正式乘車碼啟動器
+- **AND** 靜態快捷方式 SHALL NOT 維護獨立的支付 URI 清單
+
+#### Scenario: 候車情境沿用正式候選鏈
+
+- **WHEN** 用戶從既有候車或通知情境啟動乘車碼
+- **THEN** 該入口 SHALL 呼叫同一正式乘車碼啟動器
+- **AND** 該情境原有的監控、返回與生命週期狀態 SHALL 保持不變
+
+#### Scenario: 正式候選鏈失敗時統一提示
+
+- **WHEN** 任一乘車碼快捷入口無法啟動全部正式候選及降級入口
+- **THEN** 系統 SHALL 使用同一組本地化失敗提示與可恢復行為
+
+### Requirement: 桌面乘車碼快捷方式使用無界面轉發入口
+
+系統 MUST 讓靜態與 pinned 桌面乘車碼快捷方式進入不展示 App 內容頁面的轉發入口，由該入口立即沿用既有乘車碼啟動器開啟支付 App，並在完成轉發後結束自身。
+
+#### Scenario: 點擊 pinned 桌面快捷方式直接轉發
+
+- **WHEN** 用戶點擊已建立的 pinned 乘車碼桌面快捷方式
+- **THEN** 系統 SHALL 啟動無界面轉發入口並立即執行既有乘車碼候選與降級鏈
+- **AND** 系統 SHALL NOT 先展示主頁、設定頁或其他 App 內容頁面
+- **AND** 轉發入口 SHALL 在發出外部啟動請求後結束，不留在返回堆疊或最近任務中
+
+#### Scenario: 點擊靜態桌面快捷方式直接轉發
+
+- **WHEN** 用戶點擊 App 提供的靜態乘車碼桌面快捷方式
+- **THEN** 系統 SHALL 使用與 pinned 快捷方式相同的無界面轉發入口
+- **AND** 系統 SHALL 沿用既有支付 App 候選、scheme 與 HTTPS 降級鏈
+
+#### Scenario: 所有乘車碼候選均無法啟動
+
+- **WHEN** 無界面轉發入口嘗試全部正式候選與降級入口後仍無法開啟乘車碼
+- **THEN** 系統 SHALL 顯示既有本地化失敗提示
+- **AND** 轉發入口 SHALL 結束自身，不停留空白頁面
+
+#### Scenario: 冷啟動快捷方式時不建立主頁流程
+
+- **WHEN** App 程序尚未運行且用戶點擊桌面乘車碼快捷方式
+- **THEN** 系統 SHALL 僅初始化執行乘車碼轉發所需的最小流程
+- **AND** 系統 SHALL NOT 建立主頁導覽狀態或將主頁 Activity 加入任務堆疊
