@@ -2,7 +2,6 @@ package com.golink.busiscoming.service
 
 import android.Manifest
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -538,33 +537,7 @@ class BusMonitorService : Service() {
     }
 
     private fun ensureNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val statusChannel = NotificationChannel(
-            BusMonitorNotificationContract.STATUS_CHANNEL_ID,
-            getString(R.string.notification_channel_monitor),
-            BusMonitorNotificationContract.STATUS_CHANNEL_IMPORTANCE
-        ).apply {
-            description = getString(R.string.notification_channel_monitor_description)
-            lockscreenVisibility = BusMonitorNotificationContract.LOCKSCREEN_VISIBILITY
-            enableVibration(false)
-            setSound(null, null)
-            setShowBadge(false)
-        }
-        val alertChannel = NotificationChannel(
-            BusMonitorNotificationContract.ALERT_CHANNEL_ID,
-            getString(R.string.notification_channel_urgent),
-            BusMonitorNotificationContract.ALERT_CHANNEL_IMPORTANCE
-        ).apply {
-            description = getString(R.string.notification_channel_urgent_description)
-            lockscreenVisibility = BusMonitorNotificationContract.LOCKSCREEN_VISIBILITY
-            enableVibration(false)
-            setSound(null, null)
-            setShowBadge(false)
-        }
-        getSystemService(NotificationManager::class.java).apply {
-            createNotificationChannel(statusChannel)
-            createNotificationChannel(alertChannel)
-        }
+        BusMonitorNotificationChannelManager.forContext(this).ensureChannels()
     }
 
     private fun canPostNotifications(): Boolean {
