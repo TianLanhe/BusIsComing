@@ -12,6 +12,28 @@ data class MonitorStartAttempt(
     val batteryOptimizationAttempted: Boolean = false
 )
 
+data class MonitorStartProgress(
+    val attempt: MonitorStartAttempt = MonitorStartAttempt(),
+    val awaitingStep: MonitorStartStep? = null
+) {
+    fun awaiting(step: MonitorStartStep): MonitorStartProgress {
+        val updatedAttempt = when (step) {
+            MonitorStartStep.NOTIFICATION_SETTINGS ->
+                attempt.copy(notificationSettingsAttempted = true)
+            MonitorStartStep.EXACT_ALARM -> attempt.copy(exactAlarmAttempted = true)
+            MonitorStartStep.BATTERY_OPTIMIZATION ->
+                attempt.copy(batteryOptimizationAttempted = true)
+            MonitorStartStep.BLOCKED,
+            MonitorStartStep.START_SERVICE -> attempt
+        }
+        return copy(attempt = updatedAttempt, awaitingStep = step)
+    }
+
+    fun returnedFromSettings(): MonitorStartProgress {
+        return copy(awaitingStep = null)
+    }
+}
+
 enum class MonitorStartStep {
     NOTIFICATION_SETTINGS,
     BLOCKED,

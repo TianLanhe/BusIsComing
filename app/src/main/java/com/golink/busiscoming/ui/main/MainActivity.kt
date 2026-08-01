@@ -78,6 +78,10 @@ import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.PinnedRouteRepository
 import com.golink.busiscoming.data.repository.RouteEndpointSnapshot
 import com.golink.busiscoming.service.BusMonitorService
+import com.golink.busiscoming.service.BusMonitorNotificationChannelManager
+import com.golink.busiscoming.service.MonitorNotificationHealth
+import com.golink.busiscoming.service.MonitorNotificationIssue
+import com.golink.busiscoming.service.MonitorNotificationSeverity
 import com.golink.busiscoming.service.BusMonitorSchedulingCapability
 import com.golink.busiscoming.service.BusMonitorSessionStore
 import com.golink.busiscoming.data.model.BusMonitorSessionPolicy
@@ -157,6 +161,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var routeDetailBottomSheet: RouteDetailBottomSheet
     private lateinit var etaArrivalsBottomSheet: EtaArrivalsBottomSheet
     private lateinit var monitorSettingsBottomSheet: MonitorSettingsBottomSheet
+    private lateinit var monitorNotificationChannelManager: BusMonitorNotificationChannelManager
+    private lateinit var monitorNotificationSettingsNavigator: MonitorNotificationSettingsNavigator
     private lateinit var transitCodePaymentLauncher: TransitCodePaymentLaunchAction
     private lateinit var topLevelNav: BottomNavigationView
     private val destinationState = TopLevelDestinationState()
@@ -176,6 +182,7 @@ class MainActivity : AppCompatActivity() {
         get() = routeQueryState.isQueryInProgress || activePinQueryId != null
     private var preserveSortOnNextResults: Boolean = false
     private var pendingMonitorStart: PendingMonitorStart? = null
+    private var monitorBatteryExplanationDialog: AlertDialog? = null
     private val refreshFeedbackState = RouteRefreshFeedbackState()
     private var refreshFinishRunnable: Runnable? = null
     private var refreshViewport: RefreshViewport? = null
@@ -224,14 +231,23 @@ class MainActivity : AppCompatActivity() {
         clearExpiredMonitorSession()
         routeDetailBottomSheet = RouteDetailBottomSheet(this, routeDetailRepository)
         etaArrivalsBottomSheet = EtaArrivalsBottomSheet(this)
+        monitorNotificationChannelManager =
+            BusMonitorNotificationChannelManager.forContext(this)
+        monitorNotificationSettingsNavigator =
+            MonitorNotificationSettingsNavigator.forContext(this)
         monitorSettingsBottomSheet = MonitorSettingsBottomSheet(
             context = this,
             onStart = { result ->
                 pendingMonitorStart?.copy(
                     walkingMinutes = result.walkingMinutes,
-                    voiceEnabled = result.voiceEnabled
-                )?.let { startMonitor(it) }
-            }
+                    voiceEnabled = result.voiceEnabled,
+                    progress = MonitorStartProgress()
+                )?.let { start ->
+                    pendingMonitorStart = start
+                    advanceMonitorStart(start)
+                }
+            },
+            onOpenNotificationSettings = ::openMonitorNotificationSettings
         )
         transitCodePaymentLauncher = TransitCodePaymentLauncher.forActivity(this)
         installTopLevelFragments(savedInstanceState)
@@ -288,6 +304,8 @@ class MainActivity : AppCompatActivity() {
         routeDetailBottomSheet.dispose()
         etaArrivalsBottomSheet.dispose()
         monitorSettingsBottomSheet.dispose()
+        monitorBatteryExplanationDialog?.dismiss()
+        monitorBatteryExplanationDialog = null
         queryExecutor.shutdownNow()
         pinExecutor.shutdownNow()
         pinnedRouteRepository.close()
@@ -304,6 +322,8 @@ class MainActivity : AppCompatActivity() {
             loadRouteConfigs()
         }
         retryCurrentPlaceAfterLocationSettings()
+        refreshMonitorNotificationHealth()
+        resumePendingMonitorStartAfterSettings()
     }
 
     override fun onStart() {
@@ -1633,7 +1653,8 @@ class MainActivity : AppCompatActivity() {
                     inputs = MonitorWalkingInputs(
                         interfaceDistanceMeters = interfaceDistanceMeters,
                         straightLineDistanceMeters = straightLineDistanceMeters
-                    )
+                    ),
+                    health = readMonitorNotificationHealth()
                 )
             }
         }
@@ -1646,7 +1667,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startMonitor(start: PendingMonitorStart) {
+    private fun advanceMonitorStart(start: PendingMonitorStart) {
         val walkingMinutes = start.walkingMinutes ?: return
         if (requiresNotificationPermission()) {
             pendingMonitorStart = start
@@ -1658,28 +1679,203 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        promptHighPriorityMonitorSettingsIfNeeded()
-        ContextCompat.startForegroundService(
-            this,
-            BusMonitorService.startIntent(
-                context = this,
-                route = start.route,
-                walkingMinutes = walkingMinutes,
-                voiceEnabled = start.voiceEnabled
-            )
+        val notificationHealth = readMonitorNotificationHealth()
+        monitorSettingsBottomSheet.updateNotificationHealth(notificationHealth)
+        val alarmManager = getSystemService(AlarmManager::class.java)
+        val step = BusMonitorStartPolicy.nextStep(
+            capabilities = MonitorStartCapabilities(
+                notificationBlocking =
+                    notificationHealth.severity == MonitorNotificationSeverity.BLOCKING,
+                canScheduleExactAlarm =
+                    BusMonitorSchedulingCapability.canScheduleExactAlarms(alarmManager),
+                ignoringBatteryOptimizations =
+                    BusMonitorSchedulingCapability.isIgnoringBatteryOptimizations(this)
+            ),
+            attempt = start.progress.attempt
         )
-        pendingMonitorStart = null
-        Toast.makeText(this, R.string.monitor_started, Toast.LENGTH_SHORT).show()
+        when (step) {
+            MonitorStartStep.NOTIFICATION_SETTINGS -> {
+                val waiting = start.copy(progress = start.progress.awaiting(step))
+                pendingMonitorStart = waiting
+                val navigation = monitorNotificationSettingsNavigator.open(
+                    notificationHealth.recommendedChannelId
+                )
+                if (navigation == MonitorNotificationSettingsNavigationResult.MANUAL_GUIDANCE) {
+                    pendingMonitorStart = waiting.copy(
+                        progress = waiting.progress.returnedFromSettings()
+                    )
+                    Toast.makeText(
+                        this,
+                        R.string.monitor_notification_manual_guidance,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+            MonitorStartStep.BLOCKED -> {
+                pendingMonitorStart = start
+                Toast.makeText(
+                    this,
+                    R.string.monitor_notification_blocking,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            MonitorStartStep.EXACT_ALARM -> openExactAlarmSettings(start, step)
+            MonitorStartStep.BATTERY_OPTIMIZATION -> {
+                val attempted = start.copy(
+                    progress = start.progress.awaiting(step).returnedFromSettings()
+                )
+                pendingMonitorStart = attempted
+                showBatteryOptimizationExplanation(attempted)
+            }
+            MonitorStartStep.START_SERVICE -> {
+                ContextCompat.startForegroundService(
+                    this,
+                    BusMonitorService.startIntent(
+                        context = this,
+                        route = start.route,
+                        walkingMinutes = walkingMinutes,
+                        voiceEnabled = start.voiceEnabled
+                    )
+                )
+                pendingMonitorStart = null
+                monitorSettingsBottomSheet.dismissAfterStart()
+                Toast.makeText(this, R.string.monitor_started, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
-    private fun promptHighPriorityMonitorSettingsIfNeeded() {
-        val alarmManager = getSystemService(AlarmManager::class.java)
-        if (!BusMonitorSchedulingCapability.canScheduleExactAlarms(alarmManager)) {
-            val intent = BusMonitorSchedulingCapability.exactAlarmSettingsIntent(this)
-            if (intent != null && intent.resolveActivity(packageManager) != null) {
-                Toast.makeText(this, R.string.monitor_alarm_hint, Toast.LENGTH_LONG).show()
-                startActivity(intent)
+    private fun openExactAlarmSettings(
+        start: PendingMonitorStart,
+        step: MonitorStartStep
+    ) {
+        val waiting = start.copy(progress = start.progress.awaiting(step))
+        pendingMonitorStart = waiting
+        val intent = BusMonitorSchedulingCapability.exactAlarmSettingsIntent(this)
+        if (intent != null && startSystemSettingsSafely(intent)) {
+            Toast.makeText(this, R.string.monitor_alarm_hint, Toast.LENGTH_LONG).show()
+            return
+        }
+        val resumed = waiting.copy(progress = waiting.progress.returnedFromSettings())
+        pendingMonitorStart = resumed
+        Toast.makeText(
+            this,
+            R.string.monitor_alarm_settings_unavailable,
+            Toast.LENGTH_LONG
+        ).show()
+        advanceMonitorStart(resumed)
+    }
+
+    private fun showBatteryOptimizationExplanation(start: PendingMonitorStart) {
+        monitorBatteryExplanationDialog?.dismiss()
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.monitor_battery_explanation_title)
+            .setMessage(R.string.monitor_battery_explanation_message)
+            .setPositiveButton(R.string.monitor_battery_continue) { _, _ ->
+                openBatteryOptimizationSettings(start)
             }
+            .setNegativeButton(R.string.monitor_battery_not_now) { _, _ ->
+                continueAfterBatteryOptimizationPrompt(start)
+            }
+            .setOnCancelListener {
+                continueAfterBatteryOptimizationPrompt(start)
+            }
+            .create()
+        dialog.setOnDismissListener {
+            if (monitorBatteryExplanationDialog == dialog) {
+                monitorBatteryExplanationDialog = null
+            }
+        }
+        monitorBatteryExplanationDialog = dialog
+        dialog.show()
+    }
+
+    private fun openBatteryOptimizationSettings(start: PendingMonitorStart) {
+        if (BusMonitorSchedulingCapability.isIgnoringBatteryOptimizations(this)) {
+            continueAfterBatteryOptimizationPrompt(start)
+            return
+        }
+        val waiting = start.copy(
+            progress = start.progress.awaiting(MonitorStartStep.BATTERY_OPTIMIZATION)
+        )
+        pendingMonitorStart = waiting
+        val intent = BusMonitorSchedulingCapability.batteryOptimizationSettingsIntent(this)
+        if (intent != null && startSystemSettingsSafely(intent)) return
+
+        val resumed = waiting.copy(progress = waiting.progress.returnedFromSettings())
+        pendingMonitorStart = resumed
+        Toast.makeText(
+            this,
+            R.string.monitor_battery_settings_unavailable,
+            Toast.LENGTH_LONG
+        ).show()
+        advanceMonitorStart(resumed)
+    }
+
+    private fun continueAfterBatteryOptimizationPrompt(start: PendingMonitorStart) {
+        if (pendingMonitorStart != start || isFinishing || isDestroyed) return
+        advanceMonitorStart(start)
+    }
+
+    private fun openMonitorNotificationSettings(health: MonitorNotificationHealth) {
+        if (
+            monitorNotificationSettingsNavigator.open(health.recommendedChannelId) ==
+            MonitorNotificationSettingsNavigationResult.MANUAL_GUIDANCE
+        ) {
+            Toast.makeText(
+                this,
+                R.string.monitor_notification_manual_guidance,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun refreshMonitorNotificationHealth() {
+        if (
+            ::monitorNotificationChannelManager.isInitialized &&
+            ::monitorSettingsBottomSheet.isInitialized &&
+            monitorSettingsBottomSheet.isShowing
+        ) {
+            monitorSettingsBottomSheet.updateNotificationHealth(
+                readMonitorNotificationHealth()
+            )
+        }
+    }
+
+    private fun readMonitorNotificationHealth(): MonitorNotificationHealth {
+        return runCatching { monitorNotificationChannelManager.readHealth() }.getOrElse {
+            MonitorNotificationHealth(
+                severity = MonitorNotificationSeverity.UNKNOWN,
+                issues = listOf(MonitorNotificationIssue.PLATFORM_CHANNELS_UNAVAILABLE)
+            )
+        }
+    }
+
+    private fun resumePendingMonitorStartAfterSettings() {
+        val waiting = pendingMonitorStart?.takeIf { it.progress.awaitingStep != null } ?: return
+        val resumed = waiting.copy(progress = waiting.progress.returnedFromSettings())
+        pendingMonitorStart = resumed
+        mainHandler.post {
+            if (
+                !isFinishing &&
+                !isDestroyed &&
+                pendingMonitorStart == resumed
+            ) {
+                advanceMonitorStart(resumed)
+            }
+        }
+    }
+
+    private fun startSystemSettingsSafely(intent: Intent): Boolean {
+        return try {
+            if (intent.resolveActivity(packageManager) == null) return false
+            startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        } catch (_: RuntimeException) {
+            false
         }
     }
 
@@ -1698,7 +1894,7 @@ class MainActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_POST_NOTIFICATIONS -> {
                 if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-                    pendingMonitorStart?.let { startMonitor(it) }
+                    pendingMonitorStart?.let { advanceMonitorStart(it) }
                 } else {
                     pendingMonitorStart = null
                     Toast.makeText(
@@ -2333,7 +2529,8 @@ class MainActivity : AppCompatActivity() {
     private data class PendingMonitorStart(
         val route: BusRouteOption,
         val walkingMinutes: Int? = null,
-        val voiceEnabled: Boolean = true
+        val voiceEnabled: Boolean = true,
+        val progress: MonitorStartProgress = MonitorStartProgress()
     )
 
     private data class RefreshViewport(

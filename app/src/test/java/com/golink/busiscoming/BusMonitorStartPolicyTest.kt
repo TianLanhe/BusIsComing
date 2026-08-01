@@ -3,6 +3,7 @@ package com.golink.busiscoming
 import com.golink.busiscoming.ui.main.BusMonitorStartPolicy
 import com.golink.busiscoming.ui.main.MonitorStartAttempt
 import com.golink.busiscoming.ui.main.MonitorStartCapabilities
+import com.golink.busiscoming.ui.main.MonitorStartProgress
 import com.golink.busiscoming.ui.main.MonitorStartStep
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -63,6 +64,24 @@ class BusMonitorStartPolicyTest {
                     ignoringBatteryOptimizations = true
                 ),
                 MonitorStartAttempt()
+            )
+        )
+    }
+
+    @Test
+    fun returningFromSystemSettingsKeepsAttemptButClearsAwaitingStep() {
+        val waiting = MonitorStartProgress().awaiting(MonitorStartStep.EXACT_ALARM)
+        assertEquals(MonitorStartStep.EXACT_ALARM, waiting.awaitingStep)
+        assertEquals(true, waiting.attempt.exactAlarmAttempted)
+
+        val returned = waiting.returnedFromSettings()
+        assertEquals(null, returned.awaitingStep)
+        assertEquals(true, returned.attempt.exactAlarmAttempted)
+        assertEquals(
+            MonitorStartStep.BATTERY_OPTIMIZATION,
+            BusMonitorStartPolicy.nextStep(
+                missingEveryCapability(notificationBlocking = false),
+                returned.attempt
             )
         )
     }

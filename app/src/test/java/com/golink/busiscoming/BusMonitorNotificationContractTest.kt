@@ -77,7 +77,7 @@ class BusMonitorNotificationContractTest {
         assertTrue(manifestXml.contains("android.permission.WAKE_LOCK"))
         assertTrue(manifestXml.contains("android.permission.FOREGROUND_SERVICE_DATA_SYNC"))
         assertTrue(manifestXml.contains("android:foregroundServiceType=\"dataSync\""))
-        assertFalse(manifestXml.contains("android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"))
+        assertTrue(manifestXml.contains("android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"))
 
         assertTrue(serviceKt.contains("ACTION_AUTO_STOP"))
         assertTrue(serviceKt.contains("acquireWakeLock"))

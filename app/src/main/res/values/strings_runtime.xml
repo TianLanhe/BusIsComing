@@ -126,6 +126,12 @@
     <string name="monitor_notification_settings">前往設定</string>
     <string name="monitor_notification_settings_content_description">開啟通知與鎖屏設定</string>
     <string name="monitor_notification_manual_guidance">請在系統設定中開啟 BusIsComing 通知，並檢查「巴士通知欄監控」與「巴士出門提醒」的鎖屏顯示。</string>
+    <string name="monitor_alarm_settings_unavailable">未能開啟鬧鐘與提醒設定，監控會以一般排程繼續</string>
+    <string name="monitor_battery_explanation_title">允許不受電池最佳化限制？</string>
+    <string name="monitor_battery_explanation_message">這有助提高鎖屏更新與語音播報的及時性，但可能增加耗電。你可以拒絕，監控仍會以現有降級方式運作。</string>
+    <string name="monitor_battery_continue">繼續</string>
+    <string name="monitor_battery_not_now">暫不</string>
+    <string name="monitor_battery_settings_unavailable">未能開啟電池最佳化確認頁，監控仍會繼續</string>
     <string name="monitor_voice">語音播報</string>
     <string name="monitor_start">開始監控</string>
     <string name="monitor_source_api">接口 %1$d 分鐘</string>
