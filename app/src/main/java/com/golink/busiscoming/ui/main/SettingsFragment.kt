@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.fragment.app.Fragment
 import com.golink.busiscoming.BuildConfig
@@ -21,6 +22,7 @@ import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.data.model.AppUpdateState
 import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailureKind
+import com.golink.busiscoming.data.update.AppUpdateExternalActions
 import com.golink.busiscoming.data.update.AppUpdateRuntime
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.ui.settings.AboutActivity
@@ -201,15 +203,36 @@ class SettingsFragment : Fragment() {
         }
         if (manualUpdateCheckRequested && !state.isChecking) {
             manualUpdateCheckRequested = false
-            if (state.lastFailure != null) {
-                val message = if (state.lastFailure.kind == UpdateFailureKind.PLAY_UNAVAILABLE) {
-                    R.string.update_play_unavailable
-                } else {
-                    R.string.update_status_failed
-                }
-                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+            when (state.lastFailure?.kind) {
+                UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED ->
+                    showPlayVerificationFailure(R.string.update_debug_build_unsupported_message)
+                UpdateFailureKind.PLAY_APP_NOT_OWNED ->
+                    showPlayVerificationFailure(R.string.update_play_not_owned_message)
+                UpdateFailureKind.PLAY_UNAVAILABLE -> Toast.makeText(
+                    requireContext(),
+                    R.string.update_play_unavailable,
+                    Toast.LENGTH_SHORT
+                ).show()
+                null -> Unit
+                else -> Toast.makeText(
+                    requireContext(),
+                    R.string.update_status_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
+    }
+
+    private fun showPlayVerificationFailure(@StringRes messageRes: Int) {
+        val context = context ?: return
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.update_verification_failed_title)
+            .setMessage(messageRes)
+            .setNegativeButton(R.string.update_action_cancel, null)
+            .setPositiveButton(R.string.update_action_open_play) { _, _ ->
+                AppUpdateExternalActions.openPlayListing(context)
+            }
+            .show()
     }
 
     private fun requestTransitCodeShortcut(bypassXiaomiPermissionGate: Boolean = false) {

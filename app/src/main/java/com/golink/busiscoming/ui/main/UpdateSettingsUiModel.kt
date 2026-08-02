@@ -2,6 +2,7 @@ package com.golink.busiscoming.ui.main
 
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.AppUpdateState
+import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailureKind
 import com.golink.busiscoming.data.model.UpdateSnapshotState
 
@@ -19,6 +20,7 @@ object UpdateSettingsUiModelFactory {
         val summaryRes = when {
             state.isChecking -> R.string.update_status_checking
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE &&
+                state.lastTrigger == UpdateCheckTrigger.MANUAL &&
                 state.lastFailure != null -> R.string.update_status_available_failed
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE &&
                 state.skippedVersionCode == state.snapshot.availableVersionCode ->
@@ -29,10 +31,16 @@ object UpdateSettingsUiModelFactory {
                 R.string.update_status_available_deferred
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE ->
                 R.string.update_status_available
+            state.lastTrigger == UpdateCheckTrigger.MANUAL &&
+                state.lastFailure?.kind in setOf(
+                    UpdateFailureKind.PLAY_APP_NOT_OWNED,
+                    UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED
+                ) -> R.string.update_status_unverified
             state.snapshot.state == UpdateSnapshotState.UP_TO_DATE ->
                 R.string.update_status_up_to_date
             state.snapshot.state == UpdateSnapshotState.NEVER_CHECKED &&
-                state.lastFailure == null -> R.string.update_status_never_checked
+                (state.lastFailure == null || state.lastTrigger == UpdateCheckTrigger.AUTOMATIC) ->
+                R.string.update_status_never_checked
             state.lastFailure?.kind == UpdateFailureKind.PLAY_UNAVAILABLE ->
                 R.string.update_play_unavailable
             else -> R.string.update_status_failed
