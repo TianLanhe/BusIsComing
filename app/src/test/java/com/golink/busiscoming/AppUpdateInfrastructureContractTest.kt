@@ -32,6 +32,11 @@ class AppUpdateInfrastructureContractTest {
     }
 
     @Test
+    fun playPriorityIsTheDefaultUpdateStrategy() {
+        assertFalse(BuildConfig.FORCE_WEBSITE_UPDATE_CHECK)
+    }
+
+    @Test
     fun websiteOnlySwitchIsDefinedAndWiresTheCoordinator() {
         assertTrue(
             Regex(

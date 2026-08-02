@@ -1,17 +1,16 @@
 ## ADDED Requirements
 
-### Requirement: 系統允許上架前暫時強制網站更新渠道
-系統 SHALL 提供集中且預設啟用的本機構建開關，在 App 尚未正式上架 Google Play 期間強制自動與手動更新檢查使用網站渠道，並 SHALL 保留關閉開關後恢復 Play 優先策略的完整實作。
+### Requirement: 系統保留本機網站渠道回退開關
+系統 SHALL 提供集中且預設關閉的本機構建開關；正常構建 SHALL 使用 Play 優先策略，只有明確啟用回退時才強制自動與手動更新檢查使用網站渠道。
 
-#### Scenario: 上架前開關啟用
+#### Scenario: 網站回退開關啟用
 - **WHEN** `FORCE_WEBSITE_UPDATE_CHECK` 為 `true`
 - **THEN** 系統 SHALL 不論初始安裝渠道或 Google Play package 是否可用，直接使用官方網站 metadata 檢查更新
 - **AND** 系統 SHALL 將可靠結果的更新渠道設為網站
 - **AND** 系統 SHALL NOT 執行 Play 版本檢查、Play 安裝狀態刷新或 flexible update
 
-#### Scenario: 上架後關閉開關
-- **WHEN** App 已正式上架並完成真實 Play 更新驗收
-- **AND** `FORCE_WEBSITE_UPDATE_CHECK` 改為 `false`
+#### Scenario: 正常構建預設使用 Play 優先策略
+- **WHEN** `FORCE_WEBSITE_UPDATE_CHECK` 為預設值 `false`
 - **THEN** 系統 SHALL 恢復本規格定義的 Google Play 優先及網站兜底策略
 - **AND** 系統 SHALL NOT 需要修改 coordinator、resolver 或更新 UI 才能恢復 Play 流程
 

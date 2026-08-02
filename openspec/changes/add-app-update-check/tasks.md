@@ -20,7 +20,8 @@
 - [x] 3.3 修正 `WebsiteUpdateSource` 以已部署響應為 runtime 契約：不要求 `applicationId`，接受精確相對 `/api/downloads/android/latest` 或等價官方 HTTPS 絕對 URL，拒絕其他 path／host／scheme／port／query／fragment；以實際響應同形 fixture 覆蓋合法、有更新、無更新、缺欄位、錯誤來源、惡意下載 URL、錯誤日期與 HTTP 失敗。
 - [x] 3.4 實作 `UpdateChannelResolver` 並以表格化測試覆蓋：Play 可更新、Play 無更新、Play 暫時失敗、App not owned、有 Play 的網站安裝、無 Play 的非 Play 安裝、無 Play 的 Play 初始安裝及未知 installer；確認 Play 暫時失敗不降級網站。
 - [x] 3.5 在網站渠道更新動作中只按目前 App 語言產生 `/zh-hant/#download`、`/zh-hans/#download`、`/en/#download` 白名單頁面 Intent，不使用 metadata 的 `downloadUrl`；以測試確認不直接下載或安裝 APK。
-- [x] 3.6 新增預設啟用的 `FORCE_WEBSITE_UPDATE_CHECK` BuildConfig 開關；啟用時繞過 Play 檢查、監聽與安裝狀態操作，所有安裝來源均直接查網站並保存為網站渠道，以 JVM 行為測試及構建接線契約測試覆蓋，關閉時保留原有 Play 優先邏輯。
+- [x] 3.6 新增 `FORCE_WEBSITE_UPDATE_CHECK` BuildConfig 開關；初次上架前預設啟用，啟用時繞過 Play 檢查、監聽與安裝狀態操作，所有安裝來源均直接查網站並保存為網站渠道，以 JVM 行為測試及構建接線契約測試覆蓋，關閉時保留原有 Play 優先邏輯。
+- [x] 3.7 進入 Google Play 驗收階段時把 `FORCE_WEBSITE_UPDATE_CHECK` 預設值改為 `false`，以生成後的 `BuildConfig` JVM 契約測試防止正常構建意外退回網站強制模式；同步更新目前行為、TD-002、proposal、design 與規格，真實 Play 及發佈鏈任務保持未完成。
 
 ## 4. 檢查協調與 Android 生命週期
 

@@ -41,10 +41,11 @@
 
 ## TD-002：Google Play 上架前暫時強制網站更新渠道
 
-- **狀態**：已啟用，主動延期
+- **狀態**：回退開關已停用，等待真實 Play 與發佈鏈驗收後關閉
 - **記錄日期**：2026-07-24
+- **預設切換日期**：2026-08-02
 - **影響範圍**：App 自動與手動更新檢查、更新渠道選擇及 Play flexible update
-- **目前影響**：所有安裝來源均只從官方網站 metadata 判斷更新，更新操作只開啟目前語言的網站下載頁；既有 Google Play 優先分流及 flexible update 代碼保留，但目前不會進入。
+- **目前影響**：正常構建已使用 Google Play 優先分流及 flexible update；網站強制模式仍可由本機構建開關恢復。真實 Play 帳號、較高版本及網站簽名發佈鏈驗收尚未完成，因此本條目暫不關閉。
 
 ### 已驗證根因
 
@@ -54,18 +55,18 @@
 
 ### 本次延期邊界
 
-- 開關位於 `app/build.gradle.kts`：`FORCE_WEBSITE_UPDATE_CHECK=true`。
+- 開關位於 `app/build.gradle.kts`：`FORCE_WEBSITE_UPDATE_CHECK=false`。
 - 開關啟用時，coordinator 不執行 Play 版本檢查、下載狀態監聽、安裝狀態刷新或 flexible update，可靠快照固定使用 `WEBSITE` 渠道。
 - 保留 Play source、渠道 resolver、Play 詳情頁及 flexible update 實作，不另建平行更新流程。
 - 此開關是本機構建配置，不提供用戶可見設定或遠端控制。
 
 ### 後續恢復步驟
 
-1. App 正式上架 Google Play，並準備相同 application ID、正確簽名及較高 `versionCode` 的 internal test／Internal App Sharing 版本。
-2. 把 `app/build.gradle.kts` 的 `FORCE_WEBSITE_UPDATE_CHECK` 改為 `false`。
+1. `FORCE_WEBSITE_UPDATE_CHECK=false` 已進入正常構建，並以 JVM 契約測試鎖定預設值。
+2. 準備相同 application ID、正確簽名及較高 `versionCode` 的 internal test／Internal App Sharing 版本。
 3. 以已擁有 App 的真實 Play 帳號驗證資格判斷、flexible 下載、取消／返回、下載完成、`completeUpdate()` 及升級後清除小紅點。
 4. 運行既有開關接線、Play 分流及三語設定頁契約測試，完成 Play 詳情頁恢復路徑回歸。
-5. 將本條目狀態改為已關閉，記錄驗證版本、軌道及日期。
+5. 完成網站 signed universal APK、metadata 與 `ERROR_APP_NOT_OWNED` 發佈順序驗收後，將本條目狀態改為已關閉並記錄版本、軌道及日期。
 
 ### 關閉條件
 

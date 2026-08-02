@@ -2,13 +2,15 @@
 
 ## 渠道規則
 
-### 目前上架前行為
+### 目前 Play 優先行為
 
-App 尚未正式上架 Google Play，`app/build.gradle.kts` 目前把 `FORCE_WEBSITE_UPDATE_CHECK` 設為 `true`。自動與手動檢查均忽略初始安裝渠道及 Google Play 可用性，直接使用網站 metadata；發現更新後只會開啟目前語言的網站下載頁。開關啟用期間不執行 Play 版本檢查、安裝狀態刷新或 flexible update。
+`app/build.gradle.kts` 目前把 `FORCE_WEBSITE_UPDATE_CHECK` 設為 `false`。更新檢查以 Google Play 對目前帳號、軌道、地區及裝置的結果為優先權威。只要官方 Play 可用，不論 App 最初由哪個渠道安裝，都不以網站全局版本覆蓋 Play 的資格判斷。只有初始為非 Play 安裝且目前沒有可用 Play 時，才使用網站 metadata；初始為 Play 的安裝在 Play 後來不可用時只顯示受控錯誤。
 
-### 上架後目標行為
+真實 Play flexible update、簽名與網站發佈鏈驗收仍未完成；目前狀態代表正常構建已進入 Play 優先驗收，不代表發布驗收任務已通過。
 
-完成 Google Play 上架及真實更新驗收後，把 `FORCE_WEBSITE_UPDATE_CHECK` 改為 `false`，即可恢復既有 Play 優先策略：更新檢查以 Google Play 對目前帳號、軌道、地區及裝置的結果為優先權威。只要官方 Play 可用，不論 App 最初由哪個渠道安裝，都不以網站全局版本覆蓋 Play 的資格判斷。只有初始為非 Play 安裝且目前沒有可用 Play 時，才使用網站 metadata；初始為 Play 的安裝在 Play 後來不可用時只顯示受控錯誤。
+### 網站渠道回退
+
+`FORCE_WEBSITE_UPDATE_CHECK=true` 時，自動與手動檢查均忽略初始安裝渠道及 Google Play 可用性，直接使用網站 metadata；發現更新後只會開啟目前語言的網站下載頁。開關啟用期間不執行 Play 版本檢查、安裝狀態刷新或 flexible update。此開關保留作本機發布驗收回退，不是正常構建預設。
 
 自動檢查在冷啟動首個主要畫面可用後執行，最多每 24 小時嘗試一次。網站的 `lastUpdated` 解析為香港時區當日零時，滿 72 小時才自動提醒；「稍後提醒」及「前往更新」均把同一 `versionCode` 延後 72 小時，「略過此版本」只停止同一版本的自動 Dialog。手動檢查不受上述節流及提醒抑制限制。24 小時與 72 小時門檻均以可注入 clock 的毫秒級測試驗證，不需真機等待。
 
