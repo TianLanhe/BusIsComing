@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.TextView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.WalkingScenarioModifier
@@ -39,6 +40,7 @@ class MonitorSettingsBottomSheet(
     private lateinit var walkingMinutesText: TextView
     private lateinit var estimateSourceText: TextView
     private lateinit var notificationStatusText: TextView
+    private lateinit var notificationSettingsButton: MaterialButton
     private lateinit var voiceSwitch: SwitchMaterial
     private var notificationHealth = unknownNotificationHealth()
 
@@ -94,6 +96,8 @@ class MonitorSettingsBottomSheet(
                 MonitorNotificationSeverity.UNKNOWN -> R.string.monitor_notification_unknown
             }
         )
+        notificationSettingsButton.isVisible =
+            MonitorNotificationSettingsActionPolicy.isVisible(health.severity)
     }
 
     fun dismissAfterStart() {
@@ -109,6 +113,9 @@ class MonitorSettingsBottomSheet(
         walkingMinutesText = root.findViewById(R.id.monitor_walking_minutes)
         estimateSourceText = root.findViewById(R.id.monitor_estimate_source)
         notificationStatusText = root.findViewById(R.id.monitor_notification_status)
+        notificationSettingsButton = root.findViewById(
+            R.id.monitor_notification_settings_button
+        )
         voiceSwitch = root.findViewById(R.id.monitor_voice_switch)
     }
 
@@ -177,9 +184,7 @@ class MonitorSettingsBottomSheet(
     }
 
     private fun bindSettingsControls(root: View) {
-        root.findViewById<MaterialButton>(
-            R.id.monitor_notification_settings_button
-        ).setOnClickListener {
+        notificationSettingsButton.setOnClickListener {
             onOpenNotificationSettings(notificationHealth)
         }
         root.findViewById<MaterialButton>(R.id.monitor_start_button).setOnClickListener {

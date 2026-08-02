@@ -76,7 +76,7 @@ channel 不存在時先建立再查詢；建立後普通 channel 仍不存在視
 
 - blocking：保存既有 `PendingMonitorStart`，打開最具體設定頁；返回後重新檢查，修復成功才續辦，仍 blocking 則留在面板並提示；
 - warning／unknown：允許啟動，狀態區保留可選設定入口；
-- ready：繼續既有權限與高優先級調度流程。
+- ready：隱藏設定入口，繼續既有權限與高優先級調度流程。
 
 替代方案是每次遇到 warning 都強制跳轉。這會讓 OEM 無法確認或用戶主動保留隱私設定時無法使用基本監控，因此只對無可見 ongoing notification 的 blocking 狀態強制攔截。
 
@@ -152,7 +152,7 @@ channel 不存在時先建立再查詢；建立後普通 channel 仍不存在視
 
 ## Risks / Trade-offs
 
-- [Risk] `getLockscreenVisibility()` 正常仍可能被全局鎖屏或 OEM 設定覆蓋。→ Mitigation：只將公開 API 明確異常標為問題，正常狀態文案使用「未發現問題」而非保證，保留設定入口。
+- [Risk] `getLockscreenVisibility()` 正常仍可能被全局鎖屏或 OEM 設定覆蓋。→ Mitigation：只將公開 API 明確異常標為問題，正常狀態文案使用「未發現問題」而非保證；`READY` 隱藏設定入口，無法確認的 `UNKNOWN` 仍保留入口。
 - [Risk] 直接電池豁免增加耗電、權限敏感度與 Google Play 審核風險。→ Mitigation：只在用戶主動啟動短時監控時、尚未豁免時請求；先說明用途與耗電影響，拒絕可繼續，session 停止時仍完整釋放資源。
 - [Risk] 多個系統設定頁造成重複跳轉或 `onResume` 循環。→ Mitigation：單次啟動 coordinator 記錄已嘗試步驟，每次只開一頁，返回後重新查詢並最多嘗試一次。
 - [Risk] 普通 channel blocking 時中止啟動改變既有「點擊即開始」行為。→ Mitigation：保存 pending start，修復後自動續辦；無法跳轉時展示可操作的手動路徑。

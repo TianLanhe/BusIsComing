@@ -7,6 +7,7 @@
 - **WHEN** App 通知總開關及普通監控渠道沒有公開 API 可確定的 blocking 問題
 - **THEN** 啟動面板 SHALL 展示通知監控可啟動的狀態
 - **AND** 系統 SHALL NOT 將此狀態描述為保證所有設備都會在鎖屏顯示
+- **AND** 面板 SHALL 隱藏通知設定操作入口
 
 #### Scenario: 面板展示需要設定狀態
 - **WHEN** channel 健康檢查發現 blocking 或 warning
