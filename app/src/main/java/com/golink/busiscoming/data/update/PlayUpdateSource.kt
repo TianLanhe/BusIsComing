@@ -84,6 +84,12 @@ class GooglePlayUpdateSource(
         manager.appUpdateInfo
             .addOnSuccessListener { info ->
                 latestInfo = info
+                diagnostics.record(
+                    AppUpdateDiagnosticEvent.PlaySuccess(
+                        updateAvailability = info.updateAvailability(),
+                        availableVersionCode = info.availableVersionCode()
+                    )
+                )
                 callback(
                     PlayUpdateResultMapper.success(
                         availability = info.updateAvailability(),
@@ -96,6 +102,7 @@ class GooglePlayUpdateSource(
             }
             .addOnFailureListener { error ->
                 val errorCode = (error as? InstallException)?.errorCode
+                diagnostics.record(AppUpdateDiagnosticEvent.PlayFailure(errorCode))
                 callback(PlayUpdateResultMapper.failure(errorCode))
             }
     }

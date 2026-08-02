@@ -170,13 +170,15 @@ class AppUpdateCoordinator(
         val initialChannel = stored.initialInstallChannel ?: InitialInstallChannel.UNKNOWN_NON_PLAY
         val playAvailable = playPackageProbe.isPlayAvailable()
         if (!playAvailable) {
-            when (
-                UpdateChannelResolver.resolve(
-                    playPackageAvailable = false,
-                    initialInstallChannel = initialChannel,
-                    playResult = null
-                )
-            ) {
+            val decision = UpdateChannelResolver.resolve(
+                playPackageAvailable = false,
+                initialInstallChannel = initialChannel,
+                playResult = null
+            )
+            diagnostics.record(
+                AppUpdateDiagnosticEvent.ChannelDecision(initialChannel, decision)
+            )
+            when (decision) {
                 UpdateChannelDecision.WEBSITE -> checkWebsite(UpdateChannel.WEBSITE)
                 UpdateChannelDecision.PLAY_UNAVAILABLE -> completeFailure(
                     UpdateFailureKind.PLAY_UNAVAILABLE
@@ -189,14 +191,17 @@ class AppUpdateCoordinator(
     }
 
     private fun handlePlayResult(result: PlayUpdateResult) {
-        when (
-            UpdateChannelResolver.resolve(
-                playPackageAvailable = true,
-                initialInstallChannel = stateStore.load().initialInstallChannel
-                    ?: InitialInstallChannel.UNKNOWN_NON_PLAY,
-                playResult = result
-            )
-        ) {
+        val initialChannel = stateStore.load().initialInstallChannel
+            ?: InitialInstallChannel.UNKNOWN_NON_PLAY
+        val decision = UpdateChannelResolver.resolve(
+            playPackageAvailable = true,
+            initialInstallChannel = initialChannel,
+            playResult = result
+        )
+        diagnostics.record(
+            AppUpdateDiagnosticEvent.ChannelDecision(initialChannel, decision)
+        )
+        when (decision) {
             UpdateChannelDecision.PLAY -> when (result) {
                 is PlayUpdateResult.Available -> completePlayAvailable(result)
                 PlayUpdateResult.NotAvailable -> completeReliable(
@@ -208,7 +213,10 @@ class AppUpdateCoordinator(
                 )
                 else -> completeFailure(UpdateFailureKind.PLAY_TEMPORARY)
             }
-            UpdateChannelDecision.PLAY_WITH_WEBSITE_METADATA -> checkWebsite(UpdateChannel.PLAY)
+            UpdateChannelDecision.PLAY_WITH_WEBSITE_METADATA -> checkWebsite(
+                resultChannel = UpdateChannel.PLAY,
+                nonAvailableFailure = UpdateFailureKind.PLAY_APP_NOT_OWNED
+            )
             UpdateChannelDecision.PLAY_FAILED -> completeFailure(
                 (result as? PlayUpdateResult.Failed)?.kind ?: UpdateFailureKind.PLAY_TEMPORARY
             )
@@ -243,17 +251,24 @@ class AppUpdateCoordinator(
         )
     }
 
-    private fun checkWebsite(resultChannel: UpdateChannel) {
+    private fun checkWebsite(
+        resultChannel: UpdateChannel,
+        nonAvailableFailure: UpdateFailureKind? = null
+    ) {
         val checkedAt = clock()
         websiteSource.check(installedVersionCode, checkedAt) { result ->
             when (result) {
                 is WebsiteUpdateResult.Available -> completeReliable(
                     result.snapshot.copy(channel = resultChannel)
                 )
-                is WebsiteUpdateResult.UpToDate -> completeReliable(
-                    result.snapshot.copy(channel = resultChannel)
+                is WebsiteUpdateResult.UpToDate -> if (nonAvailableFailure == null) {
+                    completeReliable(result.snapshot.copy(channel = resultChannel))
+                } else {
+                    completeFailure(nonAvailableFailure)
+                }
+                is WebsiteUpdateResult.Failed -> completeFailure(
+                    nonAvailableFailure ?: result.kind
                 )
-                is WebsiteUpdateResult.Failed -> completeFailure(result.kind)
             }
         }
     }
@@ -275,6 +290,7 @@ class AppUpdateCoordinator(
     }
 
     private fun completeFailure(kind: UpdateFailureKind) {
+        diagnostics.record(AppUpdateDiagnosticEvent.CompletedFailure(kind))
         val stored = stateStore.load().copy(lastAttemptOutcome = UpdateAttemptOutcome.FAILED)
         stateStore.save(stored)
         val retained = stored.snapshot.state != UpdateSnapshotState.NEVER_CHECKED
