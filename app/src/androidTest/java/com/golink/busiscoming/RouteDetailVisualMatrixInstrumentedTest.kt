@@ -20,9 +20,15 @@ import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.repository.RouteDetailRepository
+import com.golink.busiscoming.data.repository.RouteGeometryDataSource
+import com.golink.busiscoming.data.repository.RouteGeometryLoadHandle
+import com.golink.busiscoming.data.repository.RouteGeometryRequest
+import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.ui.main.RouteDetailActivity
 import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
 import com.golink.busiscoming.ui.main.RouteDetailRuntime
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.card.MaterialCardView
 import java.io.FileInputStream
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
@@ -60,6 +66,14 @@ class RouteDetailVisualMatrixInstrumentedTest {
             }
         }
         RouteDetailRuntime.etaResolver = { DemoScreenshotFixtures.primaryRoute().waitTimeState }
+        RouteDetailRuntime.geometryRepositoryFactory = {
+            object : RouteGeometryDataSource {
+                override fun loadGeometries(
+                    requests: List<RouteGeometryRequest>,
+                    onResult: (RouteGeometryRequest, Result<RouteGeometrySegment>) -> Unit
+                ): RouteGeometryLoadHandle = RouteGeometryLoadHandle {}
+            }
+        }
         executeShell("wm size 1080x2400")
         executeShell("wm density 480")
         executeShell("settings put system font_scale $fontScale")
@@ -75,6 +89,12 @@ class RouteDetailVisualMatrixInstrumentedTest {
                 configure(language, theme)
                 ActivityScenario.launch<RouteDetailActivity>(intent()).use { scenario ->
                     waitForDetail(scenario)
+                    scenario.onActivity { activity ->
+                        BottomSheetBehavior.from(
+                            activity.findViewById<MaterialCardView>(R.id.routeDetailSheet)
+                        ).state = BottomSheetBehavior.STATE_EXPANDED
+                    }
+                    waitForUi()
                     scenario.onActivity { activity ->
                         assertEquals(fontScale, activity.resources.configuration.fontScale, 0.01f)
                         assertEquals(360, activity.resources.displayMetrics.widthPixels * 160 / activity.resources.displayMetrics.densityDpi)

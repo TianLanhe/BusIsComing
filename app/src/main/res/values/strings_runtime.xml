@@ -237,4 +237,24 @@
     <string name="route_detail_walking_incomplete">部分步行距離由路線摘要提供</string>
     <string name="route_detail_origin">起點</string>
     <string name="route_detail_destination">終點</string>
+    <string name="route_map_content_description">路線地圖；所有站點及轉乘亦可在下方路線詳情閱讀</string>
+    <string name="route_map_current_location">顯示目前位置</string>
+    <string name="route_map_overview">全覽路線</string>
+    <string name="route_map_legend_bus">巴士路線</string>
+    <string name="route_map_legend_walk">步行連接（示意）</string>
+    <string name="route_map_unavailable">地圖暫不可用，已顯示完整文字詳情</string>
+    <string name="route_map_location_permission_denied">未取得位置權限，仍可查看完整路線</string>
+    <string name="route_map_location_permission_settings">請在系統設定允許位置權限</string>
+    <string name="route_map_location_disabled">請先開啟系統定位服務</string>
+    <string name="route_map_location_unavailable">暫時未能取得目前位置</string>
+    <string name="route_map_geometry_partial">部分路線道路暫未能顯示</string>
+    <string name="route_detail_sheet_handle_summary">路線詳情目前為摘要；點兩下展開全屏</string>
+    <string name="route_detail_sheet_handle_half">路線詳情目前為半屏；點兩下展開全屏</string>
+    <string name="route_detail_sheet_handle_full">路線詳情目前為全屏；點兩下收合至摘要</string>
+    <string name="route_map_marker_origin">起點：%1$s</string>
+    <string name="route_map_marker_destination">終點：%1$s</string>
+    <string name="route_map_marker_boarding">%1$s 上車站：%2$s</string>
+    <string name="route_map_marker_via">%1$s 途經站：%2$s</string>
+    <string name="route_map_marker_alighting">%1$s 下車站：%2$s</string>
+    <string name="route_map_marker_transfer">由 %1$s 轉乘 %2$s：%3$s</string>
 </resources>

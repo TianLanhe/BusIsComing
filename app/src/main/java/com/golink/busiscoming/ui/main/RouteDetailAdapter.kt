@@ -24,9 +24,21 @@ import com.google.android.material.card.MaterialCardView
 
 class RouteDetailAdapter(
     private val onToggleLeg: (Int) -> Unit,
-    private val onRetry: () -> Unit
+    private val onRetry: () -> Unit,
+    private val onTimelineStopSelected: (String) -> Unit = {}
 ) : ListAdapter<RouteDetailUiItem, RouteDetailAdapter.Holder>(DIFF) {
+    private var selectedStableId: String? = null
+
     init { setHasStableIds(true) }
+
+    fun selectTimelineItem(stableId: String?) {
+        val previous = selectedStableId
+        if (previous == stableId) return
+        selectedStableId = stableId
+        listOfNotNull(previous, stableId).forEach { id ->
+            currentList.indexOfFirst { it.stableId == id }.takeIf { it >= 0 }?.let(::notifyItemChanged)
+        }
+    }
 
     override fun getItemId(position: Int): Long = getItem(position).stableId.hashCode().toLong()
 
@@ -48,6 +60,11 @@ class RouteDetailAdapter(
             root.setOnClickListener(null)
             root.isClickable = false
             root.isFocusable = false
+            root.isSelected = item.stableId == selectedStableId
+            if (root.isSelected) {
+                val selected = color(R.color.route_map_selected)
+                root.setBackgroundColor((selected and 0x00FFFFFF) or 0x22000000)
+            }
             when (item) {
                 RouteDetailUiItem.Loading -> bindLoading()
                 RouteDetailUiItem.Error -> bindError()
@@ -103,6 +120,9 @@ class RouteDetailAdapter(
             ).joinToString("  ·  ")
             content.addView(text(timing, 15f, true, R.color.bus_text_primary).apply {
                 layoutParams = marginTop(8)
+            })
+            content.addView(text(liveEta(item.firstLegEta), 14f, true, if (item.firstLegEta is WaitTimeState.Available) R.color.bus_wait_accent else R.color.bus_text_secondary).apply {
+                layoutParams = marginTop(7)
             })
             val fare = price(item.priceHkd)
             content.addView(text("$fare  ·  ${root.context.getString(R.string.route_detail_total_stops, item.totalViaStops)}", 14f, false, R.color.bus_text_secondary).apply {
@@ -165,6 +185,7 @@ class RouteDetailAdapter(
             val label = root.context.getString(if (item.isBoarding) R.string.boarding_stop else R.string.alighting_stop)
             val time = item.plannedTime?.let { root.context.getString(R.string.route_detail_planned_time, it) }
             root.addView(timelineRow(RouteTimelineRailView.Style.SOLID, legColor(item.colorKey), item.stop.displayName, listOfNotNull(label, time).joinToString(" · "), true))
+            bindTimelineSelection(item.stableId)
         }
 
         private fun bindBusLeg(item: RouteDetailUiItem.BusLeg) {
@@ -208,6 +229,13 @@ class RouteDetailAdapter(
 
         private fun bindViaStop(item: RouteDetailUiItem.ViaStop) {
             root.addView(timelineRow(RouteTimelineRailView.Style.SOLID, legColor(item.colorKey), item.stop.displayName, null, false))
+            bindTimelineSelection(item.stableId)
+        }
+
+        private fun bindTimelineSelection(stableId: String) {
+            root.isClickable = true
+            root.isFocusable = true
+            root.setOnClickListener { onTimelineStopSelected(stableId) }
         }
 
         private fun bindTransfer(item: RouteDetailUiItem.Transfer) {

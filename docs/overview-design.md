@@ -18,6 +18,14 @@ BusRouteAdapter(ListAdapter)
 
 搜尋頁沿用相同卡片 Adapter 與 Binder，但只提交普通路線卡，不建立置頂區域，亦不附加置頂手勢。
 
+## 地圖路線詳情
+
+`RouteDetailActivity` 使用全屏 `MapView` 與不可隱藏的 persistent bottom sheet。詳情窗有摘要、約 55% 半屏及全屏三個檔位；系統返回、返回手勢與頁面返回按鈕在任何檔位均直接退出。摘要上滑直接全屏，把手拖動可停半屏，地圖與時間線站點以共同 stable id 雙向選取。
+
+頁面同時啟動 Citybus 文字詳情、`getlinep2p.php` 分段道路幾何與首程 ETA。各分區使用獨立 generation，舊生命週期或舊語言 callback 不得更新畫面。`RouteMapPresentationBuilder` 保持純 Kotlin，只有 `GoogleRouteMapRenderer` 持有 Maps SDK 物件；單段道路失敗時保留站點且不以巴士直線替代。灰色步行線只作連接示意。
+
+MapView 生命週期由 Activity 完整轉發。已有前台定位權限時才啟用 Google 原生藍點；首次開頁不主動請求權限，位置按鈕才啟動授權或設定流程。首程 ETA 只在前台每 60 秒刷新，離開前台即停止。Google 底圖標籤視為第三方內容，不承諾跟隨 App 內語言。
+
 ## 常用頁路線置頂
 
 每個可嚴格辨識的路線結果，在一個已保存行程內具有未置頂、本次置頂或長期置頂三種狀態。右滑依次由未置頂升為本次、由本次升為長期；本次或長期置頂向左滑均直接取消。長期置頂再次右滑只平滑回彈。

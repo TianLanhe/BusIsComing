@@ -6,10 +6,12 @@ import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class RouteDetailLaunchArgsTest {
@@ -41,12 +43,49 @@ class RouteDetailLaunchArgsTest {
             )
         )
 
-        val original = RouteDetailLaunchArgs.fromRoute(route)
+        val original = RouteDetailLaunchArgs.fromRoute(
+            route = route,
+            queryOrigin = Place("北角碼頭", 22.29361, 114.20056),
+            queryDestination = Place("中環", 22.28190, 114.15815)
+        )
         val restored = requireNotNull(RouteDetailLaunchArgs.fromPrimitiveValues(original.toPrimitiveValues()))
 
         assertNotSame(original, restored)
         assertEquals(original, restored)
         assertEquals(14, restored.estimatedViaStopCount)
         assertEquals(listOf(6, 14), (restored.waitTimeState as WaitTimeState.Available).arrivals.map { it.minutes })
+        assertEquals("北角碼頭", restored.queryOrigin?.name)
+        assertEquals(22.29361, restored.queryOrigin?.latitude ?: 0.0, 0.0)
+        assertEquals("中環", restored.queryDestination?.name)
+        assertEquals(114.15815, restored.queryDestination?.longitude ?: 0.0, 0.0)
+    }
+
+    @Test
+    fun oldAndPartiallyMissingEndpointSnapshotsRemainCompatible() {
+        val oldValues = mapOf(
+            "routeName" to "118",
+            "routeSegmentCount" to "1",
+            "routeSegment.0" to "118",
+            "priceHkd" to "12.3",
+            "durationMinutes" to "32",
+            "walkingDistanceMeters" to "240",
+            "wait.type" to "loading"
+        )
+
+        val oldRestored = requireNotNull(RouteDetailLaunchArgs.fromPrimitiveValues(oldValues))
+        assertNull(oldRestored.queryOrigin)
+        assertNull(oldRestored.queryDestination)
+
+        val partialRestored = requireNotNull(
+            RouteDetailLaunchArgs.fromPrimitiveValues(
+                oldValues + mapOf(
+                    "query.origin.present" to "true",
+                    "query.origin.name" to "缺少座標",
+                    "query.origin.latitude" to "22.3"
+                )
+            )
+        )
+        assertNull(partialRestored.queryOrigin)
+        assertEquals(oldRestored.routeName, partialRestored.routeName)
     }
 }

@@ -66,4 +66,24 @@
     <string name="route_detail_walking_incomplete">Some walking distance comes from the route summary</string>
     <string name="route_detail_origin">Start</string>
     <string name="route_detail_destination">Destination</string>
+    <string name="route_map_content_description">Route map; every stop and transfer is also available in the route details below</string>
+    <string name="route_map_current_location">Show current location</string>
+    <string name="route_map_overview">Show full route</string>
+    <string name="route_map_legend_bus">Bus route</string>
+    <string name="route_map_legend_walk">Walking connection (schematic)</string>
+    <string name="route_map_unavailable">Map unavailable. Full text details are shown.</string>
+    <string name="route_map_location_permission_denied">Location permission not granted. You can still view the full route.</string>
+    <string name="route_map_location_permission_settings">Allow location access in system settings</string>
+    <string name="route_map_location_disabled">Turn on system location services first</string>
+    <string name="route_map_location_unavailable">Current location is temporarily unavailable</string>
+    <string name="route_map_geometry_partial">Part of the route path cannot be shown right now</string>
+    <string name="route_detail_sheet_handle_summary">Route details are in summary view. Double tap to expand fully.</string>
+    <string name="route_detail_sheet_handle_half">Route details are half expanded. Double tap to expand fully.</string>
+    <string name="route_detail_sheet_handle_full">Route details are fully expanded. Double tap to return to summary.</string>
+    <string name="route_map_marker_origin">Start: %1$s</string>
+    <string name="route_map_marker_destination">Destination: %1$s</string>
+    <string name="route_map_marker_boarding">Route %1$s boarding stop: %2$s</string>
+    <string name="route_map_marker_via">Route %1$s intermediate stop: %2$s</string>
+    <string name="route_map_marker_alighting">Route %1$s alighting stop: %2$s</string>
+    <string name="route_map_marker_transfer">Transfer from %1$s to %2$s at %3$s</string>
 </resources>

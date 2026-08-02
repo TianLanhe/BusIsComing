@@ -28,6 +28,7 @@ class RouteDetailUiFormatterTest {
         assertEquals(403, summary.walkingDistanceMeters)
         assertTrue(summary.isWalkingDistanceComplete)
         assertEquals("01:21", summary.plannedArrivalTime)
+        assertEquals(6, (summary.firstLegEta as WaitTimeState.Available).minutes)
     }
 
     @Test

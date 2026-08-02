@@ -42,6 +42,10 @@ android {
                     ?: ""
             ).asBuildConfigString()
         )
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] =
+            localProperties.getProperty("GOOGLE_MAPS_API_KEY")
+                ?: System.getenv("GOOGLE_MAPS_API_KEY")
+                ?: ""
         buildConfigField("boolean", "FORCE_WEBSITE_UPDATE_CHECK", "true")
     }
 
@@ -73,6 +77,7 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.jsoup)
     implementation(libs.play.services.location)
+    implementation(libs.play.services.maps)
     implementation(libs.play.app.update)
     implementation(libs.play.app.update.ktx)
     testImplementation(libs.junit)

@@ -290,7 +290,14 @@ class SearchFragment : Fragment() {
         )
         etaSheet = EtaArrivalsBottomSheet(context)
         resultAdapter = BusRouteAdapter(
-            onRouteClick = { route -> RouteDetailNavigator.open(requireContext(), route) },
+            onRouteClick = { route ->
+                RouteDetailNavigator.open(
+                    context = requireContext(),
+                    route = route,
+                    queryOrigin = successfulQueryOrigin,
+                    queryDestination = successfulQueryDestination
+                )
+            },
             onEtaClick = etaSheet::show,
             onMonitorClick = { route ->
                 successfulQueryOrigin?.let { origin ->

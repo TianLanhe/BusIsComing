@@ -3,4 +3,10 @@
     <dimen name="route_card_stroke_width">1dp</dimen>
     <dimen name="route_pin_stroke_width">2dp</dimen>
     <dimen name="route_pin_swipe_label_size">14sp</dimen>
+    <dimen name="route_map_edge_margin">16dp</dimen>
+    <dimen name="route_map_camera_padding">48dp</dimen>
+    <dimen name="route_map_controls_top_margin">96dp</dimen>
+    <dimen name="route_map_legend_top_margin">76dp</dimen>
+    <dimen name="route_detail_sheet_swipe_threshold">48dp</dimen>
+    <dimen name="route_detail_timeline_focus_offset">72dp</dimen>
 </resources>
