@@ -32,27 +32,14 @@ class AppUpdateInfrastructureContractTest {
     }
 
     @Test
-    fun playPriorityIsTheDefaultUpdateStrategy() {
-        assertFalse(BuildConfig.FORCE_WEBSITE_UPDATE_CHECK)
-    }
-
-    @Test
-    fun websiteOnlySwitchIsDefinedAndWiresTheCoordinator() {
+    fun runtimeAlwaysUsesPlaySourceAndInjectsDebugEligibility() {
+        assertFalse(appBuild.contains("FORCE_WEBSITE_UPDATE_CHECK"))
+        assertFalse(runtime.contains("DisabledPlayUpdateSource"))
+        assertFalse(runtime.contains("forceWebsiteOnly"))
         assertTrue(
-            Regex(
-                """buildConfigField\(\s*"boolean",\s*"FORCE_WEBSITE_UPDATE_CHECK",""" +
-                    """\s*"(?:true|false)"\s*\)"""
-            ).containsMatchIn(appBuild)
+            Regex("""GooglePlayUpdateSource\(\s*applicationContext""")
+                .containsMatchIn(runtime)
         )
-        assertTrue(
-            runtime.contains(
-                "forceWebsiteOnly = BuildConfig.FORCE_WEBSITE_UPDATE_CHECK"
-            )
-        )
-        assertTrue(
-            runtime.contains(
-                "if (BuildConfig.FORCE_WEBSITE_UPDATE_CHECK) DisabledPlayUpdateSource"
-            )
-        )
+        assertTrue(runtime.contains("playCheckSupported = !BuildConfig.DEBUG"))
     }
 }

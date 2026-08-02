@@ -22,7 +22,8 @@ class AppUpdateCoordinator(
     private val websiteSource: WebsiteUpdateSource,
     private val playPackageProbe: PlayPackageProbe,
     private val installSourceReader: InstallSourceReader,
-    private val forceWebsiteOnly: Boolean = false,
+    private val playCheckSupported: Boolean = true,
+    private val diagnostics: AppUpdateDiagnostics = NoOpAppUpdateDiagnostics,
     private val clock: () -> Long = System::currentTimeMillis,
     private val callbackExecutor: Executor
 ) {
@@ -35,7 +36,7 @@ class AppUpdateCoordinator(
     init {
         val stored = stateStore.synchronizeInstalledVersion(installedVersionCode, clock())
         state = stored.toAppState()
-        if (!forceWebsiteOnly) {
+        if (playCheckSupported) {
             playSource.setDownloadedListener(::recordPlayDownloaded)
         }
     }
@@ -74,10 +75,10 @@ class AppUpdateCoordinator(
                 ) {
                     return false
                 }
-                val initialized = if (forceWebsiteOnly) {
-                    stored
-                } else {
+                val initialized = if (playCheckSupported) {
                     ensureInitialInstallChannel(stored)
+                } else {
+                    stored
                 }
                 val withAttempt = initialized.copy(
                     lastAutoAttemptAt = if (trigger == UpdateCheckTrigger.AUTOMATIC) {
@@ -100,6 +101,10 @@ class AppUpdateCoordinator(
         }
         publishCurrentState()
         if (attached) return true
+        if (!playCheckSupported) {
+            completeFailure(UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED)
+            return true
+        }
         startChannelCheck()
         return true
     }
@@ -146,25 +151,21 @@ class AppUpdateCoordinator(
     fun startFlexibleUpdate(
         activity: Activity,
         launcher: ActivityResultLauncher<IntentSenderRequest>
-    ): Boolean = !forceWebsiteOnly && playSource.startFlexibleUpdate(activity, launcher)
+    ): Boolean = playCheckSupported && playSource.startFlexibleUpdate(activity, launcher)
 
     fun refreshPlayInstallStatus() {
-        if (!forceWebsiteOnly) playSource.refreshInstallStatus()
+        if (playCheckSupported) playSource.refreshInstallStatus()
     }
 
     fun completePlayUpdate(callback: (Boolean) -> Unit) {
-        if (forceWebsiteOnly) {
-            callback(false)
-        } else {
+        if (playCheckSupported) {
             playSource.completeUpdate(callback)
+        } else {
+            callback(false)
         }
     }
 
     private fun startChannelCheck() {
-        if (forceWebsiteOnly) {
-            checkWebsite(UpdateChannel.WEBSITE)
-            return
-        }
         val stored = stateStore.load()
         val initialChannel = stored.initialInstallChannel ?: InitialInstallChannel.UNKNOWN_NON_PLAY
         val playAvailable = playPackageProbe.isPlayAvailable()
