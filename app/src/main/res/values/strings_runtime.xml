@@ -60,8 +60,8 @@
     <string name="route_detail_summary">耗時 %1$d 分鐘 · %2$s · 步行 %3$d 米</string>
     <string name="boarding_stop">上車</string>
     <string name="alighting_stop">下車</string>
-    <string name="via_stops_collapse">⌃ 途經 %1$d 個站 · 收起</string>
-    <string name="via_stops_expand">⌄ 途經 %1$d 個站 · 展開</string>
+    <string name="via_stops_collapse">%1$d 個途經站 · 收起</string>
+    <string name="via_stops_expand">%1$d 個途經站</string>
     <string name="price_free">免費</string>
     <string name="price_hkd">HK$ %1$.1f</string>
     <string name="route_detail_loading">正在載入路線詳情</string>
@@ -78,6 +78,9 @@
     <string name="eta_temporarily_unavailable">候車暫不可用</string>
     <string name="eta_next">下一班 %1$s ›</string>
     <string name="route_card_summary">%1$s · 耗時 %2$d 分鐘 · 步行 %3$d 米</string>
+    <string name="route_card_duration_value">%1$d 分鐘</string>
+    <string name="route_card_walking_value">%1$d 米</string>
+    <string name="route_card_info_content_description">%1$s，耗時 %2$d 分鐘，步行 %3$d 米</string>
     <string name="route_results_summary">共 %1$d 條路線，%2$d 條直達</string>
     <string name="select_route_first">請先選擇常用行程</string>
     <string name="route_no_longer_exists">行程已不存在</string>
@@ -212,4 +215,26 @@
     <string name="search_field_accessibility_value">%1$s，%2$s</string>
     <string name="search_field_accessibility_value_status">%1$s，%2$s，%3$s</string>
     <string name="route_direction_format">往 %1$s 方向</string>
+    <string name="route_detail_title">路線詳情</string>
+    <string name="route_detail_navigate_up">返回路線結果</string>
+    <string name="route_detail_arrival">預計 %1$s 到達</string>
+    <string name="route_detail_total_stops">一共 %1$d 站</string>
+    <string name="route_detail_summary_accessibility">%1$s，耗時 %2$d 分鐘，%3$s，車費 %4$s，一共 %5$d 站，步行 %6$d 米</string>
+    <string name="route_detail_summary_accessibility_without_arrival">%1$s，耗時 %2$d 分鐘，車費 %3$s，一共 %4$d 站，步行 %5$d 米</string>
+    <string name="route_detail_planned_time">預計 %1$s</string>
+    <string name="route_detail_live_eta">即時 · 還有 %1$d 分鐘</string>
+    <string name="route_detail_live_due">即時 · 即將到站</string>
+    <string name="route_detail_live_loading">即時候車查詢中</string>
+    <string name="route_detail_live_none">即時 · 暫無車輛</string>
+    <string name="route_detail_live_unavailable">即時候車暫不可用</string>
+    <string name="route_detail_walk_distance">步行 %1$d 米</string>
+    <string name="route_detail_walk_unknown">步行</string>
+    <string name="route_detail_same_stop_transfer">同站換乘</string>
+    <string name="route_detail_walk_transfer">步行前往轉車站</string>
+    <string name="route_detail_leg_stops">一共 %1$d 站</string>
+    <string name="route_detail_leg_accessibility">路線 %1$s，%2$s，%3$s，%4$s</string>
+    <string name="route_detail_retry">重試載入路線詳情</string>
+    <string name="route_detail_walking_incomplete">部分步行距離由路線摘要提供</string>
+    <string name="route_detail_origin">起點</string>
+    <string name="route_detail_destination">終點</string>
 </resources>

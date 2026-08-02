@@ -14,7 +14,7 @@ class ShortTextLayoutContractTest {
 
     private val dynamicShortTextFiles = listOf(
         "src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt",
-        "src/main/java/com/golink/busiscoming/ui/main/RouteDetailBottomSheet.kt",
+        "src/main/java/com/golink/busiscoming/ui/main/RouteDetailAdapter.kt",
         "src/main/java/com/golink/busiscoming/ui/main/EtaArrivalsBottomSheet.kt",
         "src/main/java/com/golink/busiscoming/ui/main/MonitorSettingsBottomSheet.kt",
         "src/main/java/com/golink/busiscoming/ui/main/TemporaryRouteSaveDialog.kt"

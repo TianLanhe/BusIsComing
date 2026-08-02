@@ -220,7 +220,72 @@ data class RouteDetail(
     val durationMinutes: Int,
     val walkingDistanceMeters: Int,
     val legs: List<RouteDetailLeg>,
-    val originWalkingDistanceMeters: Int? = null
+    val originWalking: RouteDetailWalkingSegment? = null,
+    val transfers: List<RouteDetailTransfer> = emptyList(),
+    val destinationWalking: RouteDetailWalkingSegment? = null,
+    val plannedDepartureTime: String? = null,
+    val plannedArrivalTime: String? = null,
+    val originName: String? = null,
+    val destinationName: String? = null
+) {
+    val originWalkingDistanceMeters: Int?
+        get() = originWalking?.distanceMeters
+
+    val totalViaStopCount: Int
+        get() = legs.sumOf { it.viaStops.size }
+
+    val hasCompleteWalkingDistance: Boolean
+        get() = originWalking?.distanceMeters != null &&
+            destinationWalking?.distanceMeters != null &&
+            transfers.size == (legs.size - 1).coerceAtLeast(0) &&
+            transfers.all { transfer ->
+                transfer.type == RouteDetailTransferType.SAME_STOP ||
+                    transfer.walking?.distanceMeters != null
+            }
+
+    val completeWalkingDistanceMeters: Int?
+        get() = if (hasCompleteWalkingDistance) {
+            requireNotNull(originWalking?.distanceMeters) +
+                transfers.sumOf { it.walking?.distanceMeters ?: 0 } +
+                requireNotNull(destinationWalking?.distanceMeters)
+        } else {
+            null
+        }
+
+    val displayWalkingDistanceMeters: Int
+        get() = completeWalkingDistanceMeters ?: walkingDistanceMeters
+}
+
+data class RouteDetailWalkingSegment(
+    val kind: RouteDetailWalkingKind,
+    val distanceMeters: Int?
+)
+
+enum class RouteDetailWalkingKind {
+    ORIGIN,
+    TRANSFER,
+    DESTINATION
+}
+
+data class RouteDetailTransfer(
+    val type: RouteDetailTransferType,
+    val walking: RouteDetailWalkingSegment? = null
+)
+
+enum class RouteDetailTransferType {
+    WALK_TO_TRANSFER_STOP,
+    SAME_STOP
+}
+
+data class ParsedRouteDetail(
+    val legs: List<RouteDetailLeg>,
+    val originWalking: RouteDetailWalkingSegment? = null,
+    val transfers: List<RouteDetailTransfer> = emptyList(),
+    val destinationWalking: RouteDetailWalkingSegment? = null,
+    val plannedDepartureTime: String? = null,
+    val plannedArrivalTime: String? = null,
+    val originName: String? = null,
+    val destinationName: String? = null
 )
 
 data class RouteDetailLeg(
@@ -229,7 +294,10 @@ data class RouteDetailLeg(
     val directionText: String?,
     val boardingStop: RouteDetailStop,
     val viaStops: List<RouteDetailStop>,
-    val alightingStop: RouteDetailStop
+    val alightingStop: RouteDetailStop,
+    val fareHkd: Double? = null,
+    val plannedBoardingTime: String? = null,
+    val plannedAlightingTime: String? = null
 )
 
 data class RouteDetailStop(

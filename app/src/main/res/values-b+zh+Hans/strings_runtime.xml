@@ -9,8 +9,8 @@
     <string name="current_location_manual_origin">暂时无法获取当前位置，请手动选择起点</string><string name="current_location_unavailable">暂时无法获取当前位置</string><string name="enable_system_location">请开启系统定位</string>
     <string name="route_title_add">添加行程</string><string name="route_title_clone">复制行程</string><string name="route_title_edit">编辑行程</string><string name="route_config_missing">行程设置不存在</string><string name="route_duplicate_detail">行程已存在，请修改名称或起终点</string><string name="route_duplicate">行程已存在</string><string name="route_added">已添加行程</string><string name="route_updated">已保存修改</string>
     <string name="place_search_failed">地点搜索失败，请稍后重试</string><string name="place_search_empty">没有匹配地点</string><string name="route_copy_name">%1$s（副本）</string><string name="route_delete_title">删除行程</string><string name="route_delete_message">确定删除“%1$s”？</string>
-    <string name="route_detail_unavailable">路线详情暂不可用</string><string name="route_detail_summary">耗时 %1$d 分钟 · %2$s · 步行 %3$d 米</string><string name="boarding_stop">上车</string><string name="alighting_stop">下车</string><string name="via_stops_collapse">⌃ 途经 %1$d 站 · 收起</string><string name="via_stops_expand">⌄ 途经 %1$d 站 · 展开</string><string name="price_free">免费</string><string name="price_hkd">HK$ %1$.1f</string><string name="route_detail_loading">正在加载路线详情</string>
-    <string name="eta_arrival_sequence">第%1$d班</string><string name="eta_sheet_title">首程 %1$s 候车时间</string><string name="direction_from_to">%1$s 前往 %2$s</string><string name="direction_to">前往 %1$s</string><string name="eta_due">即将到站</string><string name="minutes_count">%1$d 分钟</string><string name="eta_updated">更新于 %1$s</string><string name="eta_wait">等待 %1$d 分钟</string><string name="eta_loading">候车查询中</string><string name="eta_unavailable">暂无车辆</string><string name="eta_temporarily_unavailable">候车暂不可用</string><string name="eta_next">下一班 %1$s ›</string><string name="route_card_summary">%1$s · 耗时 %2$d 分钟 · 步行 %3$d 米</string><string name="route_results_summary">共 %1$d 条路线，%2$d 条直达</string>
+    <string name="route_detail_unavailable">路线详情暂不可用</string><string name="route_detail_summary">耗时 %1$d 分钟 · %2$s · 步行 %3$d 米</string><string name="boarding_stop">上车</string><string name="alighting_stop">下车</string><string name="via_stops_collapse">%1$d 个途经站 · 收起</string><string name="via_stops_expand">%1$d 个途经站</string><string name="price_free">免费</string><string name="price_hkd">HK$ %1$.1f</string><string name="route_detail_loading">正在加载路线详情</string>
+    <string name="eta_arrival_sequence">第%1$d班</string><string name="eta_sheet_title">首程 %1$s 候车时间</string><string name="direction_from_to">%1$s 前往 %2$s</string><string name="direction_to">前往 %1$s</string><string name="eta_due">即将到站</string><string name="minutes_count">%1$d 分钟</string><string name="eta_updated">更新于 %1$s</string><string name="eta_wait">等待 %1$d 分钟</string><string name="eta_loading">候车查询中</string><string name="eta_unavailable">暂无车辆</string><string name="eta_temporarily_unavailable">候车暂不可用</string><string name="eta_next">下一班 %1$s ›</string><string name="route_card_summary">%1$s · 耗时 %2$d 分钟 · 步行 %3$d 米</string><string name="route_card_duration_value">%1$d 分钟</string><string name="route_card_walking_value">%1$d 米</string><string name="route_card_info_content_description">%1$s，耗时 %2$d 分钟，步行 %3$d 米</string><string name="route_results_summary">共 %1$d 条路线，%2$d 条直达</string>
     <string name="select_route_first">请先选择常用行程</string><string name="route_no_longer_exists">行程已不存在</string><string name="route_query_failed">路线查询失败</string><string name="refresh_failed">刷新失败，请稍后重试</string><string name="no_routes_title">暂无可用公交路线</string><string name="no_routes_message">可以换一个常用行程，或稍后再试。</string><string name="monitor_route_unavailable">此路线暂时无法监控</string><string name="monitor_origin_missing">缺少起点信息，无法估算步行时间</string><string name="monitor_started">已开始通知栏监控</string><string name="monitor_alarm_hint">可以开启闹钟和提醒，提高候车监控的准时性</string><string name="monitor_notification_permission_denied">未授予通知权限，无法启动通知栏监控</string>
     <string name="updated_at">更新时间：%1$s</string><string name="nearby">附近</string><string name="location_fallback_permission">未授予定位权限，已按常用顺序选择行程</string><string name="location_fallback_unavailable">暂时无法获取当前位置，已按常用顺序选择行程</string><string name="location_fallback_imprecise">当前位置精度不足，已按常用顺序选择行程</string><string name="route_query_loading_title">正在查询路线</string><string name="route_query_loading_message">正在匹配可用公交方案和候车时间。</string><string name="route_query_failure_message">请稍后重试，或换一个常用行程再查询路线。</string><string name="search_no_routes">没有找到可用路线</string><string name="search_failed">搜索失败，请稍后重试</string>
 <string name="frequent_route_name_hint">常用行程名称</string><string name="route_preview">行程预览</string><string name="save_frequent_title">保存为常用行程</string><string name="saved_as_frequent">已保存为常用行程</string><string name="save_frequent_failed">暂时无法保存行程，请重试</string><string name="save_query_changed">查询已变化，请关闭后重新保存</string><string name="eta_arrivals_content_description">查看首程候车班次，%1$s</string>
@@ -44,4 +44,26 @@
     <string name="route_direction_format">往 %1$s 方向</string>
     <string name="search_no_routes_message">请检查起点和终点，或稍后再试。</string>
     <string name="search_route_query_failure_message">请稍后重试，或调整起点和终点后重新查询。</string>
+    <string name="route_detail_title">路线详情</string>
+    <string name="route_detail_navigate_up">返回路线结果</string>
+    <string name="route_detail_arrival">预计 %1$s 到达</string>
+    <string name="route_detail_total_stops">一共 %1$d 站</string>
+    <string name="route_detail_summary_accessibility">%1$s，耗时 %2$d 分钟，%3$s，车费 %4$s，一共 %5$d 站，步行 %6$d 米</string>
+    <string name="route_detail_summary_accessibility_without_arrival">%1$s，耗时 %2$d 分钟，车费 %3$s，一共 %4$d 站，步行 %5$d 米</string>
+    <string name="route_detail_planned_time">预计 %1$s</string>
+    <string name="route_detail_live_eta">实时 · 还有 %1$d 分钟</string>
+    <string name="route_detail_live_due">实时 · 即将到站</string>
+    <string name="route_detail_live_loading">实时到站时间查询中</string>
+    <string name="route_detail_live_none">实时 · 暂无车辆</string>
+    <string name="route_detail_live_unavailable">实时到站时间暂不可用</string>
+    <string name="route_detail_walk_distance">步行 %1$d 米</string>
+    <string name="route_detail_walk_unknown">步行</string>
+    <string name="route_detail_same_stop_transfer">同站换乘</string>
+    <string name="route_detail_walk_transfer">步行前往换乘站</string>
+    <string name="route_detail_leg_stops">一共 %1$d 站</string>
+    <string name="route_detail_leg_accessibility">路线 %1$s，%2$s，%3$s，%4$s</string>
+    <string name="route_detail_retry">重新加载路线详情</string>
+    <string name="route_detail_walking_incomplete">部分步行距离来自路线摘要</string>
+    <string name="route_detail_origin">起点</string>
+    <string name="route_detail_destination">终点</string>
 </resources>

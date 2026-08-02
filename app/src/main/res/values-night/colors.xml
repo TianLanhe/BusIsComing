@@ -33,4 +33,9 @@
     <color name="bus_action_secondary">#FFF0B25B</color>
     <color name="bus_on_secondary">#FF2A1700</color>
     <color name="bus_on_route_badge">#FFFFFFFF</color>
+    <color name="route_leg_0">#FF236D62</color>
+    <color name="route_leg_1">#FF426BA8</color>
+    <color name="route_leg_2">#FF995D28</color>
+    <color name="route_leg_3">#FF7759A5</color>
+    <color name="route_timeline_walk">#FFA6BBB4</color>
 </resources>

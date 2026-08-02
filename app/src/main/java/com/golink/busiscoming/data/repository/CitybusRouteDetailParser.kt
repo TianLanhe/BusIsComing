@@ -1,16 +1,71 @@
 package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.ParsedRouteDetail
 import com.golink.busiscoming.data.model.RouteDetailDisplayFormatter
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
 import com.golink.busiscoming.data.model.RouteDetailStopRole
+import com.golink.busiscoming.data.model.RouteDetailTransfer
+import com.golink.busiscoming.data.model.RouteDetailTransferType
+import com.golink.busiscoming.data.model.RouteDetailWalkingKind
+import com.golink.busiscoming.data.model.RouteDetailWalkingSegment
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 class CitybusRouteDetailParseException(message: String) : IllegalArgumentException(message)
 
 object CitybusRouteDetailParser {
+    fun parseDetail(response: String, plan: P2pRoutePlan): ParsedRouteDetail {
+        val document = Jsoup.parse(response)
+        val legs = parse(response, plan)
+        val timetable = parseTimetable(document.root(), plan)
+        val endpointRows = parseEndpointRows(document.root())
+        val distances = timetable?.walkingDistances.orEmpty()
+        val transferCount = (legs.size - 1).coerceAtLeast(0)
+        val sameStopTransfer = SAME_STOP_PATTERN.containsMatchIn(document.text())
+
+        val enrichedLegs = legs.mapIndexed { index, leg ->
+            val timing = timetable?.legs?.firstOrNull { it.routeVariant == leg.routeVariant }
+                ?: timetable?.legs?.getOrNull(index)
+            leg.copy(
+                fareHkd = timing?.fareHkd,
+                plannedBoardingTime = timing?.plannedBoardingTime,
+                plannedAlightingTime = timing?.plannedAlightingTime
+            )
+        }
+        val transfers = (0 until transferCount).map { index ->
+            if (sameStopTransfer && transferCount == 1) {
+                RouteDetailTransfer(RouteDetailTransferType.SAME_STOP)
+            } else {
+                RouteDetailTransfer(
+                    type = RouteDetailTransferType.WALK_TO_TRANSFER_STOP,
+                    walking = RouteDetailWalkingSegment(
+                        kind = RouteDetailWalkingKind.TRANSFER,
+                        distanceMeters = distances.getOrNull(index + 1)
+                    )
+                )
+            }
+        }
+
+        return ParsedRouteDetail(
+            legs = enrichedLegs,
+            originWalking = RouteDetailWalkingSegment(
+                RouteDetailWalkingKind.ORIGIN,
+                distances.firstOrNull() ?: parseOriginWalkingDistanceMeters(response)
+            ),
+            transfers = transfers,
+            destinationWalking = RouteDetailWalkingSegment(
+                RouteDetailWalkingKind.DESTINATION,
+                distances.getOrNull(transferCount + 1) ?: parseDestinationWalkingDistanceMeters(response)
+            ),
+            plannedDepartureTime = endpointRows.first,
+            plannedArrivalTime = timetable?.plannedArrivalTime ?: endpointRows.second,
+            originName = parseEndpointName(document.root(), "wpoint_from"),
+            destinationName = parseEndpointName(document.root(), "wpoint_to")
+        )
+    }
+
     fun parse(response: String, plan: P2pRoutePlan): List<RouteDetailLeg> {
         val document = Jsoup.parse(response)
         val stopRows = document.allElements
@@ -59,6 +114,61 @@ object CitybusRouteDetailParser {
             ?.getOrNull(1)
             ?.replace(",", "")
             ?.toIntOrNull()
+    }
+
+    fun parseDestinationWalkingDistanceMeters(response: String): Int? {
+        val lastDestinationIndex = response.lastIndexOf("wpoint_to", ignoreCase = true)
+        if (lastDestinationIndex < 0) return null
+        val searchScope = response.substring(lastDestinationIndex)
+        return WALKING_DISTANCE_PATTERN.find(searchScope)
+            ?.groupValues?.getOrNull(1)?.replace(",", "")?.toIntOrNull()
+    }
+
+    private fun parseTimetable(root: Element, plan: P2pRoutePlan): ParsedTimetable? {
+        val handler = root.allElements.asSequence()
+            .map { it.attr("onclick") }
+            .firstOrNull { it.contains("showtimetable1(") }
+            ?: return null
+        val payload = TIMETABLE_PATTERN.find(handler)?.groupValues?.getOrNull(1) ?: return null
+        val sections = payload.split("|*|")
+        val header = sections.firstOrNull()?.split("||") ?: return null
+        val legCount = header.firstOrNull()?.toIntOrNull() ?: plan.legs.size
+        val distances = (0..legCount).map { offset -> header.getOrNull(offset + 2)?.toIntOrNull() }
+        val plannedArrival = header.getOrNull(1)?.substringAfter(',', "")?.toClockTime()
+        val legs = sections.drop(1).mapNotNull { section ->
+            val fields = section.split("||")
+            val routeVariant = fields.getOrNull(2)?.trim().orEmpty()
+            if (routeVariant.isBlank()) return@mapNotNull null
+            ParsedTimetableLeg(
+                routeVariant = routeVariant,
+                fareHkd = fields.getOrNull(6)?.toDoubleOrNull(),
+                plannedBoardingTime = fields.getOrNull(7)?.toClockTime(),
+                plannedAlightingTime = fields.getOrNull(8)?.toClockTime()
+            )
+        }
+        return ParsedTimetable(distances, plannedArrival, legs)
+    }
+
+    private fun parseEndpointRows(root: Element): Pair<String?, String?> {
+        return parseEndpointTime(root, "wpoint_from") to parseEndpointTime(root, "wpoint_to")
+    }
+
+    private fun parseEndpointTime(root: Element, imageMarker: String): String? {
+        val rowText = root.select("img[src*=$imageMarker]").firstOrNull()?.closest("tr")?.text()
+        return rowText?.let { CLOCK_PATTERN.findAll(it).lastOrNull()?.value }
+    }
+
+    private fun parseEndpointName(root: Element, imageMarker: String): String? {
+        val row = root.select("img[src*=$imageMarker]").firstOrNull()?.closest("tr") ?: return null
+        return row.select("td").map { it.text().trim() }
+            .firstOrNull { text ->
+                text.isNotBlank() && !CLOCK_PATTERN.containsMatchIn(text) &&
+                    !text.contains("起點") && !text.contains("终点") && !text.contains("終點")
+            }
+    }
+
+    private fun String.toClockTime(): String? {
+        return CLOCK_PATTERN.findAll(this).lastOrNull()?.value
     }
 
     private fun parseStopRow(row: Element): ParsedStop? {
@@ -134,9 +244,25 @@ object CitybusRouteDetailParser {
         val routeVariant: String
     )
 
+    private data class ParsedTimetable(
+        val walkingDistances: List<Int?>,
+        val plannedArrivalTime: String?,
+        val legs: List<ParsedTimetableLeg>
+    )
+
+    private data class ParsedTimetableLeg(
+        val routeVariant: String,
+        val fareHkd: Double?,
+        val plannedBoardingTime: String?,
+        val plannedAlightingTime: String?
+    )
+
     private val STOP_CLICK_PATTERN = Regex("""stopclick1\(([^)]*)\)""")
     private val FUNCTION_ARG_PATTERN = Regex("""'([^']*)'""")
     private val WALKING_DISTANCE_PATTERN = Regex("""步行距離\s*\(約\)\s*([0-9,]+)\s*米""")
+    private val TIMETABLE_PATTERN = Regex("""showtimetable1\('([^']*)'""")
+    private val CLOCK_PATTERN = Regex("""\b(?:[01]\d|2[0-3]):[0-5]\d\b""")
+    private val SAME_STOP_PATTERN = Regex("""同站[轉转]乘|same\s+stop""", RegexOption.IGNORE_CASE)
     private const val STOP_ROW_CLASS = "p2plistcell"
     private const val ROUTE_TITLE_CLASS = "p2proutetitle"
 }

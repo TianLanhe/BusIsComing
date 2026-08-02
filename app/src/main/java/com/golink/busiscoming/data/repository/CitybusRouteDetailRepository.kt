@@ -16,21 +16,11 @@ class CitybusRouteDetailRepository(
     override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
         val query = route.routeDetailQuery ?: throw IOException("Route detail metadata is missing")
         val cacheKey = query.cacheKey()
-        val cachedLegs = cache.get(cacheKey)
-        val cachedOriginWalkingDistanceMeters = cache.getOriginWalkingDistanceMeters(cacheKey)
-        val detailResponse = if (cachedLegs == null) detailFetcher(buildDetailUrl(query), requestHeaders()) else null
-        val legs = cachedLegs ?: run {
-            val response = detailResponse ?: throw IOException("Route detail response is missing")
-            val parsedLegs = parser.parse(
-                response = response,
-                plan = query.plan
-            )
-            cache.put(
-                cacheKey,
-                parsedLegs,
-                originWalkingDistanceMeters = parser.parseOriginWalkingDistanceMeters(response)
-            )
-            parsedLegs
+        val parsed = cache.getDetail(cacheKey) ?: run {
+            val response = detailFetcher(buildDetailUrl(query), requestHeaders())
+            val value = parser.parseDetail(response = response, plan = query.plan)
+            cache.put(cacheKey, value)
+            value
         }
 
         return RouteDetail(
@@ -38,9 +28,14 @@ class CitybusRouteDetailRepository(
             priceHkd = route.priceHkd,
             durationMinutes = route.durationMinutes,
             walkingDistanceMeters = route.walkingDistanceMeters,
-            legs = legs,
-            originWalkingDistanceMeters = cachedOriginWalkingDistanceMeters
-                ?: detailResponse?.let { parser.parseOriginWalkingDistanceMeters(it) }
+            legs = parsed.legs,
+            originWalking = parsed.originWalking,
+            transfers = parsed.transfers,
+            destinationWalking = parsed.destinationWalking,
+            plannedDepartureTime = parsed.plannedDepartureTime,
+            plannedArrivalTime = parsed.plannedArrivalTime ?: query.plannedArrivalTime(),
+            originName = parsed.originName,
+            destinationName = parsed.destinationName
         )
     }
 
@@ -58,6 +53,12 @@ class CitybusRouteDetailRepository(
 
     private fun encodeQueryValue(value: String): String {
         return URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+    }
+
+    private fun P2pRouteDetailQuery.plannedArrivalTime(): String? {
+        return generalInfo.substringBefore("|*|").trim().takeIf { value ->
+            value.matches(Regex("\\d{1,2}:\\d{2}"))
+        }
     }
 
     companion object {

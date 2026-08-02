@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -21,6 +22,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.app.NotificationCompat
+import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -33,7 +35,9 @@ import com.golink.busiscoming.service.BusMonitorNotificationContract
 import com.golink.busiscoming.service.BusMonitorNotificationFormatter
 import com.golink.busiscoming.ui.main.EtaArrivalsBottomSheet
 import com.golink.busiscoming.ui.main.MainActivity
-import com.golink.busiscoming.ui.main.RouteDetailBottomSheet
+import com.golink.busiscoming.ui.main.RouteDetailActivity
+import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
+import com.golink.busiscoming.ui.main.RouteDetailRuntime
 import com.golink.busiscoming.ui.common.localizedText
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -87,6 +91,18 @@ class DemoScreenshotInstrumentedTest {
         }
     }
 
+    @Test
+    fun generateRouteDetailDarkLargeTextScreenshot() {
+        executeShell("cmd uimode night yes")
+        executeShell("settings put system font_scale 2.0")
+
+        captureRouteDetail()
+
+        val file = File(outputDir, DemoScreenshotFixtures.routeDetailExpanded)
+        assertTrue("Missing dark large-text route detail screenshot", file.isFile)
+        assertTrue("Dark large-text route detail screenshot is empty", file.length() > 16_000L)
+    }
+
     private fun captureHomeAndRoutePicker() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             val dialogRef = AtomicReference<BottomSheetDialog>()
@@ -108,35 +124,35 @@ class DemoScreenshotInstrumentedTest {
     }
 
     private fun captureRouteDetail() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            val sheetRef = AtomicReference<RouteDetailBottomSheet>()
-            scenario.onActivity { activity ->
-                configureHome(activity)
-                val sheet = RouteDetailBottomSheet(
-                    activity = activity,
-                    repository = object : RouteDetailRepository {
-                        override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
-                            return DemoScreenshotFixtures.routeDetail()
-                        }
-                    }
-                )
-                sheetRef.set(sheet)
-                sheet.show(DemoScreenshotFixtures.primaryRoute())
-            }
-            waitUntil(5_000L) {
-                collectText(dialogRoot(sheetRef.get())).any { it.contains("途經 2 個站") }
-            }
-            scenario.onActivity {
-                expandBottomSheet(sheetRef.get())
-                dialogRoot(sheetRef.get())?.let { root ->
-                    clickAllTextViewsContaining(root, "途經 2 個站")
+        RouteDetailRuntime.repositoryFactory = {
+            object : RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
+                    return DemoScreenshotFixtures.routeDetail()
                 }
             }
-            waitForUi()
-            saveAppAreaScreenshot(scenario, DemoScreenshotFixtures.routeDetailExpanded)
-            scenario.onActivity {
-                sheetRef.get()?.dispose()
+        }
+        RouteDetailRuntime.etaResolver = { DemoScreenshotFixtures.primaryRoute().waitTimeState }
+        val intent = Intent(targetContext, RouteDetailActivity::class.java).putExtras(
+            RouteDetailLaunchArgs.fromRoute(DemoScreenshotFixtures.primaryRoute()).toBundle()
+        )
+        try {
+            ActivityScenario.launch<RouteDetailActivity>(intent).use { scenario ->
+                waitUntil(5_000L) {
+                    val itemCount = AtomicReference(0)
+                    scenario.onActivity { activity ->
+                        itemCount.set(activity.findViewById<RecyclerView>(R.id.routeDetailList).adapter?.itemCount ?: 0)
+                    }
+                    itemCount.get() > 2
+                }
+                scenario.onActivity { activity ->
+                    invoke(activity, "toggleLeg", arrayOf(Int::class.javaPrimitiveType!!), 0)
+                    invoke(activity, "toggleLeg", arrayOf(Int::class.javaPrimitiveType!!), 1)
+                }
+                waitForUi()
+                saveAppAreaScreenshot(scenario, DemoScreenshotFixtures.routeDetailExpanded)
             }
+        } finally {
+            RouteDetailRuntime.reset()
         }
     }
 
@@ -246,8 +262,8 @@ class DemoScreenshotInstrumentedTest {
         return dialog
     }
 
-    private fun saveAppAreaScreenshot(
-        scenario: ActivityScenario<MainActivity>,
+    private fun <T : android.app.Activity> saveAppAreaScreenshot(
+        scenario: ActivityScenario<T>,
         name: String
     ) {
         val bounds = appAreaBounds(scenario)
@@ -268,7 +284,7 @@ class DemoScreenshotInstrumentedTest {
         bitmap.recycle()
     }
 
-    private fun appAreaBounds(scenario: ActivityScenario<MainActivity>): Rect {
+    private fun <T : android.app.Activity> appAreaBounds(scenario: ActivityScenario<T>): Rect {
         val ref = AtomicReference<Rect>()
         scenario.onActivity { activity ->
             val decor = activity.window.decorView
@@ -441,21 +457,6 @@ class DemoScreenshotInstrumentedTest {
                 }
             }
             else -> emptyList()
-        }
-    }
-
-    private fun clickAllTextViewsContaining(root: View, text: String) {
-        val matches = mutableListOf<TextView>()
-        collectTextViews(root, matches)
-        matches.filter { it.text?.contains(text) == true }.forEach { it.performClick() }
-    }
-
-    private fun collectTextViews(view: View, output: MutableList<TextView>) {
-        if (view is TextView) output += view
-        if (view is android.view.ViewGroup) {
-            for (index in 0 until view.childCount) {
-                collectTextViews(view.getChildAt(index), output)
-            }
         }
     }
 

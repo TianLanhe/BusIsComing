@@ -97,7 +97,6 @@ class SearchFragment : Fragment() {
     private var refreshFeedbackGeneration: Int = 0
     private var refreshFinishRunnable: Runnable? = null
     private lateinit var resultAdapter: BusRouteAdapter
-    private lateinit var detailSheet: RouteDetailBottomSheet
     private lateinit var etaSheet: EtaArrivalsBottomSheet
     private lateinit var resultList: RecyclerView
     private lateinit var swipeRefresh: SwipeRefreshLayout
@@ -289,13 +288,9 @@ class SearchFragment : Fragment() {
                 viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
             }
         )
-        detailSheet = RouteDetailBottomSheet(
-            requireActivity() as androidx.appcompat.app.AppCompatActivity,
-            routeDetailRepositoryFactory()
-        )
         etaSheet = EtaArrivalsBottomSheet(context)
         resultAdapter = BusRouteAdapter(
-            onRouteClick = detailSheet::show,
+            onRouteClick = { route -> RouteDetailNavigator.open(requireContext(), route) },
             onEtaClick = etaSheet::show,
             onMonitorClick = { route ->
                 successfulQueryOrigin?.let { origin ->
@@ -419,7 +414,6 @@ class SearchFragment : Fragment() {
         hasPendingDestinationSelection = false
         candidateBackCallback = null
         candidateScrollLock.reset()
-        detailSheet.dispose()
         etaSheet.dispose()
         super.onDestroyView()
     }

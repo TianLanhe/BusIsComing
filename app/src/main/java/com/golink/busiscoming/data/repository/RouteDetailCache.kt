@@ -1,6 +1,7 @@
 package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.P2pRouteDetailCacheKey
+import com.golink.busiscoming.data.model.ParsedRouteDetail
 import com.golink.busiscoming.data.model.RouteDetailLeg
 
 class RouteDetailCache(
@@ -12,6 +13,8 @@ class RouteDetailCache(
     fun get(key: P2pRouteDetailCacheKey): List<RouteDetailLeg>? {
         return getEntry(key)?.legs
     }
+
+    fun getDetail(key: P2pRouteDetailCacheKey): ParsedRouteDetail? = getEntry(key)?.detail
 
     fun getOriginWalkingDistanceMeters(key: P2pRouteDetailCacheKey): Int? {
         return getEntry(key)?.originWalkingDistanceMeters
@@ -33,22 +36,38 @@ class RouteDetailCache(
         put(key, legs, originWalkingDistanceMeters = null)
     }
 
+    fun put(key: P2pRouteDetailCacheKey, detail: ParsedRouteDetail) {
+        if (detail.legs.isEmpty()) return
+        synchronized(entries) {
+            entries[key] = CachedRouteDetail(detail = detail, cachedAtMillis = clock())
+        }
+    }
+
     fun put(key: P2pRouteDetailCacheKey, legs: List<RouteDetailLeg>, originWalkingDistanceMeters: Int?) {
         if (legs.isEmpty()) return
         synchronized(entries) {
             entries[key] = CachedRouteDetail(
-                legs = legs,
-                originWalkingDistanceMeters = originWalkingDistanceMeters,
+                detail = ParsedRouteDetail(
+                    legs = legs,
+                    originWalking = originWalkingDistanceMeters?.let {
+                        com.golink.busiscoming.data.model.RouteDetailWalkingSegment(
+                            com.golink.busiscoming.data.model.RouteDetailWalkingKind.ORIGIN,
+                            it
+                        )
+                    }
+                ),
                 cachedAtMillis = clock()
             )
         }
     }
 
     private data class CachedRouteDetail(
-        val legs: List<RouteDetailLeg>,
-        val originWalkingDistanceMeters: Int?,
+        val detail: ParsedRouteDetail,
         val cachedAtMillis: Long
-    )
+    ) {
+        val legs: List<RouteDetailLeg> get() = detail.legs
+        val originWalkingDistanceMeters: Int? get() = detail.originWalking?.distanceMeters
+    }
 
     companion object {
         const val DEFAULT_TTL_MILLIS = 86_400_000L

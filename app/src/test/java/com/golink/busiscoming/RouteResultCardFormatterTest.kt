@@ -45,7 +45,7 @@ class RouteResultCardFormatterTest {
     }
 
     @Test
-    fun formatsBottomInfoWithPriceDurationAndWalkingDistance() {
+    fun formatsBottomInfoAsSeparatePriceDurationAndWalkingValues() {
         val route = BusRouteOption(
             routeName = "82X \u2192 102",
             routeSegments = listOf("82X", "102"),
@@ -56,7 +56,13 @@ class RouteResultCardFormatterTest {
             walkingDistanceMeters = 456
         )
 
-        assertEquals("HK$ 20.4 · 耗時 34 分鐘 · 步行 456 米", RouteResultCardFormatter.info(route, text))
+        assertEquals("HK$ 20.4", RouteResultCardFormatter.price(route.priceHkd, text))
+        assertEquals("34 分鐘", RouteResultCardFormatter.duration(route.durationMinutes, text))
+        assertEquals("456 米", RouteResultCardFormatter.walking(route.walkingDistanceMeters, text))
+        assertEquals(
+            "HK$ 20.4，耗時 34 分鐘，步行 456 米",
+            RouteResultCardFormatter.infoAccessibility(route, text)
+        )
     }
 
     @Test
@@ -129,7 +135,8 @@ class RouteResultCardFormatterTest {
         assertEquals("等候 4 分鐘", RouteResultCardFormatter.waitStatus(route.waitTimeState, text))
         assertEquals("下一班 11 分鐘 ›", RouteResultCardFormatter.nextArrivalStatus(route.waitTimeState, text))
         assertEquals("Chai Wan  →  Central", route.stopPreview?.displayText())
-        assertEquals("HK$ 11.8 · 耗時 38 分鐘 · 步行 160 米", RouteResultCardFormatter.info(route, text))
+        assertEquals("38 分鐘", RouteResultCardFormatter.duration(route.durationMinutes, text))
+        assertEquals("160 米", RouteResultCardFormatter.walking(route.walkingDistanceMeters, text))
         assertFalse(RouteCardActionPolicy.canStartMonitor(route))
         assertTrue(RouteCardActionPolicy.canOpenEtaArrivals(route.waitTimeState))
     }
@@ -172,6 +179,10 @@ class RouteResultCardFormatterTest {
             R.string.minutes_count -> "${args[0]} 分鐘"
             R.string.eta_next -> "下一班 ${args[0]} ›"
             R.string.route_card_summary -> "${args[0]} · 耗時 ${args[1]} 分鐘 · 步行 ${args[2]} 米"
+            R.string.route_card_duration_value -> "${args[0]} 分鐘"
+            R.string.route_card_walking_value -> "${args[0]} 米"
+            R.string.route_card_info_content_description ->
+                "${args[0]}，耗時 ${args[1]} 分鐘，步行 ${args[2]} 米"
             R.string.route_results_summary -> "共 ${args[0]} 條路線，${args[1]} 條直達"
             else -> error("Unexpected resource $resourceId")
         }
