@@ -33,9 +33,9 @@ class AppUpdateInfrastructureContractTest {
 
     @Test
     fun runtimeAlwaysUsesPlaySourceAndInjectsDebugEligibility() {
-        assertFalse(appBuild.contains("FORCE_WEBSITE_UPDATE_CHECK"))
-        assertFalse(runtime.contains("DisabledPlayUpdateSource"))
-        assertFalse(runtime.contains("forceWebsiteOnly"))
+        assertFalse(appBuild.contains("FORCE_" + "WEBSITE_UPDATE_CHECK"))
+        assertFalse(runtime.contains("Disabled" + "PlayUpdateSource"))
+        assertFalse(runtime.contains("force" + "WebsiteOnly"))
         assertTrue(
             Regex("""GooglePlayUpdateSource\(\s*applicationContext""")
                 .containsMatchIn(runtime)

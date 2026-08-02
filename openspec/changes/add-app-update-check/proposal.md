@@ -6,7 +6,7 @@
 
 - 新增冷啟動靜默檢查與設定頁手動檢查；自動檢查最多每 24 小時一次，失敗時保持靜默並保留最近可靠結果。
 - 目標渠道策略是：只要裝置有可用的官方 Google Play，不論 App 最初從何處安裝，都由 Play 判斷目前帳號、軌道、地區與裝置的更新資格，並在允許時使用 flexible in-app update。
-- 保留本機 BuildConfig 網站回退開關，並在進入 Google Play 驗收階段時把預設值改為關閉；目前構建直接使用完整 Play 優先策略，真實 Play 與簽名發佈鏈驗收仍由發布任務追蹤。
+- Google Play 上架後刪除本機網站強制開關；正常構建固定使用 Play 優先策略。網站渠道只保留給目前沒有可用官方 Play 的非 Play／未知非 Play 安裝，`ERROR_APP_NOT_OWNED` 只把網站較高版本當作正向證據。
 - 只有 App 初始為非 Play 安裝且目前沒有可用官方 Play 時，才查詢 `https://www.busiscoming.com/api/downloads/android/latest/metadata`，並把更新操作導向目前語言網站的 `#download` 區域。
 - 網站 metadata 沿用已部署首頁下載資訊契約，不要求回傳 `applicationId`；Android 端固定請求官方 endpoint，驗證平台、版本、日期與下載路徑等必要欄位，並接受精確相對路徑 `/api/downloads/android/latest` 或其等價官方 HTTPS 絕對 URL。
 - 新增本地更新狀態、首次發現時間、稍後提醒與略過 versionCode；更新可用滿 3 天後才自動提醒，「稍後提醒」延後 3 天，「略過此版本」只抑制同一 versionCode 的自動彈窗。

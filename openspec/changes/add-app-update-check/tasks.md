@@ -20,8 +20,9 @@
 - [x] 3.3 修正 `WebsiteUpdateSource` 以已部署響應為 runtime 契約：不要求 `applicationId`，接受精確相對 `/api/downloads/android/latest` 或等價官方 HTTPS 絕對 URL，拒絕其他 path／host／scheme／port／query／fragment；以實際響應同形 fixture 覆蓋合法、有更新、無更新、缺欄位、錯誤來源、惡意下載 URL、錯誤日期與 HTTP 失敗。
 - [x] 3.4 實作 `UpdateChannelResolver` 並以表格化測試覆蓋：Play 可更新、Play 無更新、Play 暫時失敗、App not owned、有 Play 的網站安裝、無 Play 的非 Play 安裝、無 Play 的 Play 初始安裝及未知 installer；確認 Play 暫時失敗不降級網站。
 - [x] 3.5 在網站渠道更新動作中只按目前 App 語言產生 `/zh-hant/#download`、`/zh-hans/#download`、`/en/#download` 白名單頁面 Intent，不使用 metadata 的 `downloadUrl`；以測試確認不直接下載或安裝 APK。
-- [x] 3.6 新增 `FORCE_WEBSITE_UPDATE_CHECK` BuildConfig 開關；初次上架前預設啟用，啟用時繞過 Play 檢查、監聽與安裝狀態操作，所有安裝來源均直接查網站並保存為網站渠道，以 JVM 行為測試及構建接線契約測試覆蓋，關閉時保留原有 Play 優先邏輯。
-- [x] 3.7 進入 Google Play 驗收階段時把 `FORCE_WEBSITE_UPDATE_CHECK` 預設值改為 `false`，以生成後的 `BuildConfig` JVM 契約測試防止正常構建意外退回網站強制模式；同步更新目前行為、TD-002、proposal、design 與規格，真實 Play 及發佈鏈任務保持未完成。
+- [x] 3.6 Google Play 上架後刪除本機網站強制 BuildConfig、停用 Play source 與強制網站 coordinator 平行接線；正常 runtime 固定建立 Play source，無 Play 非 Play 安裝的網站渠道保持不變。
+- [x] 3.7 把 debuggable 構建短路為 `PLAY_DEBUG_BUILD_UNSUPPORTED`，不呼叫 installer／Play package／Play source／網站 source，手動提供 Play 恢復提示，自動失敗保留 24 小時節流。
+- [x] 3.8 把 `ERROR_APP_NOT_OWNED` 的網站 metadata 限制為正向證據：只有較高版本形成 Play 渠道更新，相等、較低、網絡失敗或非法資料均回傳 `PLAY_APP_NOT_OWNED`。
 
 ## 4. 檢查協調與 Android 生命週期
 
@@ -31,6 +32,7 @@
 - [x] 4.4 在 `ui/main/MainActivity.kt` 於首個主要畫面完成後觸發到期的靜默檢查，並只在 resumed、可安全展示且提醒條件成立時交付不可取消 Dialog；背景完成時先持久化並在返回前台恢復交付。
 - [x] 4.5 接入 flexible update 啟動、install state listener 與生命週期清理；只有用戶按「前往更新」才啟動 Play UI，`DOWNLOADED` 後持續顯示「重新啟動並安裝」，確認後呼叫 `completeUpdate()`，返回前台可恢復待完成狀態。
 - [x] 4.6 實作 Play flexible 不可用／啟動失敗的兜底：依序嘗試明確 package 的 `market://details` 與 Play HTTPS 詳情頁；兩者失敗只顯示 Play 錯誤，不切換網站。
+- [x] 4.7 新增不含個人資料的結構化 `AppUpdate` 本機診斷，記錄 Play availability／versionCode／errorCode、初始渠道、渠道決策與失敗類型。
 
 ## 5. 設定頁、提醒介面與三語文案
 
@@ -39,6 +41,7 @@
 - [x] 5.3 實作不可按返回鍵或外部取消的三操作更新 Dialog，按鈕為「前往更新／稍後提醒／略過此版本」；稍後與前往更新均寫入同版本 3 天 defer，略過只記錄目前 available versionCode。
 - [x] 5.4 在 `values/strings.xml`、`values-b+zh+Hans/strings.xml`、`values-en/strings.xml` 提供自然香港繁體、獨立簡體與英文的狀態、Dialog、錯誤、Play 下載完成及無障礙文案，並以字串契約測試確認無 XML／Kotlin 硬編碼可見文字。
 - [x] 5.5 更新 `AppSettingsSupportContractTest` 及相關 layout／short-text contract，斷言應用評分仍顯示不支援 Toast，而檢查更新已連接新能力、小紅點、摘要與三語資源。
+- [x] 5.6 新增 Debug 不支援與 AppNotOwned 的三語可操作 Dialog；手動失敗不顯示舊「已是最新」，自動失敗不覆蓋可靠摘要。
 
 ## 6. 自動化驗證
 
@@ -47,19 +50,20 @@
 - [x] 6.3 運行更新相關 JVM 測試及 `./gradlew build`，確認 Kotlin 編譯、unit tests、lint 與 debug／release assemble 全部通過，並記錄任何環境限制。
 - [x] 6.4 新增網站渠道整合回歸測試，把已部署 metadata 同形 JSON 經 parser、versionCode 判斷及 3 天 policy 串接，覆蓋無 `applicationId`、相對 `downloadUrl` 與邊界時間。
 - [x] 6.5 重新運行更新相關 JVM 測試及 `./gradlew build`，確認本次契約修正未破壞 Kotlin 編譯、unit tests、lint 與 debug／release assemble。
+- [x] 6.6 以 JVM 與 UI 契約測試覆蓋 Debug 短路、AppNotOwned 網站矩陣、歷史快照保留、手動／自動摘要及 Play 詳情頁兜底。
 
 ## 7. 裝置與發布鏈驗收
 
 - [x] 7.1 在無可用 Google Play 的 API 25 與 API 30+ 模擬器驗證：非 Play 安裝走三語網站頁、Play 初始安裝只顯示 Play 暫不可用，且 App 不請求未知來源安裝權限。
 - [ ] 7.2 使用 Google Play internal test／Internal App Sharing、已擁有 App 的帳號及較高 `versionCode` 真實驗證資格判斷、flexible 下載、取消／返回、下載完成、`completeUpdate()` 與升級後清除小紅點；mock 結果不得取代此門檻。
 - [x] 7.3 人工驗證繁體／簡體／英文 × 淺／深色、360dp、font scale 1.0／1.3／2.0 與 TalkBack，確認設定摘要、小紅點、三個 Dialog 操作及下載完成提示不裁切且朗讀完整。
-- [ ] 7.4 按固定順序驗證網站正式包：Play 目標地區 100% 發佈後下載 signed universal APK，以 `apksigner` 與 package metadata 確認 SHA-256 為 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`、application ID 及版本一致，再從實際 APK 產生 size／SHA-256／metadata；不得公開 upload key 簽署的候選 APK。
-- [ ] 7.5 驗證網站 APK 與 metadata 下載響應後才公開新版本，並以真實 App 確認 `ERROR_APP_NOT_OWNED` 判斷及網站 100% 發佈門檻不會把 Play 可用用戶導向網站。
+- [x] 7.4 已按固定順序驗證網站 v11 正式包：metadata 為 `versionCode=11`、`versionName=1.0`、`sizeBytes=6094814`，下載 APK 的 application ID 為 `com.golink.busiscoming`，Play app signing SHA-256 為 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`，且響應使用 `Cache-Control: no-store`。
+- [x] 7.5 以確定性測試驗證 `ERROR_APP_NOT_OWNED` 網站矩陣：只有較高版本形成 Play 渠道可靠更新，相等、較低、網絡或非法資料均保留 AppNotOwned；網站 v11 APK、metadata 與發佈鏈已完成驗證，真實帳號重現 AppNotOwned 屬可選補充證據，不取代 7.2 的 IAS flexible flow 門檻。
 - [x] 7.6 對已部署 metadata endpoint 做只讀線上契約核對，確認 HTTP 200、`Cache-Control: no-store`、無 `applicationId`、相對 `downloadUrl=/api/downloads/android/latest`、正整數版本／大小與合法日期；線上檢查不加入一般單元測試以避免網絡造成 CI 不穩定。
 
 ## 8. 文件與提交
 
 - [x] 8.1 更新 `README.md` 或對應 `docs/`，記錄雙渠道權威規則、本機 24 小時／3 天策略、網站 metadata 契約、三語入口及 Play signed universal APK 發佈流程，不把 upload key 當正式網站簽名。
-- [x] 8.2 在 `docs/technical-debt.md` 記錄上架前強制網站渠道的臨時例外、開關位置、目前影響、恢復步驟與關閉條件；同步更新本 change 與更新檢查說明，避免把目標 Play 策略誤寫成目前運行時行為。
+- [x] 8.2 在 `docs/technical-debt.md` 記錄網站強制模式已刪除、目前 Debug 行為、v11 發佈鏈證據、IAS 剩餘門檻與關閉條件；同步更新本 change 與更新檢查說明。
 - [x] 8.3 更新 `docs/app-update-check.md`，使 runtime metadata 欄位、無 `applicationId` 理由、相對 `downloadUrl` 白名單與線上驗證證據和實作一致。
 - [x] 8.4 核對本 change 的 requirement／scenario 均有實作或驗證證據，同步勾選完成任務；執行 `git status --short` 與 staged diff 檢查，避開既有無關改動後依專案規則建立單一清晰 conventional commit。

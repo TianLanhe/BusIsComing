@@ -39,38 +39,37 @@
 - DATA.GOV.HK timeout、HTTP 失敗、HTTP 200 空 `data` 及欄位缺失均有回歸測試，失敗時路線卡仍可用且不把降級值長期快取為簡體成功結果。
 - 站名補齊與 ETA 並行時，ETA 不等待站名查詢完成；完成真實裝置三語及網路降級驗證。
 
-## TD-002：Google Play 上架前暫時強制網站更新渠道
+## TD-002：Google Play flexible update 真實裝置驗收
 
-- **狀態**：回退開關已停用，等待真實 Play 與發佈鏈驗收後關閉
+- **狀態**：網站強制開關已刪除，等待真實 IAS flexible flow 驗收後關閉
 - **記錄日期**：2026-07-24
-- **預設切換日期**：2026-08-02
+- **最近更新**：2026-08-03
 - **影響範圍**：App 自動與手動更新檢查、更新渠道選擇及 Play flexible update
-- **目前影響**：正常構建已使用 Google Play 優先分流及 flexible update；網站強制模式仍可由本機構建開關恢復。真實 Play 帳號、較高版本及網站簽名發佈鏈驗收尚未完成，因此本條目暫不關閉。
+- **目前影響**：正常構建固定使用 Google Play 優先分流；Debug 構建不宣稱 Play 已是最新。v11 網站 signed universal APK 與 metadata 已完成發佈鏈驗證，目前只餘 IAS v10 → v11 flexible update 真實裝置門檻。
 
-### 已驗證根因
+### 已驗證狀態
 
-- App 尚未正式上架 Google Play，現階段沒有可供目前 application ID、帳號及裝置真實驗證的 Play 更新版本。
-- 在此階段依賴 Play Core 結果無法完成正式資格及 flexible flow 驗收，亦會讓網站測試版本的更新路徑不穩定。
-- 移除 Play 實作會增加正式上架後的恢復改動及回歸風險，因此採用本機構建開關隔離臨時行為。
+- 正常 runtime 固定建立 Play source；只有沒有可用 Play 的非 Play／未知非 Play 初始安裝使用網站渠道。
+- Debug 構建在 installer、Play package、Play source 與網站 source 前短路，手動提供 Play 恢復提示，自動保持靜默及 24 小時節流。
+- `ERROR_APP_NOT_OWNED` 只有在網站 `versionCode` 較高時形成 Play 渠道可靠更新；相等、較低、網絡失敗或非法 metadata 均保持無法驗證，不再誤報最新。
+- 網站 v11 metadata 為 `versionCode=11`、`versionName=1.0`、`sizeBytes=6094814`；APK application ID 為 `com.golink.busiscoming`，簽名為 Play app signing SHA-256 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`。
 
 ### 本次延期邊界
 
-- 開關位於 `app/build.gradle.kts`：`FORCE_WEBSITE_UPDATE_CHECK=false`。
-- 開關啟用時，coordinator 不執行 Play 版本檢查、下載狀態監聽、安裝狀態刷新或 flexible update，可靠快照固定使用 `WEBSITE` 渠道。
-- 保留 Play source、渠道 resolver、Play 詳情頁及 flexible update 實作，不另建平行更新流程。
-- 此開關是本機構建配置，不提供用戶可見設定或遠端控制。
+- 自動化 fake 與契約測試可驗證分流及狀態矩陣，但不得取代已擁有 App 的真實 Play 帳號與裝置上的 flexible flow。
+- 真實帳號重現 `ERROR_APP_NOT_OWNED` 可作補充證據，不是關閉本條目的硬門檻；確定性網站矩陣已負責防止誤報最新。
+- 不以 Debug APK、直接 adb 安裝或網站 APK 代替 Internal App Sharing 的 Play 擁有權及更新交付證據。
 
-### 後續恢復步驟
+### 剩餘驗收步驟
 
-1. `FORCE_WEBSITE_UPDATE_CHECK=false` 已進入正常構建，並以 JVM 契約測試鎖定預設值。
-2. 準備相同 application ID、正確簽名及較高 `versionCode` 的 internal test／Internal App Sharing 版本。
-3. 以已擁有 App 的真實 Play 帳號驗證資格判斷、flexible 下載、取消／返回、下載完成、`completeUpdate()` 及升級後清除小紅點。
-4. 運行既有開關接線、Play 分流及三語設定頁契約測試，完成 Play 詳情頁恢復路徑回歸。
-5. 完成網站 signed universal APK、metadata 與 `ERROR_APP_NOT_OWNED` 發佈順序驗收後，將本條目狀態改為已關閉並記錄版本、軌道及日期。
+1. 取得同一 Internal App Sharing 渠道的 Play signed v10 與 v11 測試連結。
+2. 使用目標真實帳號由 Play 安裝 v10，確認帳號擁有權及目前版本。
+3. 發佈或開啟 v11，驗證 App 內檢查識別較高 `versionCode` 並啟動 flexible update。
+4. 驗證取消／返回、重新進入、下載完成、`completeUpdate()`、升級到 v11 及小紅點清除。
+5. 記錄帳號軌道、裝置、v10／v11 版本及日期後，勾選 OpenSpec 任務 7.2 並關閉本條目。
 
 ### 關閉條件
 
-- Google Play 已正式上架，且 `FORCE_WEBSITE_UPDATE_CHECK=false` 已進入準備發佈的構建。
-- 真實 Play 測試證明 Play 安裝與網站安裝在裝置有 Play 時均使用 Play 資格結果。
-- flexible update 與 Play 詳情頁兜底完成真實裝置驗證，無 Play 的非 Play 安裝仍可使用網站渠道。
-- OpenSpec `add-app-update-check` 的 Play 真實驗收任務已有證據並完成勾選。
+- Internal App Sharing v10 → v11 在真實裝置與已擁有 App 的帳號完成資格判斷及 flexible update。
+- 取消／返回、下載完成、重新啟動安裝及升級後狀態清理均有真實裝置證據。
+- OpenSpec `add-app-update-check` 任務 7.2 已完成勾選並記錄驗收資訊。

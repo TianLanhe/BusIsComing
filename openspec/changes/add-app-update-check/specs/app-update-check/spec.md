@@ -1,21 +1,15 @@
 ## ADDED Requirements
 
-### Requirement: 系統保留本機網站渠道回退開關
-系統 SHALL 提供集中且預設關閉的本機構建開關；正常構建 SHALL 使用 Play 優先策略，只有明確啟用回退時才強制自動與手動更新檢查使用網站渠道。
-
-#### Scenario: 網站回退開關啟用
-- **WHEN** `FORCE_WEBSITE_UPDATE_CHECK` 為 `true`
-- **THEN** 系統 SHALL 不論初始安裝渠道或 Google Play package 是否可用，直接使用官方網站 metadata 檢查更新
-- **AND** 系統 SHALL 將可靠結果的更新渠道設為網站
-- **AND** 系統 SHALL NOT 執行 Play 版本檢查、Play 安裝狀態刷新或 flexible update
-
-#### Scenario: 正常構建預設使用 Play 優先策略
-- **WHEN** `FORCE_WEBSITE_UPDATE_CHECK` 為預設值 `false`
-- **THEN** 系統 SHALL 恢復本規格定義的 Google Play 優先及網站兜底策略
-- **AND** 系統 SHALL NOT 需要修改 coordinator、resolver 或更新 UI 才能恢復 Play 流程
-
 ### Requirement: 系統按 Google Play 可用性選擇更新渠道
 系統 SHALL 優先使用目前裝置上可用的官方 Google Play 判斷及執行更新，並 SHALL 只在初始為非 Play 安裝且目前沒有可用官方 Play 時使用官方網站渠道。
+
+#### Scenario: Debug 構建不宣稱 Play 已是最新
+- **WHEN** 目前 App 為 debuggable 構建
+- **AND** 系統發起自動或手動更新檢查
+- **THEN** 系統 SHALL NOT 呼叫 Play package probe、Play 更新服務或網站 metadata
+- **AND** 系統 SHALL NOT 保存可靠的已是最新或更新可用快照
+- **AND** 手動檢查 SHALL 提供前往 Google Play 的受控提示
+- **AND** 自動檢查 SHALL 保持靜默並保留 24 小時嘗試節流
 
 #### Scenario: Play 可用且允許目前用戶更新
 - **WHEN** 裝置有可用的官方 Google Play
@@ -33,6 +27,9 @@
 - **THEN** 系統 SHALL 保持 Google Play 為更新操作渠道
 - **AND** 系統 SHALL 讀取只在 Play 目標地區達到 100% 發佈後上線的網站 metadata，判斷是否存在較高 `versionCode`
 - **AND** 發現更新時系統 SHALL 將用戶導向 Google Play 而非網站 APK
+- **AND** 網站 metadata 只有在 `versionCode` 高於目前 App 時 SHALL 形成可靠更新快照
+- **AND** 網站版本相等、較低、請求失敗或 metadata 無效時 SHALL 回報 `PLAY_APP_NOT_OWNED`
+- **AND** 系統 SHALL NOT 以這些非正向結果宣稱目前已是最新版本
 
 #### Scenario: Play 暫時失敗
 - **WHEN** Play 更新服務因網絡、服務或裝置暫時狀態無法完成檢查
