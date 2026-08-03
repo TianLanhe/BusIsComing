@@ -76,6 +76,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private lateinit var toolbar: MaterialToolbar
     private lateinit var floatingBack: MaterialButton
     private lateinit var mapView: MapView
+    private lateinit var mapControls: View
     private lateinit var mapLegend: View
     private lateinit var mapError: TextView
     private lateinit var sheetMapError: TextView
@@ -258,6 +259,7 @@ class RouteDetailActivity : AppCompatActivity() {
         toolbar = findViewById(R.id.routeDetailToolbar)
         floatingBack = findViewById(R.id.routeDetailFloatingBack)
         mapView = findViewById(R.id.routeDetailMap)
+        mapControls = findViewById(R.id.routeDetailMapControls)
         mapLegend = findViewById(R.id.routeDetailMapLegend)
         mapError = findViewById(R.id.routeDetailMapError)
         sheetMapError = findViewById(R.id.routeDetailSheetMapError)
@@ -270,6 +272,8 @@ class RouteDetailActivity : AppCompatActivity() {
             renderer?.fitOverview(animated = true, paddingPx = dimension(R.dimen.route_map_camera_padding))
         }
         findViewById<MaterialButton>(R.id.routeDetailLocation).setOnClickListener { onLocationClicked() }
+        mapLegend.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMapControlPlacement() }
+        mapControls.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMapControlPlacement() }
     }
 
     private fun setupTimeline() {
@@ -340,8 +344,9 @@ class RouteDetailActivity : AppCompatActivity() {
             statusBarInset = status.top
             navigationBarInset = navigation.bottom
             updateTopMargin(floatingBack, dimension(R.dimen.route_map_edge_margin) + statusBarInset)
-            updateTopMargin(findViewById(R.id.routeDetailMapControls), dimension(R.dimen.route_map_controls_top_margin) + statusBarInset)
+            updateTopMargin(mapControls, dimension(R.dimen.route_map_controls_top_margin) + statusBarInset)
             updateTopMargin(mapLegend, dimension(R.dimen.route_map_legend_top_margin) + statusBarInset)
+            mapLegend.post(::updateMapControlPlacement)
             updateMapPadding()
             insets
         }
@@ -633,6 +638,31 @@ class RouteDetailActivity : AppCompatActivity() {
                 .coerceAtMost((root.height - statusBarInset - 1).coerceAtLeast(0))
             renderer?.updatePadding(0, statusBarInset, 0, bottomPadding)
         }
+    }
+
+    private fun updateMapControlPlacement() {
+        if (!::mapControls.isInitialized || !::mapLegend.isInitialized || mapControls.width <= 0) return
+        val defaultTop = dimension(R.dimen.route_map_controls_top_margin) + statusBarInset
+        val defaultBounds = android.graphics.Rect(
+            mapControls.left,
+            defaultTop,
+            mapControls.left + mapControls.width,
+            defaultTop + mapControls.height
+        )
+        val legendBounds = android.graphics.Rect(
+            mapLegend.left,
+            mapLegend.top,
+            mapLegend.right,
+            mapLegend.bottom
+        )
+        val targetTop = if (
+            mapLegend.visibility == View.VISIBLE && android.graphics.Rect.intersects(defaultBounds, legendBounds)
+        ) {
+            mapLegend.bottom + dimension(R.dimen.route_map_edge_margin)
+        } else {
+            defaultTop
+        }
+        updateTopMargin(mapControls, targetTop)
     }
 
     private fun onLocationClicked() {

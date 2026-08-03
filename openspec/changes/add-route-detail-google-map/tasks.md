@@ -66,7 +66,7 @@
 
 - [x] 9.1 更新 `RouteDetailActivityContractTest`、`RouteDetailActivityTest` 與視覺矩陣 fixture／啟動工具，覆蓋新啟動參數、即時摘要、舊 bundle 兼容及既有純文字詳情回歸。
 - [x] 9.2 新增 instrumentation 測試覆蓋三個 detent、摘要上滑直達全屏、把手半屏、返回直接退出、返回入口遷移、nested scroll、marker／時間線聯動、重建恢復及底圖失敗自動全屏。
-- [ ] 9.3 在本任務自行啟動且不佔用他人工作中的模擬器／實機上，以單段與多段真實 Citybus 結果驗證 Google 底圖、所有站點、道路幾何、示意步行、位置權限、60 秒 ETA、局部重試及生命週期；驗證後關閉本任務啟動的模擬器。
-- [ ] 9.4 依 `docs/localization-validation-matrix.md` 完成繁體／簡體／英文 × 淺色／深色、360dp、font scale 1.0／1.3／2.0 與 TalkBack 人工檢查，保存必要截圖或測試記錄。
+- [x] 9.3 在本任務自行啟動且不佔用他人工作中的模擬器／實機上，以單段與多段真實 Citybus 結果驗證 Google 底圖、所有站點、道路幾何、示意步行、位置權限、60 秒 ETA、局部重試及生命週期；驗證後關閉本任務啟動的模擬器。
+- [x] 9.4 依 `docs/localization-validation-matrix.md` 完成繁體／簡體／英文 × 淺色／深色、360dp、font scale 1.0／1.3／2.0 與 TalkBack 人工檢查，保存必要截圖或測試記錄。
 - [x] 9.5 更新 README／相關技術文檔，記錄 `getlinep2p.php` 最小請求、fixture、Maps key 本機配置、Google 標籤語言例外、步行線僅為示意、無背景定位／車輛追蹤，以及 Play Data Safety／隱私披露的發佈前檢查。
 - [x] 9.6 執行針對性 JVM 與 instrumentation 測試後運行 `./gradlew build`，檢查 `git status --short` 與 staged 範圍，確認未提交 secret／構建產物並依專案規則建立單一清晰的實作提交。

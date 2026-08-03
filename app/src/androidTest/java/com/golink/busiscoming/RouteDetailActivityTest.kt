@@ -15,6 +15,7 @@ import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.Visibility.VISIBLE
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.RecyclerView
 import com.golink.busiscoming.data.model.BusRouteOption
@@ -42,6 +43,7 @@ import org.hamcrest.CoreMatchers.any
 import org.hamcrest.Matcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.After
 import org.junit.Before
@@ -50,6 +52,7 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.golink.busiscoming.data.repository.RouteGeometryDataSource
 import com.golink.busiscoming.data.repository.RouteGeometryLoadHandle
 import com.golink.busiscoming.data.repository.RouteGeometryRequest
+import com.golink.busiscoming.data.model.RouteGeometryPoint
 import com.golink.busiscoming.data.model.RouteGeometrySegment
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -206,6 +209,31 @@ class RouteDetailActivityTest {
     }
 
     @Test
+    fun etaRefreshesAgainAfterSixtySecondsWhilePageStaysInForeground() {
+        assumeTrue(
+            InstrumentationRegistry.getArguments().getString(ARG_RUN_SIXTY_SECOND_ETA) == "true"
+        )
+        val etaCalls = AtomicInteger()
+        RouteDetailRuntime.etaResolver = {
+            etaCalls.incrementAndGet()
+            WaitTimeState.Available(7)
+        }
+
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use {
+            waitForValue(etaCalls, 1)
+            val startedAt = SystemClock.uptimeMillis()
+            val deadline = startedAt + 68_000L
+            while (SystemClock.uptimeMillis() < deadline && etaCalls.get() < 2) Thread.sleep(250L)
+
+            assertEquals(2, etaCalls.get())
+            assertTrue(
+                "The recurring ETA refresh ran before the 60-second interval",
+                SystemClock.uptimeMillis() - startedAt >= 59_000L
+            )
+        }
+    }
+
+    @Test
     fun summaryAndRecoverableMissingMetadataStateSurviveRecreation() {
         val route = BusRouteOption(
             routeName = "N118",
@@ -275,6 +303,75 @@ class RouteDetailActivityTest {
         }
     }
 
+    @Test
+    fun partialGeometryRetryKeepsSuccessfulSegmentAndReloadsTheFailedSegment() {
+        val route = twoLegRouteWithDetailQuery()
+        val requestBatches = AtomicReference<List<List<String>>>(emptyList())
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail = twoLegDetail()
+            }
+        }
+        RouteDetailRuntime.geometryRepositoryFactory = {
+            object : RouteGeometryDataSource {
+                override fun loadGeometries(
+                    requests: List<RouteGeometryRequest>,
+                    onResult: (RouteGeometryRequest, Result<RouteGeometrySegment>) -> Unit
+                ): RouteGeometryLoadHandle {
+                    requestBatches.updateAndGet { batches ->
+                        batches + listOf(requests.map { it.key.routeVariant })
+                    }
+                    requests.forEach { request ->
+                        val retryingOnlyFailedSegment = requests.size == 1
+                        val secondSegment = request.key.routeVariant == "102-MEF-1"
+                        val result = if (secondSegment && !retryingOnlyFailedSegment) {
+                            Result.failure(IllegalStateException("second segment unavailable"))
+                        } else {
+                            Result.success(geometryFor(request.key))
+                        }
+                        onResult(request, result)
+                    }
+                    return RouteGeometryLoadHandle {}
+                }
+            }
+        }
+        RouteDetailRuntime.mapsAvailabilityChecker = { false }
+        val latestPresentation = AtomicReference<RouteMapPresentation>()
+        RouteDetailRuntime.presentationObserver = latestPresentation::set
+
+        ActivityScenario.launch<RouteDetailActivity>(intent(route)).use { scenario ->
+            waitForTimelineItems(scenario)
+            waitForBusLineCount(latestPresentation, 1)
+            val retainedLineId = requireNotNull(latestPresentation.get()).lines.single {
+                it.kind == com.golink.busiscoming.ui.main.RouteMapLineKind.BUS
+            }.stableId
+            scenario.onActivity { activity ->
+                val retry = activity.findViewById<View>(com.google.android.material.R.id.snackbar_action)
+                assertTrue(retry.isShown)
+                assertTrue(retry.isClickable)
+                assertTrue(retry.performClick())
+            }
+            val retryDeadline = SystemClock.uptimeMillis() + 3_000L
+            while (
+                SystemClock.uptimeMillis() < retryDeadline &&
+                requestBatches.get().lastOrNull() != listOf("102-MEF-1")
+            ) Thread.sleep(50L)
+            assertEquals(listOf("102-MEF-1"), requestBatches.get().lastOrNull())
+            scenario.onActivity { activity ->
+                val geometries = activity.javaClass.getDeclaredField("geometries").apply {
+                    isAccessible = true
+                }.get(activity) as Map<*, *>
+                assertEquals(2, geometries.size)
+            }
+            waitForBusLineCount(latestPresentation, 2)
+
+            val finalBusLines = requireNotNull(latestPresentation.get()).lines.filter {
+                it.kind == com.golink.busiscoming.ui.main.RouteMapLineKind.BUS
+            }
+            assertTrue(finalBusLines.any { it.stableId == retainedLineId })
+        }
+    }
+
     private fun intent(route: BusRouteOption): Intent {
         return Intent(ApplicationProvider.getApplicationContext(), RouteDetailActivity::class.java)
             .putExtras(RouteDetailLaunchArgs.fromRoute(route).toBundle())
@@ -334,6 +431,23 @@ class RouteDetailActivityTest {
         assertEquals(expected, value.get())
     }
 
+    private fun waitForBusLineCount(presentation: AtomicReference<RouteMapPresentation>, expected: Int) {
+        val deadline = SystemClock.uptimeMillis() + 5_000L
+        while (SystemClock.uptimeMillis() < deadline) {
+            val count = presentation.get()?.lines?.count {
+                it.kind == com.golink.busiscoming.ui.main.RouteMapLineKind.BUS
+            }
+            if (count == expected) return
+            Thread.sleep(50L)
+        }
+        assertEquals(
+            expected,
+            presentation.get()?.lines?.count {
+                it.kind == com.golink.busiscoming.ui.main.RouteMapLineKind.BUS
+            }
+        )
+    }
+
     private fun waitForDestroyed(scenario: ActivityScenario<RouteDetailActivity>) {
         val deadline = SystemClock.uptimeMillis() + 3_000L
         while (SystemClock.uptimeMillis() < deadline && scenario.state != Lifecycle.State.DESTROYED) Thread.sleep(50)
@@ -383,8 +497,85 @@ class RouteDetailActivityTest {
         )
     }
 
+    private fun twoLegRouteWithDetailQuery(): BusRouteOption {
+        val rawInfo = "2|*|CTB||82X-ISR-1||6||9||O|*|CTB||102-MEF-1||12||15||O|*|"
+        val legs = listOf(
+            P2pRouteLeg("CTB", "82X-ISR-1", "82X", 6, 9, "O", "outbound"),
+            P2pRouteLeg("CTB", "102-MEF-1", "102", 12, 15, "O", "outbound")
+        )
+        return BusRouteOption(
+            routeName = "82X → 102",
+            routeSegments = listOf("82X", "102"),
+            priceHkd = 20.0,
+            durationMinutes = 35,
+            arrivalMinutes = 35,
+            transferCount = 1,
+            walkingDistanceMeters = 0,
+            waitTimeState = WaitTimeState.Loading,
+            routeDetailQuery = P2pRouteDetailQuery(
+                rawInfo,
+                "02:04|*|35",
+                "0",
+                "0",
+                P2pRoutePlan(rawInfo, "0", legs)
+            )
+        )
+    }
+
+    private fun twoLegDetail(): RouteDetail {
+        val firstBoard = stop("第一段上車", 6, RouteDetailStopRole.BOARDING, "82X-ISR-1", 22.3000, 114.1000)
+        val firstAlight = stop("轉乘站", 9, RouteDetailStopRole.ALIGHTING, "82X-ISR-1", 22.3100, 114.1100)
+        val secondBoard = stop("轉乘站", 12, RouteDetailStopRole.BOARDING, "102-MEF-1", 22.3100, 114.1100)
+        val secondAlight = stop("第二段下車", 15, RouteDetailStopRole.ALIGHTING, "102-MEF-1", 22.3200, 114.1200)
+        return RouteDetail(
+            routeName = "82X → 102",
+            priceHkd = 20.0,
+            durationMinutes = 35,
+            walkingDistanceMeters = 0,
+            legs = listOf(
+                RouteDetailLeg("82X", "82X-ISR-1", null, firstBoard, emptyList(), firstAlight),
+                RouteDetailLeg("102", "102-MEF-1", null, secondBoard, emptyList(), secondAlight)
+            )
+        )
+    }
+
+    private fun geometryFor(key: com.golink.busiscoming.data.model.RouteGeometryKey): RouteGeometrySegment {
+        val points = if (key.routeVariant == "82X-ISR-1") {
+            listOf(
+                RouteGeometryPoint("first-1", 22.3000, 114.1000),
+                RouteGeometryPoint("first-2", 22.3050, 114.1050),
+                RouteGeometryPoint("first-3", 22.3100, 114.1100)
+            )
+        } else {
+            listOf(
+                RouteGeometryPoint("second-1", 22.3100, 114.1100),
+                RouteGeometryPoint("second-2", 22.3150, 114.1150),
+                RouteGeometryPoint("second-3", 22.3200, 114.1200)
+            )
+        }
+        return RouteGeometrySegment(key, points)
+    }
+
     private fun stop(name: String, sequence: Int, role: RouteDetailStopRole) = RouteDetailStop(
         name, name, sequence.toString(), sequence, 22.0, 114.0, "N118-TOS-1", role
+    )
+
+    private fun stop(
+        name: String,
+        sequence: Int,
+        role: RouteDetailStopRole,
+        routeVariant: String,
+        latitude: Double,
+        longitude: Double
+    ) = RouteDetailStop(
+        name,
+        name,
+        sequence.toString(),
+        sequence,
+        latitude,
+        longitude,
+        routeVariant,
+        role
     )
 
     private fun clickClickableParent(): ViewAction = object : ViewAction {
@@ -396,6 +587,10 @@ class RouteDetailActivityTest {
             checkNotNull(target).performClick()
             uiController.loopMainThreadUntilIdle()
         }
+    }
+
+    private companion object {
+        const val ARG_RUN_SIXTY_SECOND_ETA = "runSixtySecondEta"
     }
 
 }

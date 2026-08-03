@@ -24,6 +24,8 @@ import com.golink.busiscoming.ui.main.RouteMapPresentation
 import java.io.File
 import java.io.FileOutputStream
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -36,7 +38,40 @@ class RouteDetailRealServiceInstrumentedTest {
     fun resetRuntime() = RouteDetailRuntime.reset()
 
     @Test
-    fun realMultiLegCitybusGeometryAndGoogleMapRenderTogether() {
+    fun realSingleLegCitybusRendersEveryStopRoadGeometryWalksAndGoogleBaseMap() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString(ARG_RUN_REAL) == "true")
+        val rawInfo = "1|*|CTB||780-CEF-1||6||17||O|*|"
+        val leg = P2pRouteLeg("CTB", "780-CEF-1", "780", 6, 17, "O", "outbound")
+        val route = BusRouteOption(
+            routeName = "780",
+            routeSegments = listOf("780"),
+            priceHkd = 7.2,
+            durationMinutes = 35,
+            arrivalMinutes = 35,
+            transferCount = 0,
+            walkingDistanceMeters = 180,
+            waitTimeState = WaitTimeState.Loading,
+            routeDetailQuery = P2pRouteDetailQuery(
+                rawInfo,
+                "02:04|*|35",
+                "0",
+                "0",
+                P2pRoutePlan(rawInfo, "0", listOf(leg))
+            )
+        )
+
+        validateRealRoute(
+            route = route,
+            origin = Place("柴灣", 22.2624, 114.2344),
+            destination = Place("中環碼頭", 22.2842, 114.1567),
+            expectedBusLines = 1,
+            minimumStops = 12,
+            screenshotName = SINGLE_SCREENSHOT_NAME
+        )
+    }
+
+    @Test
+    fun realMultiLegCitybusRendersEveryStopRoadGeometryWalksAndGoogleBaseMap() {
         assumeTrue(InstrumentationRegistry.getArguments().getString(ARG_RUN_REAL) == "true")
         val rawInfo = "2|*|CTB||82X-ISR-1||6||9||O|*|CTB||102-MEF-1||12||15||O|*|"
         val legs = listOf(
@@ -60,51 +95,105 @@ class RouteDetailRealServiceInstrumentedTest {
                 P2pRoutePlan(rawInfo, "0", legs)
             )
         )
-        val launchArgs = RouteDetailLaunchArgs.fromRoute(
-            route,
-            Place("柴灣", 22.2649, 114.2416),
-            Place("北角", 22.2900, 114.1963)
+        validateRealRoute(
+            route = route,
+            origin = Place("柴灣", 22.2649, 114.2416),
+            destination = Place("北角", 22.2900, 114.1963),
+            expectedBusLines = 2,
+            minimumStops = 8,
+            screenshotName = MULTI_SCREENSHOT_NAME
         )
+    }
+
+    private fun validateRealRoute(
+        route: BusRouteOption,
+        origin: Place,
+        destination: Place,
+        expectedBusLines: Int,
+        minimumStops: Int,
+        screenshotName: String
+    ) {
+        val launchArgs = RouteDetailLaunchArgs.fromRoute(route, origin, destination)
         val intent = Intent(ApplicationProvider.getApplicationContext(), RouteDetailActivity::class.java)
             .putExtras(launchArgs.toBundle())
         val latestPresentation = AtomicReference<RouteMapPresentation>()
         RouteDetailRuntime.presentationObserver = latestPresentation::set
 
         ActivityScenario.launch<RouteDetailActivity>(intent).use { scenario ->
-            waitForRealContent(scenario, latestPresentation)
+            waitForRealContent(scenario, latestPresentation, expectedBusLines)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            Thread.sleep(500L)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             scenario.onActivity { activity ->
                 val list = activity.findViewById<RecyclerView>(R.id.routeDetailList)
                 assertTrue(requireNotNull(list.adapter).itemCount > 4)
                 assertTrue(activity.findViewById<View>(R.id.routeDetailMapLegend).visibility == View.VISIBLE)
                 assertTrue(findViewWithTag(activity.window.decorView, "GoogleWatermark")?.visibility == View.VISIBLE)
-                assertTrue(latestPresentation.get().lines.count { it.kind == RouteMapLineKind.BUS } == 2)
+                assertTrue(readBooleanField(activity, "baseMapLoaded"))
+
+                val detail = readDetail(activity)
+                val expectedTimelineStops = detail.legs.sumOf { leg -> leg.viaStops.size + 2 }
+                val presentation = requireNotNull(latestPresentation.get())
+                val renderedTimelineStops = presentation.markers.flatMap { it.timelineStopIds }.distinct()
+                assertTrue(expectedTimelineStops >= minimumStops)
+                assertEquals(expectedTimelineStops, renderedTimelineStops.size)
+                assertEquals(expectedBusLines, presentation.lines.count { it.kind == RouteMapLineKind.BUS })
+                assertTrue(
+                    presentation.lines.filter { it.kind == RouteMapLineKind.BUS }.all { it.points.size > 2 }
+                )
+                assertTrue(presentation.lines.count { it.kind == RouteMapLineKind.WALKING } >= 2)
 
                 val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                val output = File(requireNotNull(activity.getExternalFilesDir(null)), SCREENSHOT_NAME)
+                val output = File(requireNotNull(activity.getExternalFilesDir(null)), screenshotName)
                 FileOutputStream(output).use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
             }
             if (InstrumentationRegistry.getArguments().getString(ARG_HOLD_FOR_INSPECTION) == "true") {
-                Thread.sleep(30_000L)
+                val holdMillis = InstrumentationRegistry.getArguments()
+                    .getString(ARG_HOLD_MILLIS)
+                    ?.toLongOrNull()
+                    ?.coerceIn(1_000L, 180_000L)
+                    ?: 30_000L
+                Thread.sleep(holdMillis)
             }
         }
     }
 
     private fun waitForRealContent(
         scenario: ActivityScenario<RouteDetailActivity>,
-        latestPresentation: AtomicReference<RouteMapPresentation>
+        latestPresentation: AtomicReference<RouteMapPresentation>,
+        expectedBusLines: Int
     ) {
-        val deadline = SystemClock.uptimeMillis() + 20_000L
+        val deadline = SystemClock.uptimeMillis() + 30_000L
         while (SystemClock.uptimeMillis() < deadline) {
             var ready = false
             scenario.onActivity { activity ->
                 ready = activity.findViewById<RecyclerView>(R.id.routeDetailList).adapter?.itemCount?.let { it > 4 } == true &&
                     findViewWithTag(activity.window.decorView, "GoogleWatermark")?.visibility == View.VISIBLE &&
-                    latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.BUS } == 2
+                    readBooleanField(activity, "baseMapLoaded") &&
+                    latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.BUS } == expectedBusLines &&
+                    latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.WALKING }?.let { it >= 2 } == true
             }
             if (ready) return
             Thread.sleep(250)
         }
+        scenario.onActivity { activity ->
+            assertTrue("Google base map did not finish loading", readBooleanField(activity, "baseMapLoaded"))
+            assertNotNull("Real Citybus presentation was not produced", latestPresentation.get())
+            assertEquals(
+                expectedBusLines,
+                latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.BUS }
+            )
+        }
     }
+
+    private fun readBooleanField(activity: RouteDetailActivity, name: String): Boolean =
+        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.getBoolean(activity)
+
+    private fun readDetail(activity: RouteDetailActivity): com.golink.busiscoming.data.model.RouteDetail =
+        requireNotNull(
+            activity.javaClass.getDeclaredField("detail").apply { isAccessible = true }.get(activity)
+                as? com.golink.busiscoming.data.model.RouteDetail
+        )
 
     private fun findViewWithTag(root: View, tag: String): View? {
         if (root.tag?.toString() == tag) return root
@@ -116,6 +205,8 @@ class RouteDetailRealServiceInstrumentedTest {
     private companion object {
         const val ARG_RUN_REAL = "runRealRouteMap"
         const val ARG_HOLD_FOR_INSPECTION = "holdRealRouteMap"
-        const val SCREENSHOT_NAME = "route-map-real.png"
+        const val ARG_HOLD_MILLIS = "holdRealRouteMapMillis"
+        const val SINGLE_SCREENSHOT_NAME = "route-map-real-single.png"
+        const val MULTI_SCREENSHOT_NAME = "route-map-real-multi.png"
     }
 }
