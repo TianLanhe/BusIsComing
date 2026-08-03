@@ -4,13 +4,15 @@
 
 ### 目前 Play 優先行為
 
-`app/build.gradle.kts` 目前把 `FORCE_WEBSITE_UPDATE_CHECK` 設為 `false`。更新檢查以 Google Play 對目前帳號、軌道、地區及裝置的結果為優先權威。只要官方 Play 可用，不論 App 最初由哪個渠道安裝，都不以網站全局版本覆蓋 Play 的資格判斷。只有初始為非 Play 安裝且目前沒有可用 Play 時，才使用網站 metadata；初始為 Play 的安裝在 Play 後來不可用時只顯示受控錯誤。
+正常構建已刪除本機網站強制模式，更新檢查固定以 Google Play 對目前帳號、軌道、地區及裝置的結果為優先權威。只要官方 Play 可用，不論 App 最初由哪個渠道安裝，都不以網站全局版本覆蓋 Play 的資格判斷。只有初始為非 Play 安裝且目前沒有可用 Play 時，才使用網站 metadata；初始為 Play 的安裝在 Play 後來不可用時只顯示受控錯誤。
 
-真實 Play flexible update、簽名與網站發佈鏈驗收仍未完成；目前狀態代表正常構建已進入 Play 優先驗收，不代表發布驗收任務已通過。
+Play Core 回報 `ERROR_APP_NOT_OWNED` 時仍保持 Play 為操作渠道，網站 metadata 只提供正向證據：只有網站 `versionCode` 較高才形成可靠更新；相等、較低、網絡失敗或 metadata 無效都回報無法確認，不宣稱目前已是最新。發現較高版本後只導向 Google Play，不導向網站 APK。
 
-### 網站渠道回退
+Debug 構建無法代表 Google Play 的正式交付與帳號擁有權，因此檢查會在 installer、Play package、Play Core 與網站請求前短路。手動檢查顯示前往 Google Play 的受控提示，自動檢查保持靜默及 24 小時嘗試節流，兩者均不寫入可靠更新快照。
 
-`FORCE_WEBSITE_UPDATE_CHECK=true` 時，自動與手動檢查均忽略初始安裝渠道及 Google Play 可用性，直接使用網站 metadata；發現更新後只會開啟目前語言的網站下載頁。開關啟用期間不執行 Play 版本檢查、安裝狀態刷新或 flexible update。此開關保留作本機發布驗收回退，不是正常構建預設。
+網站 v11 signed universal APK、metadata 與簽名發佈鏈已完成驗證；真實 Internal App Sharing v10 → v11 flexible update、取消／返回、下載完成及升級後狀態清理仍是剩餘發布驗收門檻。
+
+### 檢查與提醒
 
 自動檢查在冷啟動首個主要畫面可用後執行，最多每 24 小時嘗試一次。網站的 `lastUpdated` 解析為香港時區當日零時，滿 72 小時才自動提醒；「稍後提醒」及「前往更新」均把同一 `versionCode` 延後 72 小時，「略過此版本」只停止同一版本的自動 Dialog。手動檢查不受上述節流及提醒抑制限制。24 小時與 72 小時門檻均以可注入 clock 的毫秒級測試驗證，不需真機等待。
 
@@ -51,6 +53,20 @@ downloadUrl
 網站 `feat/010-website-analytics` 建立的 `LatestAPKMetadata` DTO 按設計不公開 `applicationId`，網站契約測試亦防止意外加入該欄位。已部署的官方 endpoint 返回 HTTP 200、`Cache-Control: no-store`，公開欄位與上述契約一致，且 `downloadUrl` 使用相對路徑 `/api/downloads/android/latest`。
 
 Android 回歸測試使用與已部署響應同形的 fixture，覆蓋 HTTP 狀態、`Cache-Control: no-store`、網絡失敗、無 `applicationId`、相對及官方絕對 `downloadUrl`、目前版本／較高版本、缺欄位、錯誤日期、非整數數值、被篡改 metadata 來源，以及其他 path／host／scheme／port／query／fragment。線上 endpoint 只作交付時只讀核對，不加入一般單元測試，避免外部網絡使 CI 不穩定。
+
+### 2026-08-03 v11 發佈鏈核對
+
+已部署 metadata 及下載 APK 的只讀驗證結果如下：
+
+```text
+versionCode=11
+versionName=1.0
+sizeBytes=6094814
+applicationId=com.golink.busiscoming
+signing SHA-256=33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58
+```
+
+Metadata 與 APK 版本一致，下載響應使用 `Cache-Control: no-store`。這項證據完成網站正式包與 Play app signing key 的發佈鏈核對，但不取代 Internal App Sharing flexible update 的真實裝置驗收。
 
 ## 網站 APK 發佈順序
 

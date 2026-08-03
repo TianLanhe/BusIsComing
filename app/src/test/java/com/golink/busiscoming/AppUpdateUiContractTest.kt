@@ -108,6 +108,10 @@ class AppUpdateUiContractTest {
         assertTrue(settingsSource.contains("UpdateSnapshotState.NEVER_CHECKED"))
         assertTrue(settingsSource.contains("UpdateSnapshotState.UP_TO_DATE"))
         assertTrue(settingsSource.contains("UpdateSnapshotState.UPDATE_AVAILABLE"))
+        assertTrue(settingsSource.contains("showPlayVerificationFailure"))
+        assertTrue(settingsSource.contains("AppUpdateExternalActions.openPlayListing"))
+        assertTrue(settingsSource.contains("UpdateFailureKind.PLAY_APP_NOT_OWNED"))
+        assertTrue(settingsSource.contains("UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED"))
     }
 
     @Test
@@ -118,6 +122,12 @@ class AppUpdateUiContractTest {
             "update_status_up_to_date",
             "update_status_available",
             "update_status_failed",
+            "update_status_unverified",
+            "update_verification_failed_title",
+            "update_debug_build_unsupported_message",
+            "update_play_not_owned_message",
+            "update_action_open_play",
+            "update_action_cancel",
             "update_prompt_title",
             "update_prompt_version",
             "update_prompt_message",

@@ -53,6 +53,12 @@
     <string name="update_status_available_skipped">Version %1$s is available; reminder skipped</string>
     <string name="update_status_available_failed">Version %1$s is available; last check failed</string>
     <string name="update_status_failed">Couldn’t check for updates. Tap to retry</string>
+    <string name="update_status_unverified">Unable to confirm updates. Tap to retry</string>
+    <string name="update_verification_failed_title">Google Play update unavailable</string>
+    <string name="update_debug_build_unsupported_message">This debug build can’t verify Google Play updates. Try again with a Google Play test build.</string>
+    <string name="update_play_not_owned_message">Google Play can’t confirm an update right now. You can check the app’s Google Play page.</string>
+    <string name="update_action_open_play">Open Google Play</string>
+    <string name="update_action_cancel">Cancel</string>
     <string name="update_prompt_title">New version available</string>
     <string name="update_prompt_version">Version %1$s</string>
     <string name="update_prompt_message">A new version is ready to download. You can update now or come back to it later.</string>

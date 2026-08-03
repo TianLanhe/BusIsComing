@@ -42,7 +42,6 @@ android {
                     ?: ""
             ).asBuildConfigString()
         )
-        buildConfigField("boolean", "FORCE_WEBSITE_UPDATE_CHECK", "false")
     }
 
     buildFeatures {

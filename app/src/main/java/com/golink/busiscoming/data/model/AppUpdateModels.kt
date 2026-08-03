@@ -31,6 +31,7 @@ enum class UpdateAttemptOutcome {
 enum class UpdateFailureKind {
     PLAY_UNAVAILABLE,
     PLAY_APP_NOT_OWNED,
+    PLAY_DEBUG_BUILD_UNSUPPORTED,
     PLAY_TEMPORARY,
     NETWORK,
     INVALID_METADATA,

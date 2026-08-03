@@ -13,9 +13,11 @@ object AppUpdateRuntime {
         if (::coordinator.isInitialized) return
         val applicationContext = context.applicationContext
         val mainHandler = Handler(Looper.getMainLooper())
-        val playSource = if (BuildConfig.FORCE_WEBSITE_UPDATE_CHECK) DisabledPlayUpdateSource else {
-            GooglePlayUpdateSource(applicationContext)
-        }
+        val diagnostics = LogcatAppUpdateDiagnostics
+        val playSource = GooglePlayUpdateSource(
+            applicationContext,
+            diagnostics = diagnostics
+        )
         coordinator = AppUpdateCoordinator(
             installedVersionCode = installedVersionCode,
             stateStore = SharedPreferencesUpdateStateStore(
@@ -27,7 +29,8 @@ object AppUpdateRuntime {
             websiteSource = HttpWebsiteUpdateSource(),
             playPackageProbe = AndroidPlayPackageProbe(applicationContext),
             installSourceReader = AndroidInstallSourceReader(applicationContext),
-            forceWebsiteOnly = BuildConfig.FORCE_WEBSITE_UPDATE_CHECK,
+            playCheckSupported = !BuildConfig.DEBUG,
+            diagnostics = diagnostics,
             callbackExecutor = { runnable -> mainHandler.post(runnable) }
         )
     }

@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.AppUpdateState
 import com.golink.busiscoming.data.model.UpdateChannel
+import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailure
 import com.golink.busiscoming.data.model.UpdateFailureKind
 import com.golink.busiscoming.data.model.UpdateSnapshot
@@ -55,6 +56,7 @@ class UpdateSettingsUiModelTest {
         )
         assertModel(
             base.copy(
+                lastTrigger = UpdateCheckTrigger.MANUAL,
                 lastFailure = UpdateFailure(
                     UpdateFailureKind.NETWORK,
                     retainedReliableSnapshot = true
@@ -62,6 +64,61 @@ class UpdateSettingsUiModelTest {
             ),
             R.string.update_status_available_failed
         )
+    }
+
+    @Test
+    fun manualUnverifiableFailureOverridesStaleUpToDateSummary() {
+        val state = AppUpdateState(
+            snapshot = UpdateSnapshot.upToDate(6L, UpdateChannel.PLAY, now),
+            lastTrigger = UpdateCheckTrigger.MANUAL,
+            lastFailure = UpdateFailure(UpdateFailureKind.PLAY_APP_NOT_OWNED)
+        )
+
+        assertEquals(
+            R.string.update_status_unverified,
+            UpdateSettingsUiModelFactory.create(state, now).summaryRes
+        )
+    }
+
+    @Test
+    fun automaticFailureKeepsReliableUpToDateSummary() {
+        val state = AppUpdateState(
+            snapshot = UpdateSnapshot.upToDate(6L, UpdateChannel.PLAY, now),
+            lastTrigger = UpdateCheckTrigger.AUTOMATIC,
+            lastFailure = UpdateFailure(UpdateFailureKind.PLAY_APP_NOT_OWNED)
+        )
+
+        assertEquals(
+            R.string.update_status_up_to_date,
+            UpdateSettingsUiModelFactory.create(state, now).summaryRes
+        )
+    }
+
+    @Test
+    fun automaticFailureKeepsNeverCheckedAndAvailableSummaries() {
+        val neverChecked = AppUpdateState(
+            snapshot = UpdateSnapshot.neverChecked(6L),
+            lastTrigger = UpdateCheckTrigger.AUTOMATIC,
+            lastFailure = UpdateFailure(UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED)
+        )
+        assertEquals(
+            R.string.update_status_never_checked,
+            UpdateSettingsUiModelFactory.create(neverChecked, now).summaryRes
+        )
+
+        val available = AppUpdateState(
+            snapshot = availableSnapshot(),
+            lastTrigger = UpdateCheckTrigger.AUTOMATIC,
+            lastFailure = UpdateFailure(
+                UpdateFailureKind.PLAY_APP_NOT_OWNED,
+                retainedReliableSnapshot = true
+            )
+        )
+        assertEquals(
+            R.string.update_status_available,
+            UpdateSettingsUiModelFactory.create(available, now).summaryRes
+        )
+        assertTrue(UpdateSettingsUiModelFactory.create(available, now).showDot)
     }
 
     @Test
