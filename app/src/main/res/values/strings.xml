@@ -49,9 +49,13 @@
     <string name="update_status_checking">正在檢查更新…</string>
     <string name="update_status_up_to_date">目前已是最新版本</string>
     <string name="update_status_available">有新版本 %1$s 可用</string>
+    <string name="update_status_available_generic">有新版本可用</string>
     <string name="update_status_available_deferred">有新版本 %1$s 可用；已稍後提醒</string>
+    <string name="update_status_available_deferred_generic">有新版本可用；已稍後提醒</string>
     <string name="update_status_available_skipped">有新版本 %1$s 可用；已略過此版本提醒</string>
+    <string name="update_status_available_skipped_generic">有新版本可用；已略過此版本提醒</string>
     <string name="update_status_available_failed">有新版本 %1$s 可用；上次檢查失敗</string>
+    <string name="update_status_available_failed_generic">有新版本可用；上次檢查失敗</string>
     <string name="update_status_failed">檢查失敗，點按重試</string>
     <string name="update_status_unverified">暫時無法確認更新，點按重試</string>
     <string name="update_verification_failed_title">無法確認 Google Play 更新</string>

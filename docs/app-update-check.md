@@ -8,6 +8,8 @@
 
 Play Core 回報 `ERROR_APP_NOT_OWNED` 時仍保持 Play 為操作渠道，網站 metadata 只提供正向證據：只有網站 `versionCode` 較高才形成可靠更新；相等、較低、網絡失敗或 metadata 無效都回報無法確認，不宣稱目前已是最新。發現較高版本後只導向 Google Play，不導向網站 APK。
 
+Play Core 的 `AppUpdateInfo` 只提供可用 `versionCode`，不提供目標版本的 `versionName`。Play 已確認有更新時，App 會額外讀取官方網站 metadata，但只在兩者 `versionCode` 精確一致時把 metadata 的 `versionName` 用於展示，並統一顯示為 `v1.2` 形式。網站 metadata 不參與 Play 資格、渠道或 flexible 能力判斷；如測試軌道先於網站版本、metadata 無效或網絡失敗，設定頁改為不含數字的通用「有新版本可用」，更新 Dialog 隱藏版本行，絕不把 `versionCode` 冒充 `versionName`。
+
 Debug 構建無法代表 Google Play 的正式交付與帳號擁有權，因此檢查會在 installer、Play package、Play Core 與網站請求前短路。手動檢查顯示前往 Google Play 的受控提示，自動檢查保持靜默及 24 小時嘗試節流，兩者均不寫入可靠更新快照。
 
 網站 v11 signed universal APK、metadata 與簽名發佈鏈已完成驗證；真實 Internal App Sharing v10 → v11 flexible update、取消／返回、下載完成及升級後狀態清理仍是剩餘發布驗收門檻。

@@ -10,6 +10,7 @@ import com.golink.busiscoming.data.model.UpdateSnapshotState
 import com.golink.busiscoming.ui.main.UpdateSettingsUiModelFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -64,6 +65,70 @@ class UpdateSettingsUiModelTest {
             ),
             R.string.update_status_available_failed
         )
+    }
+
+    @Test
+    fun formatsAvailableVersionNameWithSingleLowercaseVPrefix() {
+        val plain = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = "1.2")),
+            now
+        )
+        val alreadyPrefixed = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = "V1.2")),
+            now
+        )
+
+        assertEquals("v1.2", plain.versionArgument)
+        assertEquals("v1.2", alreadyPrefixed.versionArgument)
+    }
+
+    @Test
+    fun missingVersionNameNeverFallsBackToVersionCode() {
+        val model = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = null)),
+            now
+        )
+
+        assertNull(model.versionArgument)
+        assertEquals(R.string.update_status_available_generic, model.summaryRes)
+        assertTrue(model.showDot)
+    }
+
+    @Test
+    fun legacyVersionNameEqualToVersionCodeIsRenderedAsGenericUpdate() {
+        val model = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = "8")),
+            now
+        )
+
+        assertNull(model.versionArgument)
+        assertEquals(R.string.update_status_available_generic, model.summaryRes)
+        assertTrue(model.showDot)
+    }
+
+    @Test
+    fun missingVersionNameKeepsDeferredSkippedAndFailedMeaningWithoutNumber() {
+        val base = AppUpdateState(availableSnapshot().copy(availableVersionName = null))
+        val cases = listOf(
+            base.copy(deferredVersionCode = 8L, deferredUntil = now + 1L) to
+                R.string.update_status_available_deferred_generic,
+            base.copy(skippedVersionCode = 8L) to
+                R.string.update_status_available_skipped_generic,
+            base.copy(
+                lastTrigger = UpdateCheckTrigger.MANUAL,
+                lastFailure = UpdateFailure(
+                    UpdateFailureKind.NETWORK,
+                    retainedReliableSnapshot = true
+                )
+            ) to R.string.update_status_available_failed_generic
+        )
+
+        cases.forEach { (state, expectedSummary) ->
+            val model = UpdateSettingsUiModelFactory.create(state, now)
+            assertEquals(expectedSummary, model.summaryRes)
+            assertNull(model.versionArgument)
+            assertTrue(model.showDot)
+        }
     }
 
     @Test
@@ -146,7 +211,7 @@ class UpdateSettingsUiModelTest {
     private fun assertModel(state: AppUpdateState, expectedSummary: Int) {
         val model = UpdateSettingsUiModelFactory.create(state, now)
         assertEquals(expectedSummary, model.summaryRes)
-        assertEquals("1.2", model.versionArgument)
+        assertEquals("v1.2", model.versionArgument)
         assertTrue(model.showDot)
         assertTrue(model.rowEnabled)
     }

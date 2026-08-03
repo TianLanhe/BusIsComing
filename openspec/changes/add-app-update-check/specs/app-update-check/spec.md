@@ -17,6 +17,21 @@
 - **THEN** 系統 SHALL 將 Google Play 設為目前更新渠道
 - **AND** 系統 SHALL NOT 因 App 最初由網站或其他非 Play 方式安裝而改用網站下載
 
+#### Scenario: Play 更新展示真實 versionName
+- **WHEN** Google Play 回報目前用戶有較高 versionCode 可更新
+- **AND** 官方網站 metadata 的 versionCode 與 Play 可用 versionCode 精確一致
+- **THEN** 系統 SHALL 只使用該 metadata 的 versionName 作展示名稱
+- **AND** 設定摘要與更新 Dialog SHALL 以單一小寫 `v` 前綴展示，例如 `v1.2`
+- **AND** 網站 metadata SHALL NOT 改變 Play 更新資格、渠道或 flexible 能力
+
+#### Scenario: Play 更新暫無可驗證 versionName
+- **WHEN** Google Play 回報目前用戶有較高 versionCode 可更新
+- **AND** 網站 metadata 的 versionCode 不一致、請求失敗或資料無效
+- **THEN** 系統 SHALL 保留 Google Play 的可靠更新結果與小紅點
+- **AND** 設定摘要 SHALL 使用不含版本數字的通用更新文案
+- **AND** 更新 Dialog SHALL 隱藏版本行
+- **AND** 系統 SHALL NOT 把 availableVersionCode 當作 versionName 展示
+
 #### Scenario: Play 對目前用戶沒有更新
 - **WHEN** Google Play 回報目前帳號、軌道、地區及裝置沒有可用更新
 - **THEN** 系統 SHALL 將目前版本視為對該用戶已是最新

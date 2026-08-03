@@ -23,6 +23,7 @@
 - [x] 3.6 Google Play 上架後刪除本機網站強制 BuildConfig、停用 Play source 與強制網站 coordinator 平行接線；正常 runtime 固定建立 Play source，無 Play 非 Play 安裝的網站渠道保持不變。
 - [x] 3.7 把 debuggable 構建短路為 `PLAY_DEBUG_BUILD_UNSUPPORTED`，不呼叫 installer／Play package／Play source／網站 source，手動提供 Play 恢復提示，自動失敗保留 24 小時節流。
 - [x] 3.8 把 `ERROR_APP_NOT_OWNED` 的網站 metadata 限制為正向證據：只有較高版本形成 Play 渠道更新，相等、較低、網絡失敗或非法資料均回傳 `PLAY_APP_NOT_OWNED`。
+- [x] 3.9 Play 回報可更新時只以 versionCode 精確匹配的官方網站 metadata 補充 `versionName`；不匹配或查詢失敗仍保留 Play 更新資格，且不把 versionCode 寫入 versionName。
 
 ## 4. 檢查協調與 Android 生命週期
 
@@ -42,6 +43,7 @@
 - [x] 5.4 在 `values/strings.xml`、`values-b+zh+Hans/strings.xml`、`values-en/strings.xml` 提供自然香港繁體、獨立簡體與英文的狀態、Dialog、錯誤、Play 下載完成及無障礙文案，並以字串契約測試確認無 XML／Kotlin 硬編碼可見文字。
 - [x] 5.5 更新 `AppSettingsSupportContractTest` 及相關 layout／short-text contract，斷言應用評分仍顯示不支援 Toast，而檢查更新已連接新能力、小紅點、摘要與三語資源。
 - [x] 5.6 新增 Debug 不支援與 AppNotOwned 的三語可操作 Dialog；手動失敗不顯示舊「已是最新」，自動失敗不覆蓋可靠摘要。
+- [x] 5.7 把可驗證 versionName 統一格式化為單一 `v` 前綴；缺少名稱時設定頁使用三語通用更新摘要、Dialog 隱藏版本行，仍保留小紅點與更新操作。
 
 ## 6. 自動化驗證
 
@@ -51,6 +53,7 @@
 - [x] 6.4 新增網站渠道整合回歸測試，把已部署 metadata 同形 JSON 經 parser、versionCode 判斷及 3 天 policy 串接，覆蓋無 `applicationId`、相對 `downloadUrl` 與邊界時間。
 - [x] 6.5 重新運行更新相關 JVM 測試及 `./gradlew build`，確認本次契約修正未破壞 Kotlin 編譯、unit tests、lint 與 debug／release assemble。
 - [x] 6.6 以 JVM 與 UI 契約測試覆蓋 Debug 短路、AppNotOwned 網站矩陣、歷史快照保留、手動／自動摘要及 Play 詳情頁兜底。
+- [x] 6.7 以 JVM、持久化、三語 UI 契約與 instrumentation 測試覆蓋 versionName 精確匹配、`v` 前綴、metadata 不同步／失敗時不顯示 versionCode，以及無名稱快照重啟後仍可更新。
 
 ## 7. 裝置與發布鏈驗收
 

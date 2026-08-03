@@ -49,9 +49,13 @@
     <string name="update_status_checking">Checking for updates…</string>
     <string name="update_status_up_to_date">You’re up to date</string>
     <string name="update_status_available">Version %1$s is available</string>
+    <string name="update_status_available_generic">A new version is available</string>
     <string name="update_status_available_deferred">Version %1$s is available; reminder postponed</string>
+    <string name="update_status_available_deferred_generic">A new version is available; reminder postponed</string>
     <string name="update_status_available_skipped">Version %1$s is available; reminder skipped</string>
+    <string name="update_status_available_skipped_generic">A new version is available; reminder skipped</string>
     <string name="update_status_available_failed">Version %1$s is available; last check failed</string>
+    <string name="update_status_available_failed_generic">A new version is available; last check failed</string>
     <string name="update_status_failed">Couldn’t check for updates. Tap to retry</string>
     <string name="update_status_unverified">Unable to confirm updates. Tap to retry</string>
     <string name="update_verification_failed_title">Google Play update unavailable</string>

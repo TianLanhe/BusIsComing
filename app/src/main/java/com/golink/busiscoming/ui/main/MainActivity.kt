@@ -352,12 +352,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun showUpdatePrompt(state: AppUpdateState) {
         if (updatePromptDialog?.isShowing == true) return
-        val version = state.snapshot.availableVersionName
-            ?: state.snapshot.availableVersionCode?.toString()
-            ?: return
+        val version = UpdateVersionLabel.format(
+            state.snapshot.availableVersionName,
+            state.snapshot.availableVersionCode
+        )
         val content = layoutInflater.inflate(R.layout.dialog_app_update, null)
-        content.findViewById<TextView>(R.id.updatePromptVersion).text =
-            getString(R.string.update_prompt_version, version)
+        content.findViewById<TextView>(R.id.updatePromptVersion).apply {
+            if (version == null) {
+                visibility = View.GONE
+            } else {
+                text = getString(R.string.update_prompt_version, version)
+            }
+        }
         applyUpdatePromptLayout(content)
         val dialog = MaterialAlertDialogBuilder(
             this,
