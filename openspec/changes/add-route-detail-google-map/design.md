@@ -50,13 +50,22 @@ Google Maps SDK 只提供底圖與繪製能力，不計算 Citybus 候選路線�
 getlinep2p.php?rdv=<routeVariant>&start=<boardingSeq>&dest=<alightingSeq>
 ```
 
-不攜帶 Cookie、`ssid`、`sysid`、時間戳或瀏覽器 header。parser 解析 `pointId,latitude,longitude`，拒絕空內容、少於兩點、非法坐標與無效站序；詳情坐標可用時再校驗幾何首尾與上下車站的合理距離。
+不攜帶 Cookie、`ssid`、`sysid`、時間戳或瀏覽器 header。parser 忠實解析 `pointId,latitude,longitude` 原始回應，拒絕空內容、少於兩點、非法坐標與無效站序。Citybus 現行 mobile 網頁以自家舊底圖常數 `alat=-0.0001935197`、`alon=0.0000697374` 對齊站點與底圖；`getlinep2p.php` 路線點則直接按該舊底圖坐標輸出。Google Maps 以 WGS84 繪圖，因此 repository 在 parser 之後、端點驗證與成功快取之前套用反向校正：
+
+```text
+googleLatitude  = citybusLatitude  + 0.0001935197
+googleLongitude = citybusLongitude - 0.0000697374
+```
+
+校正封裝為純 Kotlin `CitybusRouteGeometryCoordinateNormalizer`，只處理 `getlinep2p.php` 路線幾何；`getp2pstopinroute.php` 站點、查詢起終點、設備位置與 Google 資料維持原值。快取保存校正後結果，端點距離亦以同一 WGS84 坐標系驗證，避免錯誤拒絕有效路線。
 
 被否決的替代方案：
 
 - 站點直線不能代表巴士道路，失敗時亦不得作為 fallback。
 - `showstops2.php`／`getp2pstopinroute.php` 適合提供站點，不包含足夠道路採樣。
 - Google Routes 不應取代 Citybus 候選方案，且客戶端 Web Service key 需要額外安全與計費架構。
+- 在 Google renderer 統一平移所有坐標會把 provider 假設帶入展示層，亦會錯移站點、定位與查詢端點。
+- 只調整經度不能修正實測約 21.5 米的南北偏差；任意按截圖微調常數亦不能形成可追溯契約。
 
 ### 4. 以純展示模型隔離 Google Maps SDK
 
@@ -126,6 +135,7 @@ Manifest 以 `GOOGLE_MAPS_API_KEY` placeholder 注入 `com.google.android.geo.AP
 ## Risks / Trade-offs
 
 - [Citybus 私有 mobile endpoint 可能變更或回空] → 保存使用者提供的兩份 fixture、擴充多種 live 樣本、封裝 parser、拒絕 malformed／空成功並保留逐段降級。
+- [Citybus 改版後舊底圖偏移常數或輸出坐標系可能改變] → 常數以 provider-specific normalizer 集中管理，以 N118 及多個既有 fixture 固定方向與數值，並在真實 Google 地圖高縮放抽查；上游契約改變時只更新此邊界而不補第二層魔法位移。
 - [Google Map、RecyclerView 與 BottomSheet 手勢競爭] → 地圖起始手勢只交給地圖；把手與 RecyclerView 使用 Material nested scroll，並以 instrumentation 覆蓋三檔轉換。
 - [MapView 生命週期遺漏造成洩漏或黑屏] → Activity 明確轉發全部生命週期，狀態模型不保存 Google SDK 實例，重建後由 renderer 重畫。
 - [路線點過多造成重繪成本] → geometry 只在 route／theme／selection 變化時差量更新，不跟隨 ETA 或位置更新重畫全部 polyline；實測後才考慮不改變形狀的簡化。
@@ -139,7 +149,7 @@ Manifest 以 `GOOGLE_MAPS_API_KEY` placeholder 注入 `com.google.android.geo.AP
 1. 確認 `enhance-route-detail-page` 的完成實作與規格作為基線，保留既有詳情測試。
 2. 加入 Maps SDK 依賴、Manifest metadata、相容配置與本機 key 注入，不提交 secret。
 3. 擴充詳情啟動參數與兩個結果入口，先以測試固定查詢快照。
-4. 實作 geometry parser／repository／cache 與 fixture，再加入 presentation builder／renderer。
+4. 實作 geometry parser／provider-specific 坐標校正／repository／cache 與 fixture，再加入 presentation builder／renderer。
 5. 把 Activity 版面改為 MapView + persistent bottom sheet，接入三檔狀態、相機、marker 聯動與生命週期。
 6. 接入位置權限與 60 秒 ETA 前台刷新，完成局部錯誤重試。
 7. 執行單元、instrumentation、三語明暗大字體、真實 Citybus 與真實 Google 地圖驗證，最後執行 `./gradlew build`。

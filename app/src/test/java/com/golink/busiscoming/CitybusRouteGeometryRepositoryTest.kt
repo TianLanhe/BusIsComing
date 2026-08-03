@@ -87,6 +87,31 @@ class CitybusRouteGeometryRepositoryTest {
     }
 
     @Test
+    fun `repository 校正 Citybus 舊底圖坐標並快取校正後結果`() {
+        var fetchCount = 0
+        val repository = CitybusRouteGeometryRepository(
+            geometryFetcher = { _, _ ->
+                fetchCount += 1
+                resourceText("citybus/getlinep2p-N118-TOS-1-5-9.txt")
+            }
+        )
+        val key = RouteGeometryKey("N118-TOS-1", 5, 9)
+
+        val firstLoad = repository.loadGeometry(key)
+        val cachedLoad = repository.loadGeometry(key)
+
+        assertEquals(57, firstLoad.points.size)
+        assertEquals("389351", firstLoad.points.first().pointId)
+        assertEquals("408511", firstLoad.points.last().pointId)
+        assertEquals(22.264897461791, firstLoad.points.first().latitude, 0.000000000001)
+        assertEquals(114.24161529313, firstLoad.points.first().longitude, 0.000000000001)
+        assertEquals(22.262470011791, firstLoad.points.last().latitude, 0.000000000001)
+        assertEquals(114.23424341313, firstLoad.points.last().longitude, 0.000000000001)
+        assertEquals(firstLoad, cachedLoad)
+        assertEquals(1, fetchCount)
+    }
+
+    @Test
     fun loadGeometriesUsesAtMostThreeWorkersAndReportsEachSegment() {
         val active = AtomicInteger(0)
         val maxActive = AtomicInteger(0)

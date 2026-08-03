@@ -24,6 +24,26 @@
 
 兩張圖均確認真實 Google 道路／地名瓦片、Google attribution、巴士道路線、站點、轉乘與摘要半屏沒有互相遮擋。App 對 Google Play Services 不可用、Map 初始化失敗或底圖 15 秒仍未完成載入的全屏文字詳情降級亦由獨立 instrumentation 測試覆蓋。
 
+### Citybus 舊底圖坐標校正與 N118 高縮放回歸
+
+使用者回報的 N118 畫面顯示 `getlinep2p.php` 路線相對 Google 道路整體偏向東南。Citybus mobile 網頁現行腳本以 `alat=-0.0001935197`、`alon=0.0000697374` 對齊自家舊底圖，而路線 endpoint 直接輸出該舊底圖坐標；因此不能只把經度任意上調。repository 現在於 parser 之後、端點驗證與成功快取之前反向套用：
+
+```text
+googleLatitude  = citybusLatitude  + 0.0001935197
+googleLongitude = citybusLongitude - 0.0000697374
+```
+
+這相當於在香港約向北 21.5 米、向西 7.2 米，合計約 22.7 米。校正只限 `getlinep2p.php` 路線幾何；Citybus 站點、查詢端點、設備位置與 Google 資料維持原值，renderer 不含 provider-specific 位移。
+
+- 新增 2026-08-04 真實最小請求 `N118-TOS-1`（5 → 9）57 點 fixture；parser 測試保留原始坐標，repository 測試固定首尾校正值、point id／次序、點數與 cache hit 不重複位移。
+- `RouteDetailRealServiceInstrumentedTest#realN118GeometryAlignsWithGoogleRoadAtHighZoom` 直接使用生產 repository 與真實 Citybus／Google，在裝置端斷言首點為 `22.264897461791,114.24161529313`、末點為 `22.262470011791,114.23424341313`。
+- 以 zoom 18.5 聚焦柴灣道／環翠道後保存 `route-map-real-n118-high-zoom.png`，SHA-256 `322d237f439b3be53496b7d91db9f83e7d694f0621bb4b7608b13181584cbd70`；目視確認巴士線沿對應行車帶連續繪製，不再出現原畫面的整體平移。
+- 同一任務模擬器同輪重跑 N118、單段 `780-CEF-1` 與多段 `82X-ISR-1 → 102-MEF-1` 共 3 個真實案例，全部通過；各案例仍驗證 Google watermark、所有時間線站點、道路幾何與至少兩條示意步行。
+- `RouteDetailActivityTest` 路線詳情核心套件通過，門控的 60 秒 ETA 案例另以完整 60 秒生產間隔單獨通過；`RouteDetailVisualMatrixInstrumentedTest` 亦分別以正確 runner 參數完成 font scale 1.0／1.3／2.0，每檔均覆蓋三語 × 明暗共 6 個畫面狀態。
+- 首輪裝置測試因新啟動 AVD 停在鎖屏而令 Activity 進入 paused 狀態，診斷截圖與 lifecycle 證據確認後解鎖；未修改產品超時或放寬斷言，原樣重跑通過。
+
+全量 `connectedDebugAndroidTest` 裸跑亦用作額外診斷，但不是本專案所有 instrumentation 的有效單一入口：三個視覺矩陣類別各自要求 runner 參數，無參數時會按設計在 `requireNotNull` 中失敗；Google Play AVD 亦不符合 `noPlayDevice...` 的無 Play 前置條件。另發現兩組與本次 geometry 無關的舊測試夾具：refresh fixture 未先更新 `routeQueryState`，search fixture 仍等待已由獨立 `RouteDetailActivity` 取代的舊詳情 Dialog。這些既有測試債沒有以放寬本次驗收或擴張坐標修正範圍處理；本次涉及的 JVM、route detail、真實服務及正確參數矩陣均獨立重跑通過。
+
 ## 位置、ETA、局部重試與生命週期
 
 - `RouteDetailLocationPermissionInstrumentedTest` 透過真實 Android PermissionController 驗證頁面不會自動索取位置；點擊定位後可授予精確位置，注入 `22.3193, 114.1694` 的 GPS 位置後相機及藍點定位成功。
@@ -44,7 +64,7 @@
 - `RouteDetailActivityTest` 常規套件通過；60 秒門控案例另以真實時間單獨通過。
 - 真實 Citybus／Google：單段與多段 2 個案例最終同輪通過。
 - 位置權限 3 個真實系統流程、TalkBack 1 個流程、三組完整視覺矩陣均通過。
-- JVM 測試覆蓋 `getlinep2p.php` parser、最小 URL／header、端點距離、一天成功快取、相同請求去重、最多三路並發、局部失敗、取消與 generation 作廢。
+- JVM 測試覆蓋 `getlinep2p.php` parser、Citybus 舊底圖坐標校正、最小 URL／header、端點距離、一天成功快取、相同請求去重、最多三路並發、局部失敗、取消與 generation 作廢。
 - 最終以 `./gradlew build` 覆蓋 Kotlin 編譯、unit tests、lint 及 debug／release assemble；OpenSpec strict validation、git diff／secret 檢查亦須通過後才提交。
 
 本 change 的裝置端與頁面驗收已由本任務完成，沒有保留需要使用者人工補測的項目。

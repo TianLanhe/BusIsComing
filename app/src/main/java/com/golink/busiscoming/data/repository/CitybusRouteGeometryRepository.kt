@@ -105,7 +105,9 @@ class CitybusRouteGeometryRepository(
     ): RouteGeometrySegment {
         val segment = RouteGeometrySegment(
             key,
-            parser.parse(geometryFetcher(buildGeometryUrl(key), requestHeaders()))
+            CitybusRouteGeometryCoordinateNormalizer.toWgs84(
+                parser.parse(geometryFetcher(buildGeometryUrl(key), requestHeaders()))
+            )
         )
         validateEndpoints(segment, boardingCoordinate, alightingCoordinate)
         cache.put(segment)

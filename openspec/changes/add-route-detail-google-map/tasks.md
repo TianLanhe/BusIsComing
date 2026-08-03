@@ -70,3 +70,11 @@
 - [x] 9.4 依 `docs/localization-validation-matrix.md` 完成繁體／簡體／英文 × 淺色／深色、360dp、font scale 1.0／1.3／2.0 與 TalkBack 人工檢查，保存必要截圖或測試記錄。
 - [x] 9.5 更新 README／相關技術文檔，記錄 `getlinep2p.php` 最小請求、fixture、Maps key 本機配置、Google 標籤語言例外、步行線僅為示意、無背景定位／車輛追蹤，以及 Play Data Safety／隱私披露的發佈前檢查。
 - [x] 9.6 執行針對性 JVM 與 instrumentation 測試後運行 `./gradlew build`，檢查 `git status --short` 與 staged 範圍，確認未提交 secret／構建產物並依專案規則建立單一清晰的實作提交。
+
+## 10. Citybus 路線幾何與 Google 道路對齊修正
+
+- [x] 10.1 以 Citybus mobile 網頁現行 `alat`／`alon` 證據更新提案、設計與 `citybus-route-geometry` 規格，明確定義校正公式、provider 範圍、快取位置及被否決方案。
+- [x] 10.2 先新增 repository 邊界回歸測試，以 N118 原始點固定緯度上調、經度下調、point id／次序保留及校正後快取行為，並確認測試在尚未實作校正時失敗。
+- [x] 10.3 實作純 Kotlin `CitybusRouteGeometryCoordinateNormalizer`，在 parser 之後、端點驗證與成功快取之前只校正 `getlinep2p.php` 路線幾何。
+- [x] 10.4 執行幾何 parser／repository／presentation JVM 回歸、OpenSpec strict validate 及完整 `./gradlew build`，確認其他 provider 坐標與既有功能不受影響。
+- [x] 10.5 在本任務自行啟動的模擬器以真實 N118 及既有單段／多段案例完成 Google 地圖高縮放驗收，保存截圖與驗證記錄並在完成後關閉模擬器。

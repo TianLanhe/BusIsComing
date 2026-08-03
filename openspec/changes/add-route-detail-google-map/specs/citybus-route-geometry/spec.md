@@ -42,6 +42,24 @@
 - **THEN** 系統 SHALL 拒絕該段幾何
 - **AND** 系統 SHALL 保留站點資料供地圖與時間線降級展示
 
+### Requirement: Citybus 舊底圖幾何須對齊 Google Maps 坐標
+系統 SHALL 在 Citybus 幾何 repository 邊界把 `getlinep2p.php` 的舊底圖路線坐標轉換為 Google Maps 使用的 WGS84 坐標，且 SHALL NOT 把同一校正套用到其他資料來源。
+
+#### Scenario: 校正每個有效路線點
+- **WHEN** parser 成功產生 `getlinep2p.php` 的有序原始路線點
+- **THEN** repository SHALL 對每點套用 `latitude + 0.0001935197` 與 `longitude - 0.0000697374`
+- **AND** 系統 SHALL 保留 point id、原始次序與點數
+
+#### Scenario: 以校正後坐標驗證及快取
+- **WHEN** repository 需要驗證幾何端點或保存成功快取
+- **THEN** 系統 SHALL 使用校正後的 WGS84 路線幾何
+- **AND** cache hit SHALL 回傳同一校正後結果而不重複位移
+
+#### Scenario: 校正範圍只限 Citybus 路線幾何
+- **WHEN** 地圖同時展示 Citybus 站點、查詢起終點、設備目前位置或 Google 資料
+- **THEN** 系統 SHALL 保持這些坐標原值
+- **AND** Google renderer SHALL NOT 對所有地圖內容套用 Citybus provider-specific 位移
+
 ### Requirement: 分段並發與進程內快取路線幾何
 系統 SHALL 按乘車段獨立載入幾何、限制並發，並對成功結果使用一天進程內快取。
 
@@ -81,5 +99,6 @@
 
 #### Scenario: 保存可復現回歸證據
 - **WHEN** 本能力進行實作驗證
-- **THEN** 專案 SHALL 保存 `780-CEF-1`、`104-KET-1` 及至少一個多段轉乘樣本的原始回應或等價 fixture
+- **THEN** 專案 SHALL 保存 `780-CEF-1`、`104-KET-1`、`N118-TOS-1` 及至少一個多段轉乘樣本的原始回應或等價 fixture
 - **AND** live 驗證 SHALL 確認不帶 session 的最小請求仍可重複解析
+- **AND** 真實 Google 地圖驗證 SHALL 以高縮放畫面抽查校正後道路幾何與道路中心線的相對位置

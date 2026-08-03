@@ -111,14 +111,14 @@ flowchart TD
 | `ppsearch_p3.php` | 點到點候選路線 | `l=0/2/1`，聚合 T/F/W `m1` |
 | `showstops2.php` | P2P route variant、站序與 stop id 對齊 | 與路線查詢使用相同 `l` |
 | `getp2pstopinroute.php` | 上下車站、途經站與換乘段 | cache key 包含語言 |
-| `getlinep2p.php` | 每段巴士道路幾何 | 只傳 `rdv`、`start`、`dest`；成功快取不分語言 |
+| `getlinep2p.php` | 每段巴士道路幾何 | 只傳 `rdv`、`start`、`dest`；repository 把 Citybus 舊底圖坐標校正為 Google／WGS84；成功快取不分語言 |
 | DATA.GOV.HK Citybus ETA | 首程即時到站資料 | tc／sc／en 依目前語言作單欄位官方回退 |
 | Google Geocoding v4 | 目前座標的地址名稱 | `zh-Hant/zh-Hans/en` + `regionCode=HK` |
 | Maps SDK for Android | 詳情頁底圖、marker 與 polyline | Google 底圖標籤屬第三方內容，未保證跟隨 App 內語言 |
 
 Citybus mobile 請求不附加 Cookie、Referer、User-Agent 或 X-Requested-With 等瀏覽器 header。修改參數或 parser 時，必須保留可復現的脫敏請求、fixture 或針對性回歸證據。
 
-路線詳情的彩色實線來自 Citybus `getlinep2p.php` 道路點；灰色虛線只表示起終點或轉乘之間存在步行連接，不是沿街導航。頁面只在前台且已授權時顯示原生藍點，不申請背景位置、不保存軌跡，也不顯示巴士車輛位置。發佈前須重新核對 Google API 限制、Play Data Safety 與私隱披露。
+路線詳情的彩色實線來自 Citybus `getlinep2p.php` 道路點；這個 endpoint 使用 Citybus 舊底圖坐標，只有 geometry repository 會對每點套用 `latitude + 0.0001935197`、`longitude - 0.0000697374` 後交給 Google Maps，站點、查詢端點、設備位置與 Google 資料不套用該位移。灰色虛線只表示起終點或轉乘之間存在步行連接，不是沿街導航。頁面只在前台且已授權時顯示原生藍點，不申請背景位置、不保存軌跡，也不顯示巴士車輛位置。發佈前須重新核對 Google API 限制、Play Data Safety 與私隱披露。
 
 ## 本機資料與私隱
 

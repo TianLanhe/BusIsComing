@@ -19,6 +19,8 @@ import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteDetailActivity
 import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
 import com.golink.busiscoming.ui.main.RouteDetailRuntime
+import com.golink.busiscoming.ui.main.GoogleRouteMapRenderer
+import com.golink.busiscoming.ui.main.RouteMapCoordinate
 import com.golink.busiscoming.ui.main.RouteMapLineKind
 import com.golink.busiscoming.ui.main.RouteMapPresentation
 import java.io.File
@@ -105,13 +107,54 @@ class RouteDetailRealServiceInstrumentedTest {
         )
     }
 
+    @Test
+    fun realN118GeometryAlignsWithGoogleRoadAtHighZoom() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString(ARG_RUN_REAL) == "true")
+        val rawInfo = "1|*|CTB||N118-TOS-1||5||9||O|*|"
+        val leg = P2pRouteLeg("CTB", "N118-TOS-1", "N118", 5, 9, "O", "outbound")
+        val route = BusRouteOption(
+            routeName = "N118",
+            routeSegments = listOf("N118"),
+            priceHkd = 17.8,
+            durationMinutes = 12,
+            arrivalMinutes = 12,
+            transferCount = 0,
+            walkingDistanceMeters = 273,
+            waitTimeState = WaitTimeState.Loading,
+            routeDetailQuery = P2pRouteDetailQuery(
+                rawInfo,
+                "03:12|*|12",
+                "0",
+                "0",
+                P2pRoutePlan(rawInfo, "0", listOf(leg))
+            )
+        )
+
+        validateRealRoute(
+            route = route,
+            origin = Place("樂軒臺", 22.264980642091, 114.24170198053),
+            destination = Place("興華邨豐興樓", 22.262516262091, 114.23426978053),
+            expectedBusLines = 1,
+            minimumStops = 5,
+            screenshotName = N118_HIGH_ZOOM_SCREENSHOT_NAME,
+            expectedBusLineStart = RouteMapCoordinate(22.264897461791, 114.24161529313),
+            expectedBusLineEnd = RouteMapCoordinate(22.262470011791, 114.23424341313),
+            inspectionFocus = RouteMapCoordinate(22.26302, 114.23795),
+            inspectionZoom = 18.5f
+        )
+    }
+
     private fun validateRealRoute(
         route: BusRouteOption,
         origin: Place,
         destination: Place,
         expectedBusLines: Int,
         minimumStops: Int,
-        screenshotName: String
+        screenshotName: String,
+        expectedBusLineStart: RouteMapCoordinate? = null,
+        expectedBusLineEnd: RouteMapCoordinate? = null,
+        inspectionFocus: RouteMapCoordinate? = null,
+        inspectionZoom: Float = 16f
     ) {
         val launchArgs = RouteDetailLaunchArgs.fromRoute(route, origin, destination)
         val intent = Intent(ApplicationProvider.getApplicationContext(), RouteDetailActivity::class.java)
@@ -142,7 +185,27 @@ class RouteDetailRealServiceInstrumentedTest {
                     presentation.lines.filter { it.kind == RouteMapLineKind.BUS }.all { it.points.size > 2 }
                 )
                 assertTrue(presentation.lines.count { it.kind == RouteMapLineKind.WALKING } >= 2)
-
+                val busLine = presentation.lines.singleOrNull { it.kind == RouteMapLineKind.BUS }
+                expectedBusLineStart?.let { expected ->
+                    assertNotNull(busLine)
+                    assertEquals(expected.latitude, busLine!!.points.first().latitude, 0.000000000001)
+                    assertEquals(expected.longitude, busLine.points.first().longitude, 0.000000000001)
+                }
+                expectedBusLineEnd?.let { expected ->
+                    assertNotNull(busLine)
+                    assertEquals(expected.latitude, busLine!!.points.last().latitude, 0.000000000001)
+                    assertEquals(expected.longitude, busLine.points.last().longitude, 0.000000000001)
+                }
+                inspectionFocus?.let { coordinate ->
+                    readRenderer(activity).focusCoordinate(coordinate, inspectionZoom)
+                }
+            }
+            if (inspectionFocus != null) {
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                Thread.sleep(1_500L)
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            }
+            scenario.onActivity { activity ->
                 val screenshot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
                 val output = File(requireNotNull(activity.getExternalFilesDir(null)), screenshotName)
                 FileOutputStream(output).use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -195,6 +258,12 @@ class RouteDetailRealServiceInstrumentedTest {
                 as? com.golink.busiscoming.data.model.RouteDetail
         )
 
+    private fun readRenderer(activity: RouteDetailActivity): GoogleRouteMapRenderer =
+        requireNotNull(
+            activity.javaClass.getDeclaredField("renderer").apply { isAccessible = true }.get(activity)
+                as? GoogleRouteMapRenderer
+        )
+
     private fun findViewWithTag(root: View, tag: String): View? {
         if (root.tag?.toString() == tag) return root
         if (root !is ViewGroup) return null
@@ -208,5 +277,6 @@ class RouteDetailRealServiceInstrumentedTest {
         const val ARG_HOLD_MILLIS = "holdRealRouteMapMillis"
         const val SINGLE_SCREENSHOT_NAME = "route-map-real-single.png"
         const val MULTI_SCREENSHOT_NAME = "route-map-real-multi.png"
+        const val N118_HIGH_ZOOM_SCREENSHOT_NAME = "route-map-real-n118-high-zoom.png"
     }
 }
