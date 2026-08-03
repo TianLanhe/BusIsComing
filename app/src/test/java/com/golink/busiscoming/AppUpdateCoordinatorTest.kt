@@ -27,6 +27,7 @@ import com.golink.busiscoming.data.update.WebsiteUpdateResult
 import com.golink.busiscoming.data.update.WebsiteUpdateSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -108,6 +109,86 @@ class AppUpdateCoordinatorTest {
         assertEquals(UpdateCheckTrigger.MANUAL, state.lastTrigger)
         assertEquals(8L, state.snapshot.availableVersionCode)
         assertTrue(coordinator.shouldPrompt())
+    }
+
+    @Test
+    fun playAvailableUsesMatchingWebsiteVersionNameWithoutChangingPlayEligibility() {
+        val website = FakeWebsiteUpdateSource(
+            WebsiteUpdateResult.Available(
+                availableSnapshot(
+                    versionCode = 12L,
+                    firstSeenAt = 1L,
+                    channel = UpdateChannel.WEBSITE,
+                    versionName = "1.2"
+                )
+            )
+        )
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(
+                immediateResult = availablePlay(versionCode = 12L, stalenessDays = 3)
+            ),
+            website = website
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        val snapshot = coordinator.currentState().snapshot
+        assertEquals(1, website.checkCount)
+        assertEquals(UpdateChannel.PLAY, snapshot.channel)
+        assertEquals(12L, snapshot.availableVersionCode)
+        assertEquals("1.2", snapshot.availableVersionName)
+        assertTrue(snapshot.flexibleAllowed)
+    }
+
+    @Test
+    fun playAvailableNeverUsesVersionCodeOrMismatchedWebsiteNameAsVersionName() {
+        val website = FakeWebsiteUpdateSource(
+            WebsiteUpdateResult.Available(
+                availableSnapshot(
+                    versionCode = 11L,
+                    firstSeenAt = 1L,
+                    channel = UpdateChannel.WEBSITE,
+                    versionName = "1.1"
+                )
+            )
+        )
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(
+                immediateResult = availablePlay(versionCode = 12L, stalenessDays = 3)
+            ),
+            website = website
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        val snapshot = coordinator.currentState().snapshot
+        assertEquals(1, website.checkCount)
+        assertEquals(12L, snapshot.availableVersionCode)
+        assertNull(snapshot.availableVersionName)
+        assertTrue(snapshot.hasNewerVersion)
+    }
+
+    @Test
+    fun playAvailableRemainsReliableWhenVersionNameLookupFails() {
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(
+                immediateResult = availablePlay(versionCode = 12L, stalenessDays = 3)
+            ),
+            website = FakeWebsiteUpdateSource(
+                WebsiteUpdateResult.Failed(UpdateFailureKind.NETWORK)
+            )
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        val state = coordinator.currentState()
+        assertEquals(UpdateChannel.PLAY, state.snapshot.channel)
+        assertEquals(12L, state.snapshot.availableVersionCode)
+        assertNull(state.snapshot.availableVersionName)
+        assertNull(state.lastFailure)
     }
 
     @Test
@@ -420,13 +501,14 @@ class AppUpdateCoordinatorTest {
     private fun availableSnapshot(
         versionCode: Long,
         firstSeenAt: Long,
-        channel: UpdateChannel = UpdateChannel.PLAY
+        channel: UpdateChannel = UpdateChannel.PLAY,
+        versionName: String = "1.$versionCode"
     ) = UpdateSnapshot(
         state = UpdateSnapshotState.UPDATE_AVAILABLE,
         channel = channel,
         installedVersionCode = 6L,
         availableVersionCode = versionCode,
-        availableVersionName = "1.$versionCode",
+        availableVersionName = versionName,
         availableSinceAt = firstSeenAt,
         firstSeenAt = firstSeenAt,
         checkedAt = firstSeenAt,

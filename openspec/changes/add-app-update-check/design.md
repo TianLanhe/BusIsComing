@@ -39,7 +39,9 @@ Debug 構建無法代表 Google Play 的正式交付與帳號擁有權，因此�
 
 ### 1. Play 能力優先，初始安裝渠道只限制網站兜底
 
-更新協調器先呼叫 Play Core，並以 `AppUpdateInfo` 的更新狀態作目前用戶的權威結果。`UPDATE_AVAILABLE` 與 `UPDATE_NOT_AVAILABLE` 都不再查網站；`ERROR_APP_NOT_OWNED` 保持 Play 操作渠道，但可在網站已遵守「Play 100% 後才發佈」的前提下讀 metadata 判斷是否有較高版本。只有網站 `versionCode` 較高時才形成可靠更新快照；版本相等、較低、請求失敗或 metadata 無效都保留 `PLAY_APP_NOT_OWNED`，不得宣稱目前已是最新。Play 暫時失敗但 `com.android.vending` 可用時保留 Play 渠道。
+更新協調器先呼叫 Play Core，並以 `AppUpdateInfo` 的更新狀態作目前用戶的權威結果。`UPDATE_NOT_AVAILABLE` 不再查網站；`UPDATE_AVAILABLE` 的資格、versionCode、staleness 與 flexible 能力完全採用 Play 結果，網站 metadata 只可作展示名稱補充。`ERROR_APP_NOT_OWNED` 保持 Play 操作渠道，但可在網站已遵守「Play 100% 後才發佈」的前提下讀 metadata 判斷是否有較高版本。只有網站 `versionCode` 較高時才形成可靠更新快照；版本相等、較低、請求失敗或 metadata 無效都保留 `PLAY_APP_NOT_OWNED`，不得宣稱目前已是最新。Play 暫時失敗但 `com.android.vending` 可用時保留 Play 渠道。
+
+Play Core 2.1.0 的 `AppUpdateInfo` 只暴露 `availableVersionCode()`，沒有目標版本的 `versionName`。Play 回報可更新後，協調器可讀取同一官方網站 metadata，但只有 metadata `versionCode` 與 Play 精確一致時才保存其 `versionName`；這次讀取不得改變 Play 渠道、更新資格、flexible 能力或失敗結果。UI 把合法名稱規範為單一小寫 `v` 前綴，例如 `v1.2`。網站版本落後、超前、無效或網絡失敗時仍保存 Play 的可靠更新快照，但版本名稱留空，設定摘要改用不含數字的通用「有新版本可用」，Dialog 隱藏版本行，絕不顯示裸 `versionCode`。
 
 系統首次使用更新能力時保存 `initialInstallChannel`：API 30 或以上讀 `getInstallSourceInfo()`，API 25–29 讀 `getInstallerPackageName()`。目前有 Play 時不論初始渠道都走 Play；只有沒有 Play且初始渠道不是 Play時才走網站。初始為 Play 的安裝即使 Play 日後被停用，也只顯示 Play 暫不可用。
 
@@ -143,6 +145,7 @@ App 僅由固定 HTTPS 官方 endpoint 取得資料，驗證響應最終 URL 沒
 - [Play Core 在 sideload／帳號未擁有時可能無法提供版本] → `ERROR_APP_NOT_OWNED` 只用已遵守 Play 100% 門檻的網站 metadata 判斷是否顯示更新，操作仍導向 Play。
 - [Package installer 可能為 null 或隨更新改變] → 首次保存渠道；有 Play 時始終 Play；無 Play 且未知時只歸為未知非 Play，不把 installer 當安全憑證。
 - [Play 暫時錯誤造成網站錯誤降級] → resolver 必須同時判斷 Play error 與官方 package 可用性，暫時錯誤只保留可靠快照。
+- [Play 測試軌道先於網站版本，無法取得 versionName] → 網站 metadata 只在 versionCode 精確匹配時補充名稱；不匹配時保留 Play 更新資格並使用通用摘要，不猜測名稱或顯示 versionCode。
 - [使用者點更新但不完成] → 點擊前先 defer 3 天；更新完成後以目前 versionCode 同步清理。
 - [三個 Dialog action 在英文或大字體下擁擠] → 使用可換行／垂直 action 佈局，按 360dp 及 font scale 2.0 驗證，不縮字。
 - [系統時間回撥破壞節流] → 負間隔按未到期處理，持久化 epoch 時間並以注入 clock 做邊界測試。

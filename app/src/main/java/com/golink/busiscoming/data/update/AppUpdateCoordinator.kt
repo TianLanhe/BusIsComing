@@ -226,14 +226,24 @@ class AppUpdateCoordinator(
 
     private fun completePlayAvailable(result: PlayUpdateResult.Available) {
         val now = clock()
+        websiteSource.findVersionName(result.availableVersionCode, now) { versionName ->
+            completePlayAvailable(result, versionName, now)
+        }
+    }
+
+    private fun completePlayAvailable(
+        result: PlayUpdateResult.Available,
+        versionName: String?,
+        checkedAt: Long
+    ) {
         val previous = stateStore.load().snapshot
         val firstSeen = if (previous.availableVersionCode == result.availableVersionCode) {
-            previous.firstSeenAt ?: now
+            previous.firstSeenAt ?: checkedAt
         } else {
-            now
+            checkedAt
         }
         val availableSince = result.stalenessDays?.coerceAtLeast(0)?.let { days ->
-            now - days.toLong() * UpdatePolicy.DAY_MILLIS
+            checkedAt - days.toLong() * UpdatePolicy.DAY_MILLIS
         } ?: firstSeen
         completeReliable(
             UpdateSnapshot(
@@ -241,10 +251,10 @@ class AppUpdateCoordinator(
                 channel = UpdateChannel.PLAY,
                 installedVersionCode = installedVersionCode,
                 availableVersionCode = result.availableVersionCode,
-                availableVersionName = result.availableVersionCode.toString(),
+                availableVersionName = versionName,
                 availableSinceAt = availableSince,
                 firstSeenAt = firstSeen,
-                checkedAt = now,
+                checkedAt = checkedAt,
                 flexibleAllowed = result.flexibleAllowed
             ),
             playDownloaded = result.downloaded

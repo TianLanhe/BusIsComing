@@ -15,22 +15,40 @@ data class UpdateSettingsUiModel(
 
 object UpdateSettingsUiModelFactory {
     fun create(state: AppUpdateState, now: Long): UpdateSettingsUiModel {
-        val version = state.snapshot.availableVersionName
-            ?: state.snapshot.availableVersionCode?.toString()
+        val version = UpdateVersionLabel.format(
+            state.snapshot.availableVersionName,
+            state.snapshot.availableVersionCode
+        )
         val summaryRes = when {
             state.isChecking -> R.string.update_status_checking
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE &&
                 state.lastTrigger == UpdateCheckTrigger.MANUAL &&
-                state.lastFailure != null -> R.string.update_status_available_failed
+                state.lastFailure != null -> if (version == null) {
+                R.string.update_status_available_failed_generic
+            } else {
+                R.string.update_status_available_failed
+            }
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE &&
                 state.skippedVersionCode == state.snapshot.availableVersionCode ->
-                R.string.update_status_available_skipped
+                if (version == null) {
+                    R.string.update_status_available_skipped_generic
+                } else {
+                    R.string.update_status_available_skipped
+                }
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE &&
                 state.deferredVersionCode == state.snapshot.availableVersionCode &&
                 state.deferredUntil?.let { now < it } == true ->
-                R.string.update_status_available_deferred
+                if (version == null) {
+                    R.string.update_status_available_deferred_generic
+                } else {
+                    R.string.update_status_available_deferred
+                }
             state.snapshot.state == UpdateSnapshotState.UPDATE_AVAILABLE ->
-                R.string.update_status_available
+                if (version == null) {
+                    R.string.update_status_available_generic
+                } else {
+                    R.string.update_status_available
+                }
             state.lastTrigger == UpdateCheckTrigger.MANUAL &&
                 state.lastFailure?.kind in setOf(
                     UpdateFailureKind.PLAY_APP_NOT_OWNED,
@@ -53,5 +71,18 @@ object UpdateSettingsUiModelFactory {
             showDot = state.snapshot.hasNewerVersion,
             rowEnabled = !state.isChecking
         )
+    }
+}
+
+object UpdateVersionLabel {
+    fun format(versionName: String?, versionCode: Long?): String? {
+        val trimmed = versionName?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val withoutPrefix = if (trimmed.startsWith("v", ignoreCase = true)) {
+            trimmed.drop(1)
+        } else {
+            trimmed
+        }
+        if (withoutPrefix == versionCode?.toString()) return null
+        return withoutPrefix.takeIf { it.isNotBlank() }?.let { "v$it" }
     }
 }
