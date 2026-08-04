@@ -131,6 +131,21 @@ object WebsiteMetadataParser {
 
 interface WebsiteUpdateSource {
     fun check(installedVersionCode: Long, checkedAt: Long, callback: (WebsiteUpdateResult) -> Unit)
+
+    fun findVersionName(
+        versionCode: Long,
+        checkedAt: Long,
+        callback: (String?) -> Unit
+    ) {
+        check(installedVersionCode = 0L, checkedAt = checkedAt) { result ->
+            val snapshot = (result as? WebsiteUpdateResult.Available)?.snapshot
+            callback(
+                snapshot?.availableVersionName?.takeIf {
+                    snapshot.availableVersionCode == versionCode
+                }
+            )
+        }
+    }
 }
 
 class HttpWebsiteUpdateSource(

@@ -175,11 +175,16 @@ class SharedPreferencesUpdateStateStore(
         val channel = values.enumValue<UpdateChannel>(KEY_SNAPSHOT_CHANNEL)
         val availableVersion = values.longValue(KEY_SNAPSHOT_AVAILABLE_VERSION_CODE)
         val availableName = values[KEY_SNAPSHOT_AVAILABLE_VERSION_NAME]
+            ?.takeIf { it.isNotBlank() }
+            ?.takeUnless { name ->
+                channel == UpdateChannel.PLAY &&
+                    name.removePrefix("v").removePrefix("V") == availableVersion?.toString()
+            }
         val checkedAt = values.longValue(KEY_SNAPSHOT_CHECKED_AT)
         if (state == UpdateSnapshotState.UPDATE_AVAILABLE) {
             if (
                 channel == null || availableVersion == null || availableVersion <= installed ||
-                availableName.isNullOrBlank() || checkedAt == null
+                checkedAt == null
             ) {
                 return null
             }

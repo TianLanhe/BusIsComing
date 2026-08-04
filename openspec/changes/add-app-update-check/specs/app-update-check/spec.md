@@ -1,28 +1,36 @@
 ## ADDED Requirements
 
-### Requirement: 系統允許上架前暫時強制網站更新渠道
-系統 SHALL 提供集中且預設啟用的本機構建開關，在 App 尚未正式上架 Google Play 期間強制自動與手動更新檢查使用網站渠道，並 SHALL 保留關閉開關後恢復 Play 優先策略的完整實作。
-
-#### Scenario: 上架前開關啟用
-- **WHEN** `FORCE_WEBSITE_UPDATE_CHECK` 為 `true`
-- **THEN** 系統 SHALL 不論初始安裝渠道或 Google Play package 是否可用，直接使用官方網站 metadata 檢查更新
-- **AND** 系統 SHALL 將可靠結果的更新渠道設為網站
-- **AND** 系統 SHALL NOT 執行 Play 版本檢查、Play 安裝狀態刷新或 flexible update
-
-#### Scenario: 上架後關閉開關
-- **WHEN** App 已正式上架並完成真實 Play 更新驗收
-- **AND** `FORCE_WEBSITE_UPDATE_CHECK` 改為 `false`
-- **THEN** 系統 SHALL 恢復本規格定義的 Google Play 優先及網站兜底策略
-- **AND** 系統 SHALL NOT 需要修改 coordinator、resolver 或更新 UI 才能恢復 Play 流程
-
 ### Requirement: 系統按 Google Play 可用性選擇更新渠道
 系統 SHALL 優先使用目前裝置上可用的官方 Google Play 判斷及執行更新，並 SHALL 只在初始為非 Play 安裝且目前沒有可用官方 Play 時使用官方網站渠道。
+
+#### Scenario: Debug 構建不宣稱 Play 已是最新
+- **WHEN** 目前 App 為 debuggable 構建
+- **AND** 系統發起自動或手動更新檢查
+- **THEN** 系統 SHALL NOT 呼叫 Play package probe、Play 更新服務或網站 metadata
+- **AND** 系統 SHALL NOT 保存可靠的已是最新或更新可用快照
+- **AND** 手動檢查 SHALL 提供前往 Google Play 的受控提示
+- **AND** 自動檢查 SHALL 保持靜默並保留 24 小時嘗試節流
 
 #### Scenario: Play 可用且允許目前用戶更新
 - **WHEN** 裝置有可用的官方 Google Play
 - **AND** Google Play 回報目前用戶有較高 versionCode 可更新
 - **THEN** 系統 SHALL 將 Google Play 設為目前更新渠道
 - **AND** 系統 SHALL NOT 因 App 最初由網站或其他非 Play 方式安裝而改用網站下載
+
+#### Scenario: Play 更新展示真實 versionName
+- **WHEN** Google Play 回報目前用戶有較高 versionCode 可更新
+- **AND** 官方網站 metadata 的 versionCode 與 Play 可用 versionCode 精確一致
+- **THEN** 系統 SHALL 只使用該 metadata 的 versionName 作展示名稱
+- **AND** 設定摘要與更新 Dialog SHALL 以單一小寫 `v` 前綴展示，例如 `v1.2`
+- **AND** 網站 metadata SHALL NOT 改變 Play 更新資格、渠道或 flexible 能力
+
+#### Scenario: Play 更新暫無可驗證 versionName
+- **WHEN** Google Play 回報目前用戶有較高 versionCode 可更新
+- **AND** 網站 metadata 的 versionCode 不一致、請求失敗或資料無效
+- **THEN** 系統 SHALL 保留 Google Play 的可靠更新結果與小紅點
+- **AND** 設定摘要 SHALL 使用不含版本數字的通用更新文案
+- **AND** 更新 Dialog SHALL 隱藏版本行
+- **AND** 系統 SHALL NOT 把 availableVersionCode 當作 versionName 展示
 
 #### Scenario: Play 對目前用戶沒有更新
 - **WHEN** Google Play 回報目前帳號、軌道、地區及裝置沒有可用更新
@@ -34,6 +42,9 @@
 - **THEN** 系統 SHALL 保持 Google Play 為更新操作渠道
 - **AND** 系統 SHALL 讀取只在 Play 目標地區達到 100% 發佈後上線的網站 metadata，判斷是否存在較高 `versionCode`
 - **AND** 發現更新時系統 SHALL 將用戶導向 Google Play 而非網站 APK
+- **AND** 網站 metadata 只有在 `versionCode` 高於目前 App 時 SHALL 形成可靠更新快照
+- **AND** 網站版本相等、較低、請求失敗或 metadata 無效時 SHALL 回報 `PLAY_APP_NOT_OWNED`
+- **AND** 系統 SHALL NOT 以這些非正向結果宣稱目前已是最新版本
 
 #### Scenario: Play 暫時失敗
 - **WHEN** Play 更新服務因網絡、服務或裝置暫時狀態無法完成檢查

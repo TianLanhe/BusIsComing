@@ -29,7 +29,7 @@ android {
         applicationId = "com.golink.busiscoming"
         minSdk = 25
         targetSdk = 36
-        versionCode = 10
+        versionCode = 13
         versionName = "1.0"
 
         testInstrumentationRunner = "com.golink.busiscoming.BusIsComingTestRunner"
@@ -42,7 +42,6 @@ android {
                     ?: ""
             ).asBuildConfigString()
         )
-        buildConfigField("boolean", "FORCE_WEBSITE_UPDATE_CHECK", "true")
     }
 
     buildFeatures {
