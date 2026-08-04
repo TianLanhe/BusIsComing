@@ -52,8 +52,8 @@
 
 - [x] 7.1 以脫敏等價 cURL／測試工具完成 `ppsearch_p3.php -> getp2pstopinroute.php` A/B：無 session 時確認空距離，僅匹配 `PHPSESSID` 時確認單段與多段的每個精確距離；覆蓋繁體、簡體、英文且不保存 session 值。
 - [x] 7.2 驗證三個 `m1` 同時返回時各自 `lid + session` 正確，並驗證 session 過期後一次恢復能匹配原方案；記錄無匹配／再次失敗的誠實降級結果。
-- [ ] 7.3 使用任務專用且完成後關閉的 Google Play 模擬器，從冷 App 進程首次開啟真實單段與多段 Citybus 結果，確認 Google 底圖、所有站點、每段道路幾何、示意步行、精確分段距離及 60 秒 ETA 均在同頁出現而不需退出重入。
-- [ ] 7.4 在同一任務專用模擬器驗證第一輪 geometry 暫時失敗後自動恢復、單段永久失敗的局部手動重試、configuration change／背景前台／真正退出重入、位置權限及無圖例三檔 UI；高縮放抽查 N118 等校正幾何仍貼合 Google 道路。
+- [x] 7.3 使用任務專用且完成後關閉的 Google Play 模擬器，從冷 App 進程首次開啟真實單段與多段 Citybus 結果，確認 Google 底圖、所有站點、每段道路幾何、示意步行、精確分段距離及 60 秒 ETA 均在同頁出現而不需退出重入。
+- [x] 7.4 在同一任務專用模擬器驗證第一輪 geometry 暫時失敗後自動恢復、單段永久失敗的局部手動重試、configuration change／背景前台／真正退出重入、位置權限及無圖例三檔 UI；高縮放抽查 N118 等校正幾何仍貼合 Google 道路。
 - [x] 7.5 更新 `docs/route-detail-google-map-validation.md` 或對應驗證記錄，區分自動化證據、真實服務證據與受網路限制未完成項，不記錄 API key、PHPSESSID、完整 Cookie 或其他敏感資料。
 
 ## 8. 最終回歸與交付

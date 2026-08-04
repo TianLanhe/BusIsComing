@@ -122,7 +122,6 @@ class RouteDetailActivity : AppCompatActivity() {
         override fun run() {
             if (!foreground) return
             refreshFirstLegEta()
-            mainHandler.postDelayed(this, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
         }
     }
 
@@ -185,11 +184,12 @@ class RouteDetailActivity : AppCompatActivity() {
         super.onStart()
         if (::mapView.isInitialized) mapView.onStart()
         foreground = true
+        mainHandler.removeCallbacks(etaTick)
         if (RouteDetailEtaRefreshPolicy.shouldRefreshOnForeground(System.currentTimeMillis(), lastEtaSuccessMillis)) {
             refreshFirstLegEta()
+        } else {
+            mainHandler.postDelayed(etaTick, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
         }
-        mainHandler.removeCallbacks(etaTick)
-        mainHandler.postDelayed(etaTick, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
         scheduleMapLoadTimeout()
         syncGeometryFailureState()
     }
@@ -554,6 +554,8 @@ class RouteDetailActivity : AppCompatActivity() {
                 waitTimeState = state
                 if (state !is WaitTimeState.Unavailable) lastEtaSuccessMillis = System.currentTimeMillis()
                 if (detail != null) renderDetail() else showLaunchSummary(detailLoading, detailFailed)
+                mainHandler.removeCallbacks(etaTick)
+                mainHandler.postDelayed(etaTick, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
             }
         }
     }

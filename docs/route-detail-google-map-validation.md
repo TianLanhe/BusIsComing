@@ -85,10 +85,28 @@ googleLongitude = citybusLongitude - 0.0000697374
 - 常規 Activity 套件、位置權限三個真實系統流程、真實 60 秒 ETA、TalkBack 操作及 360dp 的三語 × 明暗 × font scale 1.0／1.3／2.0 矩陣均在任務 AVD 執行；矩陣同時斷言 XML、resource id 與無障礙樹均不存在圖例，返回、定位、全覽、Google attribution 與三檔半屏保持可用。
 - 首次授權位置時曾重現「定位結果早於 renderer 建立」競態；現在先保存相機座標與 zoom，再在 renderer 可用時聚焦。產品修正後重新執行首次授權、系統定位關閉及重複拒絕／設定三條流程均通過。
 
-### 真實 Google 圖磚受阻證據
+### 真實 Google 圖磚代理重試與根因
 
-- 同一任務 AVD 以生產 repository 執行真實單段、多段與 N118 高縮放案例，Citybus 站點／詳情／道路幾何可產生，但 Google Maps `OnMapLoadedCallback` 在 30 秒內沒有返回，因此門控測試嚴格失敗於 `Google base map did not finish loading`，沒有放寬斷言或宣稱圖磚通過。
-- 模擬器把 `maps.googleapis.com` 解析到與 Google 不相符的地址；Google Play 服務同輪記錄 `SERVICE_NOT_AVAILABLE`。以 `-dns-server 8.8.8.8` 乾淨重啟後重新安裝並原樣重跑，結果仍相同。這是當前執行環境到 Google 服務的外部網路阻塞，不是 Citybus callback 或地圖 invalidate 問題。
-- 因底圖未完成，本輪不能重新宣稱「真實 Google 圖磚、Citybus 全部內容與 60 秒 ETA 同頁」或 N118 高縮放貼路目視通過；這兩項在 tasks 保持未勾選並附本節證據。所有可離線確定的 renderer 差量更新、站點／線條數量、坐標校正、競態、局部重試、權限、三檔 UI 與生命週期均由自動化覆蓋，不轉交使用者人工測試。
+2026-08-05 重新建立任務專用 `Codex_RouteMap_ProxyRetry_20260805` AVD（Android 16／API 36、Google Play arm64、360dp）後，確認前一輪失敗不是 Maps key、Citybus callback 或地圖 invalidate 問題，而是代理只在 macOS 系統層生效、沒有完整傳入模擬器：
 
-本輪沒有保留需要使用者人工執行的頁面驗收；唯一未完成的是必須由可連接 Google Maps 圖磚的外部環境重新執行之門控項目。
+- 宿主直接連線 `maps.googleapis.com` 會超時，DNS 亦返回與 Google 不相符的 fake-IP；明確經 `127.0.0.1:7890` HTTP 代理請求則 Maps 返回 `302`、Citybus 返回 `200`，證明代理本身可用。
+- 只以 emulator `-http-proxy http://127.0.0.1:7890` 啟動時，冷進程單段與多段已可載入底圖，但未快取的 N118 zoom 18.5 圖磚仍連續兩次在 30 秒超時。`dumpsys connectivity` 顯示 Wi-Fi 只有 `PARTIAL_CONNECTIVITY`，`NetworkMonitor` 的 Google probe 繞過宿主代理後連到 fake IPv4／IPv6，說明 Google Play 服務仍有系統網絡通道沒有使用 QEMU 代理。
+- 再於 Android guest 設定 `settings put global http_proxy 10.0.2.2:7890` 後，`ProxyTracker` 發出系統代理更新；同一未改測試的 N118 案例由 30 秒超時恢復為 9.432 秒通過。`10.0.2.2` 是模擬器訪問宿主的固定地址，這項設定只用於任務 AVD，不進入 App runtime 或版本控制。
+
+最終在修正後的同一任務 AVD 原樣執行 `RouteDetailRealServiceInstrumentedTest`，單段 `780-CEF-1`、多段 `82X-ISR-1 → 102-MEF-1` 與 N118 高縮放共 3 個案例於 33.767 秒全部通過；每案仍等待 `OnMapLoadedCallback`、檢查 Google watermark、全部時間線站點、每段多點道路幾何及至少兩條示意步行，沒有放寬斷言。保存並逐張目視檢查的新截圖為：
+
+- `route-map-real-single.png`：SHA-256 `a1491cee53b5d79594a8b56743e4a231c21e58aff423541189ffd743c08625ee`
+- `route-map-real-multi.png`：SHA-256 `70fb584937ba26f75b30a6dded98652d427f251cffbec9750e1e4dc41219c5fa`
+- `route-map-real-n118-high-zoom.png`：SHA-256 `5849b72a538e4ffa9064b882f7f2d7651058d8cc27272de507db2b67c3c9e5e3`
+
+單段與多段截圖確認真實 Google 圖磚、站點及巴士道路線同頁可見；N118 zoom 18.5 截圖確認校正後幾何位於柴灣道／環翠道對應道路內，沒有原回報的整體平移。精確分段距離由同一生產詳情 model 的真實 session A/B、formatter／adapter instrumentation 及三語頁面矩陣共同驗證；sessionless 對照仍誠實顯示摘要距離與「部分步行距離」說明。
+
+### 60 秒 ETA 重試發現與修正
+
+代理恢復後再次執行真實 60 秒門控時，測試捕捉到首輪 ETA 若在 detail 任務之後才開始，原 `onStart()` 固定 tick 仍從頁面進入時間起算，會令兩次實際 ETA 嘗試只相隔約 57–58 秒。現在每輪 ETA 完成後才安排下一個 60 秒 tick；退到背景仍停止，返回前台仍依最後成功時間決定是否立即刷新。
+
+- 修正前同一門控嚴格失敗於 `The recurring ETA refresh ran before the 60-second interval`。
+- 修正後使用未縮短的生產 `60_000 ms` 原樣重跑，61.812 秒通過。
+- `RouteDetailActivityTest` 常規 13 案例於 34.947 秒全部通過（60 秒門控按設計 skip），真實 Google／Citybus 3 案例在重新安裝修正 APK 後再次全部通過。
+
+至此 tasks 7.3／7.4 的自動化、真實服務及頁面圖像證據均完成，不保留需要使用者人工執行的驗收。任務 AVD 完成後已關閉並刪除；驗證記錄不包含 Maps key、`PHPSESSID`、完整 Cookie 或可還原 session 的 reference。
