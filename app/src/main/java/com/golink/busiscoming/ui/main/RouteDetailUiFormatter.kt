@@ -3,6 +3,7 @@ package com.golink.busiscoming.ui.main
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailStop
 import com.golink.busiscoming.data.model.RouteDetailTransferType
+import com.golink.busiscoming.data.model.RouteDetailStopRole
 import com.golink.busiscoming.data.model.RouteDetailWalkingKind
 import com.golink.busiscoming.data.model.WaitTimeState
 
@@ -18,7 +19,8 @@ sealed class RouteDetailUiItem(open val stableId: String) {
         val priceHkd: Double,
         val totalViaStops: Int,
         val walkingDistanceMeters: Int,
-        val isWalkingDistanceComplete: Boolean
+        val isWalkingDistanceComplete: Boolean,
+        val firstLegEta: WaitTimeState
     ) : RouteDetailUiItem("summary")
 
     data class Walking(
@@ -75,6 +77,14 @@ sealed class RouteDetailUiItem(open val stableId: String) {
     ) : RouteDetailUiItem(stableId)
 }
 
+object RouteDetailTimelineStableIds {
+    fun stop(legIndex: Int, stop: RouteDetailStop): String = when (stop.role) {
+        RouteDetailStopRole.BOARDING -> "leg-$legIndex-board"
+        RouteDetailStopRole.VIA -> "leg-$legIndex-via-${stop.sequence}"
+        RouteDetailStopRole.ALIGHTING -> "leg-$legIndex-alight"
+    }
+}
+
 object RouteDetailUiFormatter {
     fun items(
         detail: RouteDetail,
@@ -89,7 +99,8 @@ object RouteDetailUiFormatter {
                 priceHkd = detail.priceHkd,
                 totalViaStops = detail.totalViaStopCount,
                 walkingDistanceMeters = detail.displayWalkingDistanceMeters,
-                isWalkingDistanceComplete = detail.hasCompleteWalkingDistance
+                isWalkingDistanceComplete = detail.hasCompleteWalkingDistance,
+                firstLegEta = firstLegEta
             )
         )
         add(RouteDetailUiItem.Endpoint("origin", detail.originName, detail.plannedDepartureTime, true))
@@ -104,7 +115,7 @@ object RouteDetailUiFormatter {
             val colorKey = index % 4
             add(
                 RouteDetailUiItem.Stop(
-                    "leg-$index-board",
+                    RouteDetailTimelineStableIds.stop(index, leg.boardingStop),
                     index,
                     leg.boardingStop,
                     true,
@@ -129,13 +140,13 @@ object RouteDetailUiFormatter {
                 add(RouteDetailUiItem.ViaToggle("leg-$index-toggle", index, leg.viaStops.size, expanded, colorKey))
                 if (expanded) {
                     leg.viaStops.forEach { stop ->
-                        add(RouteDetailUiItem.ViaStop("leg-$index-via-${stop.sequence}", index, stop, colorKey))
+                        add(RouteDetailUiItem.ViaStop(RouteDetailTimelineStableIds.stop(index, stop), index, stop, colorKey))
                     }
                 }
             }
             add(
                 RouteDetailUiItem.Stop(
-                    "leg-$index-alight",
+                    RouteDetailTimelineStableIds.stop(index, leg.alightingStop),
                     index,
                     leg.alightingStop,
                     false,

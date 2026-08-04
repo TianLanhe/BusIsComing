@@ -3,6 +3,8 @@ package com.golink.busiscoming
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.Rect
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.view.View
@@ -20,9 +22,17 @@ import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.repository.RouteDetailRepository
+import com.golink.busiscoming.data.repository.RouteGeometryDataSource
+import com.golink.busiscoming.data.repository.RouteGeometryLoadHandle
+import com.golink.busiscoming.data.repository.RouteGeometryRequest
+import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.ui.main.RouteDetailActivity
 import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
 import com.golink.busiscoming.ui.main.RouteDetailRuntime
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.card.MaterialCardView
+import java.io.File
+import java.io.FileOutputStream
 import java.io.FileInputStream
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
@@ -60,6 +70,14 @@ class RouteDetailVisualMatrixInstrumentedTest {
             }
         }
         RouteDetailRuntime.etaResolver = { DemoScreenshotFixtures.primaryRoute().waitTimeState }
+        RouteDetailRuntime.geometryRepositoryFactory = {
+            object : RouteGeometryDataSource {
+                override fun loadGeometries(
+                    requests: List<RouteGeometryRequest>,
+                    onResult: (RouteGeometryRequest, Result<RouteGeometrySegment>) -> Unit
+                ): RouteGeometryLoadHandle = RouteGeometryLoadHandle {}
+            }
+        }
         executeShell("wm size 1080x2400")
         executeShell("wm density 480")
         executeShell("settings put system font_scale $fontScale")
@@ -75,6 +93,19 @@ class RouteDetailVisualMatrixInstrumentedTest {
                 configure(language, theme)
                 ActivityScenario.launch<RouteDetailActivity>(intent()).use { scenario ->
                     waitForDetail(scenario)
+                    waitForUi()
+                    scenario.onActivity { activity ->
+                        assertTouchTargets(activity)
+                        assertMapControlsVisibleAndLegendAbsent(activity)
+                        assertAttributionIsNotCovered(activity)
+                        saveScreenshot(activity, screenshotName(language, theme, fontScale, "summary"))
+                    }
+                    scenario.onActivity { activity ->
+                        BottomSheetBehavior.from(
+                            activity.findViewById<MaterialCardView>(R.id.routeDetailSheet)
+                        ).state = BottomSheetBehavior.STATE_EXPANDED
+                    }
+                    waitForUi()
                     scenario.onActivity { activity ->
                         assertEquals(fontScale, activity.resources.configuration.fontScale, 0.01f)
                         assertEquals(360, activity.resources.displayMetrics.widthPixels * 160 / activity.resources.displayMetrics.densityDpi)
@@ -107,6 +138,8 @@ class RouteDetailVisualMatrixInstrumentedTest {
                     scenario.onActivity { activity ->
                         assertTrue(collectText(activity.window.decorView).any { it.contains(LONG_DESTINATION) })
                         assertNoEllipsis(activity.window.decorView)
+                        assertTouchTargets(activity)
+                        saveScreenshot(activity, screenshotName(language, theme, fontScale, "full"))
                     }
                 }
             }
@@ -169,6 +202,65 @@ class RouteDetailVisualMatrixInstrumentedTest {
             for (index in 0 until view.childCount) assertNoEllipsis(view.getChildAt(index))
         }
     }
+
+    private fun assertTouchTargets(activity: RouteDetailActivity) {
+        val minimum = (48f * activity.resources.displayMetrics.density).toInt()
+        listOf(
+            R.id.routeDetailFloatingBack,
+            R.id.routeDetailToolbar,
+            R.id.routeDetailSheetHandle,
+            R.id.routeDetailLocation,
+            R.id.routeDetailOverview
+        ).forEach { id ->
+            val view = activity.findViewById<View>(id)
+            if (view.visibility == View.VISIBLE) {
+                assertTrue("Touch target width is under 48dp for id=$id", view.width >= minimum)
+                assertTrue("Touch target height is under 48dp for id=$id", view.height >= minimum)
+            }
+        }
+    }
+
+    private fun assertMapControlsVisibleAndLegendAbsent(activity: RouteDetailActivity) {
+        assertEquals(
+            "Map legend resource must be removed",
+            0,
+            activity.resources.getIdentifier("routeDetailMapLegend", "id", activity.packageName)
+        )
+        listOf(R.id.routeDetailLocation, R.id.routeDetailOverview).forEach { id ->
+            val controlBounds = Rect()
+            val control = activity.findViewById<View>(id)
+            assertTrue("Map control must be visible for id=$id", control.getGlobalVisibleRect(controlBounds))
+        }
+    }
+
+    private fun assertAttributionIsNotCovered(activity: RouteDetailActivity) {
+        val watermark = findViewWithTag(activity.window.decorView, "GoogleWatermark")
+        assertTrue("Google watermark must be visible", watermark?.visibility == View.VISIBLE)
+        val sheet = activity.findViewById<MaterialCardView>(R.id.routeDetailSheet)
+        val location = IntArray(2)
+        requireNotNull(watermark).getLocationOnScreen(location)
+        assertTrue("Google watermark must remain above the summary sheet", location[1] + watermark.height <= sheet.top)
+    }
+
+    private fun findViewWithTag(root: View, tag: String): View? {
+        if (root.tag?.toString() == tag) return root
+        if (root !is ViewGroup) return null
+        for (index in 0 until root.childCount) findViewWithTag(root.getChildAt(index), tag)?.let { return it }
+        return null
+    }
+
+    private fun saveScreenshot(activity: RouteDetailActivity, name: String) {
+        val screenshot = instrumentation.uiAutomation.takeScreenshot()
+        val output = File(requireNotNull(activity.getExternalFilesDir(null)), name)
+        FileOutputStream(output).use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun screenshotName(
+        language: AppLanguageChoice,
+        theme: AppThemeMode,
+        fontScale: Float,
+        state: String
+    ): String = "route-detail-${language.name.lowercase()}-${theme.name.lowercase()}-$fontScale-$state.png"
 
     private fun collectText(view: View): List<String> = when (view) {
         is TextView -> listOf(view.text.toString())

@@ -1614,7 +1614,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRouteDetail(route: BusRouteOption) {
-        RouteDetailNavigator.open(this, route)
+        val source = currentSavedRouteConfig()
+        RouteDetailNavigator.open(this, route, source?.origin, source?.destination)
     }
 
     private fun showEtaArrivals(route: BusRouteOption) {
@@ -1667,6 +1668,13 @@ class MainActivity : AppCompatActivity() {
         return when (val context = currentQueryContext) {
             is QueryContext.Saved -> routeConfigRepository.getById(context.routeId)?.origin
             null -> selectedRoute?.origin
+        }
+    }
+
+    private fun currentSavedRouteConfig(): RouteConfig? {
+        return when (val context = currentQueryContext) {
+            is QueryContext.Saved -> routeConfigRepository.getById(context.routeId)
+            null -> selectedRoute
         }
     }
 

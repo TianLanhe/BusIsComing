@@ -8,7 +8,23 @@ import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
+import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
+
+data class RouteDetailQueryEndpoint(
+    val name: String,
+    val latitude: Double,
+    val longitude: Double
+) {
+    companion object {
+        fun fromPlace(place: Place?): RouteDetailQueryEndpoint? {
+            if (place == null || !place.latitude.isFinite() || !place.longitude.isFinite()) return null
+            if (place.latitude !in -90.0..90.0 || place.longitude !in -180.0..180.0) return null
+            return RouteDetailQueryEndpoint(place.name, place.latitude, place.longitude)
+        }
+    }
+}
 
 data class RouteDetailLaunchArgs(
     val routeName: String,
@@ -18,7 +34,9 @@ data class RouteDetailLaunchArgs(
     val walkingDistanceMeters: Int,
     val routeDetailQuery: P2pRouteDetailQuery?,
     val firstLegEtaQuery: FirstLegEtaQuery?,
-    val waitTimeState: WaitTimeState
+    val waitTimeState: WaitTimeState,
+    val queryOrigin: RouteDetailQueryEndpoint? = null,
+    val queryDestination: RouteDetailQueryEndpoint? = null
 ) {
     val estimatedViaStopCount: Int
         get() = routeDetailQuery?.plan?.legs.orEmpty().sumOf { leg ->
@@ -32,6 +50,8 @@ data class RouteDetailLaunchArgs(
         put("priceHkd", priceHkd.toString())
         put("durationMinutes", durationMinutes.toString())
         put("walkingDistanceMeters", walkingDistanceMeters.toString())
+        queryOrigin?.let { putEndpoint("query.origin", it) }
+        queryDestination?.let { putEndpoint("query.destination", it) }
         routeDetailQuery?.let { query ->
             put("detail.present", "true")
             put("detail.rawInfo", query.rawInfo)
@@ -42,6 +62,15 @@ data class RouteDetailLaunchArgs(
             put("detail.plan.lang", query.plan.lang)
             put("detail.plan.legCount", query.plan.legs.size.toString())
             query.plan.legs.forEachIndexed { index, leg -> putLeg("detail.plan.leg.$index", leg) }
+            query.sessionRef?.let { put("detail.sessionRef", it) }
+            query.recoveryContext?.let { context ->
+                put("detail.recovery.present", "true")
+                put("detail.recovery.originLatitude", context.originLatitude.toString())
+                put("detail.recovery.originLongitude", context.originLongitude.toString())
+                put("detail.recovery.destinationLatitude", context.destinationLatitude.toString())
+                put("detail.recovery.destinationLongitude", context.destinationLongitude.toString())
+                put("detail.recovery.searchMode", context.searchMode)
+            }
         }
         firstLegEtaQuery?.let { query ->
             put("etaQuery.present", "true")
@@ -87,8 +116,19 @@ data class RouteDetailLaunchArgs(
         leg.directionPath?.let { put("$prefix.path", it) }
     }
 
+    private fun MutableMap<String, String>.putEndpoint(prefix: String, endpoint: RouteDetailQueryEndpoint) {
+        put("$prefix.present", "true")
+        put("$prefix.name", endpoint.name)
+        put("$prefix.latitude", endpoint.latitude.toString())
+        put("$prefix.longitude", endpoint.longitude.toString())
+    }
+
     companion object {
-        fun fromRoute(route: BusRouteOption): RouteDetailLaunchArgs = RouteDetailLaunchArgs(
+        fun fromRoute(
+            route: BusRouteOption,
+            queryOrigin: Place? = null,
+            queryDestination: Place? = null
+        ): RouteDetailLaunchArgs = RouteDetailLaunchArgs(
             route.routeName,
             route.routeSegments,
             route.priceHkd,
@@ -96,7 +136,9 @@ data class RouteDetailLaunchArgs(
             route.walkingDistanceMeters,
             route.routeDetailQuery,
             route.firstLegEtaQuery,
-            route.waitTimeState
+            route.waitTimeState,
+            RouteDetailQueryEndpoint.fromPlace(queryOrigin),
+            RouteDetailQueryEndpoint.fromPlace(queryDestination)
         )
 
         fun fromBundle(bundle: Bundle): RouteDetailLaunchArgs? {
@@ -117,7 +159,9 @@ data class RouteDetailLaunchArgs(
                     values["detail.generalInfo"].orEmpty(),
                     values["detail.listId"].orEmpty(),
                     values["detail.lang"].orEmpty(),
-                    P2pRoutePlan(values["detail.plan.rawInfo"].orEmpty(), values["detail.plan.lang"].orEmpty(), legs)
+                    P2pRoutePlan(values["detail.plan.rawInfo"].orEmpty(), values["detail.plan.lang"].orEmpty(), legs),
+                    sessionRef = values["detail.sessionRef"],
+                    recoveryContext = values.readRecoveryContext()
                 )
             } else null
             val etaQuery = if (values["etaQuery.present"] == "true") {
@@ -141,7 +185,39 @@ data class RouteDetailLaunchArgs(
                 values["walkingDistanceMeters"]?.toIntOrNull() ?: return null,
                 detailQuery,
                 etaQuery,
-                values.readWaitState()
+                values.readWaitState(),
+                values.readEndpoint("query.origin"),
+                values.readEndpoint("query.destination")
+            )
+        }
+
+        private fun Map<String, String>.readEndpoint(prefix: String): RouteDetailQueryEndpoint? {
+            if (get("$prefix.present") != "true") return null
+            val latitude = get("$prefix.latitude")?.toDoubleOrNull() ?: return null
+            val longitude = get("$prefix.longitude")?.toDoubleOrNull() ?: return null
+            if (!latitude.isFinite() || !longitude.isFinite()) return null
+            if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return null
+            return RouteDetailQueryEndpoint(get("$prefix.name").orEmpty(), latitude, longitude)
+        }
+
+        private fun Map<String, String>.readRecoveryContext(): P2pRouteRecoveryContext? {
+            if (get("detail.recovery.present") != "true") return null
+            val originLatitude = get("detail.recovery.originLatitude")?.toDoubleOrNull() ?: return null
+            val originLongitude = get("detail.recovery.originLongitude")?.toDoubleOrNull() ?: return null
+            val destinationLatitude = get("detail.recovery.destinationLatitude")?.toDoubleOrNull() ?: return null
+            val destinationLongitude = get("detail.recovery.destinationLongitude")?.toDoubleOrNull() ?: return null
+            val mode = get("detail.recovery.searchMode")?.takeIf { it in setOf("T", "F", "W") } ?: return null
+            if (originLatitude !in -90.0..90.0 || destinationLatitude !in -90.0..90.0 ||
+                originLongitude !in -180.0..180.0 || destinationLongitude !in -180.0..180.0
+            ) {
+                return null
+            }
+            return P2pRouteRecoveryContext(
+                originLatitude,
+                originLongitude,
+                destinationLatitude,
+                destinationLongitude,
+                mode
             )
         }
 

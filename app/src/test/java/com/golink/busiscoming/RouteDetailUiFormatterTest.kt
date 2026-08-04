@@ -28,6 +28,7 @@ class RouteDetailUiFormatterTest {
         assertEquals(403, summary.walkingDistanceMeters)
         assertTrue(summary.isWalkingDistanceComplete)
         assertEquals("01:21", summary.plannedArrivalTime)
+        assertEquals(6, (summary.firstLegEta as WaitTimeState.Available).minutes)
     }
 
     @Test
@@ -55,6 +56,29 @@ class RouteDetailUiFormatterTest {
 
         assertTrue(items.any { it is RouteDetailUiItem.Transfer && it.type == RouteDetailTransferType.SAME_STOP })
         assertTrue(items.filterIsInstance<RouteDetailUiItem.Walking>().none { it.kind == RouteDetailWalkingKind.TRANSFER })
+    }
+
+    @Test
+    fun partialWalkingKeepsKnownSegmentsAndUsesCardAggregateWithoutTreatingUnknownAsZero() {
+        val value = detail().copy(
+            walkingDistanceMeters = 378,
+            transfers = listOf(
+                RouteDetailTransfer(
+                    RouteDetailTransferType.WALK_TO_TRANSFER_STOP,
+                    RouteDetailWalkingSegment(RouteDetailWalkingKind.TRANSFER, null)
+                )
+            )
+        )
+
+        val items = RouteDetailUiFormatter.items(value, emptySet(), WaitTimeState.Loading)
+        val summary = items.filterIsInstance<RouteDetailUiItem.Summary>().single()
+        val walking = items.filterIsInstance<RouteDetailUiItem.Walking>()
+
+        assertEquals(378, summary.walkingDistanceMeters)
+        assertFalse(summary.isWalkingDistanceComplete)
+        assertEquals(243, walking.single { it.kind == RouteDetailWalkingKind.ORIGIN }.distanceMeters)
+        assertNull(walking.single { it.kind == RouteDetailWalkingKind.TRANSFER }.distanceMeters)
+        assertEquals(135, walking.single { it.kind == RouteDetailWalkingKind.DESTINATION }.distanceMeters)
     }
 
     @Test

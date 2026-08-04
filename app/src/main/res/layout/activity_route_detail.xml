@@ -1,29 +1,171 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/routeDetailRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/bus_surface"
-    android:orientation="vertical">
+    android:background="@color/bus_surface">
 
-    <com.google.android.material.appbar.MaterialToolbar
-        android:id="@+id/routeDetailToolbar"
+    <com.google.android.gms.maps.MapView
+        android:id="@+id/routeDetailMap"
         android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/route_map_content_description" />
+
+    <TextView
+        android:id="@+id/routeDetailMapError"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="24dp"
         android:background="@color/bus_card_surface"
-        android:elevation="2dp"
-        android:minHeight="56dp"
-        android:titleTextColor="@color/bus_text_primary"
-        app:navigationIcon="@drawable/ic_arrow_back"
-        app:navigationIconTint="@color/bus_text_primary"
-        app:title="@string/route_detail_title" />
+        android:elevation="4dp"
+        android:gravity="center"
+        android:maxWidth="320dp"
+        android:padding="16dp"
+        android:text="@string/route_map_unavailable"
+        android:textColor="@color/bus_text_primary"
+        android:textSize="15sp"
+        android:visibility="gone" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/routeDetailList"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/routeDetailFloatingBack"
+        style="@style/Widget.MaterialComponents.Button.Icon"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:contentDescription="@string/route_detail_navigate_up"
+        android:elevation="6dp"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
+        app:backgroundTint="@color/bus_card_surface"
+        app:cornerRadius="24dp"
+        app:icon="@drawable/ic_arrow_back"
+        app:iconGravity="textStart"
+        app:iconPadding="0dp"
+        app:iconTint="@color/bus_text_primary" />
+
+    <LinearLayout
+        android:id="@+id/routeDetailMapControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="96dp"
+        android:layout_marginEnd="16dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/routeDetailLocation"
+            style="@style/Widget.MaterialComponents.Button.Icon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="@string/route_map_current_location"
+            android:elevation="5dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/bus_card_surface"
+            app:cornerRadius="24dp"
+            app:icon="@drawable/ic_location_outline"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconTint="@color/bus_text_primary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/routeDetailOverview"
+            style="@style/Widget.MaterialComponents.Button.Icon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:contentDescription="@string/route_map_overview"
+            android:elevation="5dp"
+            android:insetLeft="0dp"
+            android:insetTop="0dp"
+            android:insetRight="0dp"
+            android:insetBottom="0dp"
+            app:backgroundTint="@color/bus_card_surface"
+            app:cornerRadius="24dp"
+            app:icon="@drawable/ic_route_overview"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            app:iconTint="@color/bus_text_primary" />
+    </LinearLayout>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/routeDetailSheet"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingTop="12dp"
-        android:paddingBottom="24dp" />
-</LinearLayout>
+        android:layout_height="match_parent"
+        app:behavior_fitToContents="false"
+        app:behavior_hideable="false"
+        app:behavior_peekHeight="240dp"
+        app:cardBackgroundColor="@color/bus_surface"
+        app:cardElevation="10dp"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
+        app:shapeAppearance="@style/ShapeAppearance.BusIsComing.RouteDetailSheet">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <com.google.android.material.appbar.MaterialToolbar
+                android:id="@+id/routeDetailToolbar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/bus_surface"
+                android:minHeight="56dp"
+                android:titleTextColor="@color/bus_text_primary"
+                android:visibility="gone"
+                app:navigationIcon="@drawable/ic_arrow_back"
+                app:navigationIconTint="@color/bus_text_primary"
+                app:title="@string/route_detail_title" />
+
+            <TextView
+                android:id="@+id/routeDetailSheetMapError"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/bus_surface_variant"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:paddingStart="20dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="20dp"
+                android:paddingBottom="10dp"
+                android:text="@string/route_map_unavailable"
+                android:textColor="@color/bus_text_primary"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <FrameLayout
+                android:id="@+id/routeDetailSheetHandle"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:clickable="true"
+                android:contentDescription="@string/route_detail_sheet_handle_summary"
+                android:focusable="true">
+
+                <View
+                    android:layout_width="36dp"
+                    android:layout_height="4dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/route_detail_sheet_handle" />
+            </FrameLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/routeDetailList"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToPadding="false"
+                android:paddingTop="0dp"
+                android:paddingBottom="24dp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

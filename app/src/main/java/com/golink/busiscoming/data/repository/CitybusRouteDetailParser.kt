@@ -3,6 +3,7 @@ package com.golink.busiscoming.data.repository
 import com.golink.busiscoming.data.model.P2pRoutePlan
 import com.golink.busiscoming.data.model.ParsedRouteDetail
 import com.golink.busiscoming.data.model.RouteDetailDisplayFormatter
+import com.golink.busiscoming.data.model.RouteDetailCompleteness
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
 import com.golink.busiscoming.data.model.RouteDetailStopRole
@@ -22,6 +23,11 @@ object CitybusRouteDetailParser {
         val timetable = parseTimetable(document.root(), plan)
         val endpointRows = parseEndpointRows(document.root())
         val distances = timetable?.walkingDistances.orEmpty()
+        val fallbackDistances = if (timetable == null) {
+            parseFallbackWalkingDistances(response, plan.legs.size + 1)
+        } else {
+            List(plan.legs.size + 1) { null }
+        }
         val transferCount = (legs.size - 1).coerceAtLeast(0)
         val sameStopTransfer = SAME_STOP_PATTERN.containsMatchIn(document.text())
 
@@ -48,21 +54,51 @@ object CitybusRouteDetailParser {
             }
         }
 
+        val originWalking = RouteDetailWalkingSegment(
+            RouteDetailWalkingKind.ORIGIN,
+            distances.firstOrNull() ?: fallbackDistances.firstOrNull() ?: parseOriginWalkingDistanceMeters(response)
+        )
+        val destinationWalking = RouteDetailWalkingSegment(
+            RouteDetailWalkingKind.DESTINATION,
+            distances.getOrNull(transferCount + 1) ?:
+                fallbackDistances.getOrNull(transferCount + 1) ?:
+                parseDestinationWalkingDistanceMeters(response)
+        )
+        val mergedTransfers = transfers.mapIndexed { index, transfer ->
+            if (transfer.type == RouteDetailTransferType.SAME_STOP || transfer.walking?.distanceMeters != null) {
+                transfer
+            } else {
+                transfer.copy(
+                    walking = transfer.walking?.copy(
+                        distanceMeters = fallbackDistances.getOrNull(index + 1)
+                    )
+                )
+            }
+        }
+        val allRequiredDistancesPresent = originWalking.distanceMeters != null &&
+            destinationWalking.distanceMeters != null &&
+            mergedTransfers.all { transfer ->
+                transfer.type == RouteDetailTransferType.SAME_STOP || transfer.walking?.distanceMeters != null
+            }
+        val hasAnyWalkingDistance = originWalking.distanceMeters != null ||
+            destinationWalking.distanceMeters != null ||
+            mergedTransfers.any { it.walking?.distanceMeters != null }
+        val completeness = when {
+            allRequiredDistancesPresent -> RouteDetailCompleteness.COMPLETE
+            timetable == null && !hasAnyWalkingDistance -> RouteDetailCompleteness.SESSION_MISSING
+            else -> RouteDetailCompleteness.PARTIAL
+        }
+
         return ParsedRouteDetail(
             legs = enrichedLegs,
-            originWalking = RouteDetailWalkingSegment(
-                RouteDetailWalkingKind.ORIGIN,
-                distances.firstOrNull() ?: parseOriginWalkingDistanceMeters(response)
-            ),
-            transfers = transfers,
-            destinationWalking = RouteDetailWalkingSegment(
-                RouteDetailWalkingKind.DESTINATION,
-                distances.getOrNull(transferCount + 1) ?: parseDestinationWalkingDistanceMeters(response)
-            ),
+            originWalking = originWalking,
+            transfers = mergedTransfers,
+            destinationWalking = destinationWalking,
             plannedDepartureTime = endpointRows.first,
             plannedArrivalTime = timetable?.plannedArrivalTime ?: endpointRows.second,
             originName = parseEndpointName(document.root(), "wpoint_from"),
-            destinationName = parseEndpointName(document.root(), "wpoint_to")
+            destinationName = parseEndpointName(document.root(), "wpoint_to"),
+            completeness = completeness
         )
     }
 
@@ -122,6 +158,14 @@ object CitybusRouteDetailParser {
         val searchScope = response.substring(lastDestinationIndex)
         return WALKING_DISTANCE_PATTERN.find(searchScope)
             ?.groupValues?.getOrNull(1)?.replace(",", "")?.toIntOrNull()
+    }
+
+    private fun parseFallbackWalkingDistances(response: String, expectedCount: Int): List<Int?> {
+        val values = WALKING_DISTANCE_PATTERN.findAll(response)
+            .mapNotNull { match -> match.groupValues.getOrNull(1)?.replace(",", "")?.toIntOrNull() }
+            .toList()
+        if (values.isEmpty()) return List(expectedCount) { null }
+        return List(expectedCount) { index -> values.getOrNull(index) }
     }
 
     private fun parseTimetable(root: Element, plan: P2pRoutePlan): ParsedTimetable? {
@@ -259,7 +303,10 @@ object CitybusRouteDetailParser {
 
     private val STOP_CLICK_PATTERN = Regex("""stopclick1\(([^)]*)\)""")
     private val FUNCTION_ARG_PATTERN = Regex("""'([^']*)'""")
-    private val WALKING_DISTANCE_PATTERN = Regex("""步行距離\s*\(約\)\s*([0-9,]+)\s*米""")
+    private val WALKING_DISTANCE_PATTERN = Regex(
+        """(?:步行距離\s*\(約\)|步行距离\s*\(约\)|Walking\s+distance\s*\((?:approx\.?|approximately)\))\s*([0-9,]+)\s*(?:米|m|metres?|meters?)""",
+        RegexOption.IGNORE_CASE
+    )
     private val TIMETABLE_PATTERN = Regex("""showtimetable1\('([^']*)'""")
     private val CLOCK_PATTERN = Regex("""\b(?:[01]\d|2[0-3]):[0-5]\d\b""")
     private val SAME_STOP_PATTERN = Regex("""同站[轉转]乘|same\s+stop""", RegexOption.IGNORE_CASE)

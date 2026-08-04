@@ -6,6 +6,7 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.localization.LanguageSnapshot
@@ -17,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.ExecutionException
@@ -27,7 +29,10 @@ class CitybusBusRouteRepository(
     private val parser: CitybusRouteParser = CitybusRouteParser,
     private val languageSnapshotProvider: () -> LanguageSnapshot = AppLanguageRuntime::snapshot,
     private val clock: () -> Long = { System.currentTimeMillis() },
-    private val routeFetcher: (URL, Map<String, String>) -> String = ::fetchRouteHtml,
+    private val routeFetcher: ((URL, Map<String, String>) -> String)? = null,
+    private val routeResponseFetcher: (URL, Map<String, String>) -> CitybusHttpResponse = ::fetchRouteResponse,
+    private val sessionRegistry: CitybusSessionRegistry = CitybusSessionRuntime.registry,
+    private val sessionScopeFactory: () -> String = { UUID.randomUUID().toString() },
     private val requestLogger: (String) -> Unit = ::logRouteCurl,
     private val stopMapResolver: CitybusP2pStopMapResolver = CitybusP2pStopMapResolver(clock = clock),
     private val etaService: CitybusFirstLegEtaService = CitybusFirstLegEtaService(
@@ -41,6 +46,8 @@ class CitybusBusRouteRepository(
     ),
     private val stopPreviewWorkerCount: Int = DEFAULT_STOP_PREVIEW_WORKER_COUNT
 ) : BusRouteRepository {
+    private val sessionScopeLock = Any()
+    private var activeSessionScope: String? = null
     private val etaScopeLock = Any()
     private var etaGeneration = 0
     private var activeEtaExecutor: ExecutorService? = null
@@ -49,6 +56,7 @@ class CitybusBusRouteRepository(
     private var activeStopPreviewExecutor: ExecutorService? = null
 
     override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> {
+        val sessionScope = beginSessionScope()
         val languageSnapshot = languageSnapshotProvider()
         val queryTime = formatQueryTime(clock())
         val headers = requestHeaders()
@@ -65,7 +73,15 @@ class CitybusBusRouteRepository(
                             languageSnapshot.citybusLanguage
                         )
                         requestLogger(buildRouteQueryLogSummary(url, headers))
-                        parser.parse(routeFetcher(url, headers), languageSnapshot.citybusLanguage)
+                        loadModeCandidates(
+                            url,
+                            headers,
+                            origin,
+                            destination,
+                            mode,
+                            languageSnapshot.citybusLanguage,
+                            sessionScope
+                        )
                     }
                 }
             )
@@ -91,6 +107,80 @@ class CitybusBusRouteRepository(
         } finally {
             executor.shutdownNow()
         }
+    }
+
+    fun searchRouteCandidatesForRecovery(
+        recoveryContext: P2pRouteRecoveryContext,
+        language: String
+    ): List<BusRouteOption> {
+        val sessionScope = beginSessionScope()
+        val origin = Place("", recoveryContext.originLatitude, recoveryContext.originLongitude)
+        val destination = Place("", recoveryContext.destinationLatitude, recoveryContext.destinationLongitude)
+        val headers = requestHeaders()
+        val url = buildRouteUrl(
+            origin = origin,
+            destination = destination,
+            queryTime = formatQueryTime(clock()),
+            searchMode = recoveryContext.searchMode,
+            language = language
+        )
+        requestLogger(buildRouteQueryLogSummary(url, headers))
+        return loadModeCandidates(
+            url,
+            headers,
+            origin,
+            destination,
+            recoveryContext.searchMode,
+            language,
+            sessionScope
+        )
+    }
+
+    private fun loadModeCandidates(
+        url: URL,
+        headers: Map<String, String>,
+        origin: Place,
+        destination: Place,
+        mode: String,
+        language: String,
+        sessionScope: String
+    ): List<BusRouteOption> {
+        val response = routeFetcher?.let { fetcher ->
+            CitybusHttpResponse(fetcher(url, headers))
+        } ?: routeResponseFetcher(url, headers)
+        val recoveryContext = P2pRouteRecoveryContext(
+            originLatitude = origin.latitude,
+            originLongitude = origin.longitude,
+            destinationLatitude = destination.latitude,
+            destinationLongitude = destination.longitude,
+            searchMode = mode
+        )
+        val sessionRef = response.phpSessionIdFor(url)?.let { phpSessionId ->
+            sessionRegistry.register(phpSessionId, language, recoveryContext, sessionScope).also { reference ->
+                if (!isActiveSessionScope(sessionScope)) sessionRegistry.invalidate(reference)
+            }.takeIf { isActiveSessionScope(sessionScope) }
+        }
+        return parser.parse(response.body, language).map { route ->
+            route.copy(
+                routeDetailQuery = route.routeDetailQuery?.copy(
+                    sessionRef = sessionRef,
+                    recoveryContext = recoveryContext
+                )
+            )
+        }
+    }
+
+    private fun beginSessionScope(): String {
+        val nextScope = sessionScopeFactory()
+        val supersededScope = synchronized(sessionScopeLock) {
+            activeSessionScope.also { activeSessionScope = nextScope }
+        }
+        supersededScope?.let(sessionRegistry::invalidateScope)
+        return nextScope
+    }
+
+    private fun isActiveSessionScope(scope: String): Boolean = synchronized(sessionScopeLock) {
+        activeSessionScope == scope
     }
 
     override fun cancelProgressiveQueries() {
@@ -412,7 +502,7 @@ private fun logRouteCurl(routeQuerySummary: String) {
     }
 }
 
-private fun fetchRouteHtml(url: URL, headers: Map<String, String>): String {
+private fun fetchRouteResponse(url: URL, headers: Map<String, String>): CitybusHttpResponse {
     val connection = url.openConnection() as HttpURLConnection
     return try {
         connection.requestMethod = "GET"
@@ -433,7 +523,12 @@ private fun fetchRouteHtml(url: URL, headers: Map<String, String>): String {
             throw IOException("Citybus route query failed with HTTP $statusCode")
         }
 
-        responseBody
+        CitybusHttpResponse(
+            body = responseBody,
+            setCookieHeaders = connection.headerFields.entries
+                .filter { (name, _) -> name.equals("Set-Cookie", ignoreCase = true) }
+                .flatMap { it.value.orEmpty() }
+        )
     } finally {
         connection.disconnect()
     }

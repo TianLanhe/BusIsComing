@@ -15,7 +15,7 @@
 - **臨時搜尋**：不保存行程也可選擇起終點、查詢路線，查詢成功後可另存為常用行程。
 - **即時路線結果**：比較路線、HK$ 車費、總耗時、步行距離、上下車站預覽及首程 ETA；支援五種排序與下拉刷新。
 - **結果置頂**：在本次查詢置頂路線，或為常用行程保存長期置頂；一般排序只作用於未置頂結果。
-- **ETA 與詳情**：查看最多三班到站時間、上下車站、方向、途經站及換乘段。
+- **ETA 與詳情**：查看最多三班到站時間、上下車站、方向、途經站及換乘段；詳情以 Google 地圖底圖展示站點、路段與轉乘。
 - **通知欄監控**：短時前台服務定期刷新 ETA，顯示準備出門、立即出門或可能遲到，並提供刷新、停止及語音播報。
 - **行程匯入匯出**：透過 Android 系統文件選擇器匯出 `.bicroutes`，或預覽後合併／取代本機行程。
 - **乘車碼快捷方式**：由桌面快捷方式開啟 AlipayHK／支付寶乘車碼候選鏈，不在常用頁佔用固定入口。
@@ -25,13 +25,14 @@
 ## 快速開始
 
 1. 使用支援 Android Gradle Plugin 9.x 的 Android Studio 打開專案根目錄。
-2. 如需把目前座標解析為 Google 地址，在不提交到版本控制的 `local.properties` 設定：
+2. 如需使用地圖或把目前座標解析為 Google 地址，在不提交到版本控制的 `local.properties` 設定：
 
    ```properties
    GOOGLE_GEOCODING_API_KEY=your_api_key
+   GOOGLE_MAPS_API_KEY=your_android_maps_api_key
    ```
 
-   也可使用同名環境變數。API key 應限制 Android package、簽名憑證及所需 API。
+   也可使用同名環境變數。兩種 API key 均應限制 Android package、簽名憑證及所需 API；不得提交真實 key。
 
 3. 構建及安裝：
 
@@ -52,7 +53,7 @@
 | 清單與刷新 | RecyclerView、SwipeRefreshLayout |
 | 本機資料 | SQLiteOpenHelper、SharedPreferences、SavedState |
 | 網絡與解析 | HTTPS、jsoup、輕量 JSON 解析 |
-| 定位 | Google Play services Location、Google Geocoding v4 |
+| 地圖與定位 | Maps SDK for Android、Google Play services Location、Google Geocoding v4 |
 | 更新 | Google Play In-App Updates、官方網站 metadata |
 | 背景能力 | Foreground Service、NotificationCompat、AlarmManager、TextToSpeech |
 | 測試 | JUnit、AndroidX Test、Espresso、Citybus fixture、真實服務驗證 |
@@ -89,8 +90,10 @@ BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 quer
 | Citybus `ppsearch_p3.php` | 點到點候選路線 |
 | Citybus `showstops2.php` | P2P route variant、站序及 stop id 對齊 |
 | Citybus `getp2pstopinroute.php` | 上下車、途經站及換乘詳情 |
+| Citybus `getlinep2p.php` | 路線詳情的每段道路幾何 |
 | DATA.GOV.HK Citybus ETA | 首程即時到站資料 |
 | Google Geocoding v4 | 目前座標的地址名稱 |
+| Maps SDK for Android | 詳情頁底圖、marker 與 polyline |
 | Google Play／官方網站 | 更新資格、版本展示及下載入口 |
 
 接口參數、語言和失敗邊界集中記錄在 [Citybus 路線查詢與 ETA](docs/citybus-route-query-and-eta.md)、[本地化指南](docs/localization-guidelines.md)及[應用程式更新檢查](docs/app-update-check.md)。

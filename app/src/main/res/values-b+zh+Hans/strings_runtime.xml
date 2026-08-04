@@ -66,4 +66,22 @@
     <string name="route_detail_walking_incomplete">部分步行距离来自路线摘要</string>
     <string name="route_detail_origin">起点</string>
     <string name="route_detail_destination">终点</string>
+    <string name="route_map_content_description">路线地图；所有站点及换乘也可在下方路线详情中阅读</string>
+    <string name="route_map_current_location">显示当前位置</string>
+    <string name="route_map_overview">查看完整路线</string>
+    <string name="route_map_unavailable">地图暂不可用，已显示完整文字详情</string>
+    <string name="route_map_location_permission_denied">未获得位置权限，仍可查看完整路线</string>
+    <string name="route_map_location_permission_settings">请在系统设置中允许位置权限</string>
+    <string name="route_map_location_disabled">请先开启系统定位服务</string>
+    <string name="route_map_location_unavailable">暂时无法获取当前位置</string>
+    <string name="route_map_geometry_partial">部分路线道路暂时无法显示</string>
+    <string name="route_detail_sheet_handle_summary">路线详情当前为摘要；点按两次展开全屏</string>
+    <string name="route_detail_sheet_handle_half">路线详情当前为半屏；点按两次展开全屏</string>
+    <string name="route_detail_sheet_handle_full">路线详情当前为全屏；点按两次收合至摘要</string>
+    <string name="route_map_marker_origin">起点：%1$s</string>
+    <string name="route_map_marker_destination">终点：%1$s</string>
+    <string name="route_map_marker_boarding">%1$s 上车站：%2$s</string>
+    <string name="route_map_marker_via">%1$s 途经站：%2$s</string>
+    <string name="route_map_marker_alighting">%1$s 下车站：%2$s</string>
+    <string name="route_map_marker_transfer">从 %1$s 换乘 %2$s：%3$s</string>
 </resources>

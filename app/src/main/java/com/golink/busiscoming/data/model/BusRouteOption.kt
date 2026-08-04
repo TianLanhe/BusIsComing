@@ -1,5 +1,7 @@
 package com.golink.busiscoming.data.model
 
+import java.util.Locale
+
 data class BusRouteOption(
     val routeName: String,
     val routeSegments: List<String>,
@@ -115,11 +117,32 @@ data class P2pRouteDetailQuery(
     val generalInfo: String,
     val listId: String,
     val lang: String,
-    val plan: P2pRoutePlan
+    val plan: P2pRoutePlan,
+    val sessionRef: String? = null,
+    val recoveryContext: P2pRouteRecoveryContext? = null
 ) {
     fun cacheKey(): P2pRouteDetailCacheKey {
         return P2pRouteDetailCacheKey(rawInfo = rawInfo, lang = lang)
     }
+}
+
+data class P2pRouteRecoveryContext(
+    val originLatitude: Double,
+    val originLongitude: Double,
+    val destinationLatitude: Double,
+    val destinationLongitude: Double,
+    val searchMode: String
+) {
+    fun walkingContextKey(): String {
+        return listOf(
+            originLatitude.toP2pCoordinateKey(),
+            originLongitude.toP2pCoordinateKey(),
+            destinationLatitude.toP2pCoordinateKey(),
+            destinationLongitude.toP2pCoordinateKey()
+        ).joinToString(":")
+    }
+
+    private fun Double.toP2pCoordinateKey(): String = String.format(Locale.US, "%.6f", this)
 }
 
 data class P2pRouteDetailCacheKey(
@@ -137,6 +160,14 @@ data class P2pRoutePlan(
 
     val previewAlightingLeg: P2pRouteLeg?
         get() = legs.lastOrNull()
+
+    fun fingerprint(): String {
+        val routeChain = legs.joinToString(">") { it.route }
+        val segmentIdentity = legs.joinToString(">") { leg ->
+            "${leg.routeVariant}:${leg.boardingSeq}:${leg.alightingSeq}"
+        }
+        return "$routeChain|$segmentIdentity"
+    }
 }
 
 data class P2pRouteLeg(
@@ -226,7 +257,8 @@ data class RouteDetail(
     val plannedDepartureTime: String? = null,
     val plannedArrivalTime: String? = null,
     val originName: String? = null,
-    val destinationName: String? = null
+    val destinationName: String? = null,
+    val completeness: RouteDetailCompleteness = RouteDetailCompleteness.PARTIAL
 ) {
     val originWalkingDistanceMeters: Int?
         get() = originWalking?.distanceMeters
@@ -285,8 +317,15 @@ data class ParsedRouteDetail(
     val plannedDepartureTime: String? = null,
     val plannedArrivalTime: String? = null,
     val originName: String? = null,
-    val destinationName: String? = null
+    val destinationName: String? = null,
+    val completeness: RouteDetailCompleteness = RouteDetailCompleteness.PARTIAL
 )
+
+enum class RouteDetailCompleteness {
+    COMPLETE,
+    PARTIAL,
+    SESSION_MISSING
+}
 
 data class RouteDetailLeg(
     val route: String,
