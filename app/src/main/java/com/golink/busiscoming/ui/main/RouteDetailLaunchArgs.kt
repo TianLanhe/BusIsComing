@@ -8,6 +8,7 @@ import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
 
@@ -61,6 +62,15 @@ data class RouteDetailLaunchArgs(
             put("detail.plan.lang", query.plan.lang)
             put("detail.plan.legCount", query.plan.legs.size.toString())
             query.plan.legs.forEachIndexed { index, leg -> putLeg("detail.plan.leg.$index", leg) }
+            query.sessionRef?.let { put("detail.sessionRef", it) }
+            query.recoveryContext?.let { context ->
+                put("detail.recovery.present", "true")
+                put("detail.recovery.originLatitude", context.originLatitude.toString())
+                put("detail.recovery.originLongitude", context.originLongitude.toString())
+                put("detail.recovery.destinationLatitude", context.destinationLatitude.toString())
+                put("detail.recovery.destinationLongitude", context.destinationLongitude.toString())
+                put("detail.recovery.searchMode", context.searchMode)
+            }
         }
         firstLegEtaQuery?.let { query ->
             put("etaQuery.present", "true")
@@ -149,7 +159,9 @@ data class RouteDetailLaunchArgs(
                     values["detail.generalInfo"].orEmpty(),
                     values["detail.listId"].orEmpty(),
                     values["detail.lang"].orEmpty(),
-                    P2pRoutePlan(values["detail.plan.rawInfo"].orEmpty(), values["detail.plan.lang"].orEmpty(), legs)
+                    P2pRoutePlan(values["detail.plan.rawInfo"].orEmpty(), values["detail.plan.lang"].orEmpty(), legs),
+                    sessionRef = values["detail.sessionRef"],
+                    recoveryContext = values.readRecoveryContext()
                 )
             } else null
             val etaQuery = if (values["etaQuery.present"] == "true") {
@@ -186,6 +198,27 @@ data class RouteDetailLaunchArgs(
             if (!latitude.isFinite() || !longitude.isFinite()) return null
             if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return null
             return RouteDetailQueryEndpoint(get("$prefix.name").orEmpty(), latitude, longitude)
+        }
+
+        private fun Map<String, String>.readRecoveryContext(): P2pRouteRecoveryContext? {
+            if (get("detail.recovery.present") != "true") return null
+            val originLatitude = get("detail.recovery.originLatitude")?.toDoubleOrNull() ?: return null
+            val originLongitude = get("detail.recovery.originLongitude")?.toDoubleOrNull() ?: return null
+            val destinationLatitude = get("detail.recovery.destinationLatitude")?.toDoubleOrNull() ?: return null
+            val destinationLongitude = get("detail.recovery.destinationLongitude")?.toDoubleOrNull() ?: return null
+            val mode = get("detail.recovery.searchMode")?.takeIf { it in setOf("T", "F", "W") } ?: return null
+            if (originLatitude !in -90.0..90.0 || destinationLatitude !in -90.0..90.0 ||
+                originLongitude !in -180.0..180.0 || destinationLongitude !in -180.0..180.0
+            ) {
+                return null
+            }
+            return P2pRouteRecoveryContext(
+                originLatitude,
+                originLongitude,
+                destinationLatitude,
+                destinationLongitude,
+                mode
+            )
         }
 
         private fun Map<String, String>.readLeg(prefix: String): P2pRouteLeg? {

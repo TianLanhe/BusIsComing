@@ -64,6 +64,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private val expandedLegIndexes = linkedSetOf<Int>()
     private val geometries = linkedMapOf<RouteGeometryKey, RouteGeometrySegment>()
     private val failedGeometryKeys = linkedSetOf<RouteGeometryKey>()
+    private lateinit var geometryCoordinator: RouteGeometryLoadCoordinator
 
     private lateinit var args: RouteDetailLaunchArgs
     private lateinit var adapter: RouteDetailAdapter
@@ -77,7 +78,6 @@ class RouteDetailActivity : AppCompatActivity() {
     private lateinit var floatingBack: MaterialButton
     private lateinit var mapView: MapView
     private lateinit var mapControls: View
-    private lateinit var mapLegend: View
     private lateinit var mapError: TextView
     private lateinit var sheetMapError: TextView
 
@@ -93,7 +93,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private var detailGeneration = 0
     private var geometryGeneration = 0
     private var etaGeneration = 0
-    private var geometryHandle: RouteGeometryLoadHandle? = null
+    private val geometryHandles = mutableListOf<RouteGeometryLoadHandle>()
     private var geometryPendingCount = 0
     private var foreground = false
     private var destroyed = false
@@ -156,6 +156,11 @@ class RouteDetailActivity : AppCompatActivity() {
             return
         }
         args = decoded
+        geometryCoordinator = RouteGeometryLoadCoordinator(
+            args.routeDetailQuery?.plan?.legs.orEmpty().map { leg ->
+                RouteGeometryKey(leg.routeVariant, leg.boardingSeq, leg.alightingSeq)
+            }.filter { it.isValid }
+        )
         waitTimeState = args.waitTimeState
         restorePageState(savedInstanceState)
         setContentView(R.layout.activity_route_detail)
@@ -172,7 +177,7 @@ class RouteDetailActivity : AppCompatActivity() {
             showLaunchSummary(loading = false, failed = true)
         } else {
             loadDetail()
-            loadGeometry(validateAgainstDetail = false)
+            loadGeometry()
         }
     }
 
@@ -186,6 +191,7 @@ class RouteDetailActivity : AppCompatActivity() {
         mainHandler.removeCallbacks(etaTick)
         mainHandler.postDelayed(etaTick, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
         scheduleMapLoadTimeout()
+        syncGeometryFailureState()
     }
 
     override fun onResume() {
@@ -244,7 +250,8 @@ class RouteDetailActivity : AppCompatActivity() {
         detailGeneration += 1
         geometryGeneration += 1
         etaGeneration += 1
-        geometryHandle?.close()
+        geometryHandles.forEach(RouteGeometryLoadHandle::close)
+        geometryHandles.clear()
         renderer?.clear()
         executor.shutdownNow()
         mainHandler.removeCallbacksAndMessages(null)
@@ -260,7 +267,6 @@ class RouteDetailActivity : AppCompatActivity() {
         floatingBack = findViewById(R.id.routeDetailFloatingBack)
         mapView = findViewById(R.id.routeDetailMap)
         mapControls = findViewById(R.id.routeDetailMapControls)
-        mapLegend = findViewById(R.id.routeDetailMapLegend)
         mapError = findViewById(R.id.routeDetailMapError)
         sheetMapError = findViewById(R.id.routeDetailSheetMapError)
 
@@ -272,8 +278,6 @@ class RouteDetailActivity : AppCompatActivity() {
             renderer?.fitOverview(animated = true, paddingPx = dimension(R.dimen.route_map_camera_padding))
         }
         findViewById<MaterialButton>(R.id.routeDetailLocation).setOnClickListener { onLocationClicked() }
-        mapLegend.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMapControlPlacement() }
-        mapControls.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMapControlPlacement() }
     }
 
     private fun setupTimeline() {
@@ -345,8 +349,6 @@ class RouteDetailActivity : AppCompatActivity() {
             navigationBarInset = navigation.bottom
             updateTopMargin(floatingBack, dimension(R.dimen.route_map_edge_margin) + statusBarInset)
             updateTopMargin(mapControls, dimension(R.dimen.route_map_controls_top_margin) + statusBarInset)
-            updateTopMargin(mapLegend, dimension(R.dimen.route_map_legend_top_margin) + statusBarInset)
-            mapLegend.post(::updateMapControlPlacement)
             updateMapPadding()
             insets
         }
@@ -374,7 +376,6 @@ class RouteDetailActivity : AppCompatActivity() {
                 }
                 map.setOnCameraIdleListener { saveCamera(map) }
                 restoreCamera(map)
-                mapLegend.visibility = View.VISIBLE
                 renderMap()
                 updateMyLocationLayer()
                 updateMapPadding()
@@ -387,7 +388,6 @@ class RouteDetailActivity : AppCompatActivity() {
         mapUnavailable = true
         mapError.visibility = View.VISIBLE
         sheetMapError.visibility = View.VISIBLE
-        mapLegend.visibility = View.GONE
         findViewById<View>(R.id.routeDetailMapControls).visibility = View.GONE
         sheet.post { applyDetent(RouteDetailSheetDetent.FULL) }
     }
@@ -396,7 +396,6 @@ class RouteDetailActivity : AppCompatActivity() {
         mapUnavailable = false
         mapError.visibility = View.GONE
         sheetMapError.visibility = View.GONE
-        mapLegend.visibility = View.VISIBLE
         findViewById<View>(R.id.routeDetailMapControls).visibility = View.VISIBLE
         updateMapPadding()
     }
@@ -423,7 +422,7 @@ class RouteDetailActivity : AppCompatActivity() {
                     detailFailed = false
                     detail = it
                     renderDetail()
-                    loadGeometry(validateAgainstDetail = true)
+                    validateLoadedGeometryAgainstDetail()
                 }.onFailure {
                     detailLoading = false
                     detailFailed = true
@@ -441,44 +440,104 @@ class RouteDetailActivity : AppCompatActivity() {
         loadDetail()
     }
 
-    private fun loadGeometry(validateAgainstDetail: Boolean, onlyKeys: Set<RouteGeometryKey>? = null) {
+    private fun loadGeometry(onlyKeys: Set<RouteGeometryKey>? = null, manualRetry: Boolean = false) {
         val query = args.routeDetailQuery ?: return
+        if (manualRetry && onlyKeys != null) geometryCoordinator.beginManualRetry(onlyKeys)
         val requests = query.plan.legs.mapIndexedNotNull { index, leg ->
             val key = RouteGeometryKey(leg.routeVariant, leg.boardingSeq, leg.alightingSeq)
             if (!key.isValid || (onlyKeys != null && key !in onlyKeys)) return@mapIndexedNotNull null
-            val detailLeg = detail?.legs?.getOrNull(index)
-            RouteGeometryRequest(
-                key = key,
-                boardingCoordinate = detailLeg?.boardingStop?.takeIf { validateAgainstDetail }?.let {
-                    RouteGeometryCoordinate(it.latitude, it.longitude)
-                },
-                alightingCoordinate = detailLeg?.alightingStop?.takeIf { validateAgainstDetail }?.let {
-                    RouteGeometryCoordinate(it.latitude, it.longitude)
-                }
-            )
+            geometryRequest(key, index)
         }
-        geometryHandle?.close()
-        val requestGeneration = ++geometryGeneration
+        val requestGeneration = if (onlyKeys == null) ++geometryGeneration else geometryGeneration
         val languageVersion = AppLanguageRuntime.snapshot().version
-        geometryPendingCount = requests.size
-        if (onlyKeys == null) failedGeometryKeys.clear() else failedGeometryKeys.removeAll(onlyKeys)
-        geometryHandle = geometryRepository.loadGeometries(requests) { request, result ->
+        geometryPendingCount = geometryCoordinator.loadingCount()
+        if (manualRetry && onlyKeys != null) failedGeometryKeys.removeAll(onlyKeys)
+        val handle = geometryRepository.loadGeometries(requests) { request, result ->
             mainHandler.post {
                 if (!isCurrentGeometry(requestGeneration, languageVersion)) return@post
-                geometryPendingCount = (geometryPendingCount - 1).coerceAtLeast(0)
-                result.onSuccess { segment ->
-                    geometries[request.key] = segment
-                    failedGeometryKeys.remove(request.key)
-                }.onFailure {
-                    geometries.remove(request.key)
-                    failedGeometryKeys += request.key
+                val validatedResult = result.mapCatching { segment ->
+                    val validationRequest = geometryRequestForKey(request.key)
+                    geometryRepository.validateGeometry(validationRequest, segment).getOrThrow()
                 }
-                renderMap()
-                if (geometryPendingCount == 0 && failedGeometryKeys.isNotEmpty()) {
-                    showMessage(R.string.route_map_geometry_partial, R.string.action_retry) {
-                        loadGeometry(validateAgainstDetail = detail != null, onlyKeys = failedGeometryKeys.toSet())
+                validatedResult.onSuccess { segment ->
+                    geometries[request.key] = segment
+                    geometryCoordinator.onCandidate(request.key, endpointsAvailable = detail != null)
+                }.onFailure { throwable ->
+                    geometries.remove(request.key)
+                    if (
+                        geometryCoordinator.onFailure(
+                            request.key,
+                            throwable,
+                            allowAutoRetry = foreground
+                        ) == RouteGeometryRetryDecision.AUTO_RETRY
+                    ) {
+                        mainHandler.postDelayed(
+                            {
+                                if (!isCurrentGeometry(requestGeneration, languageVersion)) return@postDelayed
+                                if (foreground) {
+                                    loadGeometry(setOf(request.key))
+                                } else {
+                                    geometryCoordinator.onFailure(
+                                        request.key,
+                                        throwable,
+                                        allowAutoRetry = false
+                                    )
+                                    syncGeometryFailureState()
+                                }
+                            },
+                            GEOMETRY_RETRY_BACKOFF_MILLIS
+                        )
                     }
                 }
+                syncGeometryFailureState()
+                renderMap()
+            }
+        }
+        geometryHandles += handle
+    }
+
+    private fun geometryRequest(key: RouteGeometryKey, legIndex: Int): RouteGeometryRequest {
+        val detailLeg = detail?.legs?.getOrNull(legIndex)
+        return RouteGeometryRequest(
+            key = key,
+            boardingCoordinate = detailLeg?.boardingStop?.let {
+                RouteGeometryCoordinate(it.latitude, it.longitude)
+            },
+            alightingCoordinate = detailLeg?.alightingStop?.let {
+                RouteGeometryCoordinate(it.latitude, it.longitude)
+            }
+        )
+    }
+
+    private fun geometryRequestForKey(key: RouteGeometryKey): RouteGeometryRequest {
+        val legIndex = args.routeDetailQuery?.plan?.legs.orEmpty().indexOfFirst { leg ->
+            leg.routeVariant == key.routeVariant &&
+                leg.boardingSeq == key.boardingSeq &&
+                leg.alightingSeq == key.alightingSeq
+        }
+        return geometryRequest(key, legIndex)
+    }
+
+    private fun validateLoadedGeometryAgainstDetail() {
+        geometries.toMap().forEach { (key, segment) ->
+            geometryRepository.validateGeometry(geometryRequestForKey(key), segment)
+                .onSuccess { geometryCoordinator.onValidated(key) }
+                .onFailure { throwable ->
+                    geometries.remove(key)
+                    geometryCoordinator.onFailure(key, throwable)
+                }
+        }
+        syncGeometryFailureState()
+        renderMap()
+    }
+
+    private fun syncGeometryFailureState() {
+        failedGeometryKeys.clear()
+        failedGeometryKeys += geometryCoordinator.failedKeys()
+        geometryPendingCount = geometryCoordinator.loadingCount()
+        if (foreground && geometryPendingCount == 0 && failedGeometryKeys.isNotEmpty()) {
+            showMessage(R.string.route_map_geometry_partial, R.string.action_retry) {
+                loadGeometry(onlyKeys = failedGeometryKeys.toSet(), manualRetry = true)
             }
         }
     }
@@ -640,31 +699,6 @@ class RouteDetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateMapControlPlacement() {
-        if (!::mapControls.isInitialized || !::mapLegend.isInitialized || mapControls.width <= 0) return
-        val defaultTop = dimension(R.dimen.route_map_controls_top_margin) + statusBarInset
-        val defaultBounds = android.graphics.Rect(
-            mapControls.left,
-            defaultTop,
-            mapControls.left + mapControls.width,
-            defaultTop + mapControls.height
-        )
-        val legendBounds = android.graphics.Rect(
-            mapLegend.left,
-            mapLegend.top,
-            mapLegend.right,
-            mapLegend.bottom
-        )
-        val targetTop = if (
-            mapLegend.visibility == View.VISIBLE && android.graphics.Rect.intersects(defaultBounds, legendBounds)
-        ) {
-            mapLegend.bottom + dimension(R.dimen.route_map_edge_margin)
-        } else {
-            defaultTop
-        }
-        updateTopMargin(mapControls, targetTop)
-    }
-
     private fun onLocationClicked() {
         if (!LocationPermissionUtils.hasForegroundLocationPermission(this)) {
             repeatedPermissionRequest = locationPermissionRequestedBefore
@@ -687,9 +721,13 @@ class RouteDetailActivity : AppCompatActivity() {
         locationCoordinator.getCurrentLocation { result ->
             if (!foreground || destroyed) return@getCurrentLocation
             when (result) {
-                is CurrentLocationResult.Success -> renderer?.focusCoordinate(
-                    RouteMapCoordinate(result.snapshot.latitude, result.snapshot.longitude)
-                )
+                is CurrentLocationResult.Success -> {
+                    val coordinate = RouteMapCoordinate(result.snapshot.latitude, result.snapshot.longitude)
+                    cameraLatitude = coordinate.latitude
+                    cameraLongitude = coordinate.longitude
+                    cameraZoom = LOCATION_FOCUS_ZOOM
+                    renderer?.focusCoordinate(coordinate, LOCATION_FOCUS_ZOOM)
+                }
                 CurrentLocationResult.NoPermission -> showMessage(R.string.route_map_location_permission_denied)
                 CurrentLocationResult.Timeout,
                 CurrentLocationResult.Unavailable -> showMessage(R.string.route_map_location_unavailable)
@@ -810,6 +848,8 @@ class RouteDetailActivity : AppCompatActivity() {
         const val STATE_CAMERA_ZOOM = "route_detail.camera_zoom"
         const val STATE_MAP = "route_detail.map"
         const val MAP_LOAD_TIMEOUT_MILLIS = 15_000L
+        const val GEOMETRY_RETRY_BACKOFF_MILLIS = 250L
+        const val LOCATION_FOCUS_ZOOM = 16f
     }
 }
 

@@ -240,8 +240,6 @@
     <string name="route_map_content_description">路線地圖；所有站點及轉乘亦可在下方路線詳情閱讀</string>
     <string name="route_map_current_location">顯示目前位置</string>
     <string name="route_map_overview">全覽路線</string>
-    <string name="route_map_legend_bus">巴士路線</string>
-    <string name="route_map_legend_walk">步行連接（示意）</string>
     <string name="route_map_unavailable">地圖暫不可用，已顯示完整文字詳情</string>
     <string name="route_map_location_permission_denied">未取得位置權限，仍可查看完整路線</string>
     <string name="route_map_location_permission_settings">請在系統設定允許位置權限</string>

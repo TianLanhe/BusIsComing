@@ -59,6 +59,29 @@ class RouteDetailUiFormatterTest {
     }
 
     @Test
+    fun partialWalkingKeepsKnownSegmentsAndUsesCardAggregateWithoutTreatingUnknownAsZero() {
+        val value = detail().copy(
+            walkingDistanceMeters = 378,
+            transfers = listOf(
+                RouteDetailTransfer(
+                    RouteDetailTransferType.WALK_TO_TRANSFER_STOP,
+                    RouteDetailWalkingSegment(RouteDetailWalkingKind.TRANSFER, null)
+                )
+            )
+        )
+
+        val items = RouteDetailUiFormatter.items(value, emptySet(), WaitTimeState.Loading)
+        val summary = items.filterIsInstance<RouteDetailUiItem.Summary>().single()
+        val walking = items.filterIsInstance<RouteDetailUiItem.Walking>()
+
+        assertEquals(378, summary.walkingDistanceMeters)
+        assertFalse(summary.isWalkingDistanceComplete)
+        assertEquals(243, walking.single { it.kind == RouteDetailWalkingKind.ORIGIN }.distanceMeters)
+        assertNull(walking.single { it.kind == RouteDetailWalkingKind.TRANSFER }.distanceMeters)
+        assertEquals(135, walking.single { it.kind == RouteDetailWalkingKind.DESTINATION }.distanceMeters)
+    }
+
+    @Test
     fun everyWaitStateStaysOnTheFirstLegOnly() {
         val states = buildList<WaitTimeState> {
             add(WaitTimeState.Loading)

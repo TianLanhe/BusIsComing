@@ -6,10 +6,12 @@ import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -39,6 +41,14 @@ class RouteDetailLaunchArgsTest {
                         P2pRouteLeg("CTB", "N8P-ISR-1", "N8P", 6, 15, "O", "outbound"),
                         P2pRouteLeg("CTB", "N969-ISR-1", "N969", 10, 17, "O", "outbound")
                     )
+                ),
+                sessionRef = "opaque-session-reference",
+                recoveryContext = P2pRouteRecoveryContext(
+                    originLatitude = 22.29361,
+                    originLongitude = 114.20056,
+                    destinationLatitude = 22.28190,
+                    destinationLongitude = 114.15815,
+                    searchMode = "F"
                 )
             )
         )
@@ -58,6 +68,10 @@ class RouteDetailLaunchArgsTest {
         assertEquals(22.29361, restored.queryOrigin?.latitude ?: 0.0, 0.0)
         assertEquals("中環", restored.queryDestination?.name)
         assertEquals(114.15815, restored.queryDestination?.longitude ?: 0.0, 0.0)
+        assertEquals("opaque-session-reference", restored.routeDetailQuery?.sessionRef)
+        assertEquals("F", restored.routeDetailQuery?.recoveryContext?.searchMode)
+        assertEquals(22.29361, restored.routeDetailQuery?.recoveryContext?.originLatitude ?: 0.0, 0.0)
+        assertFalse(original.toPrimitiveValues().values.any { it.contains("PHPSESSID") })
     }
 
     @Test

@@ -69,8 +69,6 @@
     <string name="route_map_content_description">Route map; every stop and transfer is also available in the route details below</string>
     <string name="route_map_current_location">Show current location</string>
     <string name="route_map_overview">Show full route</string>
-    <string name="route_map_legend_bus">Bus route</string>
-    <string name="route_map_legend_walk">Walking connection (schematic)</string>
     <string name="route_map_unavailable">Map unavailable. Full text details are shown.</string>
     <string name="route_map_location_permission_denied">Location permission not granted. You can still view the full route.</string>
     <string name="route_map_location_permission_settings">Allow location access in system settings</string>

@@ -5,8 +5,11 @@ import com.golink.busiscoming.data.repository.CitybusRouteGeometryParser
 import com.golink.busiscoming.data.repository.CitybusRouteGeometryRepository
 import com.golink.busiscoming.data.repository.RouteGeometryCache
 import com.golink.busiscoming.data.repository.RouteGeometryRequest
+import com.golink.busiscoming.data.repository.RouteGeometryFailurePolicy
+import com.golink.busiscoming.data.repository.RouteGeometryFailureKind
 import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometryCoordinate
+import com.golink.busiscoming.data.model.RouteGeometrySegment
 import java.net.URL
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -176,6 +179,111 @@ class CitybusRouteGeometryRepositoryTest {
             release.countDown()
             executor.shutdownNow()
         }
+    }
+
+    @Test
+    fun sharedCandidateDoesNotCaptureFirstConsumersEndpoints() {
+        val fetchCount = AtomicInteger(0)
+        val fetchStarted = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val repository = CitybusRouteGeometryRepository(
+            geometryFetcher = { _, _ ->
+                fetchCount.incrementAndGet()
+                fetchStarted.countDown()
+                check(release.await(2, TimeUnit.SECONDS))
+                "first,22.3000,114.1000\nsecond,22.3100,114.1100"
+            }
+        )
+        val key = RouteGeometryKey("SHARED", 1, 2)
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            val mismatched = executor.submit<Result<RouteGeometrySegment>> {
+                runCatching {
+                    repository.loadGeometry(
+                        key,
+                        RouteGeometryCoordinate(24.0, 116.0),
+                        RouteGeometryCoordinate(22.3100, 114.1100)
+                    )
+                }
+            }
+            assertTrue(fetchStarted.await(2, TimeUnit.SECONDS))
+            val matching = executor.submit<RouteGeometrySegment> {
+                repository.loadGeometry(
+                    key,
+                    RouteGeometryCoordinate(22.3000, 114.1000),
+                    RouteGeometryCoordinate(22.3100, 114.1100)
+                )
+            }
+
+            release.countDown()
+
+            assertTrue(mismatched.get(2, TimeUnit.SECONDS).isFailure)
+            assertEquals(2, matching.get(2, TimeUnit.SECONDS).points.size)
+            assertEquals(1, fetchCount.get())
+        } finally {
+            release.countDown()
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun cancellingOneConsumerDoesNotInterruptAnotherConsumerSharingTheFetch() {
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val callbacks = AtomicInteger(0)
+        val fetchCount = AtomicInteger(0)
+        val repository = CitybusRouteGeometryRepository(
+            geometryFetcher = { _, _ ->
+                fetchCount.incrementAndGet()
+                started.countDown()
+                check(release.await(2, TimeUnit.SECONDS))
+                "first,22.3000,114.1000\nsecond,22.3100,114.1100"
+            }
+        )
+        val request = RouteGeometryRequest(RouteGeometryKey("SHARED-CANCEL", 1, 2))
+
+        val cancelled = repository.loadGeometries(listOf(request)) { _, _ -> callbacks.addAndGet(100) }
+        assertTrue(started.await(2, TimeUnit.SECONDS))
+        repository.loadGeometries(listOf(request)) { _, result ->
+            if (result.isSuccess) callbacks.incrementAndGet()
+        }
+        cancelled.close()
+        release.countDown()
+
+        repeat(20) {
+            if (callbacks.get() == 1) return@repeat
+            Thread.sleep(25)
+        }
+        assertEquals(1, callbacks.get())
+        assertEquals(1, fetchCount.get())
+    }
+
+    @Test
+    fun automaticRetryPolicyOnlyAcceptsRecoverableFailures() {
+        assertTrue(RouteGeometryFailurePolicy.shouldAutoRetry(java.io.IOException("timeout")))
+        assertTrue(
+            RouteGeometryFailurePolicy.shouldAutoRetry(
+                CitybusRouteGeometryParseException("empty", RouteGeometryFailureKind.EMPTY_RESPONSE)
+            )
+        )
+        assertTrue(
+            RouteGeometryFailurePolicy.shouldAutoRetry(
+                CitybusRouteGeometryParseException("short", RouteGeometryFailureKind.INSUFFICIENT_POINTS)
+            )
+        )
+        assertEquals(
+            false,
+            RouteGeometryFailurePolicy.shouldAutoRetry(
+                CitybusRouteGeometryParseException("malformed", RouteGeometryFailureKind.MALFORMED_COORDINATES)
+            )
+        )
+        assertEquals(
+            false,
+            RouteGeometryFailurePolicy.shouldAutoRetry(
+                CitybusRouteGeometryParseException("endpoint", RouteGeometryFailureKind.ENDPOINT_MISMATCH)
+            )
+        )
+        assertEquals(false, RouteGeometryFailurePolicy.shouldAutoRetry(IllegalArgumentException("key")))
     }
 
     @Test

@@ -102,6 +102,7 @@ class RouteDetailLocationPermissionInstrumentedTest {
         assumeDeviceValidationEnabled()
         assertTrue("Test must start with location permission", hasForegroundLocationPermission())
         executeShell("settings put secure location_mode 0")
+        executeShell("am force-stop com.google.android.gms")
 
         ActivityScenario.launch<RouteDetailActivity>(intent()).use { scenario ->
             onView(withId(R.id.routeDetailLocation)).perform(click())

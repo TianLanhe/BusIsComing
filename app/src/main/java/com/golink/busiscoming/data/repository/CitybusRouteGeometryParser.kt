@@ -2,13 +2,47 @@ package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.RouteGeometryPoint
 
-class CitybusRouteGeometryParseException(message: String) : IllegalArgumentException(message)
+enum class RouteGeometryFailureKind {
+    EMPTY_RESPONSE,
+    INSUFFICIENT_POINTS,
+    MALFORMED_COORDINATES,
+    ENDPOINT_MISMATCH
+}
+
+class CitybusRouteGeometryParseException(
+    message: String,
+    val failureKind: RouteGeometryFailureKind = RouteGeometryFailureKind.MALFORMED_COORDINATES
+) : IllegalArgumentException(message)
+
+object RouteGeometryFailurePolicy {
+    fun shouldAutoRetry(throwable: Throwable): Boolean {
+        return when (throwable) {
+            is java.io.IOException -> true
+            is CitybusRouteGeometryParseException -> throwable.failureKind == RouteGeometryFailureKind.EMPTY_RESPONSE ||
+                throwable.failureKind == RouteGeometryFailureKind.INSUFFICIENT_POINTS
+            else -> false
+        }
+    }
+}
 
 object CitybusRouteGeometryParser {
     fun parse(response: String): List<RouteGeometryPoint> {
-        val points = response.lineSequence().mapNotNull(::parseLine).toList()
+        val nonBlankLines = response.lineSequence().map(String::trim).filter(String::isNotBlank).toList()
+        if (nonBlankLines.isEmpty()) {
+            throw CitybusRouteGeometryParseException(
+                "Route geometry response is empty",
+                RouteGeometryFailureKind.EMPTY_RESPONSE
+            )
+        }
+        val parsedRows = nonBlankLines.map(::parseLine)
+        val points = parsedRows.mapNotNull { it }
         if (points.size < 2) {
-            throw CitybusRouteGeometryParseException("Route geometry needs at least two valid points")
+            val kind = if (parsedRows.any { it == null }) {
+                RouteGeometryFailureKind.MALFORMED_COORDINATES
+            } else {
+                RouteGeometryFailureKind.INSUFFICIENT_POINTS
+            }
+            throw CitybusRouteGeometryParseException("Route geometry needs at least two valid points", kind)
         }
         return points
     }

@@ -2,6 +2,8 @@ package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
+import com.golink.busiscoming.data.model.RouteDetailCompleteness
 import com.golink.busiscoming.data.model.RouteDetailDisplayFormatter
 import com.golink.busiscoming.data.model.RouteDetailExpansionState
 import com.golink.busiscoming.data.model.RouteDetailStopRole
@@ -10,6 +12,9 @@ import com.golink.busiscoming.data.repository.CitybusRouteDetailParseException
 import com.golink.busiscoming.data.repository.CitybusRouteDetailParser
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.CitybusRouteParser
+import com.golink.busiscoming.data.repository.CitybusSessionRegistry
+import com.golink.busiscoming.data.repository.RouteStructureCache
+import com.golink.busiscoming.data.repository.WalkingDistanceCache
 import com.golink.busiscoming.data.repository.RouteDetailCache
 import java.io.IOException
 import java.net.URL
@@ -37,6 +42,212 @@ class CitybusRouteDetailRepositoryTest {
     @Test
     fun usesNoExplicitCitybusRequestHeaders() {
         assertTrue(CitybusRouteDetailRepository().requestHeaders().isEmpty())
+    }
+
+    @Test
+    fun sendsOnlyMatchingPhpSessionCookieToCitybusDetailEndpoint() {
+        val context = recoveryContext("T")
+        val registry = CitybusSessionRegistry(referenceFactory = { "opaque" })
+        val reference = registry.register("matching-session", "0", context)
+        var capturedHeaders = emptyMap<String, String>()
+        val repository = CitybusRouteDetailRepository(
+            sessionRegistry = registry,
+            detailFetcher = { _, headers ->
+                capturedHeaders = headers
+                resourceText("citybus/getp2pstopinroute-n118.html")
+            }
+        )
+
+        repository.loadRouteDetail(
+            route(
+                query("1|*|CTB||N118-TOS-1||5||9||O|*|").copy(
+                    sessionRef = reference,
+                    recoveryContext = context
+                ),
+                routeName = "N118"
+            )
+        )
+
+        assertEquals(mapOf("Cookie" to "PHPSESSID=matching-session"), capturedHeaders)
+        assertFalse(capturedHeaders.containsKey("User-Agent"))
+        assertFalse(capturedHeaders.containsKey("Referer"))
+    }
+
+    @Test
+    fun classifiesSessionMissingAndSupportsSimplifiedChineseAndEnglishFallbacks() {
+        val plan = query(SINGLE_ROUTE_RAW_INFO).plan
+
+        val missing = CitybusRouteDetailParser.parseDetail(
+            resourceText("citybus/getp2pstopinroute-session-missing.html"),
+            plan
+        )
+        val simplified = CitybusRouteDetailParser.parseDetail(
+            resourceText("citybus/getp2pstopinroute-sc-fallback.html"),
+            plan
+        )
+        val english = CitybusRouteDetailParser.parseDetail(
+            resourceText("citybus/getp2pstopinroute-en-fallback.html"),
+            plan
+        )
+
+        assertEquals(RouteDetailCompleteness.SESSION_MISSING, missing.completeness)
+        assertEquals(RouteDetailCompleteness.COMPLETE, simplified.completeness)
+        assertEquals(123, simplified.originWalking?.distanceMeters)
+        assertEquals(45, simplified.destinationWalking?.distanceMeters)
+        assertEquals(RouteDetailCompleteness.COMPLETE, english.completeness)
+        assertEquals(88, english.originWalking?.distanceMeters)
+        assertEquals(34, english.destinationWalking?.distanceMeters)
+    }
+
+    @Test
+    fun recoversExpiredSessionOnceAndMatchesCandidateByPlanFingerprint() {
+        val context = recoveryContext("F")
+        val registry = CitybusSessionRegistry(referenceFactory = { raw -> "ref-${raw.takeLast(3)}" })
+        val freshReference = registry.register("fresh-session", "0", context)
+        val originalQuery = query("1|*|CTB||N118-TOS-1||5||9||O|*|", listId = "old").copy(
+            sessionRef = "expired-reference",
+            recoveryContext = context
+        )
+        var recoveryCount = 0
+        var capturedUrl: URL? = null
+        var capturedHeaders = emptyMap<String, String>()
+        val repository = CitybusRouteDetailRepository(
+            sessionRegistry = registry,
+            recoverySearcher = { _, _ ->
+                recoveryCount += 1
+                listOf(
+                    route(query("1|*|CTB||OTHER-1||1||2||O|*|")),
+                    route(
+                        originalQuery.copy(
+                            listId = "fresh-lid",
+                            sessionRef = freshReference
+                        ),
+                        routeName = "N118"
+                    )
+                )
+            },
+            detailFetcher = { url, headers ->
+                capturedUrl = url
+                capturedHeaders = headers
+                resourceText("citybus/getp2pstopinroute-n118.html")
+            }
+        )
+
+        val detail = repository.loadRouteDetail(route(originalQuery, routeName = "N118"))
+
+        assertEquals(1, recoveryCount)
+        assertTrue(capturedUrl.toString().contains("lid=fresh-lid"))
+        assertEquals("PHPSESSID=fresh-session", capturedHeaders["Cookie"])
+        assertEquals(262, detail.completeWalkingDistanceMeters)
+    }
+
+    @Test
+    fun retriesSessionMissingPayloadOnlyOnceThenDegradesHonestly() {
+        val context = recoveryContext("T")
+        val registry = CitybusSessionRegistry(referenceFactory = { raw -> "ref-${raw.takeLast(3)}" })
+        val oldReference = registry.register("old-session", "0", context)
+        val freshReference = registry.register("fresh-session", "0", context)
+        val originalQuery = query(SINGLE_ROUTE_RAW_INFO, listId = "old").copy(
+            sessionRef = oldReference,
+            recoveryContext = context
+        )
+        var recoveryCount = 0
+        var fetchCount = 0
+        val repository = CitybusRouteDetailRepository(
+            sessionRegistry = registry,
+            recoverySearcher = { _, _ ->
+                recoveryCount += 1
+                listOf(
+                    route(
+                        originalQuery.copy(
+                            generalInfo = "23:59|*|30",
+                            listId = "fresh",
+                            sessionRef = freshReference
+                        )
+                    )
+                )
+            },
+            detailFetcher = { _, _ ->
+                fetchCount += 1
+                resourceText("citybus/getp2pstopinroute-session-missing.html")
+            }
+        )
+
+        val detail = repository.loadRouteDetail(route(originalQuery))
+
+        assertEquals(1, recoveryCount)
+        assertEquals(2, fetchCount)
+        assertEquals(RouteDetailCompleteness.PARTIAL, detail.completeness)
+        assertFalse(detail.hasCompleteWalkingDistance)
+        assertEquals("12:00", detail.plannedArrivalTime)
+    }
+
+    @Test
+    fun noMatchingRecoveryCandidateStopsAfterOneSearchAndKeepsOriginalRouteContext() {
+        val context = recoveryContext("W")
+        val originalQuery = query(SINGLE_ROUTE_RAW_INFO, generalInfo = "12:34|*|30").copy(
+            sessionRef = "expired-reference",
+            recoveryContext = context
+        )
+        var recoveryCount = 0
+        var fetchCount = 0
+        val repository = CitybusRouteDetailRepository(
+            sessionRegistry = CitybusSessionRegistry(),
+            recoverySearcher = { _, _ ->
+                recoveryCount += 1
+                listOf(route(query("1|*|CTB||OTHER-1||1||2||O|*|")))
+            },
+            detailFetcher = { _, headers ->
+                fetchCount += 1
+                assertTrue(headers.isEmpty())
+                resourceText("citybus/getp2pstopinroute-session-missing.html")
+            }
+        )
+
+        val detail = repository.loadRouteDetail(route(originalQuery))
+
+        assertEquals(1, recoveryCount)
+        assertEquals(1, fetchCount)
+        assertEquals(RouteDetailCompleteness.PARTIAL, detail.completeness)
+        assertEquals("12:34", detail.plannedArrivalTime)
+        assertEquals(listOf("8X"), detail.legs.map { it.route })
+    }
+
+    @Test
+    fun splitCachesReuseStableStructureAndWalkingAcrossSessionsButNotEndpointsOrPlannedTimes() {
+        val structureCache = RouteStructureCache()
+        val walkingCache = WalkingDistanceCache()
+        val firstContext = recoveryContext("T")
+        val secondContext = firstContext.copy(originLatitude = 22.300001)
+        var fetchCount = 0
+        val repository = CitybusRouteDetailRepository(
+            structureCache = structureCache,
+            walkingCache = walkingCache,
+            detailFetcher = { _, _ ->
+                fetchCount += 1
+                resourceText("citybus/getp2pstopinroute-n118.html")
+            }
+        )
+        val firstQuery = query("1|*|CTB||N118-TOS-1||5||9||O|*|", generalInfo = "02:04|*|13").copy(
+            recoveryContext = firstContext
+        )
+        val sameContextNewSession = firstQuery.copy(
+            rawInfo = "1|*|CTB||N118-TOS-1||5||9||O|*|",
+            listId = "new-list",
+            sessionRef = "different-opaque-ref",
+            generalInfo = "03:15|*|13"
+        )
+
+        repository.loadRouteDetail(route(firstQuery, routeName = "N118"))
+        val cached = repository.loadRouteDetail(route(sameContextNewSession, routeName = "N118"))
+        repository.loadRouteDetail(
+            route(sameContextNewSession.copy(recoveryContext = secondContext), routeName = "N118")
+        )
+
+        assertEquals(2, fetchCount)
+        assertEquals(262, cached.completeWalkingDistanceMeters)
+        assertEquals("03:15", cached.plannedArrivalTime)
+        assertEquals(null, cached.plannedDepartureTime)
     }
 
     @Test
@@ -117,18 +328,22 @@ class CitybusRouteDetailRepositoryTest {
     @Test
     fun repositoryCachesSuccessfulDetailsAndDoesNotCacheFailures() {
         var fetchCount = 0
-        val route = route(query(SINGLE_ROUTE_RAW_INFO))
+        val route = route(query("1|*|CTB||N118-TOS-1||5||9||O|*|"), routeName = "N118")
         val repository = CitybusRouteDetailRepository(
             detailFetcher = { _: URL, _ ->
                 fetchCount += 1
-                DIRECTION_DETAIL_HTML
+                resourceText("citybus/getp2pstopinroute-n118.html")
             }
         )
 
         val firstDetail = repository.loadRouteDetail(route)
         assertEquals(1, firstDetail.legs.size)
-        assertEquals("12:00", firstDetail.plannedArrivalTime)
-        assertEquals(1, repository.loadRouteDetail(route).legs.size)
+        assertEquals("02:04", firstDetail.plannedArrivalTime)
+        val cachedDetail = repository.loadRouteDetail(route)
+        assertEquals(1, cachedDetail.legs.size)
+        assertEquals(firstDetail.originWalking, cachedDetail.originWalking)
+        assertEquals(firstDetail.transfers, cachedDetail.transfers)
+        assertEquals(firstDetail.destinationWalking, cachedDetail.destinationWalking)
         assertEquals(1, fetchCount)
 
         var failingFetchCount = 0
@@ -334,6 +549,16 @@ class CitybusRouteDetailRepositoryTest {
             transferCount = 0,
             walkingDistanceMeters = walkingDistanceMeters,
             routeDetailQuery = query
+        )
+    }
+
+    private fun recoveryContext(mode: String): P2pRouteRecoveryContext {
+        return P2pRouteRecoveryContext(
+            originLatitude = 22.29361,
+            originLongitude = 114.20056,
+            destinationLatitude = 22.28190,
+            destinationLongitude = 114.15815,
+            searchMode = mode
         )
     }
 

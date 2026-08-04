@@ -170,7 +170,10 @@ class RouteDetailRealServiceInstrumentedTest {
             scenario.onActivity { activity ->
                 val list = activity.findViewById<RecyclerView>(R.id.routeDetailList)
                 assertTrue(requireNotNull(list.adapter).itemCount > 4)
-                assertTrue(activity.findViewById<View>(R.id.routeDetailMapLegend).visibility == View.VISIBLE)
+                assertEquals(
+                    0,
+                    activity.resources.getIdentifier("routeDetailMapLegend", "id", activity.packageName)
+                )
                 assertTrue(findViewWithTag(activity.window.decorView, "GoogleWatermark")?.visibility == View.VISIBLE)
                 assertTrue(readBooleanField(activity, "baseMapLoaded"))
 

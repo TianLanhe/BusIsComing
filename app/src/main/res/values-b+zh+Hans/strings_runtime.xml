@@ -69,8 +69,6 @@
     <string name="route_map_content_description">路线地图；所有站点及换乘也可在下方路线详情中阅读</string>
     <string name="route_map_current_location">显示当前位置</string>
     <string name="route_map_overview">查看完整路线</string>
-    <string name="route_map_legend_bus">巴士路线</string>
-    <string name="route_map_legend_walk">步行连接（示意）</string>
     <string name="route_map_unavailable">地图暂不可用，已显示完整文字详情</string>
     <string name="route_map_location_permission_denied">未获得位置权限，仍可查看完整路线</string>
     <string name="route_map_location_permission_settings">请在系统设置中允许位置权限</string>

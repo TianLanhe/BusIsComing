@@ -67,4 +67,28 @@ googleLongitude = citybusLongitude - 0.0000697374
 - JVM 測試覆蓋 `getlinep2p.php` parser、Citybus 舊底圖坐標校正、最小 URL／header、端點距離、一天成功快取、相同請求去重、最多三路並發、局部失敗、取消與 generation 作廢。
 - 最終以 `./gradlew build` 覆蓋 Kotlin 編譯、unit tests、lint 及 debug／release assemble；OpenSpec strict validation、git diff／secret 檢查亦須通過後才提交。
 
-本 change 的裝置端與頁面驗收已由本任務完成，沒有保留需要使用者人工補測的項目。
+## 2026-08-05 session、冷幾何與移除圖例回歸
+
+本輪使用任務專用 `Codex_RouteMap_QA_20260805` AVD（Android 16／API 36、Google Play arm64、360dp）執行，不接管既有裝置；完成後已關閉並刪除該 AVD。驗證資料及輸出不保存 Maps key、`PHPSESSID`、完整 Cookie 或可還原 session 的 reference。
+
+### 真實 Citybus session A/B
+
+- 門控 JVM 測試 `CitybusLiveSessionIntegrationTest` 以生產 `ppsearch_p3.php` 搜尋單段與多段候選，再以同一候選呼叫 `getp2pstopinroute.php`；為避免深夜班次令候選集合不含轉乘，固定使用香港時間 2026-08-05 08:00 的可重現查詢上下文，香港繁體、簡體及英文均完成。
+- 無 session 對照仍可取得站點但缺少完整 timetable／分段步行；只使用該候選同一 `m1` 回應的 `PHPSESSID` 時，單段的起點／終點及多段的起點／轉乘／終點距離全部存在，且分段之和與 model 完整距離一致。
+- 測試使不透明 session reference 失效後，repository 只重做一次原 `m1` 搜尋，按 route variant、上下車序號及路線鏈完整匹配，使用新候選自己的 `lid + session` 恢復；無匹配及再次 session-missing 的確定性測試則保留站點並降級為 `Partial`。
+- `m1=T/F/W` 並行單元測試為三個回應提供不同 session 與 `lid`，確認聚合後每個候選仍保留自身配對，且日誌只含 endpoint、模式及「坐標存在」等脫敏摘要。
+
+### 自動化頁面與生命週期
+
+- `RouteDetailActivityTest` 覆蓋 detail 先回／geometry 後回及相反順序；同一 key 首次進頁只載入一次，較晚 detail 只做端點校驗，不取消、不重抓且不清除已成功 polyline。
+- 暫時網路、空回應及有效點不足只在頁面前台自動重試一次；malformed、非法 key 與端點不匹配不自動循環。多段局部永久失敗只手動重試失敗 key，成功段保持可見且不畫站點假直線。
+- 常規 Activity 套件、位置權限三個真實系統流程、真實 60 秒 ETA、TalkBack 操作及 360dp 的三語 × 明暗 × font scale 1.0／1.3／2.0 矩陣均在任務 AVD 執行；矩陣同時斷言 XML、resource id 與無障礙樹均不存在圖例，返回、定位、全覽、Google attribution 與三檔半屏保持可用。
+- 首次授權位置時曾重現「定位結果早於 renderer 建立」競態；現在先保存相機座標與 zoom，再在 renderer 可用時聚焦。產品修正後重新執行首次授權、系統定位關閉及重複拒絕／設定三條流程均通過。
+
+### 真實 Google 圖磚受阻證據
+
+- 同一任務 AVD 以生產 repository 執行真實單段、多段與 N118 高縮放案例，Citybus 站點／詳情／道路幾何可產生，但 Google Maps `OnMapLoadedCallback` 在 30 秒內沒有返回，因此門控測試嚴格失敗於 `Google base map did not finish loading`，沒有放寬斷言或宣稱圖磚通過。
+- 模擬器把 `maps.googleapis.com` 解析到與 Google 不相符的地址；Google Play 服務同輪記錄 `SERVICE_NOT_AVAILABLE`。以 `-dns-server 8.8.8.8` 乾淨重啟後重新安裝並原樣重跑，結果仍相同。這是當前執行環境到 Google 服務的外部網路阻塞，不是 Citybus callback 或地圖 invalidate 問題。
+- 因底圖未完成，本輪不能重新宣稱「真實 Google 圖磚、Citybus 全部內容與 60 秒 ETA 同頁」或 N118 高縮放貼路目視通過；這兩項在 tasks 保持未勾選並附本節證據。所有可離線確定的 renderer 差量更新、站點／線條數量、坐標校正、競態、局部重試、權限、三檔 UI 與生命週期均由自動化覆蓋，不轉交使用者人工測試。
+
+本輪沒有保留需要使用者人工執行的頁面驗收；唯一未完成的是必須由可連接 Google Maps 圖磚的外部環境重新執行之門控項目。

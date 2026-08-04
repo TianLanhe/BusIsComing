@@ -6,6 +6,8 @@ import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.BusRouteQueryCallback
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusP2pStopMapResolver
+import com.golink.busiscoming.data.repository.CitybusHttpResponse
+import com.golink.busiscoming.data.repository.CitybusSessionRegistry
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.RouteCardStopPreview
 import java.io.IOException
@@ -211,6 +213,81 @@ class CitybusBusRouteRepositoryTest {
         assertEquals(2, routes.size)
         assertEquals(2, routes.map { it.routeDetailQuery?.rawInfo }.distinct().size)
         assertEquals(2, routes.map { it.resultId }.distinct().size)
+    }
+
+    @Test
+    fun bindsEachParallelModeCandidateToItsOwnSessionAndListId() {
+        val registry = CitybusSessionRegistry(referenceFactory = { "ref-${it.takeLast(1)}" })
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeResponseFetcher = { url, _ ->
+                val mode = url.queryParam("m1")
+                val sequence = when (mode) {
+                    "T" -> 1
+                    "F" -> 2
+                    "W" -> 3
+                    else -> error("Unexpected m1")
+                }
+                CitybusHttpResponse(
+                    routeHtmlWithInfoAndListId(
+                        label = "$sequence 港元1.0預計${sequence}分鐘 步行距離(約)10${sequence}米",
+                        info = "1|*|CTB||$sequence-TEST-1||$sequence||10||O|*|",
+                        listId = "lid-$mode"
+                    ),
+                    listOf("PHPSESSID=session-$mode; Path=/; HttpOnly")
+                )
+            },
+            sessionRegistry = registry,
+            requestLogger = {}
+        )
+
+        val routes = repository.searchRoutes(origin, destination)
+
+        assertEquals(setOf("T", "F", "W"), routes.mapNotNull { it.routeDetailQuery?.recoveryContext?.searchMode }.toSet())
+        routes.forEach { route ->
+            val query = requireNotNull(route.routeDetailQuery)
+            val mode = requireNotNull(query.recoveryContext).searchMode
+            assertEquals("lid-$mode", query.listId)
+            assertEquals("session-$mode", registry.resolve(requireNotNull(query.sessionRef))?.phpSessionId)
+            assertFalse(requireNotNull(query.sessionRef).contains("session-$mode"))
+        }
+    }
+
+    @Test
+    fun aNewSearchInvalidatesSessionReferencesOwnedByTheSupersededSearch() {
+        val registry = CitybusSessionRegistry(referenceFactory = { raw -> "ref-$raw" })
+        var searchNumber = 0
+        val repository = CitybusBusRouteRepository(
+            clock = { fixedQueryTimestamp },
+            routeResponseFetcher = { url, _ ->
+                val mode = url.queryParam("m1")
+                CitybusHttpResponse(
+                    routeHtmlWithInfoAndListId(
+                        label = "1 港元1.0預計10分鐘 步行距離(約)101米",
+                        info = "1|*|CTB||1-TEST-1||1||10||O|*|",
+                        listId = "lid-$mode"
+                    ),
+                    listOf("PHPSESSID=session-$searchNumber-$mode; Path=/; HttpOnly")
+                )
+            },
+            sessionRegistry = registry,
+            requestLogger = {}
+        )
+
+        searchNumber = 1
+        val firstReferences = repository.searchRoutes(origin, destination)
+            .mapNotNull { it.routeDetailQuery?.sessionRef }
+            .toSet()
+        assertTrue(firstReferences.isNotEmpty())
+        assertTrue(firstReferences.all { registry.resolve(it) != null })
+
+        searchNumber = 2
+        val secondReferences = repository.searchRoutes(origin, destination)
+            .mapNotNull { it.routeDetailQuery?.sessionRef }
+            .toSet()
+
+        assertTrue(firstReferences.all { registry.resolve(it) == null })
+        assertTrue(secondReferences.all { registry.resolve(it) != null })
     }
 
     @Test
@@ -668,6 +745,14 @@ class CitybusBusRouteRepositoryTest {
         alightingSeq: Int = 10
     ): Pair<String, String> {
         return label to "1|*|CTB||$route-TEST-1||$boardingSeq||$alightingSeq||O|*|"
+    }
+
+    private fun routeHtmlWithInfoAndListId(label: String, info: String, listId: String): String {
+        return """
+            <div id="routelist2">
+                <table aria-label="$label" onclick="showroutep2p('$info','$listId','12:00|*|30');"></table>
+            </div>
+        """.trimIndent()
     }
 
     private fun previewResolver(

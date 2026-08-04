@@ -35,6 +35,11 @@ interface RouteGeometryDataSource {
         requests: List<RouteGeometryRequest>,
         onResult: (RouteGeometryRequest, Result<RouteGeometrySegment>) -> Unit
     ): RouteGeometryLoadHandle
+
+    fun validateGeometry(
+        request: RouteGeometryRequest,
+        segment: RouteGeometrySegment
+    ): Result<RouteGeometrySegment> = Result.success(segment)
 }
 
 class CitybusRouteGeometryRepository(
@@ -69,7 +74,7 @@ class CitybusRouteGeometryRepository(
         var ownsTask = false
         val task = synchronized(inFlight) {
             inFlight[key] ?: FutureTask {
-                fetchValidateAndCache(key, boardingCoordinate, alightingCoordinate)
+                fetchCandidateAndCache(key)
             }.also {
                 inFlight[key] = it
                 ownsTask = true
@@ -94,22 +99,22 @@ class CitybusRouteGeometryRepository(
                 else -> throw IOException("Citybus route geometry query failed", cause)
             }
         }
-        validateEndpoints(segment, boardingCoordinate, alightingCoordinate)
+        try {
+            validateEndpoints(segment, boardingCoordinate, alightingCoordinate)
+        } catch (exception: CitybusRouteGeometryParseException) {
+            cache.remove(key)
+            throw exception
+        }
         return segment
     }
 
-    private fun fetchValidateAndCache(
-        key: RouteGeometryKey,
-        boardingCoordinate: RouteGeometryCoordinate?,
-        alightingCoordinate: RouteGeometryCoordinate?
-    ): RouteGeometrySegment {
+    private fun fetchCandidateAndCache(key: RouteGeometryKey): RouteGeometrySegment {
         val segment = RouteGeometrySegment(
             key,
             CitybusRouteGeometryCoordinateNormalizer.toWgs84(
                 parser.parse(geometryFetcher(buildGeometryUrl(key), requestHeaders()))
             )
         )
-        validateEndpoints(segment, boardingCoordinate, alightingCoordinate)
         cache.put(segment)
         return segment
     }
@@ -137,7 +142,19 @@ class CitybusRouteGeometryRepository(
         }
         executor.shutdown()
         return RouteGeometryLoadHandle {
-            if (cancelled.compareAndSet(false, true)) executor.shutdownNow()
+            cancelled.compareAndSet(false, true)
+        }
+    }
+
+    override fun validateGeometry(
+        request: RouteGeometryRequest,
+        segment: RouteGeometrySegment
+    ): Result<RouteGeometrySegment> {
+        return runCatching {
+            validateEndpoints(segment, request.boardingCoordinate, request.alightingCoordinate)
+            segment
+        }.onFailure {
+            if (it is CitybusRouteGeometryParseException) cache.remove(request.key)
         }
     }
 
@@ -149,12 +166,18 @@ class CitybusRouteGeometryRepository(
         if (boardingCoordinate != null &&
             distanceMeters(segment.points.first(), boardingCoordinate) > MAX_ENDPOINT_DISTANCE_METERS
         ) {
-            throw CitybusRouteGeometryParseException("Geometry start is too far from boarding stop")
+            throw CitybusRouteGeometryParseException(
+                "Geometry start is too far from boarding stop",
+                RouteGeometryFailureKind.ENDPOINT_MISMATCH
+            )
         }
         if (alightingCoordinate != null &&
             distanceMeters(segment.points.last(), alightingCoordinate) > MAX_ENDPOINT_DISTANCE_METERS
         ) {
-            throw CitybusRouteGeometryParseException("Geometry end is too far from alighting stop")
+            throw CitybusRouteGeometryParseException(
+                "Geometry end is too far from alighting stop",
+                RouteGeometryFailureKind.ENDPOINT_MISMATCH
+            )
         }
     }
 

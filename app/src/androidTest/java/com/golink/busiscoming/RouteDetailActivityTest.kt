@@ -57,6 +57,8 @@ import com.golink.busiscoming.data.model.RouteGeometrySegment
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class RouteDetailActivityTest {
@@ -369,6 +371,82 @@ class RouteDetailActivityTest {
                 it.kind == com.golink.busiscoming.ui.main.RouteMapLineKind.BUS
             }
             assertTrue(finalBusLines.any { it.stableId == retainedLineId })
+        }
+    }
+
+    @Test
+    fun detailArrivingBeforeSlowGeometryDoesNotRestartRequestAndLineAppearsInPlace() {
+        val loadCalls = AtomicInteger(0)
+        val deliverGeometry = AtomicReference<(() -> Unit)?>(null)
+        val latestPresentation = AtomicReference<RouteMapPresentation>()
+        RouteDetailRuntime.presentationObserver = latestPresentation::set
+        RouteDetailRuntime.mapsAvailabilityChecker = { false }
+        RouteDetailRuntime.geometryRepositoryFactory = {
+            object : RouteGeometryDataSource {
+                override fun loadGeometries(
+                    requests: List<RouteGeometryRequest>,
+                    onResult: (RouteGeometryRequest, Result<RouteGeometrySegment>) -> Unit
+                ): RouteGeometryLoadHandle {
+                    loadCalls.incrementAndGet()
+                    deliverGeometry.set {
+                        requests.forEach { request -> onResult(request, Result.success(geometryFor(request.key))) }
+                    }
+                    return RouteGeometryLoadHandle {}
+                }
+            }
+        }
+
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            waitForTimelineItems(scenario)
+            assertEquals(1, loadCalls.get())
+
+            requireNotNull(deliverGeometry.get()).invoke()
+
+            waitForBusLineCount(latestPresentation, 1)
+            assertEquals(1, loadCalls.get())
+        }
+    }
+
+    @Test
+    fun geometryArrivingBeforeDetailIsValidatedWithoutRestartOrClearingLine() {
+        val releaseDetail = CountDownLatch(1)
+        val detailStarted = CountDownLatch(1)
+        val loadCalls = AtomicInteger(0)
+        val latestPresentation = AtomicReference<RouteMapPresentation>()
+        RouteDetailRuntime.presentationObserver = latestPresentation::set
+        RouteDetailRuntime.mapsAvailabilityChecker = { false }
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
+                    detailStarted.countDown()
+                    check(releaseDetail.await(2, TimeUnit.SECONDS))
+                    return detail()
+                }
+            }
+        }
+        RouteDetailRuntime.geometryRepositoryFactory = {
+            object : RouteGeometryDataSource {
+                override fun loadGeometries(
+                    requests: List<RouteGeometryRequest>,
+                    onResult: (RouteGeometryRequest, Result<RouteGeometrySegment>) -> Unit
+                ): RouteGeometryLoadHandle {
+                    loadCalls.incrementAndGet()
+                    requests.forEach { request -> onResult(request, Result.success(geometryFor(request.key))) }
+                    return RouteGeometryLoadHandle {}
+                }
+            }
+        }
+
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            assertTrue(detailStarted.await(2, TimeUnit.SECONDS))
+            waitForBusLineCount(latestPresentation, 1)
+            assertEquals(1, loadCalls.get())
+
+            releaseDetail.countDown()
+            waitForTimelineItems(scenario)
+
+            waitForBusLineCount(latestPresentation, 1)
+            assertEquals(1, loadCalls.get())
         }
     }
 

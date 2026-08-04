@@ -96,7 +96,7 @@ class RouteDetailVisualMatrixInstrumentedTest {
                     waitForUi()
                     scenario.onActivity { activity ->
                         assertTouchTargets(activity)
-                        assertMapControlsDoNotOverlapLegend(activity)
+                        assertMapControlsVisibleAndLegendAbsent(activity)
                         assertAttributionIsNotCovered(activity)
                         saveScreenshot(activity, screenshotName(language, theme, fontScale, "summary"))
                     }
@@ -220,18 +220,16 @@ class RouteDetailVisualMatrixInstrumentedTest {
         }
     }
 
-    private fun assertMapControlsDoNotOverlapLegend(activity: RouteDetailActivity) {
-        val legendBounds = Rect()
-        val legend = activity.findViewById<View>(R.id.routeDetailMapLegend)
-        assertTrue("Map legend must be visible", legend.getGlobalVisibleRect(legendBounds))
+    private fun assertMapControlsVisibleAndLegendAbsent(activity: RouteDetailActivity) {
+        assertEquals(
+            "Map legend resource must be removed",
+            0,
+            activity.resources.getIdentifier("routeDetailMapLegend", "id", activity.packageName)
+        )
         listOf(R.id.routeDetailLocation, R.id.routeDetailOverview).forEach { id ->
             val controlBounds = Rect()
             val control = activity.findViewById<View>(id)
             assertTrue("Map control must be visible for id=$id", control.getGlobalVisibleRect(controlBounds))
-            assertTrue(
-                "Map control id=$id overlaps the legend at the active font scale",
-                !Rect.intersects(legendBounds, controlBounds)
-            )
         }
     }
 

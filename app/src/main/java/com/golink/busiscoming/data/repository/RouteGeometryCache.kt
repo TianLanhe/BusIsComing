@@ -28,6 +28,12 @@ class RouteGeometryCache(
         }
     }
 
+    fun remove(key: RouteGeometryKey) {
+        synchronized(entries) {
+            entries.remove(key)
+        }
+    }
+
     private data class Entry(
         val segment: RouteGeometrySegment,
         val cachedAtMillis: Long
