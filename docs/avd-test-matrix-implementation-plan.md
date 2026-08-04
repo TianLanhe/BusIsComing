@@ -30,7 +30,7 @@
 - Consumes: 已批准的四台新 AVD 名稱及五台舊 AVD 名稱。
 - Produces: 無執行中 emulator 的前置條件、重建前磁碟基準及兩個 APK。
 
-- [ ] **Step 1: 確認沒有執行中 emulator**
+- [x] **Step 1: 確認沒有執行中 emulator**
 
 ```bash
 adb devices -l
@@ -38,7 +38,7 @@ adb devices -l
 
 Expected: 清單沒有 `emulator-*`；如有來源不明裝置，停止操作且不接管。
 
-- [ ] **Step 2: 保存重建前清單與磁碟基準**
+- [x] **Step 2: 保存重建前清單與磁碟基準**
 
 ```bash
 /Users/hezhenyu/Library/Android/sdk/emulator/emulator -list-avds
@@ -51,7 +51,7 @@ du -sh /Users/hezhenyu/Library/Android/sdk/system-images/android-37.1/google_api
 
 Expected: 五台舊 AVD 均存在，AVD 約 22GB，四個既有映像路徑可讀。
 
-- [ ] **Step 3: 構建最新 APK**
+- [x] **Step 3: 構建最新 APK**
 
 ```bash
 ./gradlew assembleDebug assembleDebugAndroidTest
@@ -68,7 +68,7 @@ Expected: `BUILD SUCCESSFUL` 且兩個 APK 存在。
 - Consumes: SDK root `/Users/hezhenyu/Library/Android/sdk`。
 - Produces: `system-images;android-36.1;google_apis;arm64-v8a`。
 
-- [ ] **Step 1: 安裝精確 package id**
+- [x] **Step 1: 安裝精確 package id**
 
 ```bash
 yes | /opt/homebrew/bin/sdkmanager --sdk_root=/Users/hezhenyu/Library/Android/sdk "system-images;android-36.1;google_apis;arm64-v8a"
@@ -76,7 +76,7 @@ yes | /opt/homebrew/bin/sdkmanager --sdk_root=/Users/hezhenyu/Library/Android/sd
 
 Expected: exit 0；如 minor API XML schema 無法登記 package，保留所有舊 AVD 並先修復 command-line tools。
 
-- [ ] **Step 2: 驗證映像實體內容**
+- [x] **Step 2: 驗證映像實體內容**
 
 ```bash
 test -s /Users/hezhenyu/Library/Android/sdk/system-images/android-36.1/google_apis/arm64-v8a/system.img
@@ -98,7 +98,7 @@ Expected: 三個屬性全部匹配，`system.img` 非空。
 - Consumes: 四個 ARM64 system images 及 `pixel_2`／`pixel_9`／`pixel_8` profiles。
 - Produces: 四個新名稱 AVD；舊 AVD 保持不變。
 
-- [ ] **Step 1: 以官方 AVD manager 建立四台裝置**
+- [x] **Step 1: 建立四台裝置**
 
 ```bash
 printf 'no\n' | /opt/homebrew/bin/avdmanager create avd --force --name BIC_Min_API25_NoPlay_Compact --package "system-images;android-25;google_apis;arm64-v8a" --device pixel_2
@@ -109,7 +109,9 @@ printf 'no\n' | /opt/homebrew/bin/avdmanager create avd --force --name BIC_Futur
 
 Expected: SDK emulator `-list-avds` 列出四個新名稱。如 `avdmanager` 無法解析 36.1／37.1，停止並先修復 command-line tools，不手工拼接不完整 AVD。
 
-- [ ] **Step 2: 以 `apply_patch` 修改四個 `config.ini` 的精確鍵**
+執行備註：Command-line Tools 已升級至 22.0，但相容入口 `avdmanager` 仍不能以 minor API package id 建立 36.1／37.1。API 25 由 `avdmanager` 建立；其餘三台從已驗證的官方 system image 與 Pixel hardware profile 寫入完整 AVD 定義，並在任何舊資產刪除前逐台通過 `-wipe-data` 冷啟動、App 安裝及角色化驗收。
+
+- [x] **Step 2: 以 `apply_patch` 修改四個 `config.ini` 的精確鍵**
 
 All four:
 
@@ -144,7 +146,7 @@ Expected: 每個 `image.sysdir.1` 符合角色，第一次 boot 前沒有 `sdcar
 - Consumes: 一次一個精確 AVD 名稱；Google Maps 案例使用 host `127.0.0.1:7890` 與 guest `10.0.2.2:7890`。
 - Produces: 平台／顯示／Google package 證據、截圖、smoke 結果及乾淨關機。
 
-- [ ] **Step 1: 逐台以冷啟動、不保存快照方式執行**
+- [x] **Step 1: 逐台以冷啟動、不保存快照方式執行**
 
 For each approved name, run one emulator and wait for `sys.boot_completed=1` before continuing:
 
@@ -157,7 +159,7 @@ For each approved name, run one emulator and wait for `sys.boot_completed=1` bef
 
 Expected: 每台在有界等待內完成 boot；任何一台失敗時只關閉本次 instance 並停止清理舊資產。
 
-- [ ] **Step 2: 每台收集平台、顯示及 Google 角色**
+- [x] **Step 2: 每台收集平台、顯示及 Google 角色**
 
 Resolve the only running serial into `BIC_SERIAL`, then run:
 
@@ -176,7 +178,7 @@ adb -s "$BIC_SERIAL" shell pm list packages com.android.vending
 
 Expected: API、ARM64、尺寸及 GMS／Play Store state 符合矩陣；API 37.1 page size 為 `16384`。
 
-- [ ] **Step 3: 安裝兩個 APK、解析並啟動主頁**
+- [x] **Step 3: 安裝兩個 APK、解析並啟動主頁**
 
 ```bash
 mkdir -p /tmp/bic-avd-matrix
@@ -189,7 +191,7 @@ adb -s "$BIC_SERIAL" exec-out screencap -p > "/tmp/bic-avd-matrix/${BIC_SERIAL}.
 
 Expected: install、resolve 及 start 全部成功，沒有 crash。
 
-- [ ] **Step 4: 執行角色 smoke**
+- [x] **Step 4: 執行角色 smoke**
 
 API 25、API 36.1 No Play、API 37.1:
 
@@ -211,7 +213,7 @@ adb -s "$BIC_SERIAL" shell am instrument -w -r -e runRealRouteMap true -e class 
 
 Expected: selected suites report `OK`; real map must not pass if `OnMapLoadedCallback` times out。
 
-- [ ] **Step 5: 關閉 task-owned instance**
+- [x] **Step 5: 關閉 task-owned instance**
 
 ```bash
 adb -s "$BIC_SERIAL" emu kill
@@ -230,7 +232,7 @@ Expected: serial disappears before starting the next AVD。
 - Consumes: Task 4 全部通過及空 `adb devices` 清單。
 - Produces: 只保留四台批准 AVD 及四個角色映像。
 
-- [ ] **Step 1: 再次確認九台名稱與無執行中 emulator**
+- [x] **Step 1: 再次確認九台名稱與無執行中 emulator**
 
 ```bash
 adb devices -l
@@ -239,7 +241,7 @@ adb devices -l
 
 Expected: no running emulator；四新、五舊名稱全部存在。
 
-- [ ] **Step 2: 逐個刪除五台舊 AVD**
+- [x] **Step 2: 逐個刪除五台舊 AVD**
 
 ```bash
 /opt/homebrew/bin/avdmanager delete avd --name BusIsComing_API_25
@@ -251,7 +253,7 @@ Expected: no running emulator；四新、五舊名稱全部存在。
 
 Expected: each exits 0；SDK emulator still lists all four new names and no old name。
 
-- [ ] **Step 3: 卸載精確 API 36 Play 映像**
+- [x] **Step 3: 卸載精確 API 36 Play 映像**
 
 ```bash
 /opt/homebrew/bin/sdkmanager --sdk_root=/Users/hezhenyu/Library/Android/sdk --uninstall "system-images;android-36;google_apis_playstore;arm64-v8a"
@@ -268,7 +270,7 @@ Expected: exact API 36 path disappears；API 36.1 and 37.1 remain intact。
 - Consumes: final AVD list、角色屬性、smoke results、disk sizes。
 - Produces: reviewable final record and documentation-only commit。
 
-- [ ] **Step 1: 核對最終外部狀態**
+- [x] **Step 1: 核對最終外部狀態**
 
 ```bash
 adb devices -l
@@ -282,7 +284,7 @@ du -sh /Users/hezhenyu/Library/Android/sdk/system-images/android-37.1/google_api
 
 Expected: no emulator running；exactly four approved AVD names；four approved image paths readable；actual size recorded。
 
-- [ ] **Step 2: 回寫實際結果並檢查 git 範圍**
+- [x] **Step 2: 回寫實際結果並檢查 git 範圍**
 
 Append date、sizes、properties、Google package state、page size、smoke commands and result to `docs/avd-test-matrix.md` without secrets。
 
@@ -293,7 +295,7 @@ git status --short
 
 Expected: result document plus pre-existing `app/build.gradle.kts` only；no AVD or build product enters git。
 
-- [ ] **Step 3: 提交驗證記錄**
+- [x] **Step 3: 提交驗證記錄**
 
 ```bash
 git add docs/avd-test-matrix.md
