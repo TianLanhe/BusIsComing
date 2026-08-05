@@ -62,24 +62,41 @@ TBD - created by archiving change strengthen-monitor-scheduling-and-auto-stop. U
 - **THEN** 系統 SHALL NOT 嘗試繞過該停止行為自動復活監控
 - **AND** 下次 App 啟動或服務恢復時系統 SHALL 清理已中斷的監控 session
 
-### Requirement: 不直接請求電池最佳化豁免
-系統 SHALL NOT 在通知欄監控啟動流程中直接請求忽略電池最佳化，並 SHALL 在未取得電池最佳化豁免時仍允許用戶啟動監控。
+### Requirement: 直接請求電池最佳化豁免
+系統 SHALL 在用戶主動啟動短時通知欄監控且 App 尚未獲得電池最佳化豁免時，說明用途與耗電影響並直接開啟系統豁免確認頁，同時保留拒絕或不可用時的監控降級。
 
-#### Scenario: 啟動監控不跳轉電池豁免頁
-- **WHEN** 用戶點擊 `開始監控`
-- **AND** 通知權限已授權
-- **AND** App 尚未被系統豁免電池最佳化
-- **THEN** 系統 SHALL NOT 開啟 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 或等效的直接豁免請求頁
-- **AND** 系統 SHALL 繼續依既有監控流程啟動前台服務或處理 exact alarm special access
+#### Scenario: manifest 宣告直接豁免權限
+- **WHEN** App 生成 Android manifest
+- **THEN** manifest SHALL 宣告 `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
+- **AND** manifest SHALL 保留通知、前台服務、wake lock 與 exact alarm 相關宣告
 
-#### Scenario: 不宣告電池豁免權限
-- **WHEN** App 生成可上架的 Android manifest
-- **THEN** manifest SHALL NOT 宣告 `android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`
-- **AND** manifest SHALL 保留通知欄監控所需的前台服務、通知、wake lock 與 exact alarm 相關宣告
+#### Scenario: 已取得豁免時不重複請求
+- **WHEN** 用戶啟動通知欄監控
+- **AND** 系統確認 BusIsComing 已忽略電池最佳化
+- **THEN** 系統 SHALL NOT 再開啟電池豁免確認頁
+- **AND** 系統 SHALL 繼續既有監控啟動流程
 
-#### Scenario: 電池限制下保持可理解降級
-- **WHEN** Android 省電、Doze 或廠商省電策略導致監控刷新延遲
-- **THEN** 系統 SHALL 保留最後一次成功資料或資料延遲狀態
-- **AND** 系統 SHALL 在下一個可用調度窗口繼續嘗試刷新，除非停止條件已達成
-- **AND** 系統 SHALL NOT 因未取得電池最佳化豁免而中止本次監控
+#### Scenario: 未取得豁免時直接請求
+- **WHEN** 用戶啟動通知欄監控
+- **AND** 通知與渠道的 blocking 問題已處理
+- **AND** 系統確認 BusIsComing 尚未忽略電池最佳化
+- **THEN** 系統 SHALL 以目前 App 語言說明提高鎖屏刷新與語音及時性的用途及可能增加耗電
+- **AND** 系統 SHALL 以 `package:<applicationId>` 開啟 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 系統確認頁
 
+#### Scenario: 多個系統能力依序處理
+- **WHEN** 同一次監控啟動同時缺少通知設定、exact alarm special access 或電池最佳化豁免
+- **THEN** 系統 SHALL 依通知與渠道、exact alarm、電池豁免順序一次處理一個系統頁
+- **AND** 每個能力在單次啟動嘗試中 SHALL 最多提示一次
+- **AND** 從系統頁返回後系統 SHALL 重新查詢對應能力而非依賴 result code
+
+#### Scenario: 用戶拒絕電池豁免
+- **WHEN** 用戶從系統確認頁返回且 BusIsComing 仍未忽略電池最佳化
+- **THEN** 系統 SHALL 不在同一次啟動嘗試中重複打開確認頁
+- **AND** 系統 SHALL 允許本次監控使用 exact alarm／best-effort alarm、前台服務與受控 wake lock 繼續啟動
+- **AND** 系統 SHALL 保留資料延遲語義
+
+#### Scenario: 電池豁免設定頁不可用
+- **WHEN** 系統無法解析、啟動或完成直接電池豁免確認 Intent
+- **THEN** 系統 SHALL 顯示目前 App 語言的降級提示
+- **AND** 系統 SHALL 不因該失敗中止基本監控
+- **AND** App SHALL NOT 因 settings Activity 例外而崩潰

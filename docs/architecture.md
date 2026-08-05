@@ -12,7 +12,7 @@
 - **搜尋**：編輯臨時起終點、查詢路線，成功後可保存為常用行程。
 - **設定**：語言、外觀、行程匯入匯出、乘車碼快捷方式、支援、關於及檢查更新。
 
-行程新增／編輯、行程管理、關於及匯入匯出使用次級 Activity。`TransitCodeShortcutActivity` 是不顯示界面的桌面快捷方式中轉入口；`BusMonitorService` 是前台監控服務。
+行程新增／編輯、行程管理、路線詳情、關於及匯入匯出使用次級 Activity。`RouteDetailActivity` 以 Google 地圖為背景、不可隱藏的三檔持續 Bottom Sheet 為文字詳情層；`TransitCodeShortcutActivity` 是不顯示界面的桌面快捷方式中轉入口，`BusMonitorService` 是前台監控服務。
 
 ## 模組責任
 
@@ -22,12 +22,12 @@
 | `data/localization` | 實際 App locale、Citybus／Google／ETA mapping、TTS 語言及版本 snapshot |
 | `data/location` | 位置權限、目前位置、距離、附近行程選擇及 Google 地址解析 |
 | `data/model` | 不依賴畫面的行程、路線、ETA、置頂、更新和監控狀態／policy |
-| `data/repository` | Citybus／ETA HTTP、parser、cache、路線詳情、本機行程及置頂資料存取 |
+| `data/repository` | Citybus／ETA HTTP、parser、短期 Citybus session、詳情／geometry cache、本機行程及置頂資料存取 |
 | `data/transfer` | `.bicroutes` schema、codec、文件讀取、去重及匯入計劃 |
 | `data/update` | 安裝來源、Play／網站 source、渠道決策、提醒 policy 及可靠快照 |
 | `service` | 監控 session、ETA 刷新、AlarmManager、通知、WakeLock 及 TTS |
 | `ui/common` | 共用地點輸入、查詢結果控制、短文案、IME 及 WindowInsets |
-| `ui/main` | 頂層 destination、結果清單、詳情、ETA 面板、置頂、更新和快捷入口 |
+| `ui/main` | 頂層 destination、結果清單、全螢幕地圖詳情、ETA 面板、監控設定、置頂、更新和快捷入口 |
 | `ui/edit`、`ui/manage` | 行程新增／編輯、複製及管理 |
 | `ui/navigation`、`ui/settings` | destination 狀態和次級設定頁 |
 
@@ -53,13 +53,31 @@ flowchart TD
 
 常用與搜尋各自保存查詢上下文及 UI 狀態，但共享 repository、結果格式和排序／刷新控件。每次查詢以 query id、repository generation 及語言版本拒絕過期 callback。基礎結果先交付，ETA 與站點預覽按完成順序增量更新，不等待全部外部請求。
 
+### 路線詳情
+
+```mermaid
+flowchart TD
+    Snapshot["成功查詢的路線與起終點快照"] --> Page["RouteDetailActivity"]
+    Page --> Detail["getp2pstopinroute 詳情"]
+    Page --> Geometry["getlinep2p 每段道路幾何"]
+    Page --> Eta["DATA.GOV.HK 首程 ETA"]
+    Page --> Location["使用者觸發的目前位置"]
+    Detail --> Timeline["文字時間線與完整／部分步行距離"]
+    Detail --> Map["站點與轉乘 marker"]
+    Geometry --> Map
+    Eta --> Timeline
+    Location --> Map
+```
+
+詳情、geometry、Maps 初始化、位置及 ETA 是互相獨立的載入域；任一來源失敗都不應清除其他已成功內容。geometry 可早於文字詳情成為候選，待站點端點可用後再驗證；失敗段不以站點直線冒充巴士道路線。頁面以前台生命週期每 60 秒刷新首程 ETA，進入後台即停止 tick；MapView、callback generation 及載入 handle 跟隨 Activity 建立、重建和銷毀。
+
 ### 目前位置與地址
 
 `CurrentLocationCoordinator` 合併同時發起的位置請求。30 秒內的 snapshot 可直接使用；否則先讀 last location，再在需要時發起最長 3 秒的高精度請求。Google reverse geocoding 只負責地址名稱，保存或查詢始終保留原座標；語言版本、座標 cache key 及 in-flight 合併避免舊語言結果污染畫面。
 
 ### 監控
 
-路線結果提供首程 `FirstLegEtaQuery`，UI 計算步行時間並建立 monitor session。`BusMonitorService` 立即以前台通知啟動、刷新 ETA、計算出門狀態、持久化 session 並安排下一次刷新／停止。詳細算法見 `monitoring-design.md`。
+路線結果提供首程 `FirstLegEtaQuery`，UI 先以 Citybus 步行距離、直線距離、速度、場景及手動偏移建立步行估算。啟動 coordinator 依次處理通知權限／頻道健康、精確鬧鐘能力及電池最佳化豁免；只有通知阻斷狀態必須修復，其他能力拒絕或不可用時可降級繼續。`BusMonitorService` 再以前台通知啟動、刷新 ETA、計算出門狀態、持久化 session 並安排下一次刷新／停止。詳細算法見 `monitoring-design.md`。
 
 ### 應用程式更新
 
@@ -75,7 +93,8 @@ flowchart TD
 | 監控 session | `bus_monitor_session` SharedPreferences | 服務重建可恢復；中斷、到期或到達停止邊界時清除 |
 | 更新渠道、可靠快照、defer／skip | 更新專用 SharedPreferences | 安裝版本同步時清理已完成版本狀態 |
 | 本次置頂、搜尋表單、destination、排序及滾動 | Fragment／Activity state、SavedState | 配置重建保留；進程或工作流結束後不作長期資料 |
-| 路線詳情、stop map、Google 地址等 cache | 進程記憶體 | 按各自 key／TTL；失敗通常不作成功 cache |
+| Citybus 詳情 session reference | 進程記憶體 | 每個 `m1` 候選各自持有不透明 reference；原始 `PHPSESSID` 不持久化，預設 30 分鐘過期或由新查詢 scope 作廢 |
+| 路線結構、分段步行、geometry、stop map、Google 地址等 cache | 進程記憶體 | 按資料域使用獨立 key／TTL；完整成功資料才進相應 cache，失敗與部分資料不冒充完整成功 |
 
 SQLite schema 目前為版本 4。`route_configs` 保存行程名稱、起終點名稱／精確座標、建立／更新時間、使用次數及最近使用時間；`route_result_pins` 以外鍵關聯行程並啟用 cascade delete。
 
@@ -87,6 +106,7 @@ Android Manifest 目前允許系統備份，但 backup rules 仍未定義明確 
 - destination、行程／臨時起終點、未提交文字、排序、滾動及是否已提交有效查詢可恢復；舊路線結果不跨語言直接保存。
 - 已提交上下文在新語言重建後以原座標重查；自動重查不增加行程使用次數。
 - query owner 銷毀、提交新查詢或語言版本改變時，舊 callback 不得更新新畫面或語言相關 cache。
+- 路線詳情以 primitive launch snapshot 支持 Activity 重建；detail、geometry、ETA、Map 及位置 callback 各自用 generation／生命週期拒絕過期交付。
 - 監控 session 不因 Activity recreation 終止；語言改變時服務更新通知和 source 語言，並停止舊語音 utterance。
 
 ## 依賴方向
