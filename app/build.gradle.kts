@@ -29,7 +29,7 @@ android {
         applicationId = "com.golink.busiscoming"
         minSdk = 25
         targetSdk = 36
-        versionCode = 10
+        versionCode = 12
         versionName = "1.0"
 
         testInstrumentationRunner = "com.golink.busiscoming.BusIsComingTestRunner"
@@ -46,7 +46,6 @@ android {
             localProperties.getProperty("GOOGLE_MAPS_API_KEY")
                 ?: System.getenv("GOOGLE_MAPS_API_KEY")
                 ?: ""
-        buildConfigField("boolean", "FORCE_WEBSITE_UPDATE_CHECK", "true")
     }
 
     buildFeatures {

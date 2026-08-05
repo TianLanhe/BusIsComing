@@ -36,6 +36,42 @@ class UpdateStateStoreTest {
     }
 
     @Test
+    fun updateAvailableWithoutVersionNameRoundTripsWithoutInventingVersionCodeLabel() {
+        val store = SharedPreferencesUpdateStateStore(
+            MemoryUpdateKeyValueStore(),
+            installedVersionCode = 6L
+        )
+        val expected = UpdateStoredState(
+            snapshot = availableSnapshot(12L, 300L).copy(availableVersionName = null)
+        )
+
+        store.save(expected)
+
+        assertEquals(expected, store.load())
+    }
+
+    @Test
+    fun legacyPlayVersionCodeStoredAsVersionNameIsDiscardedOnRead() {
+        val store = SharedPreferencesUpdateStateStore(
+            MemoryUpdateKeyValueStore(),
+            installedVersionCode = 6L
+        )
+        store.save(
+            UpdateStoredState(
+                snapshot = availableSnapshot(12L, 300L).copy(
+                    availableVersionName = "12"
+                )
+            )
+        )
+
+        val loaded = store.load()
+
+        assertEquals(UpdateSnapshotState.UPDATE_AVAILABLE, loaded.snapshot.state)
+        assertEquals(12L, loaded.snapshot.availableVersionCode)
+        assertNull(loaded.snapshot.availableVersionName)
+    }
+
+    @Test
     fun corruptPreferenceValuesFallBackToSafeDefaults() {
         val backend = MemoryUpdateKeyValueStore(
             mutableMapOf(

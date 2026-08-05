@@ -68,43 +68,28 @@ interface PlayUpdateSource {
     fun setDownloadedListener(listener: ((Boolean) -> Unit)?)
 }
 
-object DisabledPlayUpdateSource : PlayUpdateSource {
-    override fun check(callback: (PlayUpdateResult) -> Unit) {
-        callback(PlayUpdateResult.Failed(UpdateFailureKind.PLAY_UNAVAILABLE))
-    }
-
-    override fun startFlexibleUpdate(
-        activity: Activity,
-        launcher: ActivityResultLauncher<IntentSenderRequest>
-    ): Boolean = false
-
-    override fun refreshInstallStatus() = Unit
-
-    override fun completeUpdate(callback: (Boolean) -> Unit) {
-        callback(false)
-    }
-
-    override fun setDownloadedListener(listener: ((Boolean) -> Unit)?) = Unit
-}
-
 class GooglePlayUpdateSource(
     context: Context,
-    private val manager: AppUpdateManager = AppUpdateManagerFactory.create(context.applicationContext)
+    private val manager: AppUpdateManager = AppUpdateManagerFactory.create(context.applicationContext),
+    private val diagnostics: AppUpdateDiagnostics = NoOpAppUpdateDiagnostics
 ) : PlayUpdateSource {
     private var latestInfo: AppUpdateInfo? = null
     private var downloadedListener: ((Boolean) -> Unit)? = null
+    private var listenerRegistered = false
     private val installStateListener = InstallStateUpdatedListener { state ->
         downloadedListener?.invoke(state.installStatus() == InstallStatus.DOWNLOADED)
-    }
-
-    init {
-        manager.registerListener(installStateListener)
     }
 
     override fun check(callback: (PlayUpdateResult) -> Unit) {
         manager.appUpdateInfo
             .addOnSuccessListener { info ->
                 latestInfo = info
+                diagnostics.record(
+                    AppUpdateDiagnosticEvent.PlaySuccess(
+                        updateAvailability = info.updateAvailability(),
+                        availableVersionCode = info.availableVersionCode()
+                    )
+                )
                 callback(
                     PlayUpdateResultMapper.success(
                         availability = info.updateAvailability(),
@@ -117,6 +102,7 @@ class GooglePlayUpdateSource(
             }
             .addOnFailureListener { error ->
                 val errorCode = (error as? InstallException)?.errorCode
+                diagnostics.record(AppUpdateDiagnosticEvent.PlayFailure(errorCode))
                 callback(PlayUpdateResultMapper.failure(errorCode))
             }
     }
@@ -153,5 +139,9 @@ class GooglePlayUpdateSource(
 
     override fun setDownloadedListener(listener: ((Boolean) -> Unit)?) {
         downloadedListener = listener
+        if (listener != null && !listenerRegistered) {
+            manager.registerListener(installStateListener)
+            listenerRegistered = true
+        }
     }
 }

@@ -6,9 +6,10 @@
 
 - 新增冷啟動靜默檢查與設定頁手動檢查；自動檢查最多每 24 小時一次，失敗時保持靜默並保留最近可靠結果。
 - 目標渠道策略是：只要裝置有可用的官方 Google Play，不論 App 最初從何處安裝，都由 Play 判斷目前帳號、軌道、地區與裝置的更新資格，並在允許時使用 flexible in-app update。
-- App 尚未正式上架 Google Play 期間，以本機 BuildConfig 開關暫時強制所有更新檢查使用網站渠道；保留完整 Play 實作，上架並完成真實驗收後只需關閉開關即可恢復目標策略。
+- Google Play 上架後刪除本機網站強制開關；正常構建固定使用 Play 優先策略。網站渠道只保留給目前沒有可用官方 Play 的非 Play／未知非 Play 安裝，`ERROR_APP_NOT_OWNED` 只把網站較高版本當作正向證據。
 - 只有 App 初始為非 Play 安裝且目前沒有可用官方 Play 時，才查詢 `https://www.busiscoming.com/api/downloads/android/latest/metadata`，並把更新操作導向目前語言網站的 `#download` 區域。
 - 網站 metadata 沿用已部署首頁下載資訊契約，不要求回傳 `applicationId`；Android 端固定請求官方 endpoint，驗證平台、版本、日期與下載路徑等必要欄位，並接受精確相對路徑 `/api/downloads/android/latest` 或其等價官方 HTTPS 絕對 URL。
+- Play Core 只提供可用 `versionCode`；Play 已確認更新時，網站 metadata 只在 `versionCode` 精確一致時補充真實 `versionName` 供 UI 以 `v1.2` 形式展示，不一致或請求失敗時使用不含版本數字的通用更新摘要，禁止把 `versionCode` 冒充 `versionName`。
 - 新增本地更新狀態、首次發現時間、稍後提醒與略過 versionCode；更新可用滿 3 天後才自動提醒，「稍後提醒」延後 3 天，「略過此版本」只抑制同一 versionCode 的自動彈窗。
 - 把設定頁「檢查更新」由暫不支援入口改為可操作狀態，展示最近檢查結果；發現較新版本時立即顯示小紅點，且不因查看、稍後或略過而清除。
 - 新增三語、深淺色、窄屏、大字體與無障礙狀態；更新 Dialog 只提供「前往更新／稍後提醒／略過此版本」三個明確操作，且不可由返回鍵或點擊外部關閉。

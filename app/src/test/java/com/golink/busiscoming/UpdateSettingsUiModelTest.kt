@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.AppUpdateState
 import com.golink.busiscoming.data.model.UpdateChannel
+import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailure
 import com.golink.busiscoming.data.model.UpdateFailureKind
 import com.golink.busiscoming.data.model.UpdateSnapshot
@@ -9,6 +10,7 @@ import com.golink.busiscoming.data.model.UpdateSnapshotState
 import com.golink.busiscoming.ui.main.UpdateSettingsUiModelFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,6 +57,7 @@ class UpdateSettingsUiModelTest {
         )
         assertModel(
             base.copy(
+                lastTrigger = UpdateCheckTrigger.MANUAL,
                 lastFailure = UpdateFailure(
                     UpdateFailureKind.NETWORK,
                     retainedReliableSnapshot = true
@@ -62,6 +65,125 @@ class UpdateSettingsUiModelTest {
             ),
             R.string.update_status_available_failed
         )
+    }
+
+    @Test
+    fun formatsAvailableVersionNameWithSingleLowercaseVPrefix() {
+        val plain = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = "1.2")),
+            now
+        )
+        val alreadyPrefixed = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = "V1.2")),
+            now
+        )
+
+        assertEquals("v1.2", plain.versionArgument)
+        assertEquals("v1.2", alreadyPrefixed.versionArgument)
+    }
+
+    @Test
+    fun missingVersionNameNeverFallsBackToVersionCode() {
+        val model = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = null)),
+            now
+        )
+
+        assertNull(model.versionArgument)
+        assertEquals(R.string.update_status_available_generic, model.summaryRes)
+        assertTrue(model.showDot)
+    }
+
+    @Test
+    fun legacyVersionNameEqualToVersionCodeIsRenderedAsGenericUpdate() {
+        val model = UpdateSettingsUiModelFactory.create(
+            AppUpdateState(availableSnapshot().copy(availableVersionName = "8")),
+            now
+        )
+
+        assertNull(model.versionArgument)
+        assertEquals(R.string.update_status_available_generic, model.summaryRes)
+        assertTrue(model.showDot)
+    }
+
+    @Test
+    fun missingVersionNameKeepsDeferredSkippedAndFailedMeaningWithoutNumber() {
+        val base = AppUpdateState(availableSnapshot().copy(availableVersionName = null))
+        val cases = listOf(
+            base.copy(deferredVersionCode = 8L, deferredUntil = now + 1L) to
+                R.string.update_status_available_deferred_generic,
+            base.copy(skippedVersionCode = 8L) to
+                R.string.update_status_available_skipped_generic,
+            base.copy(
+                lastTrigger = UpdateCheckTrigger.MANUAL,
+                lastFailure = UpdateFailure(
+                    UpdateFailureKind.NETWORK,
+                    retainedReliableSnapshot = true
+                )
+            ) to R.string.update_status_available_failed_generic
+        )
+
+        cases.forEach { (state, expectedSummary) ->
+            val model = UpdateSettingsUiModelFactory.create(state, now)
+            assertEquals(expectedSummary, model.summaryRes)
+            assertNull(model.versionArgument)
+            assertTrue(model.showDot)
+        }
+    }
+
+    @Test
+    fun manualUnverifiableFailureOverridesStaleUpToDateSummary() {
+        val state = AppUpdateState(
+            snapshot = UpdateSnapshot.upToDate(6L, UpdateChannel.PLAY, now),
+            lastTrigger = UpdateCheckTrigger.MANUAL,
+            lastFailure = UpdateFailure(UpdateFailureKind.PLAY_APP_NOT_OWNED)
+        )
+
+        assertEquals(
+            R.string.update_status_unverified,
+            UpdateSettingsUiModelFactory.create(state, now).summaryRes
+        )
+    }
+
+    @Test
+    fun automaticFailureKeepsReliableUpToDateSummary() {
+        val state = AppUpdateState(
+            snapshot = UpdateSnapshot.upToDate(6L, UpdateChannel.PLAY, now),
+            lastTrigger = UpdateCheckTrigger.AUTOMATIC,
+            lastFailure = UpdateFailure(UpdateFailureKind.PLAY_APP_NOT_OWNED)
+        )
+
+        assertEquals(
+            R.string.update_status_up_to_date,
+            UpdateSettingsUiModelFactory.create(state, now).summaryRes
+        )
+    }
+
+    @Test
+    fun automaticFailureKeepsNeverCheckedAndAvailableSummaries() {
+        val neverChecked = AppUpdateState(
+            snapshot = UpdateSnapshot.neverChecked(6L),
+            lastTrigger = UpdateCheckTrigger.AUTOMATIC,
+            lastFailure = UpdateFailure(UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED)
+        )
+        assertEquals(
+            R.string.update_status_never_checked,
+            UpdateSettingsUiModelFactory.create(neverChecked, now).summaryRes
+        )
+
+        val available = AppUpdateState(
+            snapshot = availableSnapshot(),
+            lastTrigger = UpdateCheckTrigger.AUTOMATIC,
+            lastFailure = UpdateFailure(
+                UpdateFailureKind.PLAY_APP_NOT_OWNED,
+                retainedReliableSnapshot = true
+            )
+        )
+        assertEquals(
+            R.string.update_status_available,
+            UpdateSettingsUiModelFactory.create(available, now).summaryRes
+        )
+        assertTrue(UpdateSettingsUiModelFactory.create(available, now).showDot)
     }
 
     @Test
@@ -89,7 +211,7 @@ class UpdateSettingsUiModelTest {
     private fun assertModel(state: AppUpdateState, expectedSummary: Int) {
         val model = UpdateSettingsUiModelFactory.create(state, now)
         assertEquals(expectedSummary, model.summaryRes)
-        assertEquals("1.2", model.versionArgument)
+        assertEquals("v1.2", model.versionArgument)
         assertTrue(model.showDot)
         assertTrue(model.rowEnabled)
     }

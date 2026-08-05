@@ -10,8 +10,11 @@ import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailureKind
 import com.golink.busiscoming.data.model.UpdateSnapshot
 import com.golink.busiscoming.data.model.UpdateSnapshotState
+import com.golink.busiscoming.data.update.AppUpdateDiagnosticEvent
+import com.golink.busiscoming.data.update.AppUpdateDiagnostics
 import com.golink.busiscoming.data.update.AppUpdateCoordinator
 import com.golink.busiscoming.data.update.InstallSourceReader
+import com.golink.busiscoming.data.update.NoOpAppUpdateDiagnostics
 import com.golink.busiscoming.data.update.PlayPackageProbe
 import com.golink.busiscoming.data.update.PlayUpdateResult
 import com.golink.busiscoming.data.update.PlayUpdateSource
@@ -19,10 +22,12 @@ import com.golink.busiscoming.data.update.SharedPreferencesUpdateStateStore
 import com.golink.busiscoming.data.update.UpdateKeyValueStore
 import com.golink.busiscoming.data.update.UpdatePolicy
 import com.golink.busiscoming.data.update.UpdateStoredState
+import com.golink.busiscoming.data.update.UpdateChannelDecision
 import com.golink.busiscoming.data.update.WebsiteUpdateResult
 import com.golink.busiscoming.data.update.WebsiteUpdateSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -44,27 +49,49 @@ class AppUpdateCoordinatorTest {
     }
 
     @Test
-    fun websiteOnlyAutomaticCheckRunsAgainExactlyAtTwentyFourHours() {
-        var now = 1_000_000_000L
+    fun debugBuildManualCheckFailsWithoutCallingAnyUpdateSource() {
+        val play = FakePlayUpdateSource()
         val website = FakeWebsiteUpdateSource(
-            WebsiteUpdateResult.Available(availableSnapshot(9L, 1L, UpdateChannel.WEBSITE))
+            WebsiteUpdateResult.Failed(UpdateFailureKind.NETWORK)
         )
+        val environment = CountingUpdateEnvironment()
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = play,
+            website = website,
+            playCheckSupported = false,
+            environment = environment
+        )
+
+        assertTrue(coordinator.check(UpdateCheckTrigger.MANUAL))
+
+        assertEquals(
+            UpdateFailureKind.PLAY_DEBUG_BUILD_UNSUPPORTED,
+            coordinator.currentState().lastFailure?.kind
+        )
+        assertEquals(0, play.checkCount)
+        assertEquals(0, website.checkCount)
+        assertEquals(0, environment.playPackageChecks)
+        assertEquals(0, environment.installSourceReads)
+        assertEquals(
+            UpdateSnapshotState.NEVER_CHECKED,
+            coordinator.currentState().snapshot.state
+        )
+    }
+
+    @Test
+    fun debugBuildAutomaticFailureStillUsesTwentyFourHourThrottle() {
+        var now = 1_000_000_000L
         val coordinator = coordinator(
             now = { now },
-            website = website,
-            forceWebsiteOnly = true
+            playCheckSupported = false
         )
 
         assertTrue(coordinator.check(UpdateCheckTrigger.AUTOMATIC))
-        assertEquals(1, website.checkCount)
-
-        now += UpdatePolicy.AUTO_CHECK_INTERVAL_MILLIS - 1L
         assertFalse(coordinator.check(UpdateCheckTrigger.AUTOMATIC))
-        assertEquals(1, website.checkCount)
 
-        now += 1L
+        now += UpdatePolicy.AUTO_CHECK_INTERVAL_MILLIS
         assertTrue(coordinator.check(UpdateCheckTrigger.AUTOMATIC))
-        assertEquals(2, website.checkCount)
     }
 
     @Test
@@ -82,6 +109,86 @@ class AppUpdateCoordinatorTest {
         assertEquals(UpdateCheckTrigger.MANUAL, state.lastTrigger)
         assertEquals(8L, state.snapshot.availableVersionCode)
         assertTrue(coordinator.shouldPrompt())
+    }
+
+    @Test
+    fun playAvailableUsesMatchingWebsiteVersionNameWithoutChangingPlayEligibility() {
+        val website = FakeWebsiteUpdateSource(
+            WebsiteUpdateResult.Available(
+                availableSnapshot(
+                    versionCode = 12L,
+                    firstSeenAt = 1L,
+                    channel = UpdateChannel.WEBSITE,
+                    versionName = "1.2"
+                )
+            )
+        )
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(
+                immediateResult = availablePlay(versionCode = 12L, stalenessDays = 3)
+            ),
+            website = website
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        val snapshot = coordinator.currentState().snapshot
+        assertEquals(1, website.checkCount)
+        assertEquals(UpdateChannel.PLAY, snapshot.channel)
+        assertEquals(12L, snapshot.availableVersionCode)
+        assertEquals("1.2", snapshot.availableVersionName)
+        assertTrue(snapshot.flexibleAllowed)
+    }
+
+    @Test
+    fun playAvailableNeverUsesVersionCodeOrMismatchedWebsiteNameAsVersionName() {
+        val website = FakeWebsiteUpdateSource(
+            WebsiteUpdateResult.Available(
+                availableSnapshot(
+                    versionCode = 11L,
+                    firstSeenAt = 1L,
+                    channel = UpdateChannel.WEBSITE,
+                    versionName = "1.1"
+                )
+            )
+        )
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(
+                immediateResult = availablePlay(versionCode = 12L, stalenessDays = 3)
+            ),
+            website = website
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        val snapshot = coordinator.currentState().snapshot
+        assertEquals(1, website.checkCount)
+        assertEquals(12L, snapshot.availableVersionCode)
+        assertNull(snapshot.availableVersionName)
+        assertTrue(snapshot.hasNewerVersion)
+    }
+
+    @Test
+    fun playAvailableRemainsReliableWhenVersionNameLookupFails() {
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(
+                immediateResult = availablePlay(versionCode = 12L, stalenessDays = 3)
+            ),
+            website = FakeWebsiteUpdateSource(
+                WebsiteUpdateResult.Failed(UpdateFailureKind.NETWORK)
+            )
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        val state = coordinator.currentState()
+        assertEquals(UpdateChannel.PLAY, state.snapshot.channel)
+        assertEquals(12L, state.snapshot.availableVersionCode)
+        assertNull(state.snapshot.availableVersionName)
+        assertNull(state.lastFailure)
     }
 
     @Test
@@ -129,38 +236,6 @@ class AppUpdateCoordinatorTest {
     }
 
     @Test
-    fun websiteOnlyPreLaunchSwitchBypassesPlayForPlayInstall() {
-        val play = FakePlayUpdateSource(
-            immediateResult = availablePlay(versionCode = 10L, stalenessDays = 3)
-        )
-        val website = FakeWebsiteUpdateSource(
-            WebsiteUpdateResult.Available(availableSnapshot(9L, 1L, UpdateChannel.WEBSITE))
-        )
-        val coordinator = coordinator(
-            now = { 1_000_000_000L },
-            play = play,
-            website = website,
-            playAvailable = true,
-            initialChannel = InitialInstallChannel.PLAY,
-            forceWebsiteOnly = true
-        )
-
-        coordinator.check(UpdateCheckTrigger.MANUAL)
-        coordinator.refreshPlayInstallStatus()
-        var completeResult: Boolean? = null
-        coordinator.completePlayUpdate { completeResult = it }
-
-        assertEquals(0, play.checkCount)
-        assertEquals(0, play.listenerSetCount)
-        assertEquals(0, play.refreshCount)
-        assertEquals(0, play.completeCount)
-        assertFalse(completeResult ?: true)
-        assertEquals(1, website.checkCount)
-        assertEquals(UpdateChannel.WEBSITE, coordinator.currentState().snapshot.channel)
-        assertEquals(9L, coordinator.currentState().snapshot.availableVersionCode)
-    }
-
-    @Test
     fun playInstallWithoutPlayDoesNotFallBackToWebsite() {
         val website = FakeWebsiteUpdateSource(
             WebsiteUpdateResult.Available(availableSnapshot(9L, 1L, UpdateChannel.WEBSITE))
@@ -194,6 +269,107 @@ class AppUpdateCoordinatorTest {
         assertEquals(1, website.checkCount)
         assertEquals(UpdateChannel.PLAY, coordinator.currentState().snapshot.channel)
         assertEquals(9L, coordinator.currentState().snapshot.availableVersionCode)
+        assertFalse(coordinator.currentState().snapshot.flexibleAllowed)
+    }
+
+    @Test
+    fun appNotOwnedWithWebsiteUpToDateIsUnverifiableNotUpToDate() {
+        val website = FakeWebsiteUpdateSource(
+            WebsiteUpdateResult.UpToDate(
+                UpdateSnapshot.upToDate(
+                    installedVersionCode = 6L,
+                    channel = UpdateChannel.WEBSITE,
+                    checkedAt = 1L
+                )
+            )
+        )
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(immediateResult = PlayUpdateResult.AppNotOwned),
+            website = website
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        assertEquals(
+            UpdateFailureKind.PLAY_APP_NOT_OWNED,
+            coordinator.currentState().lastFailure?.kind
+        )
+        assertEquals(
+            UpdateSnapshotState.NEVER_CHECKED,
+            coordinator.currentState().snapshot.state
+        )
+    }
+
+    @Test
+    fun appNotOwnedKeepsRootFailureWhenWebsiteFails() {
+        listOf(UpdateFailureKind.NETWORK, UpdateFailureKind.INVALID_METADATA).forEach { kind ->
+            val coordinator = coordinator(
+                now = { 1_000_000_000L },
+                play = FakePlayUpdateSource(immediateResult = PlayUpdateResult.AppNotOwned),
+                website = FakeWebsiteUpdateSource(WebsiteUpdateResult.Failed(kind))
+            )
+
+            coordinator.check(UpdateCheckTrigger.MANUAL)
+
+            assertEquals(
+                UpdateFailureKind.PLAY_APP_NOT_OWNED,
+                coordinator.currentState().lastFailure?.kind
+            )
+        }
+    }
+
+    @Test
+    fun appNotOwnedFailureRetainsReliableUpdateSnapshot() {
+        val store = stateStore().apply {
+            save(
+                UpdateStoredState(
+                    initialInstallChannel = InitialInstallChannel.PLAY,
+                    snapshot = availableSnapshot(8L, 1L)
+                )
+            )
+        }
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(immediateResult = PlayUpdateResult.AppNotOwned),
+            website = FakeWebsiteUpdateSource(
+                WebsiteUpdateResult.Failed(UpdateFailureKind.NETWORK)
+            ),
+            store = store
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        assertEquals(8L, coordinator.currentState().snapshot.availableVersionCode)
+        assertTrue(coordinator.currentState().snapshot.hasNewerVersion)
+        assertTrue(coordinator.currentState().lastFailure?.retainedReliableSnapshot == true)
+    }
+
+    @Test
+    fun coordinatorRecordsChannelDecisionAndCompletedFailure() {
+        val events = mutableListOf<AppUpdateDiagnosticEvent>()
+        val coordinator = coordinator(
+            now = { 1_000_000_000L },
+            play = FakePlayUpdateSource(immediateResult = PlayUpdateResult.AppNotOwned),
+            website = FakeWebsiteUpdateSource(
+                WebsiteUpdateResult.Failed(UpdateFailureKind.NETWORK)
+            ),
+            diagnostics = AppUpdateDiagnostics(events::add)
+        )
+
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+
+        assertTrue(
+            AppUpdateDiagnosticEvent.ChannelDecision(
+                InitialInstallChannel.PLAY,
+                UpdateChannelDecision.PLAY_WITH_WEBSITE_METADATA
+            ) in events
+        )
+        assertTrue(
+            AppUpdateDiagnosticEvent.CompletedFailure(
+                UpdateFailureKind.PLAY_APP_NOT_OWNED
+            ) in events
+        )
     }
 
     @Test
@@ -277,7 +453,9 @@ class AppUpdateCoordinatorTest {
         playAvailable: Boolean = true,
         initialChannel: InitialInstallChannel = InitialInstallChannel.PLAY,
         store: SharedPreferencesUpdateStateStore = stateStore(initialChannel),
-        forceWebsiteOnly: Boolean = false,
+        playCheckSupported: Boolean = true,
+        environment: CountingUpdateEnvironment? = null,
+        diagnostics: AppUpdateDiagnostics = NoOpAppUpdateDiagnostics,
         callbackExecutor: (Runnable) -> Unit = { it.run() }
     ) = AppUpdateCoordinator(
         installedVersionCode = 6L,
@@ -285,17 +463,18 @@ class AppUpdateCoordinatorTest {
         policy = UpdatePolicy(now),
         playSource = play,
         websiteSource = website,
-        playPackageProbe = object : PlayPackageProbe {
+        playPackageProbe = environment ?: object : PlayPackageProbe {
             override fun isPlayAvailable(): Boolean = playAvailable
         },
-        installSourceReader = object : InstallSourceReader {
+        installSourceReader = environment ?: object : InstallSourceReader {
             override fun installerPackageName(): String? = when (initialChannel) {
                 InitialInstallChannel.PLAY -> "com.android.vending"
                 InitialInstallChannel.NON_PLAY -> "com.android.packageinstaller"
                 InitialInstallChannel.UNKNOWN_NON_PLAY -> null
             }
         },
-        forceWebsiteOnly = forceWebsiteOnly,
+        playCheckSupported = playCheckSupported,
+        diagnostics = diagnostics,
         clock = now,
         callbackExecutor = callbackExecutor
     )
@@ -322,18 +501,34 @@ class AppUpdateCoordinatorTest {
     private fun availableSnapshot(
         versionCode: Long,
         firstSeenAt: Long,
-        channel: UpdateChannel = UpdateChannel.PLAY
+        channel: UpdateChannel = UpdateChannel.PLAY,
+        versionName: String = "1.$versionCode"
     ) = UpdateSnapshot(
         state = UpdateSnapshotState.UPDATE_AVAILABLE,
         channel = channel,
         installedVersionCode = 6L,
         availableVersionCode = versionCode,
-        availableVersionName = "1.$versionCode",
+        availableVersionName = versionName,
         availableSinceAt = firstSeenAt,
         firstSeenAt = firstSeenAt,
         checkedAt = firstSeenAt,
         flexibleAllowed = channel == UpdateChannel.PLAY
     )
+}
+
+private class CountingUpdateEnvironment : PlayPackageProbe, InstallSourceReader {
+    var playPackageChecks = 0
+    var installSourceReads = 0
+
+    override fun isPlayAvailable(): Boolean {
+        playPackageChecks += 1
+        return true
+    }
+
+    override fun installerPackageName(): String? {
+        installSourceReads += 1
+        return "com.android.vending"
+    }
 }
 
 private class FakePlayUpdateSource(

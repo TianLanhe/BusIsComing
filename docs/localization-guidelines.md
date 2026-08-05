@@ -62,8 +62,9 @@ BusIsComing 的 App runtime 支援以下選擇：
 
 - DATA.GOV.HK 只可對單一空欄位採用上述官方欄位回退，並保留實際欄位語言；不得把回退值寫回保存資料。
 - Citybus 或 Google 的整體請求失敗不得改用另一語言重試，不得顯示 mock 名稱或舊語言 cache。
-- `bsearch_p3.php` 必須保留 `q`、`limit=100`、`timestamp` 及空顯式 header；路線查詢保留座標、香港時間、`ws=1.3`、`leg=2`、`m1` 與 `l`。
-- Citybus mobile 不附加 Cookie、Referer、User-Agent、X-Requested-With 等瀏覽器 header。刪除其他 query 參數前必須以三語、多樣本、語義等價的 A/B 證據證明安全。
+- 上表的 Google 語言只約束 App 主動送出的 Geocoding 等請求。Google Maps 底圖內建道路、地名、商戶及 attribution 由 Maps SDK／Google／裝置環境決定，可能不完全跟隨 App locale；App 自有的詳情摘要、marker title、錯誤、定位／全覽控件及 `contentDescription` 仍必須使用目前 App 語言資源或同語言 Citybus 資料。
+- Citybus 地點、路線、站序與 ETA 的參數及解析契約由 `citybus-route-query-and-eta.md` 維護；本文件只約束它們必須使用同一 `LanguageSnapshot`，且不得以跨語言重試掩蓋失敗。
+- 更新檢查打開網站時依實際語言選擇上述路徑；由 Play 確認更新後，網站 `versionName` 只有在 `versionCode` 精確一致時才可展示。完整渠道契約見 `app-update-check.md`。
 
 ## 切換生命週期
 
@@ -77,7 +78,7 @@ BusIsComing 的 App runtime 支援以下選擇：
 - 繁體只接受粵語、香港／澳門／台灣中文或明確 `Hant` Voice；簡體只接受普通話或明確 `Hans` Voice；英文只接受 `en` 並優先 HK／GB。
 - 模糊 `zh` 不可用，繁簡不得互相 fallback。
 - no engine、初始化失敗／逾時、missing data、unsupported locale、無相容 Voice、audio focus、speak rejected、播放錯誤／逾時及 released 都是穩定失敗原因。
-- 能力失敗立即提示；runtime 原因在同一監控 session 最多提示一次。提示必須說明具體原因及「監控會繼續但不播報」，不得只寫「目前語言的語音不可用」。
+- 能力失敗立即提示；同一監控 session 內，每一種穩定 runtime 失敗原因最多提示一次，不同原因可以各提示一次。提示必須說明具體原因及「監控會繼續但不播報」，不得只寫「目前語言的語音不可用」。
 - 不提供系統語音設定或試聽入口。日誌可記錄 engine、候選 locale／Voice、setLanguage、focus、speak 與 callback 結果，不記錄 API key、完整用戶行程名或 utterance。
 
 ## 版面與無障礙
@@ -86,6 +87,8 @@ BusIsComing 的 App runtime 支援以下選擇：
 - 長英文與大字體使用 `wrap_content + minHeight`、換行、彈性 weight、水平／垂直滾動；不得靠縮字、核心文字單行裁切或重疊處理。
 - 核心 action 的觸控目標至少 48dp。Dialog 與 Bottom Sheet 的內容和 action 必須可達。
 - 快捷卡可對用戶行程名與站名作有限行數的 compact 展示，但詳情及 `contentDescription` 必須保留完整文字。
+- 路線詳情的文字時間線是地圖的等價可讀內容；站點、轉乘、geometry 或位置狀態不得只靠顏色、marker 或圖例傳達，地圖不可用時仍須保留目前語言的完整操作與錯誤說明。
+- 監控通知健康、系統設定 fallback、精確鬧鐘及電池最佳化說明均屬 App 自有文案，三語資源必須表達阻斷、警告、未知與可降級繼續的差異。
 - 深色模式使用語意色 token；只有 launcher／品牌圖像與經對比驗證的路線識別色可保持固定色。
 
 ## 驗證門檻

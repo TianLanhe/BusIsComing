@@ -89,7 +89,7 @@ class AppUpdateInstrumentedTest {
             openUpdateSetting()
             var expected = ""
             scenario.onActivity {
-                expected = it.getString(R.string.update_status_available_deferred, "1.2")
+                expected = it.getString(R.string.update_status_available_deferred, "v1.2")
             }
             onView(withId(R.id.settingsUpdateSummary)).check(matches(withText(expected)))
             onView(withId(R.id.settingsUpdateDot)).check(matches(isDisplayed()))
@@ -118,6 +118,28 @@ class AppUpdateInstrumentedTest {
 
             scenario.recreate()
             onView(withText(R.string.update_prompt_title)).check(doesNotExist())
+        }
+    }
+
+    @Test
+    fun updateDialogHidesVersionRowWhenVersionNameIsUnavailable() {
+        val now = System.currentTimeMillis()
+        seed(
+            UpdateStoredState(
+                initialInstallChannel = InitialInstallChannel.PLAY,
+                lastAutoAttemptAt = now,
+                snapshot = availableSnapshot(now - 4L * UpdatePolicy.DAY_MILLIS).copy(
+                    availableVersionName = null
+                )
+            )
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            onView(withId(R.id.updatePromptTitle)).check(matches(isDisplayed()))
+            onView(withId(R.id.updatePromptVersion)).check(
+                matches(withEffectiveVisibility(GONE))
+            )
+            onView(withId(R.id.updatePromptUpdateButton)).check(matches(isDisplayed()))
         }
     }
 
@@ -187,7 +209,7 @@ class AppUpdateInstrumentedTest {
     private fun assertUpdateDialogActions(scenario: ActivityScenario<MainActivity>) {
         var expectedVersion = ""
         scenario.onActivity {
-            expectedVersion = it.getString(R.string.update_prompt_version, "1.2")
+            expectedVersion = it.getString(R.string.update_prompt_version, "v1.2")
         }
         onView(withId(R.id.updatePromptTitle)).check(matches(isDisplayed()))
         onView(withId(R.id.updatePromptVersion)).check(

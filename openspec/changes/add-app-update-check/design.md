@@ -29,17 +29,19 @@ App 將同時由 Google Play 與官方網站提供下載，但兩個渠道不能
 
 ## Decisions
 
-### 0. 上架前以本機開關暫時強制網站渠道
+### 0. 正常構建固定使用 Play 優先策略
 
-App 尚未正式上架 Google Play，目前把 `app/build.gradle.kts` 的 BuildConfig 開關 `FORCE_WEBSITE_UPDATE_CHECK` 設為 `true`。開關啟用時，自動與手動檢查均直接使用網站 metadata，不探測安裝來源或 Play package，不執行 Play 版本檢查、安裝狀態刷新或 flexible flow；可靠結果的渠道固定為 `WEBSITE`，因此更新操作只會開啟三語網站下載頁。
+Google Play 上架後刪除本機網站強制開關；正常構建固定使用 Play 優先策略。網站渠道只保留給目前沒有可用官方 Play 的非 Play／未知非 Play 安裝，`ERROR_APP_NOT_OWNED` 只把網站較高版本當作正向證據。
 
-既有 Play source、resolver、flexible update 與 Play 詳情頁恢復路徑完整保留。App 正式上架並具備可驗收的較高版本後，只需把開關改為 `false`，即可恢復下列 Play 優先策略，毋須改動 coordinator 分流或 UI。此臨時例外記錄於 `docs/technical-debt.md` 的 TD-002，關閉前必須完成真實 Play internal test／Internal App Sharing 驗收。
+Debug 構建無法代表 Google Play 的正式交付與帳號擁有權，因此更新協調器在任何 installer、Play package、Play Core 或網站請求前短路。手動檢查提供前往 Google Play 的受控提示，自動檢查保持靜默並保存 24 小時嘗試節流，兩者都不寫入可靠的最新或更新可用快照。
 
-被否決方案：刪除或註解 Play 實作會擴大日後恢復改動及回歸風險；在未上架期間仍呼叫 Play 並依賴 `ERROR_APP_NOT_OWNED` 會讓目前更新檢查不穩定。
+被否決方案：繼續保留本機網站強制模式會讓正式行為存在無需的平行接線，亦可能再次以網站全局版本取代 Play 資格判斷。
 
 ### 1. Play 能力優先，初始安裝渠道只限制網站兜底
 
-更新協調器先呼叫 Play Core，並以 `AppUpdateInfo` 的更新狀態作目前用戶的權威結果。`UPDATE_AVAILABLE` 與 `UPDATE_NOT_AVAILABLE` 都不再查網站；`ERROR_APP_NOT_OWNED` 保持 Play 操作渠道，但可在網站已遵守「Play 100% 後才發佈」的前提下讀 metadata 判斷是否有較高版本。Play 暫時失敗但 `com.android.vending` 可用時保留 Play 渠道。
+更新協調器先呼叫 Play Core，並以 `AppUpdateInfo` 的更新狀態作目前用戶的權威結果。`UPDATE_NOT_AVAILABLE` 不再查網站；`UPDATE_AVAILABLE` 的資格、versionCode、staleness 與 flexible 能力完全採用 Play 結果，網站 metadata 只可作展示名稱補充。`ERROR_APP_NOT_OWNED` 保持 Play 操作渠道，但可在網站已遵守「Play 100% 後才發佈」的前提下讀 metadata 判斷是否有較高版本。只有網站 `versionCode` 較高時才形成可靠更新快照；版本相等、較低、請求失敗或 metadata 無效都保留 `PLAY_APP_NOT_OWNED`，不得宣稱目前已是最新。Play 暫時失敗但 `com.android.vending` 可用時保留 Play 渠道。
+
+Play Core 2.1.0 的 `AppUpdateInfo` 只暴露 `availableVersionCode()`，沒有目標版本的 `versionName`。Play 回報可更新後，協調器可讀取同一官方網站 metadata，但只有 metadata `versionCode` 與 Play 精確一致時才保存其 `versionName`；這次讀取不得改變 Play 渠道、更新資格、flexible 能力或失敗結果。UI 把合法名稱規範為單一小寫 `v` 前綴，例如 `v1.2`。網站版本落後、超前、無效或網絡失敗時仍保存 Play 的可靠更新快照，但版本名稱留空，設定摘要改用不含數字的通用「有新版本可用」，Dialog 隱藏版本行，絕不顯示裸 `versionCode`。
 
 系統首次使用更新能力時保存 `initialInstallChannel`：API 30 或以上讀 `getInstallSourceInfo()`，API 25–29 讀 `getInstallerPackageName()`。目前有 Play 時不論初始渠道都走 Play；只有沒有 Play且初始渠道不是 Play時才走網站。初始為 Play 的安裝即使 Play 日後被停用，也只顯示 Play 暫不可用。
 
@@ -143,23 +145,24 @@ App 僅由固定 HTTPS 官方 endpoint 取得資料，驗證響應最終 URL 沒
 - [Play Core 在 sideload／帳號未擁有時可能無法提供版本] → `ERROR_APP_NOT_OWNED` 只用已遵守 Play 100% 門檻的網站 metadata 判斷是否顯示更新，操作仍導向 Play。
 - [Package installer 可能為 null 或隨更新改變] → 首次保存渠道；有 Play 時始終 Play；無 Play 且未知時只歸為未知非 Play，不把 installer 當安全憑證。
 - [Play 暫時錯誤造成網站錯誤降級] → resolver 必須同時判斷 Play error 與官方 package 可用性，暫時錯誤只保留可靠快照。
+- [Play 測試軌道先於網站版本，無法取得 versionName] → 網站 metadata 只在 versionCode 精確匹配時補充名稱；不匹配時保留 Play 更新資格並使用通用摘要，不猜測名稱或顯示 versionCode。
 - [使用者點更新但不完成] → 點擊前先 defer 3 天；更新完成後以目前 versionCode 同步清理。
 - [三個 Dialog action 在英文或大字體下擁擠] → 使用可換行／垂直 action 佈局，按 360dp 及 font scale 2.0 驗證，不縮字。
 - [系統時間回撥破壞節流] → 負間隔按未到期處理，持久化 epoch 時間並以注入 clock 做邊界測試。
 - [網站 APK 簽名或 metadata 人工失配] → 只使用 Play signed universal APK，從實際包提取 metadata 並在發佈前以腳本驗證。
 - [沒有遠端 kill switch] → 更新檢查失敗預設 fail-safe 且不阻塞 App；如 Play 版本有嚴重問題，使用 Play halt／新版本回復，網站保留上一個已驗證包直到新版本 100%。
-- [上架前無法真實驗收 Play 資格與 flexible flow] → 暫時啟用 `FORCE_WEBSITE_UPDATE_CHECK`，把所有檢查固定到網站；以 TD-002 追蹤，上架並完成真實驗收後關閉。
+- [真實 Play 資格與 flexible flow 尚未驗收] → 正常構建固定進入 Play 優先流程，以 TD-002 及未完成的 Internal App Sharing 任務追蹤，取得 v10 → v11 flexible flow 真實證據後才關閉技術債。
 
 ## Migration Plan
 
 1. 確認網站已部署 metadata endpoint、真實 DTO 不含 `applicationId`、`downloadUrl` 可為固定相對路徑，並保持 `Cache-Control: no-store`。
 2. 在 Android 工程以真實 DTO 契約修正網站 parser，並維持既有 Play 依賴、有限 package visibility、更新模型／policy／store／source／coordinator。
 3. 接入 `MainActivity` 冷啟動與 `SettingsFragment` 手動入口、小紅點、三語 Dialog、flexible 完成提示及 instrumentation。
-4. 上架前保持 `FORCE_WEBSITE_UPDATE_CHECK=true`，驗證所有安裝來源都只走網站；上架後改為 `false`，再以 Play internal test／Internal App Sharing 及已擁有 App 的帳號驗證較高 versionCode flexible flow。
+4. 刪除本機網站強制模式，以 Play internal test／Internal App Sharing 及已擁有 App 的帳號驗證較高 versionCode flexible flow；Debug 構建只驗證受控失敗，不作 Play 資格證據。
 5. 運行 `./gradlew build`，並完成三語×深淺色×360dp×font scale 1.0／1.3／2.0 與 TalkBack 人工驗收。
 6. 發佈 AAB 並完成目標地區 100%；下載 Play signed universal APK，驗證 app signing certificate 後才替換網站 APK 與 metadata。
 7. 如需回滾，Play 使用 halt／修復版本；網站不公開未完成 100% 或未驗證的新包。已安裝 App 的檢查故障保持靜默，不影響行程查詢與本機資料。
 
 ## Open Questions
 
-無未裁決產品行為。網站 metadata endpoint 已可進行只讀線上契約驗證；Play internal test 帳號／裝置及 signed universal APK 取得仍屬上架後驗收條件，而非待決設計選項。
+無未裁決產品行為。網站 metadata、signed universal APK 與簽名發佈鏈已可進行只讀驗證；Play internal test／Internal App Sharing 的 v10 → v11 真實 flexible flow 仍屬關閉 TD-002 的驗收條件，而非待決設計選項。
