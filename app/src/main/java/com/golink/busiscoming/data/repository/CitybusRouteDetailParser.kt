@@ -14,7 +14,13 @@ import com.golink.busiscoming.data.model.RouteDetailWalkingSegment
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
-class CitybusRouteDetailParseException(message: String) : IllegalArgumentException(message)
+open class CitybusRouteDetailParseException(message: String) : IllegalArgumentException(message)
+
+class CitybusRouteDetailStructureException(
+    val validation: RouteDetailStructureValidationResult.Invalid
+) : CitybusRouteDetailParseException(
+    "Citybus route detail station structure is invalid: ${validation.reason} at leg ${validation.legIndex}"
+)
 
 object CitybusRouteDetailParser {
     fun parseDetail(response: String, plan: P2pRoutePlan): ParsedRouteDetail {
@@ -113,7 +119,7 @@ object CitybusRouteDetailParser {
         }
 
         val directionTexts = parseDirectionTexts(document.root())
-        return plan.legs.mapIndexed { index, leg ->
+        val legs = plan.legs.mapIndexed { index, leg ->
             val legStops = stopRows
                 .filter { it.routeVariant == leg.routeVariant }
                 .filter { it.sequence in leg.boardingSeq..leg.alightingSeq }
@@ -136,6 +142,11 @@ object CitybusRouteDetailParser {
                 alightingStop = alighting.toRouteDetailStop(RouteDetailStopRole.ALIGHTING)
             )
         }
+        val validation = RouteDetailStructureValidator.validate(plan, legs)
+        if (validation is RouteDetailStructureValidationResult.Invalid) {
+            throw CitybusRouteDetailStructureException(validation)
+        }
+        return legs
     }
 
     fun parseOriginWalkingDistanceMeters(response: String): Int? {

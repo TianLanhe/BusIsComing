@@ -48,8 +48,12 @@
     <string name="route_detail_navigate_up">Back to route results</string>
     <string name="route_detail_arrival">Arrive about %1$s</string>
     <string name="route_detail_total_stops">%1$d stops in total</string>
-    <string name="route_detail_summary_accessibility">%1$s, %2$d min, %3$s, fare %4$s, %5$d stops in total, %6$d m walk</string>
-    <string name="route_detail_summary_accessibility_without_arrival">%1$s, %2$d min, fare %3$s, %4$d stops in total, %5$d m walk</string>
+    <string name="route_detail_stops_loading">Loading stop count</string>
+    <string name="route_detail_stops_unavailable">Stop count unavailable</string>
+    <string name="route_detail_dynamic_refreshing">Updating scheduled times and fares</string>
+    <string name="route_detail_dynamic_refresh_failed">Dynamic details could not be updated. Stops are still available.</string>
+    <string name="route_detail_summary_accessibility">%1$s, %2$d min, %3$s, fare %4$s, %5$s, %6$d m walk</string>
+    <string name="route_detail_summary_accessibility_without_arrival">%1$s, %2$d min, fare %3$s, %4$s, %5$d m walk</string>
     <string name="route_detail_planned_time">Scheduled %1$s</string>
     <string name="route_detail_live_eta">Live · %1$d min away</string>
     <string name="route_detail_live_due">Live · Due</string>

@@ -264,7 +264,7 @@ data class RouteDetail(
         get() = originWalking?.distanceMeters
 
     val totalViaStopCount: Int
-        get() = legs.sumOf { it.viaStops.size }
+        get() = legs.sumOf { it.viaStops.size + 1 }
 
     val hasCompleteWalkingDistance: Boolean
         get() = originWalking?.distanceMeters != null &&

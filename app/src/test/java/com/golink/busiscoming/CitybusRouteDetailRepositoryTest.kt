@@ -15,7 +15,9 @@ import com.golink.busiscoming.data.repository.CitybusRouteParser
 import com.golink.busiscoming.data.repository.CitybusSessionRegistry
 import com.golink.busiscoming.data.repository.RouteStructureCache
 import com.golink.busiscoming.data.repository.WalkingDistanceCache
-import com.golink.busiscoming.data.repository.RouteDetailCache
+import com.golink.busiscoming.data.repository.RouteDetailStructureInvalidReason
+import com.golink.busiscoming.data.repository.RouteDetailStructureValidationResult
+import com.golink.busiscoming.data.repository.RouteDetailStructureValidator
 import java.io.IOException
 import java.net.URL
 import org.junit.Assert.assertEquals
@@ -239,15 +241,19 @@ class CitybusRouteDetailRepositoryTest {
         )
 
         repository.loadRouteDetail(route(firstQuery, routeName = "N118"))
-        val cached = repository.loadRouteDetail(route(sameContextNewSession, routeName = "N118"))
+        val cached = requireNotNull(
+            repository.loadCachedRouteDetail(route(sameContextNewSession, routeName = "N118"))
+        )
+        val refreshed = repository.loadRouteDetail(route(sameContextNewSession, routeName = "N118"))
         repository.loadRouteDetail(
             route(sameContextNewSession.copy(recoveryContext = secondContext), routeName = "N118")
         )
 
-        assertEquals(2, fetchCount)
+        assertEquals(3, fetchCount)
         assertEquals(262, cached.completeWalkingDistanceMeters)
         assertEquals("03:15", cached.plannedArrivalTime)
         assertEquals(null, cached.plannedDepartureTime)
+        assertEquals("02:04", refreshed.plannedArrivalTime)
     }
 
     @Test
@@ -326,7 +332,128 @@ class CitybusRouteDetailRepositoryTest {
     }
 
     @Test
-    fun repositoryCachesSuccessfulDetailsAndDoesNotCacheFailures() {
+    fun rejectsStationStructureWithMissingIntermediateSequence() {
+        assertThrows(CitybusRouteDetailParseException::class.java) {
+            CitybusRouteDetailParser.parse(MISSING_INTERMEDIATE_HTML, query(SINGLE_ROUTE_RAW_INFO).plan)
+        }
+    }
+
+    @Test
+    fun rejectsStationStructureWithDuplicateSequence() {
+        assertThrows(CitybusRouteDetailParseException::class.java) {
+            CitybusRouteDetailParser.parse(DUPLICATE_SEQUENCE_HTML, query(SINGLE_ROUTE_RAW_INFO).plan)
+        }
+    }
+
+    @Test
+    fun rejectsStationStructureWithBlankStopId() {
+        assertThrows(CitybusRouteDetailParseException::class.java) {
+            CitybusRouteDetailParser.parse(BLANK_STOP_ID_HTML, query(SINGLE_ROUTE_RAW_INFO).plan)
+        }
+    }
+
+    @Test
+    fun validatorReportsEndpointAndCoordinateFailuresDeterministically() {
+        val plan = query(SINGLE_ROUTE_RAW_INFO).plan
+        val validLeg = CitybusRouteDetailParser.parse(DIRECTION_DETAIL_HTML, plan).single()
+
+        assertEquals(
+            RouteDetailStructureValidationResult.Invalid(
+                RouteDetailStructureInvalidReason.ENDPOINT_MISMATCH,
+                legIndex = 0
+            ),
+            RouteDetailStructureValidator.validate(
+                plan,
+                listOf(validLeg.copy(boardingStop = validLeg.boardingStop.copy(sequence = 5)))
+            )
+        )
+        assertEquals(
+            RouteDetailStructureValidationResult.Invalid(
+                RouteDetailStructureInvalidReason.INVALID_STOP_COORDINATE,
+                legIndex = 0
+            ),
+            RouteDetailStructureValidator.validate(
+                plan,
+                listOf(validLeg.copy(alightingStop = validLeg.alightingStop.copy(latitude = Double.NaN)))
+            )
+        )
+        assertEquals(
+            RouteDetailStructureValidationResult.Invalid(
+                RouteDetailStructureInvalidReason.INVALID_STOP_ID,
+                legIndex = 0
+            ),
+            RouteDetailStructureValidator.validate(
+                plan,
+                listOf(validLeg.copy(alightingStop = validLeg.alightingStop.copy(stopId = "")))
+            )
+        )
+    }
+
+    @Test
+    fun recoversOnceWhenFirstStationStructureIsInvalid() {
+        val context = recoveryContext("T")
+        val registry = CitybusSessionRegistry(referenceFactory = { raw -> "ref-$raw" })
+        val oldReference = registry.register("old", "0", context)
+        val freshReference = registry.register("fresh", "0", context)
+        val originalQuery = query(SINGLE_ROUTE_RAW_INFO, listId = "old").copy(
+            sessionRef = oldReference,
+            recoveryContext = context
+        )
+        var recoveryCount = 0
+        var fetchCount = 0
+        val repository = CitybusRouteDetailRepository(
+            sessionRegistry = registry,
+            recoverySearcher = { _, _ ->
+                recoveryCount += 1
+                listOf(route(originalQuery.copy(listId = "fresh", sessionRef = freshReference)))
+            },
+            detailFetcher = { _, _ ->
+                fetchCount += 1
+                if (fetchCount == 1) MISSING_INTERMEDIATE_HTML else DIRECTION_DETAIL_HTML
+            }
+        )
+
+        val detail = repository.loadRouteDetail(route(originalQuery))
+
+        assertEquals(1, recoveryCount)
+        assertEquals(2, fetchCount)
+        assertEquals(2, detail.totalViaStopCount)
+    }
+
+    @Test
+    fun invalidStationStructureAfterOneRecoveryIsNotCached() {
+        val context = recoveryContext("T")
+        val registry = CitybusSessionRegistry(referenceFactory = { raw -> "ref-$raw" })
+        val oldReference = registry.register("old", "0", context)
+        val freshReference = registry.register("fresh", "0", context)
+        val originalQuery = query(SINGLE_ROUTE_RAW_INFO, listId = "old").copy(
+            sessionRef = oldReference,
+            recoveryContext = context
+        )
+        var fetchCount = 0
+        val repository = CitybusRouteDetailRepository(
+            sessionRegistry = registry,
+            recoverySearcher = { _, _ ->
+                listOf(route(originalQuery.copy(listId = "fresh", sessionRef = freshReference)))
+            },
+            detailFetcher = { _, _ ->
+                fetchCount += 1
+                MISSING_INTERMEDIATE_HTML
+            }
+        )
+
+        assertThrows(CitybusRouteDetailParseException::class.java) {
+            repository.loadRouteDetail(route(originalQuery))
+        }
+        assertThrows(CitybusRouteDetailParseException::class.java) {
+            repository.loadRouteDetail(route(originalQuery))
+        }
+
+        assertEquals(4, fetchCount)
+    }
+
+    @Test
+    fun repositoryCachesStableStructureButRefreshesDynamicDetailsAndDoesNotCacheFailures() {
         var fetchCount = 0
         val route = route(query("1|*|CTB||N118-TOS-1||5||9||O|*|"), routeName = "N118")
         val repository = CitybusRouteDetailRepository(
@@ -344,7 +471,8 @@ class CitybusRouteDetailRepositoryTest {
         assertEquals(firstDetail.originWalking, cachedDetail.originWalking)
         assertEquals(firstDetail.transfers, cachedDetail.transfers)
         assertEquals(firstDetail.destinationWalking, cachedDetail.destinationWalking)
-        assertEquals(1, fetchCount)
+        assertEquals(2, fetchCount)
+        assertNotNull(repository.loadCachedRouteDetail(route))
 
         var failingFetchCount = 0
         val failingRepository = CitybusRouteDetailRepository(
@@ -397,7 +525,7 @@ class CitybusRouteDetailRepositoryTest {
         assertEquals("利源東街", detail.legs[1].alightingStop.displayName)
         assertEquals(8, detail.legs.first().viaStops.size)
         assertEquals(6, detail.legs[1].viaStops.size)
-        assertEquals(14, detail.totalViaStopCount)
+        assertEquals(16, detail.totalViaStopCount)
         assertEquals(378, detail.walkingDistanceMeters)
         assertEquals(403, detail.completeWalkingDistanceMeters)
         assertTrue(detail.hasCompleteWalkingDistance)
@@ -485,24 +613,6 @@ class CitybusRouteDetailRepositoryTest {
         assertEquals(RouteDetailTransferType.WALK_TO_TRANSFER_STOP, detail.transfers.single().type)
         assertEquals(null, detail.transfers.single().walking?.distanceMeters)
         assertEquals("12:30", detail.plannedArrivalTime)
-    }
-
-    @Test
-    fun cacheHonorsExpiryAndLanguageIsolation() {
-        var now = 1_000L
-        val cache = RouteDetailCache(clock = { now }, ttlMillis = 100L)
-        val tcKey = query(SINGLE_ROUTE_RAW_INFO, lang = "0").cacheKey()
-        val enKey = query(SINGLE_ROUTE_RAW_INFO, lang = "1").cacheKey()
-        val legs = CitybusRouteDetailParser.parse(DIRECTION_DETAIL_HTML, query(SINGLE_ROUTE_RAW_INFO).plan)
-
-        cache.put(tcKey, legs)
-
-        assertNotNull(cache.get(tcKey))
-        assertEquals(null, cache.get(enKey))
-
-        now += 101L
-
-        assertEquals(null, cache.get(tcKey))
     }
 
     @Test
@@ -604,6 +714,30 @@ class CitybusRouteDetailRepositoryTest {
 
         private const val MISSING_BOARDING_HTML = """
             <div>
+                <table class="p2plistcell" onclick="stopclick1('001372','22.267973272090998','114.23757547053','8','8X-THR-1','','Y','22.267973272090998','114.23757547053');"><tr><td align="left"><table><tr><td align="left">張振興伉儷書院, 東區走廊</td></tr></table></td></tr></table>
+            </div>
+        """
+
+        private const val MISSING_INTERMEDIATE_HTML = """
+            <div>
+                <table class="p2plistcell" onclick="stopclick1('001227','22.264934942091','114.24163903053001','6','8X-THR-1','','Y','22.264934942091','114.24163903053001');"><tr><td align="left"><table><tr><td align="left">樂軒臺, 柴灣道</td></tr></table></td></tr></table>
+                <table class="p2plistcell" onclick="stopclick1('001372','22.267973272090998','114.23757547053','8','8X-THR-1','','Y','22.267973272090998','114.23757547053');"><tr><td align="left"><table><tr><td align="left">張振興伉儷書院, 東區走廊</td></tr></table></td></tr></table>
+            </div>
+        """
+
+        private const val DUPLICATE_SEQUENCE_HTML = """
+            <div>
+                <table class="p2plistcell" onclick="stopclick1('001227','22.264934942091','114.24163903053001','6','8X-THR-1','','Y','22.264934942091','114.24163903053001');"><tr><td align="left"><table><tr><td align="left">樂軒臺, 柴灣道</td></tr></table></td></tr></table>
+                <table class="p2plistcell" onclick="stopclick1('001228','22.263136522091','114.23869463053','7','8X-THR-1','','Y','22.263136522091','114.23869463053');"><tr><td align="left"><table><tr><td align="left">環翠商場, 柴灣道</td></tr></table></td></tr></table>
+                <table class="p2plistcell" onclick="stopclick1('009999','22.263000000000','114.23800000000','7','8X-THR-1','','Y','22.263000000000','114.23800000000');"><tr><td align="left"><table><tr><td align="left">重複站, 柴灣道</td></tr></table></td></tr></table>
+                <table class="p2plistcell" onclick="stopclick1('001372','22.267973272090998','114.23757547053','8','8X-THR-1','','Y','22.267973272090998','114.23757547053');"><tr><td align="left"><table><tr><td align="left">張振興伉儷書院, 東區走廊</td></tr></table></td></tr></table>
+            </div>
+        """
+
+        private const val BLANK_STOP_ID_HTML = """
+            <div>
+                <table class="p2plistcell" onclick="stopclick1('','22.264934942091','114.24163903053001','6','8X-THR-1','','Y','22.264934942091','114.24163903053001');"><tr><td align="left"><table><tr><td align="left">樂軒臺, 柴灣道</td></tr></table></td></tr></table>
+                <table class="p2plistcell" onclick="stopclick1('001228','22.263136522091','114.23869463053','7','8X-THR-1','','Y','22.263136522091','114.23869463053');"><tr><td align="left"><table><tr><td align="left">環翠商場, 柴灣道</td></tr></table></td></tr></table>
                 <table class="p2plistcell" onclick="stopclick1('001372','22.267973272090998','114.23757547053','8','8X-THR-1','','Y','22.267973272090998','114.23757547053');"><tr><td align="left"><table><tr><td align="left">張振興伉儷書院, 東區走廊</td></tr></table></td></tr></table>
             </div>
         """
