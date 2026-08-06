@@ -1,5 +1,6 @@
 package com.golink.busiscoming.ui.main
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Typeface
 import android.view.Gravity
@@ -8,6 +9,10 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import androidx.core.widget.NestedScrollView
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.WalkingScenarioModifier
@@ -15,6 +20,7 @@ import com.golink.busiscoming.data.model.WalkingSpeedPreset
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
 import com.golink.busiscoming.data.model.WalkingTimeEstimate
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
@@ -67,10 +73,29 @@ class MonitorSettingsBottomSheet(
         content.addView(voiceSection())
         content.addView(startButton())
 
-        bottomSheetDialog.setContentView(content)
+        val scroll = NestedScrollView(context).apply {
+            isFillViewport = false
+            isNestedScrollingEnabled = true
+            clipToPadding = false
+            addView(content)
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
+            view.updatePadding(
+                bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
+            )
+            insets
+        }
+        bottomSheetDialog.setContentView(
+            scroll,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                safeSheetHeight()
+            )
+        )
         bottomSheetDialog.setOnDismissListener { dialog = null }
         refreshEstimate()
         bottomSheetDialog.show()
+        bottomSheetDialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
     }
 
     fun dispose() {
@@ -341,5 +366,17 @@ class MonitorSettingsBottomSheet(
 
     private fun dp(value: Int): Int {
         return (value * context.resources.displayMetrics.density).toInt()
+    }
+
+    private fun safeSheetHeight(): Int {
+        val decorView = (context as? Activity)?.window?.decorView
+        val windowHeight = decorView?.height?.takeIf { it > 0 }
+            ?: context.resources.displayMetrics.heightPixels
+        val topInset = decorView
+            ?.let(ViewCompat::getRootWindowInsets)
+            ?.getInsets(WindowInsetsCompat.Type.systemBars())
+            ?.top
+            ?: 0
+        return (windowHeight - topInset).coerceAtLeast(1)
     }
 }
