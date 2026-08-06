@@ -83,6 +83,7 @@ class MonitorSettingsBottomSheet(
         refreshEstimate()
         updateNotificationHealth(health)
         bottomSheetDialog.show()
+        bottomSheetDialog.behavior.state = BottomSheetBehavior.STATE_EXPANDED
     }
 
     fun updateNotificationHealth(health: MonitorNotificationHealth) {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "BusIsComing 功能截圖"
+  short_description: "生成安全、可重現的 BusIsComing 功能截圖"
+  default_prompt: "Use $capture-busiscoming-screenshots to plan and create a reviewed BusIsComing feature screenshot with synthetic data and complete cleanup."
