@@ -35,8 +35,12 @@ import com.golink.busiscoming.ui.main.RouteDetailAdapter
 import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
 import com.golink.busiscoming.ui.main.RouteDetailRuntime
 import com.golink.busiscoming.ui.main.RouteDetailUiItem
+import com.golink.busiscoming.ui.main.RideStopCountState
+import com.golink.busiscoming.ui.main.RouteDetailCameraPolicy
+import com.golink.busiscoming.ui.main.RouteDetailCameraOwner
 import com.golink.busiscoming.ui.main.RouteMapPresentation
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.action.ViewActions.swipeLeft
 import androidx.test.espresso.UiController
 import androidx.test.espresso.ViewAction
 import org.hamcrest.CoreMatchers.any
@@ -93,6 +97,76 @@ class RouteDetailActivityTest {
             onView(withId(R.id.routeDetailSheetHandle)).check(matches(isDisplayed()))
             onView(withId(R.id.routeDetailFloatingBack)).check(matches(isDisplayed()))
             onView(withId(R.id.routeDetailList)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun mapCameraStartsOverHongKongBeforeRouteDataCompletes() {
+        val release = CountDownLatch(1)
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
+                    check(release.await(5, TimeUnit.SECONDS))
+                    return detail()
+                }
+            }
+        }
+
+        try {
+            ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+                val deadline = SystemClock.uptimeMillis() + 5_000L
+                var camera: com.google.android.gms.maps.model.CameraPosition? = null
+                while (SystemClock.uptimeMillis() < deadline && camera == null) {
+                    scenario.onActivity { activity ->
+                        val renderer = activity.javaClass.getDeclaredField("renderer").apply {
+                            isAccessible = true
+                        }.get(activity) ?: return@onActivity
+                        val map = renderer.javaClass.getDeclaredField("map").apply {
+                            isAccessible = true
+                        }.get(renderer) as com.google.android.gms.maps.GoogleMap
+                        camera = map.cameraPosition
+                    }
+                    if (camera == null) Thread.sleep(50L)
+                }
+
+                val initial = requireNotNull(camera)
+                assertTrue(initial.target.latitude in 22.1..22.6)
+                assertTrue(initial.target.longitude in 113.8..114.5)
+                assertEquals(RouteDetailCameraPolicy.HONG_KONG_ZOOM, initial.zoom, 0.2f)
+            }
+        } finally {
+            release.countDown()
+        }
+    }
+
+    @Test
+    fun mapGestureTransfersCameraOwnershipToUser() {
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            val readyDeadline = SystemClock.uptimeMillis() + 5_000L
+            var ready = false
+            while (SystemClock.uptimeMillis() < readyDeadline && !ready) {
+                scenario.onActivity { activity ->
+                    ready = activity.javaClass.getDeclaredField("renderer").apply {
+                        isAccessible = true
+                    }.get(activity) != null
+                }
+                if (!ready) Thread.sleep(50L)
+            }
+            assertTrue(ready)
+
+            onView(withId(R.id.routeDetailMap)).perform(swipeLeft())
+
+            val ownerDeadline = SystemClock.uptimeMillis() + 3_000L
+            var owner: RouteDetailCameraOwner? = null
+            while (SystemClock.uptimeMillis() < ownerDeadline && owner != RouteDetailCameraOwner.USER) {
+                scenario.onActivity { activity ->
+                    owner = activity.javaClass.getDeclaredField("cameraOwner").apply {
+                        isAccessible = true
+                    }.get(activity) as RouteDetailCameraOwner
+                }
+                if (owner != RouteDetailCameraOwner.USER) Thread.sleep(50L)
+            }
+            assertEquals(RouteDetailCameraOwner.USER, owner)
         }
     }
 
@@ -264,6 +338,66 @@ class RouteDetailActivityTest {
     }
 
     @Test
+    fun stationCountMovesFromLoadingToAvailableOrUnavailableWithoutShowingZero() {
+        val release = CountDownLatch(1)
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
+                    check(release.await(2, TimeUnit.SECONDS))
+                    return detail()
+                }
+            }
+        }
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            waitForRideStopState(scenario) { it == RideStopCountState.Loading }
+            release.countDown()
+            waitForRideStopState(scenario) { it is RideStopCountState.Available && it.count > 0 }
+        }
+
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail = error("detail unavailable")
+            }
+        }
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            waitForRideStopState(scenario) { it == RideStopCountState.Unavailable }
+        }
+    }
+
+    @Test
+    fun reenteringUsesCachedStructureWhileFreshDetailRunsConcurrently() {
+        val cached = AtomicReference<RouteDetail?>()
+        val loadCalls = AtomicInteger()
+        val releaseSecondLoad = CountDownLatch(1)
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadCachedRouteDetail(route: BusRouteOption): RouteDetail? = cached.get()
+
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
+                    val call = loadCalls.incrementAndGet()
+                    if (call == 2) check(releaseSecondLoad.await(3, TimeUnit.SECONDS))
+                    return detail().also(cached::set)
+                }
+            }
+        }
+
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { first ->
+            waitForTimelineItems(first)
+        }
+
+        try {
+            ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { second ->
+                waitForRideStopState(second) { it is RideStopCountState.Available && it.count > 0 }
+                waitForValue(loadCalls, 2)
+                waitForTimelineItems(second)
+                releaseSecondLoad.countDown()
+            }
+        } finally {
+            releaseSecondLoad.countDown()
+        }
+    }
+
+    @Test
     fun successfulLoadRetryAndExpandedStateRestorationUseTheFlatTimeline() {
         val shouldFail = AtomicBoolean(true)
         val loadCalls = AtomicInteger(0)
@@ -408,7 +542,7 @@ class RouteDetailActivityTest {
     }
 
     @Test
-    fun geometryArrivingBeforeDetailIsValidatedWithoutRestartOrClearingLine() {
+    fun geometryArrivingBeforeDetailStaysHiddenThenPublishesWithoutRestart() {
         val releaseDetail = CountDownLatch(1)
         val detailStarted = CountDownLatch(1)
         val loadCalls = AtomicInteger(0)
@@ -439,7 +573,7 @@ class RouteDetailActivityTest {
 
         ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
             assertTrue(detailStarted.await(2, TimeUnit.SECONDS))
-            waitForBusLineCount(latestPresentation, 1)
+            waitForBusLineCount(latestPresentation, 0)
             assertEquals(1, loadCalls.get())
 
             releaseDetail.countDown()
@@ -479,6 +613,28 @@ class RouteDetailActivityTest {
             }
             if (loaded) return
             Thread.sleep(50)
+        }
+    }
+
+    private fun waitForRideStopState(
+        scenario: ActivityScenario<RouteDetailActivity>,
+        predicate: (RideStopCountState) -> Boolean
+    ) {
+        val deadline = SystemClock.uptimeMillis() + 3_000L
+        while (SystemClock.uptimeMillis() < deadline) {
+            var matched = false
+            scenario.onActivity { activity ->
+                val adapter = activity.findViewById<RecyclerView>(R.id.routeDetailList).adapter as? RouteDetailAdapter
+                val summary = adapter?.currentList?.filterIsInstance<RouteDetailUiItem.Summary>()?.singleOrNull()
+                matched = summary?.rideStopCount?.let(predicate) == true
+            }
+            if (matched) return
+            Thread.sleep(50L)
+        }
+        scenario.onActivity { activity ->
+            val adapter = activity.findViewById<RecyclerView>(R.id.routeDetailList).adapter as RouteDetailAdapter
+            val summary = adapter.currentList.filterIsInstance<RouteDetailUiItem.Summary>().single()
+            assertTrue("Unexpected ride stop state: ${summary.rideStopCount}", predicate(summary.rideStopCount))
         }
     }
 

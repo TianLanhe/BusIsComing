@@ -69,6 +69,7 @@ class RouteDetailAdapter(
                 RouteDetailUiItem.Loading -> bindLoading()
                 RouteDetailUiItem.Error -> bindError()
                 is RouteDetailUiItem.Summary -> bindSummary(item)
+                is RouteDetailUiItem.DynamicStatus -> bindDynamicStatus(item)
                 is RouteDetailUiItem.Walking -> bindWalking(item)
                 is RouteDetailUiItem.Stop -> bindStop(item)
                 is RouteDetailUiItem.BusLeg -> bindBusLeg(item)
@@ -125,7 +126,12 @@ class RouteDetailAdapter(
                 layoutParams = marginTop(7)
             })
             val fare = price(item.priceHkd)
-            content.addView(text("$fare  ·  ${root.context.getString(R.string.route_detail_total_stops, item.totalViaStops)}", 14f, false, R.color.bus_text_secondary).apply {
+            val rideStopCount = when (val state = item.rideStopCount) {
+                is RideStopCountState.Available -> root.context.getString(R.string.route_detail_total_stops, state.count)
+                RideStopCountState.Loading -> root.context.getString(R.string.route_detail_stops_loading)
+                RideStopCountState.Unavailable -> root.context.getString(R.string.route_detail_stops_unavailable)
+            }
+            content.addView(text("$fare  ·  $rideStopCount", 14f, false, R.color.bus_text_secondary).apply {
                 layoutParams = marginTop(7)
             })
             val walkingRow = LinearLayout(root.context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutParams = marginTop(10) }
@@ -144,7 +150,7 @@ class RouteDetailAdapter(
                     item.routeName,
                     item.durationMinutes,
                     fare,
-                    item.totalViaStops,
+                    rideStopCount,
                     item.walkingDistanceMeters
                 )
             } else {
@@ -154,12 +160,22 @@ class RouteDetailAdapter(
                     item.durationMinutes,
                     arrival,
                     fare,
-                    item.totalViaStops,
+                    rideStopCount,
                     item.walkingDistanceMeters
                 )
             }
             card.addView(content)
             root.addView(card)
+        }
+
+        private fun bindDynamicStatus(item: RouteDetailUiItem.DynamicStatus) {
+            val message = when (item.status) {
+                RouteDynamicDetailStatus.CURRENT -> return
+                RouteDynamicDetailStatus.REFRESHING -> R.string.route_detail_dynamic_refreshing
+                RouteDynamicDetailStatus.STALE_AFTER_ERROR -> R.string.route_detail_dynamic_refresh_failed
+            }
+            root.setPadding(dp(20), 0, dp(20), dp(12))
+            root.addView(text(root.context.getString(message), 13f, false, R.color.bus_text_secondary))
         }
 
         private fun bindEndpoint(item: RouteDetailUiItem.Endpoint) {

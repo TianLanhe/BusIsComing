@@ -6,6 +6,7 @@ import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
 import com.golink.busiscoming.data.model.ParsedRouteDetail
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailCompleteness
+import com.golink.busiscoming.data.model.RouteDetailTransfer
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -13,50 +14,55 @@ import java.net.URLEncoder
 
 class CitybusRouteDetailRepository(
     private val parser: CitybusRouteDetailParser = CitybusRouteDetailParser,
-    private val cache: RouteDetailCache = RouteDetailCache(),
     private val structureCache: RouteStructureCache = RouteStructureCache(),
     private val walkingCache: WalkingDistanceCache = WalkingDistanceCache(),
+    cacheOwner: RouteDetailCacheOwner? = null,
     private val sessionRegistry: CitybusSessionRegistry = CitybusSessionRuntime.registry,
     private val recoverySearcher: ((P2pRouteRecoveryContext, String) -> List<BusRouteOption>)? = null,
     private val detailFetcher: (URL, Map<String, String>) -> String = ::fetchRouteDetailHtml
 ) : RouteDetailRepository {
+    private val activeStructureCache = cacheOwner?.structureCache ?: structureCache
+    private val activeWalkingCache = cacheOwner?.walkingCache ?: walkingCache
     private val resolvedRecoverySearcher: (P2pRouteRecoveryContext, String) -> List<BusRouteOption> =
         recoverySearcher ?: CitybusBusRouteRepository(sessionRegistry = sessionRegistry)::searchRouteCandidatesForRecovery
+
+    override fun loadCachedRouteDetail(route: BusRouteOption): RouteDetail? {
+        val query = route.routeDetailQuery ?: return null
+        val structure = activeStructureCache.get(query.structureCacheKey()) ?: return null
+        val walking = query.walkingDistanceCacheKey()?.let(activeWalkingCache::get)
+        val parsed = ParsedRouteDetail(
+            legs = structure.legs,
+            originWalking = walking?.originWalking(),
+            transfers = walking?.transfers(structure.transferTypes)
+                ?: structure.transferTypes.map { RouteDetailTransfer(it) },
+            destinationWalking = walking?.destinationWalking(),
+            originName = structure.originName,
+            destinationName = structure.destinationName,
+            completeness = if (walking == null) {
+                RouteDetailCompleteness.PARTIAL
+            } else {
+                RouteDetailCompleteness.COMPLETE
+            }
+        )
+        return toRouteDetail(route, query, parsed)
+    }
 
     override fun loadRouteDetail(route: BusRouteOption): RouteDetail {
         val originalQuery = route.routeDetailQuery ?: throw IOException("Route detail metadata is missing")
         if (originalQuery.recoveryContext == null) {
-            val cached = cache.getDetail(originalQuery.cacheKey())
-            if (cached != null) return toRouteDetail(route, originalQuery, cached)
-
-            var parsed = fetchAndParse(originalQuery)
+            var parsed = try {
+                fetchAndParse(originalQuery)
+            } catch (_: CitybusRouteDetailStructureException) {
+                fetchAndParse(originalQuery)
+            }
             if (parsed.completeness == RouteDetailCompleteness.SESSION_MISSING) {
                 parsed = parsed.copy(completeness = RouteDetailCompleteness.PARTIAL)
             }
-            if (parsed.completeness == RouteDetailCompleteness.COMPLETE) {
-                cache.put(originalQuery.cacheKey(), parsed)
-            }
+            activeStructureCache.put(originalQuery.structureCacheKey(), originalQuery.plan, parsed)
             return toRouteDetail(route, originalQuery, parsed)
         }
 
-        val cachedStructure = structureCache.get(originalQuery.structureCacheKey())
         val walkingKey = originalQuery.walkingDistanceCacheKey()
-        val cachedWalking = walkingKey?.let(walkingCache::get)
-        if (cachedStructure != null && cachedWalking != null) {
-            return toRouteDetail(
-                route,
-                originalQuery,
-                ParsedRouteDetail(
-                    legs = cachedStructure.legs,
-                    originWalking = cachedWalking?.originWalking,
-                    transfers = cachedWalking?.transfers.orEmpty(),
-                    destinationWalking = cachedWalking?.destinationWalking,
-                    originName = cachedStructure.originName,
-                    destinationName = cachedStructure.destinationName,
-                    completeness = RouteDetailCompleteness.COMPLETE
-                )
-            )
-        }
 
         var activeQuery = originalQuery
         var recoveryAttempted = false
@@ -65,7 +71,15 @@ class CitybusRouteDetailRepository(
             activeQuery = recoverQuery(activeQuery) ?: activeQuery
         }
 
-        var parsed = fetchAndParse(activeQuery)
+        var parsed = try {
+            fetchAndParse(activeQuery)
+        } catch (_: CitybusRouteDetailStructureException) {
+            if (!recoveryAttempted) {
+                recoveryAttempted = true
+                activeQuery = recoverQuery(originalQuery) ?: activeQuery
+            }
+            fetchAndParse(activeQuery)
+        }
         if (parsed.completeness == RouteDetailCompleteness.SESSION_MISSING && !recoveryAttempted) {
             recoveryAttempted = true
             val recoveredQuery = recoverQuery(originalQuery)
@@ -78,10 +92,18 @@ class CitybusRouteDetailRepository(
             parsed = parsed.copy(completeness = RouteDetailCompleteness.PARTIAL)
         }
 
-        structureCache.put(originalQuery.structureCacheKey(), parsed)
-        val activeWalkingKey = originalQuery.walkingDistanceCacheKey()
-        if (activeWalkingKey != null) {
-            walkingCache.put(activeWalkingKey, parsed)
+        activeStructureCache.put(originalQuery.structureCacheKey(), originalQuery.plan, parsed)
+        if (walkingKey != null) {
+            activeWalkingCache.put(walkingKey, parsed)
+            val cachedWalking = activeWalkingCache.get(walkingKey)
+            if (cachedWalking != null && parsed.completeness != RouteDetailCompleteness.COMPLETE) {
+                parsed = parsed.copy(
+                    originWalking = cachedWalking.originWalking(),
+                    transfers = cachedWalking.transfers(parsed.transfers.map { it.type }),
+                    destinationWalking = cachedWalking.destinationWalking(),
+                    completeness = RouteDetailCompleteness.COMPLETE
+                )
+            }
         }
         return toRouteDetail(route, originalQuery, parsed)
     }

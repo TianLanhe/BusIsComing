@@ -62,7 +62,6 @@ class RouteDetailLaunchArgsTest {
 
         assertNotSame(original, restored)
         assertEquals(original, restored)
-        assertEquals(14, restored.estimatedViaStopCount)
         assertEquals(listOf(6, 14), (restored.waitTimeState as WaitTimeState.Available).arrivals.map { it.minutes })
         assertEquals("北角碼頭", restored.queryOrigin?.name)
         assertEquals(22.29361, restored.queryOrigin?.latitude ?: 0.0, 0.0)

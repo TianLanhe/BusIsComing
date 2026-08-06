@@ -7,6 +7,20 @@ import com.golink.busiscoming.data.model.RouteDetailStopRole
 import com.golink.busiscoming.data.model.RouteDetailWalkingKind
 import com.golink.busiscoming.data.model.WaitTimeState
 
+sealed interface RideStopCountState {
+    data object Loading : RideStopCountState
+
+    data class Available(val count: Int) : RideStopCountState
+
+    data object Unavailable : RideStopCountState
+}
+
+enum class RouteDynamicDetailStatus {
+    CURRENT,
+    REFRESHING,
+    STALE_AFTER_ERROR
+}
+
 sealed class RouteDetailUiItem(open val stableId: String) {
     data object Loading : RouteDetailUiItem("loading")
 
@@ -17,11 +31,15 @@ sealed class RouteDetailUiItem(open val stableId: String) {
         val durationMinutes: Int,
         val plannedArrivalTime: String?,
         val priceHkd: Double,
-        val totalViaStops: Int,
+        val rideStopCount: RideStopCountState,
         val walkingDistanceMeters: Int,
         val isWalkingDistanceComplete: Boolean,
         val firstLegEta: WaitTimeState
     ) : RouteDetailUiItem("summary")
+
+    data class DynamicStatus(
+        val status: RouteDynamicDetailStatus
+    ) : RouteDetailUiItem("dynamic-status")
 
     data class Walking(
         override val stableId: String,
@@ -89,7 +107,8 @@ object RouteDetailUiFormatter {
     fun items(
         detail: RouteDetail,
         expandedLegIndexes: Set<Int>,
-        firstLegEta: WaitTimeState
+        firstLegEta: WaitTimeState,
+        dynamicStatus: RouteDynamicDetailStatus = RouteDynamicDetailStatus.CURRENT
     ): List<RouteDetailUiItem> = buildList {
         add(
             RouteDetailUiItem.Summary(
@@ -97,12 +116,15 @@ object RouteDetailUiFormatter {
                 durationMinutes = detail.durationMinutes,
                 plannedArrivalTime = detail.plannedArrivalTime,
                 priceHkd = detail.priceHkd,
-                totalViaStops = detail.totalViaStopCount,
+                rideStopCount = RideStopCountState.Available(detail.totalViaStopCount),
                 walkingDistanceMeters = detail.displayWalkingDistanceMeters,
                 isWalkingDistanceComplete = detail.hasCompleteWalkingDistance,
                 firstLegEta = firstLegEta
             )
         )
+        if (dynamicStatus != RouteDynamicDetailStatus.CURRENT) {
+            add(RouteDetailUiItem.DynamicStatus(dynamicStatus))
+        }
         add(RouteDetailUiItem.Endpoint("origin", detail.originName, detail.plannedDepartureTime, true))
         add(
             RouteDetailUiItem.Walking(
@@ -175,5 +197,25 @@ object RouteDetailUiFormatter {
             )
         )
         add(RouteDetailUiItem.Endpoint("destination", detail.destinationName, detail.plannedArrivalTime, false))
+    }
+
+    fun launchSummary(
+        args: RouteDetailLaunchArgs,
+        firstLegEta: WaitTimeState,
+        rideStopCount: RideStopCountState
+    ): RouteDetailUiItem.Summary {
+        val arrival = args.routeDetailQuery?.generalInfo
+            ?.substringBefore("|*|")
+            ?.takeIf { it.contains(':') }
+        return RouteDetailUiItem.Summary(
+            routeName = args.routeName,
+            durationMinutes = args.durationMinutes,
+            plannedArrivalTime = arrival,
+            priceHkd = args.priceHkd,
+            rideStopCount = rideStopCount,
+            walkingDistanceMeters = args.walkingDistanceMeters,
+            isWalkingDistanceComplete = false,
+            firstLegEta = firstLegEta
+        )
     }
 }

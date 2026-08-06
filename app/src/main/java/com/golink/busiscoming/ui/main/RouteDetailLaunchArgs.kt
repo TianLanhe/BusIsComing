@@ -38,11 +38,6 @@ data class RouteDetailLaunchArgs(
     val queryOrigin: RouteDetailQueryEndpoint? = null,
     val queryDestination: RouteDetailQueryEndpoint? = null
 ) {
-    val estimatedViaStopCount: Int
-        get() = routeDetailQuery?.plan?.legs.orEmpty().sumOf { leg ->
-            (leg.alightingSeq - leg.boardingSeq - 1).coerceAtLeast(0)
-        }
-
     fun toPrimitiveValues(): Map<String, String> = buildMap {
         put("routeName", routeName)
         put("routeSegmentCount", routeSegments.size.toString())

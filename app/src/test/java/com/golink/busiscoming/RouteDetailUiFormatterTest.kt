@@ -1,5 +1,9 @@
 package com.golink.busiscoming
 
+import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.P2pRouteDetailQuery
+import com.golink.busiscoming.data.model.P2pRouteLeg
+import com.golink.busiscoming.data.model.P2pRoutePlan
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
@@ -12,6 +16,9 @@ import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteDetailUiFormatter
 import com.golink.busiscoming.ui.main.RouteDetailUiItem
+import com.golink.busiscoming.ui.main.RouteDetailLaunchArgs
+import com.golink.busiscoming.ui.main.RouteDynamicDetailStatus
+import com.golink.busiscoming.ui.main.RideStopCountState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -20,15 +27,69 @@ import org.junit.Test
 
 class RouteDetailUiFormatterTest {
     @Test
-    fun summaryUsesCompleteWalkingDistanceAndTotalViaStops() {
+    fun summaryCountsViaAndAlightingStopsWithoutBoardingStops() {
         val items = RouteDetailUiFormatter.items(detail(), emptySet(), WaitTimeState.Available(6))
         val summary = items.filterIsInstance<RouteDetailUiItem.Summary>().single()
 
-        assertEquals(14, summary.totalViaStops)
+        assertEquals(RideStopCountState.Available(16), summary.rideStopCount)
         assertEquals(403, summary.walkingDistanceMeters)
         assertTrue(summary.isWalkingDistanceComplete)
         assertEquals("01:21", summary.plannedArrivalTime)
         assertEquals(6, (summary.firstLegEta as WaitTimeState.Available).minutes)
+    }
+
+    @Test
+    fun adjacentBoardingAndAlightingStopsContributeOneRideStopPerLeg() {
+        val adjacentLegs = detail().copy(legs = listOf(leg("789", 0), leg("11", 0)))
+
+        val summary = RouteDetailUiFormatter.items(adjacentLegs, emptySet(), WaitTimeState.Loading)
+            .filterIsInstance<RouteDetailUiItem.Summary>()
+            .single()
+
+        assertEquals(RideStopCountState.Available(2), summary.rideStopCount)
+    }
+
+    @Test
+    fun launchSummaryKeepsStationCountUnknownUntilReliableStructureArrives() {
+        val args = RouteDetailLaunchArgs.fromRoute(
+            BusRouteOption(
+                routeName = "789 → 11",
+                routeSegments = listOf("789", "11"),
+                priceHkd = 14.0,
+                durationMinutes = 28,
+                arrivalMinutes = 4,
+                transferCount = 1,
+                walkingDistanceMeters = 633,
+                routeDetailQuery = P2pRouteDetailQuery(
+                    rawInfo = "raw",
+                    generalInfo = "12:10|*|28",
+                    listId = "0",
+                    lang = "0",
+                    plan = P2pRoutePlan(
+                        rawInfo = "raw",
+                        lang = "0",
+                        legs = listOf(
+                            P2pRouteLeg("CTB", "789-A", "789", 1, 2, "O", null),
+                            P2pRouteLeg("CTB", "11-A", "11", 7, 8, "O", null)
+                        )
+                    )
+                )
+            )
+        )
+
+        val loading = RouteDetailUiFormatter.launchSummary(
+            args,
+            WaitTimeState.Loading,
+            RideStopCountState.Loading
+        )
+        val unavailable = RouteDetailUiFormatter.launchSummary(
+            args,
+            WaitTimeState.Loading,
+            RideStopCountState.Unavailable
+        )
+
+        assertEquals(RideStopCountState.Loading, loading.rideStopCount)
+        assertEquals(RideStopCountState.Unavailable, unavailable.rideStopCount)
     }
 
     @Test
@@ -95,6 +156,33 @@ class RouteDetailUiFormatterTest {
             assertEquals(state, legs.first().liveEta)
             assertNull(legs[1].liveEta)
         }
+    }
+
+    @Test
+    fun dynamicRefreshAndFailureAddOnlyTheirLocalStatusRow() {
+        val refreshing = RouteDetailUiFormatter.items(
+            detail(),
+            emptySet(),
+            WaitTimeState.Loading,
+            RouteDynamicDetailStatus.REFRESHING
+        )
+        val stale = RouteDetailUiFormatter.items(
+            detail(),
+            emptySet(),
+            WaitTimeState.Loading,
+            RouteDynamicDetailStatus.STALE_AFTER_ERROR
+        )
+
+        assertEquals(
+            RouteDynamicDetailStatus.REFRESHING,
+            refreshing.filterIsInstance<RouteDetailUiItem.DynamicStatus>().single().status
+        )
+        assertEquals(
+            RouteDynamicDetailStatus.STALE_AFTER_ERROR,
+            stale.filterIsInstance<RouteDetailUiItem.DynamicStatus>().single().status
+        )
+        assertEquals(2, refreshing.filterIsInstance<RouteDetailUiItem.BusLeg>().size)
+        assertEquals(2, stale.filterIsInstance<RouteDetailUiItem.BusLeg>().size)
     }
 
     private fun detail(): RouteDetail {

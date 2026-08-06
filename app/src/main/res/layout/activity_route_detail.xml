@@ -10,7 +10,10 @@
         android:id="@+id/routeDetailMap"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:contentDescription="@string/route_map_content_description" />
+        android:contentDescription="@string/route_map_content_description"
+        app:cameraTargetLat="22.3193"
+        app:cameraTargetLng="114.1694"
+        app:cameraZoom="10.5" />
 
     <TextView
         android:id="@+id/routeDetailMapError"

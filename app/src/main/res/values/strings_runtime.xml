@@ -219,8 +219,12 @@
     <string name="route_detail_navigate_up">返回路線結果</string>
     <string name="route_detail_arrival">預計 %1$s 到達</string>
     <string name="route_detail_total_stops">一共 %1$d 站</string>
-    <string name="route_detail_summary_accessibility">%1$s，耗時 %2$d 分鐘，%3$s，車費 %4$s，一共 %5$d 站，步行 %6$d 米</string>
-    <string name="route_detail_summary_accessibility_without_arrival">%1$s，耗時 %2$d 分鐘，車費 %3$s，一共 %4$d 站，步行 %5$d 米</string>
+    <string name="route_detail_stops_loading">站數載入中</string>
+    <string name="route_detail_stops_unavailable">站數暫不可用</string>
+    <string name="route_detail_dynamic_refreshing">正在更新預計時間及分段票價</string>
+    <string name="route_detail_dynamic_refresh_failed">暫時無法更新動態詳情，已保留站點資料</string>
+    <string name="route_detail_summary_accessibility">%1$s，耗時 %2$d 分鐘，%3$s，車費 %4$s，%5$s，步行 %6$d 米</string>
+    <string name="route_detail_summary_accessibility_without_arrival">%1$s，耗時 %2$d 分鐘，車費 %3$s，%4$s，步行 %5$d 米</string>
     <string name="route_detail_planned_time">預計 %1$s</string>
     <string name="route_detail_live_eta">即時 · 還有 %1$d 分鐘</string>
     <string name="route_detail_live_due">即時 · 即將到站</string>
