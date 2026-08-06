@@ -82,11 +82,20 @@
             android:textSize="13sp"
             android:textStyle="bold" />
 
+        <ProgressBar
+            android:id="@+id/resultAutoRefreshProgress"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginStart="10dp"
+            android:importantForAccessibility="no"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/resultUpdatedAtText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
+            android:layout_marginStart="6dp"
             android:textColor="@color/bus_text_secondary"
             android:textSize="13sp" />
     </LinearLayout>

@@ -1,0 +1,15 @@
+{
+  "routes": {
+    "features": [
+      {
+        "attributes": {
+          "Total_Length": 10.0,
+          "Total_Time": 1.0
+        },
+        "geometry": {
+          "paths": []
+        }
+      }
+    ]
+  }
+}

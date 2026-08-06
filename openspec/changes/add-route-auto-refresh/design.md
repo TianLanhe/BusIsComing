@@ -2,7 +2,9 @@
 
 常用行程結果由 `MainActivity` 管理，臨時查詢結果由 `SearchFragment` 管理；兩者已有手動下拉刷新、query generation、排序、置頂、首程 ETA 與站點預覽的漸進更新。手動刷新完成時會顯示固定刷新浮層與成功勾號，且有結果成功會滾動到頂部，這些屬於明確使用者手勢的既有回饋，不能直接套用到每分鐘自動刷新。
 
-`RouteDetailActivity` 已每 60 秒刷新首程 ETA，但 Citybus 動態詳情不會週期更新。`fix-route-detail-progressive-loading` 已完成實作任務但尚未同步／歸檔；它引入頁面／domain generation、單一 reducer、可靠結構快取、動態詳情 `Refreshing` 與互動狀態保持。Citybus 詳情 endpoint 會在同一回應返回穩定結構與動態時間／票價，無法只下載動態欄位；因此每次週期必須完整請求、解析及驗證回應，但只可把通過身份與結構校驗的動態值歸併到目前頁面。
+`RouteDetailActivity` 已每 60 秒刷新首程 ETA，但 Citybus 動態詳情不會週期更新。active `fix-route-detail-progressive-loading` 已完成實作任務，雖尚未同步／歸檔，現有代碼已引入頁面／domain generation、單一 reducer、可靠結構快取、動態詳情 `Refreshing` 與互動狀態保持，本 change 直接以該實現與 active delta 為基線。Citybus 詳情 endpoint 會在同一回應返回穩定結構與動態時間／票價，無法只下載動態欄位；因此每次週期必須完整請求、解析及驗證回應，但只可把通過身份與結構校驗的動態值歸併到目前頁面。
+
+`integrate-landsd-pedestrian-routing` 會在結果基礎列表到達後繼續漸進更新步行狀態與步行排序。兩個 change 同批實作時必須共用 query generation、result identity、單次 projection 與 viewport anchor；自動刷新不能把 CSDI callback 當成 cycle 未完成，也不能讓每分鐘刷新繞過 walking runtime 對失敗 key 的退避。
 
 設定頁目前的偏好順序是外觀主題、語言。新偏好須同時控制常用結果、臨時結果及詳情，不建立三套互相漂移的設定。產品已確認預設為 1 分鐘，選項為關閉／1／2／5／10 分鐘，且只在目前頁面可見及 App 前台時運行。
 
@@ -62,7 +64,7 @@ controller 的可觀察狀態及轉移如下：
 
 常用結果保存 query owner、行程 id、原起終點與查詢時的排序／置頂上下文；自動刷新不呼叫 usage update。臨時結果保存該次成功查詢使用的 `Place` 名稱及精確座標快照，即使來源是目前位置也不重新定位。使用者編輯起終點、展開候選、清空或發起新臨時查詢時，舊 controller 暫停或失效；切換常用行程同樣 invalidate 舊 generation。
 
-基礎路線成功（包括空陣列）即終止自動 cycle，隨後 ETA／站點預覽仍按既有漸進流程補全。排序使用回應完成時的目前字段與方向，置頂狀態按既有 stable identity 套用。自動成功前記錄第一張可見路線的 stable id 與其相對列表頂部 pixel offset；提交新列表後恢復同一 anchor，若 route 已消失則選刷新後排序中最接近的下一個 route。自動刷新不主動關閉或切換已開啟的 ETA／詳情選擇。
+基礎路線成功（包括空陣列）即終止自動 cycle，隨後 ETA／站點預覽／CSDI walking 仍按目前 query generation 漸進補全且不延長 cycle。新基礎結果使舊結果專屬 CSDI consumer 失效，但可重用仍有效成功 cache；`AUTOMATIC` 只為退避已到期的失敗 key 建立新 flight。ETA、預覽、CSDI 與基礎列表只更新同一 `RouteQueryState`，由一個 projection 依目前字段／方向及 pin identity 排序一次。所有可能改變位置的提交共用 viewport anchor：提交前記錄第一張可見路線 stable id 與相對列表頂部 pixel offset，提交後恢復；若 route 已消失則選新排序中最接近的下一個 route。自動刷新不主動關閉或切換已開啟的 ETA／詳情選擇。
 
 ### 4. 詳情 cycle 同時刷新 Citybus 動態詳情與首程 ETA
 
@@ -70,6 +72,8 @@ controller 的可觀察狀態及轉移如下：
 
 1. Citybus 完整詳情 request：使用與目前頁面相同語言及 endpoints，完整 parse／validate。只有 route/detail stable key 與目前可靠結構一致時，才把預計時間與分段票價等動態欄位送入 reducer；任何結構缺失或 mismatch 都把此 domain 視為失敗，不替換站序、乘車段、walking、marker 或其他穩定內容。
 2. 首程 ETA request：沿用目前 ETA repository、首程 stop／route identity 與 generation，成功即可獨立更新 ETA。
+
+詳情狀態明確分離 `pageGeneration`、穩定 `structureIdentity`、`dynamicDetailGeneration`、`etaGeneration` 與 `walkingGeneration`。AUTOMATIC cycle 只推進 dynamic detail 與 ETA；既有 CSDI 成功／Loading／fallback、步行 paths、站序及巴士 geometry 不屬於本 cycle，不能被取消、替換或重新請求。摘要 pending target 綁定 page＋structure identity，單純週期動態更新不得清除。
 
 兩個 domain 可同時為 `Refreshing`，各自一成功就立即發布；一方失敗不回滾另一方成功，也不顯示自動失敗警告。cycle 要等待兩方皆進入成功／失敗／取消 terminal 狀態後才把 `lastAttemptFinishedAt` 回報 controller。Citybus 回應不得引發 geometry request；現有 geometry、地圖相機、bottom sheet detent、展開乘車段、selected marker／timeline、列表位置都由 stable id reducer 保持。
 
@@ -109,6 +113,8 @@ notice 只在以下任一條件成立時標記完成：
 
 - [1 分鐘預設增加 Citybus／ETA 請求與流量] → 僅可見前台運行、cycle 完成後才重排、詳情不請求幾何，且提供一鍵 2／5／10 分鐘或關閉。
 - [結果排序變動造成閱讀位置跳動] → 以 stable id + pixel offset 恢復第一可見 anchor；缺失時選最近下一項，不自動回頂。
+- [CSDI 漸進重排與自動列表替換重複投影] → ETA、預覽、CSDI 及基礎結果共用單一結果 state／projection 與同一 anchor policy，禁止 callback 各自重排 adapter。
+- [每分鐘刷新放大 CSDI 失敗] → `AUTOMATIC` 服從 walking runtime 的 5 至 30 分鐘失敗退避；基礎 cycle 不等待 CSDI，手動刷新才可按其契約繞過一次。
 - [多入口 timer 造成重複請求] → 每個可見 owner 使用同一 controller policy，destination/lifecycle eligibility 保證只有目前頁面可接受 trigger，generation 丟棄舊 callback。
 - [Citybus 詳情結構在週期中變更] → 完整 parse／validate，mismatch 只丟棄此次動態 domain；不以新回應重建目前頁面或污染可靠 cache。
 - [一次性橫幅過強或過弱] → 保持 5 秒高辨識樣式但不遮擋、不搶焦點、可繼續操作，且全 App 僅完成一次。
@@ -116,7 +122,7 @@ notice 只在以下任一條件成立時標記完成：
 
 ## Migration Plan
 
-1. 先同步並歸檔 `fix-route-detail-progressive-loading`，以其 reducer 與主規格作為詳情刷新基線。
+1. 核對 active `fix-route-detail-progressive-loading` 的已實作 reducer、測試及 delta，直接作為詳情刷新基線；本次不要求先同步或歸檔。
 2. 加入偏好與 notice store；缺少 key 的既有安裝按 1 分鐘初始化，不修改 SQLite 或已保存行程。
 3. 先接入共用 controller 與結果 trigger 類型，再接入詳情雙 domain cycle，最後加入設定 selector、首次橫幅與日常回饋。
 4. rollout 若需回滾，可把預設／runtime feature gate 收斂為 `OFF` 並移除 UI 入口；所有新增偏好都可安全忽略或清除，無資料格式回滾。

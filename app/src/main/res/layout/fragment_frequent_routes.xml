@@ -98,6 +98,8 @@
                     android:layout_marginTop="8dp"
                     android:text="@string/action_query" />
             </LinearLayout>
+
+            <include layout="@layout/view_auto_refresh_notice" />
         </LinearLayout>
 
         <com.golink.busiscoming.ui.common.RouteResultControlsView

@@ -40,29 +40,75 @@ interface PlayPackageProbe {
     fun isPlayAvailable(): Boolean
 }
 
-class AndroidPlayPackageProbe(context: Context) : PlayPackageProbe {
+enum class PlayStoreAvailability {
+    AVAILABLE,
+    DISABLED,
+    MISSING,
+    UNUSABLE
+}
+
+enum class PlayStorePackageState {
+    ENABLED,
+    DISABLED,
+    MISSING
+}
+
+interface PlayStoreEnvironment {
+    fun packageState(): PlayStorePackageState
+    fun canResolveProductPage(): Boolean
+}
+
+class PlayStoreAvailabilityDetector(private val environment: PlayStoreEnvironment) {
+    constructor(context: Context) : this(AndroidPlayStoreEnvironment(context))
+
+    fun detect(): PlayStoreAvailability = try {
+        when (environment.packageState()) {
+            PlayStorePackageState.DISABLED -> PlayStoreAvailability.DISABLED
+            PlayStorePackageState.MISSING -> PlayStoreAvailability.MISSING
+            PlayStorePackageState.ENABLED -> if (environment.canResolveProductPage()) {
+                PlayStoreAvailability.AVAILABLE
+            } else {
+                PlayStoreAvailability.UNUSABLE
+            }
+        }
+    } catch (_: SecurityException) {
+        PlayStoreAvailability.UNUSABLE
+    } catch (_: RuntimeException) {
+        PlayStoreAvailability.UNUSABLE
+    }
+}
+
+private class AndroidPlayStoreEnvironment(context: Context) : PlayStoreEnvironment {
     private val applicationContext = context.applicationContext
 
     @Suppress("DEPRECATION")
-    override fun isPlayAvailable(): Boolean {
-        return try {
-            val packageManager = applicationContext.packageManager
-            val applicationInfo = packageManager.getApplicationInfo(PLAY_PACKAGE_NAME, 0)
-            if (!applicationInfo.enabled) {
-                false
-            } else {
-                val intent = Intent(
-                    Intent.ACTION_VIEW,
-                    Uri.parse("market://details?id=${applicationContext.packageName}")
-                ).setPackage(PLAY_PACKAGE_NAME)
-                packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) != null
-            }
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        } catch (_: RuntimeException) {
-            false
+    override fun packageState(): PlayStorePackageState = try {
+        if (applicationContext.packageManager.getApplicationInfo(PLAY_PACKAGE_NAME, 0).enabled) {
+            PlayStorePackageState.ENABLED
+        } else {
+            PlayStorePackageState.DISABLED
         }
+    } catch (_: PackageManager.NameNotFoundException) {
+        PlayStorePackageState.MISSING
     }
+
+    override fun canResolveProductPage(): Boolean {
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse(AppUpdateLinks.PLAY_HTTPS_URL)
+        ).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(PLAY_PACKAGE_NAME)
+        return applicationContext.packageManager.resolveActivity(
+            intent,
+            PackageManager.MATCH_DEFAULT_ONLY
+        ) != null
+    }
+}
+
+class AndroidPlayPackageProbe(context: Context) : PlayPackageProbe {
+    private val detector = PlayStoreAvailabilityDetector(context)
+
+    override fun isPlayAvailable(): Boolean =
+        detector.detect() == PlayStoreAvailability.AVAILABLE
 }
 
 internal const val PLAY_PACKAGE_NAME = "com.android.vending"

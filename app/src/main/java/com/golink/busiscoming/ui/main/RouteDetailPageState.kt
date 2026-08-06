@@ -4,6 +4,7 @@ import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.RouteDetailWalkingState
 import com.golink.busiscoming.data.repository.RouteDetailDiagnosticEvent
 import com.golink.busiscoming.data.repository.RouteDetailDiagnostics
 
@@ -54,6 +55,8 @@ data class RouteDetailPageState(
     val eta: ProgressiveValue<WaitTimeState> = ProgressiveValue.Idle,
     val mapGeneration: Int = 0,
     val map: ProgressiveValue<Unit> = ProgressiveValue.Idle,
+    val walkingGeneration: Int = 0,
+    val walkingSegments: Map<String, RouteDetailWalkingState> = emptyMap(),
     val geometryGenerations: Map<RouteGeometryKey, Int>,
     val geometries: Map<RouteGeometryKey, ProgressiveValue<RouteGeometrySegment>>,
     val interaction: RouteDetailInteractionState = RouteDetailInteractionState(),
@@ -133,6 +136,19 @@ sealed interface RouteDetailPageEvent {
         val reason: String
     ) : RouteDetailPageEvent
 
+    data class WalkingStarted(
+        override val pageGeneration: Long,
+        val generation: Int,
+        val initialSegments: Map<String, RouteDetailWalkingState>
+    ) : RouteDetailPageEvent
+
+    data class WalkingSegmentChanged(
+        override val pageGeneration: Long,
+        val generation: Int,
+        val segmentId: String,
+        val state: RouteDetailWalkingState
+    ) : RouteDetailPageEvent
+
     data class InteractionChanged(
         override val pageGeneration: Long,
         val interaction: RouteDetailInteractionState
@@ -202,6 +218,23 @@ object RouteDetailPageReducer {
             is RouteDetailPageEvent.GeometryStarted -> reduceGeometryStarted(state, event)
             is RouteDetailPageEvent.GeometrySucceeded -> reduceGeometrySucceeded(state, event)
             is RouteDetailPageEvent.GeometryFailed -> reduceGeometryFailed(state, event)
+            is RouteDetailPageEvent.WalkingStarted -> {
+                if (event.generation <= state.walkingGeneration) state else state.copy(
+                    walkingGeneration = event.generation,
+                    walkingSegments = event.initialSegments
+                )
+            }
+            is RouteDetailPageEvent.WalkingSegmentChanged -> {
+                if (event.generation != state.walkingGeneration ||
+                    event.segmentId !in state.walkingSegments
+                ) {
+                    state
+                } else {
+                    state.copy(
+                        walkingSegments = state.walkingSegments + (event.segmentId to event.state)
+                    )
+                }
+            }
             is RouteDetailPageEvent.InteractionChanged -> state.copy(interaction = event.interaction)
             is RouteDetailPageEvent.Destroyed -> state.copy(active = false)
         }

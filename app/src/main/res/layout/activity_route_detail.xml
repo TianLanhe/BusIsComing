@@ -101,6 +101,67 @@
     </LinearLayout>
 
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/routeDetailCsdiAttribution"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="56dp"
+        android:clickable="true"
+        android:contentDescription="@string/route_map_csdi_attribution_accessibility"
+        android:elevation="4dp"
+        android:focusable="true"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/bus_card_surface"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="0dp"
+        app:strokeColor="@color/bus_divider"
+        app:strokeWidth="1dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp">
+
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_lands_department_logo" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="7dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="@string/route_map_csdi_attribution_line_one"
+                    android:textColor="@color/bus_text_primary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:text="@string/route_map_csdi_attribution_line_two"
+                    android:textColor="@color/bus_text_secondary"
+                    android:textSize="10sp" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/routeDetailSheet"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -113,21 +174,10 @@
         app:shapeAppearance="@style/ShapeAppearance.BusIsComing.RouteDetailSheet">
 
         <LinearLayout
+            android:id="@+id/routeDetailSheetContent"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical">
-
-            <com.google.android.material.appbar.MaterialToolbar
-                android:id="@+id/routeDetailToolbar"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@color/bus_surface"
-                android:minHeight="56dp"
-                android:titleTextColor="@color/bus_text_primary"
-                android:visibility="gone"
-                app:navigationIcon="@drawable/ic_arrow_back"
-                app:navigationIconTint="@color/bus_text_primary"
-                app:title="@string/route_detail_title" />
 
             <TextView
                 android:id="@+id/routeDetailSheetMapError"

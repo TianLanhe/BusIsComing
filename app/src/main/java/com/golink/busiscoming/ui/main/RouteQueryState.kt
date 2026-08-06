@@ -5,6 +5,7 @@ import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.repository.BusRouteSorter
 
 class RouteQueryState {
@@ -98,6 +99,13 @@ class RouteQueryState {
 
     fun updateStopPreview(routeId: String, preview: RouteCardStopPreview): Boolean {
         return update(routeId) { it.copy(stopPreview = preview) }
+    }
+
+    fun updateWalkingDistance(
+        routeId: String,
+        walkingDistanceDisplayState: WalkingDistanceDisplayState
+    ): Boolean = update(routeId) {
+        it.copy(walkingDistanceDisplayState = walkingDistanceDisplayState)
     }
 
     fun update(routeId: String, transform: (BusRouteOption) -> BusRouteOption): Boolean {

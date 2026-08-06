@@ -9,7 +9,7 @@ import androidx.core.content.ContextCompat
 import com.golink.busiscoming.R
 
 class RouteTimelineRailView(context: Context) : View(context) {
-    enum class Style { SOLID, DASHED, NODE, NONE }
+    enum class Style { SOLID, DASHED, NODE, ORIGIN, DESTINATION, NONE }
 
     var style: Style = Style.NONE
         set(value) {
@@ -32,13 +32,21 @@ class RouteTimelineRailView(context: Context) : View(context) {
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = dp(if (style == Style.SOLID) 6 else 2).toFloat()
         paint.pathEffect = if (style == Style.DASHED) DashPathEffect(floatArrayOf(dp(5f), dp(5f)), 0f) else null
-        if (style != Style.NODE) canvas.drawLine(x, 0f, x, height.toFloat(), paint)
+        if (style != Style.NODE && style != Style.ORIGIN && style != Style.DESTINATION) {
+            canvas.drawLine(x, 0f, x, height.toFloat(), paint)
+        }
         paint.pathEffect = null
-        paint.style = Paint.Style.FILL
-        if (style == Style.NODE || style == Style.SOLID) {
-            canvas.drawCircle(x, height / 2f, dp(if (style == Style.NODE) 5f else 6f), paint)
+        if (style == Style.NODE) {
+            paint.style = Paint.Style.FILL
+            canvas.drawCircle(x, height / 2f, dp(4f), paint)
+        } else if (style == Style.ORIGIN || style == Style.DESTINATION) {
+            paint.style = Paint.Style.FILL
             paint.color = ContextCompat.getColor(context, R.color.bus_card_surface)
-            canvas.drawCircle(x, height / 2f, dp(2.5f), paint)
+            canvas.drawCircle(x, height / 2f, dp(8f), paint)
+            paint.color = railColor
+            canvas.drawCircle(x, height / 2f, dp(5f), paint)
+            paint.color = ContextCompat.getColor(context, R.color.bus_card_surface)
+            canvas.drawCircle(x, height / 2f, dp(1.5f), paint)
         }
     }
 

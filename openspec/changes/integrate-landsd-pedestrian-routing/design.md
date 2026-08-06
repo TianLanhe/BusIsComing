@@ -108,15 +108,15 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 - 分段 cache：request key → 原始 CSDI 成功結果。
 - 組合 cache：查詢起終點 context + plan fingerprint → 有序 segment key、角色及 SameStop 標記。
 
-組合 cache 不複製軌跡結果。重入時若組合與全部必要分段均命中，卡片首幀直接顯示 CSDI 合計，詳情可立即重建分段文字及 paths，不製造假 Loading；若只缺部分分段，既有成功立即可用並只提交缺失 key。失敗、來源衝突、無效 response 及格式化 UI 狀態均不快取；pull refresh、重新進入及語言切換重用成功 cache 並重新嘗試失敗段。
+組合 cache 不複製軌跡結果。重入時若組合與全部必要分段均命中，卡片首幀直接顯示 CSDI 合計，詳情可立即重建分段文字及 paths，不製造假 Loading；若只缺部分分段，既有成功立即可用並只提交缺失 key。失敗、來源衝突、無效 response 及格式化 UI 狀態均不進入成功 cache。為避免預設一分鐘自動刷新把相同永久或暫時失敗放大成請求風暴，runtime 另保存不含結果內容的進程內失敗資格：`AUTOMATIC` trigger 對同一有向 request key 採 5 分鐘起始、最長 30 分鐘的指數退避；退避只決定是否可建立新 flight，不向 consumer 返回快取失敗。明確 `MANUAL` pull refresh 或使用者重新進入可各繞過一次目前退避，成功後立即清除該 key 的失敗資格；語言切換不繞過也不重請語言無關結果。
 
 **否決方案：**只保存整條路線總數會失去跨不同候選路線的端點共享及詳情 paths；磁碟 cache 會引入 schema、隱私及清理成本；快取失敗會令一次暫時故障在 24 小時內持續回退。
 
 ### 6. 邏輯查詢會話跨 configuration change 保持訂閱
 
-搜索與詳情使用可跨 configuration change 的邏輯會話／ViewModel 持有 pedestrian subscription 和原始狀態；View、Activity 或 Fragment 只替換 observer。搜尋會話在新查詢、清空結果或真正離開流程時結束；詳情會話在返回關閉頁面時結束。這避免旋轉、主題或語言切換時短暫零訂閱令在途工作被取消後重請。
+搜索與詳情使用可跨 configuration change 的邏輯會話／ViewModel 持有 pedestrian subscription 和原始狀態；View、Activity 或 Fragment 只替換 observer。搜尋會話在新查詢、清空結果或真正離開流程時結束；詳情會話在返回關閉頁面時結束。自動刷新建立新基礎查詢 generation 時，舊結果專屬訂閱立即失效，成功 cache 仍可由新結果重用；基礎路線回應可結束自動刷新 cycle，而後續 CSDI callback 不延長該 cycle，下一個新查詢則取消不再匹配的舊 consumer。這避免旋轉、主題或語言切換時短暫零訂閱令在途工作被取消後重請，也避免舊查詢更新新列表。
 
-卡片事件仍經 `RouteQueryCoordinator` 驗證目前 query generation 與 `resultId`；UI 派送另外驗證 language version。詳情事件進入既有主線程 reducer，驗證 page generation、walking domain generation 與 segment id。CSDI 原始結果與語言無關，舊 UI observer 被拒絕後，新 observer 從會話目前 snapshot 以新語言重新格式化，不重請網絡。
+卡片事件仍經 `RouteQueryCoordinator` 驗證目前 query generation、`resultId` 與 segment id；UI 派送另外驗證 language version。詳情事件進入既有主線程 reducer，驗證 page generation、walking domain generation 與 segment id。CSDI 原始結果與語言無關，舊 UI observer 被拒絕後，新 observer 從會話目前 snapshot 以新語言重新格式化，不重請網絡。ETA、站點預覽、CSDI 與自動刷新基礎結果共用一個結果狀態／projection 入口，按目前排序及置頂規則只投影一次。
 
 **否決方案：**讓 coordinator 直接修改 adapter／Map 會跨越 data 與 UI 邊界；把訂閱綁定 View 生命週期會與「最後訂閱取消」共同造成 configuration change 重請；為避免重請而永不取消則會浪費網絡並可能持有頁面。
 
@@ -132,17 +132,17 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 
 ### 8. 步行 path 由 presentation model 增量渲染並遵守署名
 
-`RouteMapPresentationBuilder` 不再由端點製造步行直線。只有 `CSDISuccess` 生成 line；每個子路徑的 stable id 為 `walk:<segmentId>:path:<index>`，沿用中性步行色與虛線。Loading、SameStop、失敗或回退均不生成 line，marker 及其他成功 bus／walk lines 保持。renderer 只按 stable id 增刪差異。
+`RouteMapPresentationBuilder` 不再由端點製造步行直線。只有 `CSDISuccess` 生成 path presentation；每個子路徑的 stable id 為 `walk:<segmentId>:path:<index>`，保留上游有序點列與 path 邊界。`GoogleRouteMapRenderer` 使用綁定該同一有序 path 的透明承載 stroke 與較粗灰色開放折角 stamp，讓每個折角由 SDK 按所在位置局部切線定向；不得另畫灰色實線、點線或虛線底圖，也不得在子路徑空隙補線。Loading、SameStop、失敗或回退均不生成 path presentation，marker 及其他成功 bus／walk paths 保持。renderer 只按 stable id 增刪差異；若 stamp 無法可靠建立，省略該步行紋理而不使用手工 Marker、整段 bearing 或固定角度圖標。
 
 地圖建立仍以香港中心作首幀。可靠站點結構到達後，用查詢起終點及所有可靠站點自動 fit 最多一次；晚到 bus geometry 或 pedestrian paths 不移動相機。使用者任何手勢把所有權交給 USER，之後異步結果不得自動 fit。使用者點擊「全覽」時，才以目前全部 marker、bus geometry 及 pedestrian paths 計算完整 bounds。
 
-第一條 CSDI path 實際顯示時，在地圖左下安全區、Google Logo 與 bottom sheet 上方顯示官方地政總署標誌及雙行短署名：繁中 `步行：地政總署 · CSDI`／`© 香港特區政府`，簡中及英文使用獨立資源；點擊可開啟完整來源、版權及免責說明。全部沒有 CSDI path 時隱藏。署名與 map padding 必須避免遮擋 Google Logo、法律文字、返回、定位及全覽控件；不以另一個常駐圖例取代。
+第一條 CSDI path 實際顯示時，在地圖左下安全區、Google Logo 與 bottom sheet 上方顯示官方地政總署標誌及雙行短署名：繁中 `步行：地政總署 · CSDI`／`© 香港特區政府`，簡中及英文使用獨立資源；點擊可開啟完整來源、版權及免責說明。全部沒有 CSDI path 時隱藏。署名與 map padding 必須避免遮擋 Google Logo、法律文字、返回、定位及全覽控件，並作為站名碰撞模型的保留矩形；不以另一個常駐圖例取代。
 
 **否決方案：**保留端點直線直到 path 到達會短暫展示錯誤走法；path 失敗後畫直線會讓使用者誤認為真實導航；等待晚到 geometry 再首次 fit 會重現信息集中出現與搶鏡頭。
 
 ### 9. 步行排序以數值可用性分組且保持身份穩定
 
-步行 `CSDISuccess` 與 `CitybusFallback` 都是可排序數值；升序或降序先排序所有數值，Loading 永遠置後。相同數值與 Loading 以本次查詢初始索引作 tie-break，避免每次 callback 任意換位。只有目前按步行距離排序時，步行狀態更新才造成位置變化；常用頁的置頂卡按 token 保持原序，只重排未置頂結果，搜尋頁重排全部結果。`resultId` 不包含新的展示狀態且不隨 CSDI 完成改變。
+步行 `CSDISuccess` 與 `CitybusFallback` 都是可排序數值；升序或降序先排序所有數值，Loading 永遠置後。相同數值與 Loading 以本次查詢初始索引作 tie-break，避免每次 callback 任意換位。只有目前按步行距離排序時，步行狀態更新才造成位置變化；常用頁的置頂卡按 token 保持原序，只重排未置頂結果，搜尋頁重排全部結果。`resultId` 不包含新的展示狀態且不隨 CSDI 完成改變。任何 CSDI 漸進重排與自動刷新列表替換均經同一 viewport anchor policy：提交前保存第一可見 stable id 與相對頂部 pixel offset，提交後恢復；route 消失時選新排序中最接近的下一項，不能因 callback 到達而跳回頂部。
 
 **否決方案：**降序時把 Loading 反轉到頂部會遮擋已有可比較結果；使用 callback 完成順序作 tie-break 會令慢網下排序不確定；重建 result identity 會讓 DiffUtil、置頂及已開啟詳情失去對應。
 
@@ -156,6 +156,7 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 
 - **[首次卡片查詢增加 Citybus 詳情結構請求]** → 只按完整 request identity single-flight，重用 24 小時可靠結構，與詳情頁共用；起終點 CSDI 段在主端點可用後先行，不把所有工作串行化。
 - **[地政總署服務限制短時間大量請求或暫時不可用]** → 全 App 公平上限 5、端點 single-flight、24 小時成功 cache、訂閱取消、8 秒邊界及最多一次瞬時重試；失敗立即使用 Citybus，不阻塞基本路線功能。
+- **[預設一分鐘自動刷新反覆重試 CSDI 失敗段]** → `AUTOMATIC` trigger 使用 5 至 30 分鐘進程內指數退避；失敗不作成功 cache，手動刷新／重新進入仍可各繞過一次，成功即清除退避。
 - **[30 米門禁可能拒絕少數合法網絡吸附]** → 保存不含坐標的原因診斷與固定 fixture；不得為提高成功率靜默放寬，需以可復現真實樣本另行調整規格。
 - **[24 小時記憶體 cache 可能重用已變更的行人設施]** → 只保存進程內成功結果、失敗不 cache、進程重啟清空；第一版不承諾即時扶手電梯／升降機開放狀態。
 - **[Citybus 總耗時與 CSDI 分段分鐘不一致]** → UI 不嘗試加總重構總耗時，分段分鐘清楚標示約略；實作完成後登記技術債，關閉需統一個人步速、時間依賴公交與轉乘重算。
@@ -167,8 +168,8 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 
 1. 先建立純 model、request builder／parser、兩個 30 米門禁、取整與 segment planner 測試；加入可注入 fixture fetcher，生產預設仍走真實 HTTPS。
 2. 實作進程級雙層 cache、優先隊列、global-5 single-flight、可取消 HTTP、重試及匿名診斷；以純並發測試證明上限、去重、訂閱與完成順序。
-3. 把路線查詢接入 Citybus 詳情／端點規劃與 walking callback，新增卡片顯示狀態及穩定排序；保留原 `walkingDistanceMeters` 和既有 result identity。
-4. 擴展詳情邏輯會話、page reducer、formatter、adapter 與 presentation model，移除步行直線並加入多 path、相機門禁與署名 overlay。
+3. 把路線查詢接入 Citybus 詳情／端點規劃與 walking callback，新增卡片顯示狀態、`INITIAL／MANUAL／AUTOMATIC` 退避語義、統一 projection 及 viewport anchor；保留原 `walkingDistanceMeters` 和既有 result identity。
+4. 擴展詳情邏輯會話、page reducer、formatter、adapter 與 presentation model，移除步行直線並沿每個 CSDI path 加入局部切線開放折角、相機門禁與署名 overlay。
 5. 完成 focused tests、`./gradlew build`、三語／TalkBack／窄屏與任務自有 Google Maps 模擬器驗收，再作少量 Citybus + CSDI 只讀抽查並記錄外部驗證限制。
 6. 實作與驗證完成後更新 `docs/technical-debt.md`，再按 OpenSpec apply 流程核對 tasks、嚴格驗證及提交。
 

@@ -45,7 +45,10 @@ class BusRouteCardBinder(private val itemView: View) {
         nextArrivalText.visibility = if (shouldShowNextArrival) View.VISIBLE else View.GONE
         routePriceText.text = RouteResultCardFormatter.price(route.priceHkd, localizedText)
         routeDurationText.text = RouteResultCardFormatter.duration(route.durationMinutes, localizedText)
-        routeWalkingText.text = RouteResultCardFormatter.walking(route.walkingDistanceMeters, localizedText)
+        routeWalkingText.text = RouteResultCardFormatter.walking(
+            route.walkingDistanceDisplayState,
+            localizedText
+        )
         routeInfoLayout.contentDescription = RouteResultCardFormatter.infoAccessibility(route, localizedText)
 
         val preview = route.stopPreview

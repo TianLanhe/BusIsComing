@@ -1,13 +1,16 @@
 package com.golink.busiscoming.ui.main
 
-import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.TouchDelegate
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -20,12 +23,12 @@ import com.golink.busiscoming.data.model.RouteDetailTransferType
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.card.MaterialCardView
 
 class RouteDetailAdapter(
     private val onToggleLeg: (Int) -> Unit,
     private val onRetry: () -> Unit,
-    private val onTimelineStopSelected: (String) -> Unit = {}
+    private val onTimelineStopSelected: (String) -> Unit = {},
+    private val onSummarySegmentSelected: (RouteSummarySegment) -> Unit = {}
 ) : ListAdapter<RouteDetailUiItem, RouteDetailAdapter.Holder>(DIFF) {
     private var selectedStableId: String? = null
 
@@ -102,49 +105,64 @@ class RouteDetailAdapter(
         }
 
         private fun bindSummary(item: RouteDetailUiItem.Summary) {
-            val card = MaterialCardView(root.context).apply {
-                radius = dp(14).toFloat()
-                cardElevation = 0f
-                strokeWidth = dp(1)
-                strokeColor = color(R.color.bus_divider)
-                setCardBackgroundColor(color(R.color.bus_card_surface))
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = dp(16); marginEnd = dp(16); bottomMargin = dp(12)
-                }
+            val content = LinearLayout(root.context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(16), dp(7), dp(16), dp(10))
             }
-            val content = LinearLayout(root.context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(16), dp(18), dp(16)) }
-            content.addView(text(item.routeName, 22f, true, R.color.bus_text_primary))
             val arrival = item.plannedArrivalTime?.let { root.context.getString(R.string.route_detail_arrival, it) }
             val timing = listOfNotNull(
                 root.context.getString(R.string.route_card_duration_value, item.durationMinutes),
                 arrival
             ).joinToString("  ·  ")
-            content.addView(text(timing, 15f, true, R.color.bus_text_primary).apply {
-                layoutParams = marginTop(8)
+            content.addView(text(timing, 21f, true, R.color.bus_text_primary))
+
+            val segmentRow = LinearLayout(root.context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val segmentTargets = mutableListOf<View>()
+            item.segments.forEachIndexed { index, segment ->
+                val target = summarySegment(segment)
+                segmentTargets += target
+                segmentRow.addView(target, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    dp(22)
+                ).apply { if (index > 0) marginStart = dp(2) })
+            }
+            content.addView(HorizontalScrollView(root.context).apply {
+                isHorizontalScrollBarEnabled = false
+                isFillViewport = false
+                overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                addView(segmentRow)
+                layoutParams = marginTop(4)
             })
-            content.addView(text(liveEta(item.firstLegEta), 14f, true, if (item.firstLegEta is WaitTimeState.Available) R.color.bus_wait_accent else R.color.bus_text_secondary).apply {
-                layoutParams = marginTop(7)
-            })
+            content.post {
+                if (content.parent === root) {
+                    installSummarySegmentTouchDelegates(content, segmentTargets)
+                }
+            }
+
             val fare = price(item.priceHkd)
             val rideStopCount = when (val state = item.rideStopCount) {
                 is RideStopCountState.Available -> root.context.getString(R.string.route_detail_total_stops, state.count)
                 RideStopCountState.Loading -> root.context.getString(R.string.route_detail_stops_loading)
                 RideStopCountState.Unavailable -> root.context.getString(R.string.route_detail_stops_unavailable)
             }
-            content.addView(text("$fare  ·  $rideStopCount", 14f, false, R.color.bus_text_secondary).apply {
-                layoutParams = marginTop(7)
+            val summaryWalking = if (item.isWalkingDistanceLoading) {
+                root.context.getString(R.string.route_detail_walk_loading)
+            } else {
+                root.context.getString(R.string.route_detail_walk_distance, item.walkingDistanceMeters)
+            }
+            val meta = listOf(
+                rideStopCount,
+                summaryWalking,
+                fare,
+                liveEta(item.firstLegEta)
+            ).joinToString("  ·  ")
+            content.addView(text(meta, 13f, false, R.color.bus_text_secondary).apply {
+                layoutParams = marginTop(3)
             })
-            val walkingRow = LinearLayout(root.context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; layoutParams = marginTop(10) }
-            walkingRow.addView(ImageView(root.context).apply {
-                setImageResource(R.drawable.ic_walking_person); imageTintList = ColorStateList.valueOf(color(R.color.bus_text_secondary)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
-            })
-            walkingRow.addView(text(root.context.getString(R.string.route_detail_walk_distance, item.walkingDistanceMeters), 14f, false, R.color.bus_text_secondary).apply {
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(7) }
-            })
-            content.addView(walkingRow)
-            if (!item.isWalkingDistanceComplete) content.addView(text(root.context.getString(R.string.route_detail_walking_incomplete), 12f, false, R.color.bus_text_secondary).apply { layoutParams = marginTop(5) })
-            card.contentDescription = if (arrival == null) {
+            root.contentDescription = if (arrival == null) {
                 root.context.getString(
                     R.string.route_detail_summary_accessibility_without_arrival,
                     item.routeName,
@@ -164,8 +182,94 @@ class RouteDetailAdapter(
                     item.walkingDistanceMeters
                 )
             }
-            card.addView(content)
-            root.addView(card)
+            root.addView(content)
+        }
+
+        private fun summarySegment(segment: RouteSummarySegment): View {
+            val visible = LinearLayout(root.context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.BOTTOM
+                isBaselineAligned = true
+                setPadding(dp(4), dp(2), dp(4), dp(2))
+                minimumHeight = dp(22)
+                background = rounded(
+                    when (segment.kind) {
+                        RouteSummarySegmentKind.BUS -> legColor(segment.colorKey ?: 0)
+                        RouteSummarySegmentKind.WALKING,
+                        RouteSummarySegmentKind.SAME_STOP_TRANSFER -> color(R.color.bus_surface_variant)
+                    },
+                    dp(6).toFloat()
+                )
+            }
+            when (segment.kind) {
+                RouteSummarySegmentKind.BUS -> visible.addView(
+                    text(segment.routeLabel.orEmpty(), 14f, true, R.color.bus_on_route_badge)
+                )
+                RouteSummarySegmentKind.WALKING,
+                RouteSummarySegmentKind.SAME_STOP_TRANSFER -> visible.addView(ImageView(root.context).apply {
+                    setImageResource(
+                        if (segment.kind == RouteSummarySegmentKind.WALKING) {
+                            R.drawable.ic_walking_person
+                        } else {
+                            R.drawable.ic_swap_curved
+                        }
+                    )
+                    imageTintList = ColorStateList.valueOf(color(R.color.bus_text_secondary))
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
+                })
+            }
+            segment.durationMinutes?.let { minutes ->
+                visible.addView(
+                    text(minutes.toString(), 10f, false, if (segment.kind == RouteSummarySegmentKind.BUS) {
+                        R.color.bus_on_route_badge
+                    } else {
+                        R.color.bus_text_secondary
+                    }).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT
+                        ).apply { marginStart = dp(3) }
+                    }
+                )
+            }
+            val label = when (segment.kind) {
+                RouteSummarySegmentKind.BUS -> segment.routeLabel.orEmpty()
+                RouteSummarySegmentKind.WALKING -> root.context.getString(R.string.route_detail_walk_unknown)
+                RouteSummarySegmentKind.SAME_STOP_TRANSFER -> root.context.getString(R.string.route_detail_same_stop_transfer)
+            }
+            val description = segment.durationMinutes?.let {
+                "$label, ${root.context.getString(R.string.route_card_duration_value, it)}"
+            } ?: label
+            return FrameLayout(root.context).apply {
+                minimumHeight = dp(22)
+                isClickable = true
+                isFocusable = true
+                contentDescription = description
+                foreground = ContextCompat.getDrawable(root.context, android.R.drawable.list_selector_background)
+                addView(visible, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    dp(22),
+                    Gravity.CENTER_VERTICAL
+                ))
+                setOnClickListener { onSummarySegmentSelected(segment) }
+            }
+        }
+
+        private fun installSummarySegmentTouchDelegates(
+            parent: ViewGroup,
+            targets: List<View>
+        ) {
+            val delegate = SummarySegmentTouchDelegate(parent)
+            targets.forEach { target ->
+                val bounds = Rect(0, 0, target.width, target.height)
+                parent.offsetDescendantRectToMyCoords(target, bounds)
+                val missingHeight = (dp(48) - bounds.height()).coerceAtLeast(0)
+                bounds.top -= missingHeight / 2
+                bounds.bottom += missingHeight - missingHeight / 2
+                delegate.add(TouchDelegate(bounds, target))
+            }
+            parent.touchDelegate = delegate
         }
 
         private fun bindDynamicStatus(item: RouteDetailUiItem.DynamicStatus) {
@@ -181,12 +285,27 @@ class RouteDetailAdapter(
         private fun bindEndpoint(item: RouteDetailUiItem.Endpoint) {
             val title = item.name ?: root.context.getString(if (item.isOrigin) R.string.route_detail_origin else R.string.route_detail_destination)
             val details = item.plannedTime?.let { root.context.getString(R.string.route_detail_planned_time, it) }
-            root.addView(timelineRow(RouteTimelineRailView.Style.NODE, color(R.color.route_timeline_walk), title, details, true))
+            root.addView(timelineRow(
+                if (item.isOrigin) RouteTimelineRailView.Style.ORIGIN else RouteTimelineRailView.Style.DESTINATION,
+                color(if (item.isOrigin) R.color.bus_chip_selected else R.color.bus_danger),
+                title,
+                details,
+                true
+            ))
         }
 
         private fun bindWalking(item: RouteDetailUiItem.Walking) {
-            val label = item.distanceMeters?.let { root.context.getString(R.string.route_detail_walk_distance, it) }
-                ?: root.context.getString(R.string.route_detail_walk_unknown)
+            val label = when {
+                item.isLoading -> root.context.getString(R.string.route_detail_walk_loading)
+                item.isUnavailable -> root.context.getString(R.string.route_detail_walk_unavailable)
+                item.distanceMeters != null && item.approximateMinutes != null -> root.context.getString(
+                    R.string.route_detail_walk_distance_with_time,
+                    item.distanceMeters,
+                    item.approximateMinutes
+                )
+                item.distanceMeters != null -> root.context.getString(R.string.route_detail_walk_distance, item.distanceMeters)
+                else -> root.context.getString(R.string.route_detail_walk_unavailable)
+            }
             val content = LinearLayout(root.context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             content.addView(ImageView(root.context).apply {
                 setImageResource(R.drawable.ic_walking_person); imageTintList = ColorStateList.valueOf(color(R.color.bus_text_secondary)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -205,23 +324,31 @@ class RouteDetailAdapter(
         }
 
         private fun bindBusLeg(item: RouteDetailUiItem.BusLeg) {
-            val card = MaterialCardView(root.context).apply {
-                radius = dp(12).toFloat(); cardElevation = 0f; strokeWidth = dp(1); strokeColor = color(R.color.bus_divider); setCardBackgroundColor(color(R.color.bus_card_surface))
+            val content = LinearLayout(root.context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(4), 0, dp(4))
             }
-            val content = LinearLayout(root.context).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(13), dp(14), dp(13)) }
             val header = LinearLayout(root.context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             header.addView(text(item.route, 16f, true, R.color.bus_on_route_badge).apply {
                 gravity = Gravity.CENTER; setPadding(dp(10), dp(5), dp(10), dp(5)); background = rounded(legColor(item.colorKey), dp(6).toFloat())
             })
             item.direction?.let { direction -> header.addView(text(root.context.getString(R.string.route_direction_format, direction), 14f, false, R.color.bus_text_secondary).apply { layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(10) } }) }
+                ?: header.addView(View(root.context), LinearLayout.LayoutParams(0, 1, 1f))
+            item.fareHkd?.let { fare ->
+                header.addView(text(price(fare), 13f, false, R.color.bus_text_secondary).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { marginStart = dp(8) }
+                })
+            }
             content.addView(header)
-            item.liveEta?.let { eta -> content.addView(text(liveEta(eta), 14f, true, if (eta is WaitTimeState.Available) R.color.bus_wait_accent else R.color.bus_text_secondary).apply { layoutParams = marginTop(10) }) }
-            val fare = item.fareHkd?.let(::price)
-            val meta = listOfNotNull(fare, root.context.getString(R.string.route_detail_leg_stops, item.stopCount)).joinToString(" · ")
-            content.addView(text(meta, 14f, false, R.color.bus_text_secondary).apply { layoutParams = marginTop(8) })
-            card.contentDescription = root.context.getString(R.string.route_detail_leg_accessibility, item.route, item.direction.orEmpty(), liveEta(item.liveEta ?: WaitTimeState.Loading), meta)
-            card.addView(content)
-            root.addView(timelineRow(RouteTimelineRailView.Style.SOLID, legColor(item.colorKey), card))
+            content.contentDescription = listOfNotNull(
+                item.route,
+                item.direction,
+                item.fareHkd?.let(::price)
+            ).joinToString(", ")
+            root.addView(timelineRow(RouteTimelineRailView.Style.SOLID, legColor(item.colorKey), content))
         }
 
         private fun bindToggle(item: RouteDetailUiItem.ViaToggle) {
@@ -301,4 +428,15 @@ class RouteDetailAdapter(
             override fun areContentsTheSame(oldItem: RouteDetailUiItem, newItem: RouteDetailUiItem) = oldItem == newItem
         }
     }
+}
+
+private class SummarySegmentTouchDelegate(anchor: View) : TouchDelegate(Rect(), anchor) {
+    private val delegates = mutableListOf<TouchDelegate>()
+
+    fun add(delegate: TouchDelegate) {
+        delegates += delegate
+    }
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean =
+        delegates.any { it.onTouchEvent(event) }
 }

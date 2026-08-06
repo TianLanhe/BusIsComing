@@ -4,18 +4,21 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Point
+import android.graphics.Rect
+import android.graphics.RectF
 import androidx.annotation.ColorInt
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import com.golink.busiscoming.R
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.Dash
-import com.google.android.gms.maps.model.Dot
-import com.google.android.gms.maps.model.Gap
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapColorScheme
@@ -23,6 +26,9 @@ import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
+import com.google.android.gms.maps.model.StrokeStyle
+import com.google.android.gms.maps.model.StyleSpan
+import com.google.android.gms.maps.model.TextureStyle
 
 data class RouteMapRenderPalette(
     val busColors: IntArray,
@@ -58,9 +64,22 @@ class GoogleRouteMapRenderer(
     private val onMarkerSelected: (String) -> Unit
 ) {
     private val markerIcons = RouteMapMarkerIconFactory(context, palette)
+    private val walkingStrokeStyle by lazy(::createWalkingStrokeStyle)
+    private val busStrokeStyles by lazy {
+        palette.busColors.map { color -> createBusStrokeStyle(color) }
+    }
     private val markers = mutableMapOf<String, RenderedMarker>()
+    private val labelMarkers = mutableMapOf<String, Marker>()
+    private val labelSides = mutableMapOf<String, RouteMapLabelSide>()
     private val lines = mutableMapOf<String, RenderedLine>()
     private var presentation: RouteMapPresentation? = null
+    private var paddingLeft = 0
+    private var paddingTop = 0
+    private var paddingRight = 0
+    private var paddingBottom = 0
+    private var viewportWidth = 0
+    private var viewportHeight = 0
+    private var reservedLabelRects: List<RouteMapLabelRect> = emptyList()
 
     init {
         map.uiSettings.apply {
@@ -96,10 +115,35 @@ class GoogleRouteMapRenderer(
         val nextLineIds = value.lines.mapTo(mutableSetOf()) { it.stableId }
         (lines.keys - nextLineIds).forEach { id -> lines.remove(id)?.remove() }
         value.lines.forEach { model -> renderLine(model) }
+        relayoutLabels()
     }
 
-    fun updatePadding(left: Int, top: Int, right: Int, bottom: Int) {
+    fun updatePadding(
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+        viewportWidth: Int,
+        viewportHeight: Int,
+        reservedLabelRects: List<RouteMapLabelRect> = emptyList()
+    ) {
+        paddingLeft = left
+        paddingTop = top
+        paddingRight = right
+        paddingBottom = bottom
+        this.viewportWidth = viewportWidth
+        this.viewportHeight = viewportHeight
+        this.reservedLabelRects = reservedLabelRects
         map.setPadding(left, top, right, bottom)
+        relayoutLabels()
+    }
+
+    fun onCameraIdle() {
+        relayoutLabels()
+    }
+
+    fun hasRenderedWalkingPaths(): Boolean = lines.values.any {
+        it.model.kind == RouteMapLineKind.WALKING
     }
 
     fun fitOverview(animated: Boolean, paddingPx: Int): Boolean {
@@ -134,8 +178,11 @@ class GoogleRouteMapRenderer(
 
     fun clear() {
         markers.values.forEach { it.marker.remove() }
+        labelMarkers.values.forEach(Marker::remove)
         lines.values.forEach(RenderedLine::remove)
         markers.clear()
+        labelMarkers.clear()
+        labelSides.clear()
         lines.clear()
         presentation = null
     }
@@ -149,7 +196,13 @@ class GoogleRouteMapRenderer(
                     .position(model.position.toLatLng())
                     .title(accessibleTitle(model))
                     .icon(markerIcons.icon(model))
-                    .anchor(0.5f, 0.5f)
+                    .anchor(
+                        0.5f,
+                        if (
+                            model.role == RouteMapMarkerRole.QUERY_ORIGIN ||
+                            model.role == RouteMapMarkerRole.QUERY_DESTINATION
+                        ) 1f else 0.5f
+                    )
                     .zIndex(if (model.selected) 20f else 10f)
             ) ?: return
             marker.tag = model.stableId
@@ -176,23 +229,79 @@ class GoogleRouteMapRenderer(
                     PolylineOptions().addAll(points).color(palette.busOutlineColor).width(dp(9f)).zIndex(1f)
                 )
                 val core = map.addPolyline(
-                    PolylineOptions().addAll(points).color(color).width(dp(6f)).zIndex(2f)
+                    PolylineOptions()
+                        .addAll(points)
+                        .color(color)
+                        .width(dp(7f))
+                        .apply {
+                            busStrokeStyles.getOrNull((model.colorSlot ?: 0).mod(busStrokeStyles.size))
+                                ?.let { addSpan(StyleSpan(it)) }
+                        }
+                        .zIndex(2f)
                 )
                 RenderedLine(model, core, outline)
             }
             RouteMapLineKind.WALKING -> {
+                val strokeStyle = walkingStrokeStyle ?: return
                 val core = map.addPolyline(
                     PolylineOptions()
                         .addAll(points)
-                        .color(palette.walkingColor)
-                        .width(dp(4f))
-                        .pattern(listOf(Dot(), Gap(dp(7f)), Dash(dp(10f)), Gap(dp(7f))))
+                        .color(Color.TRANSPARENT)
+                        .width(dp(13f))
+                        .addSpan(StyleSpan(strokeStyle))
                         .zIndex(3f)
                 )
                 RenderedLine(model, core, null)
             }
         }
     }
+
+    private fun createWalkingStrokeStyle(): StrokeStyle? = runCatching {
+        val width = dp(24f).toInt().coerceAtLeast(24)
+        val height = dp(14f).toInt().coerceAtLeast(14)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val inset = dp(2.5f)
+        val chevron = Path().apply {
+            moveTo(inset, inset)
+            lineTo(width - inset, height / 2f)
+            lineTo(inset, height - inset)
+        }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = dp(3.2f)
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            color = palette.walkingColor
+        }
+        canvas.drawPath(chevron, paint)
+        StrokeStyle.transparentColorBuilder()
+            .stamp(TextureStyle.newBuilder(BitmapDescriptorFactory.fromBitmap(bitmap)).build())
+            .build()
+    }.getOrNull()
+
+    private fun createBusStrokeStyle(@ColorInt color: Int): StrokeStyle? = runCatching {
+        val width = dp(28f).toInt().coerceAtLeast(28)
+        val height = dp(14f).toInt().coerceAtLeast(14)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val inset = dp(3f)
+        val chevron = Path().apply {
+            moveTo(inset, inset)
+            lineTo(width - inset, height / 2f)
+            lineTo(inset, height - inset)
+        }
+        canvas.drawPath(chevron, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = dp(2.2f)
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            this.color = palette.busOutlineColor
+        })
+        StrokeStyle.colorBuilder(color)
+            .stamp(TextureStyle.newBuilder(BitmapDescriptorFactory.fromBitmap(bitmap)).build())
+            .build()
+    }.getOrNull()
 
     private fun accessibleTitle(marker: RouteMapMarker): String {
         val firstRoute = marker.routeLabels.firstOrNull().orEmpty()
@@ -211,9 +320,147 @@ class GoogleRouteMapRenderer(
         }
     }
 
+    private fun relayoutLabels() {
+        val value = presentation ?: return
+        if (viewportWidth <= 0 || viewportHeight <= 0) return
+        runCatching {
+            val screenWidth = viewportWidth.toFloat()
+            val screenHeight = viewportHeight.toFloat()
+            val margin = dp(8f)
+            val safeRect = RouteMapLabelRect(
+                paddingLeft + margin,
+                paddingTop + margin,
+                screenWidth - paddingRight - margin,
+                screenHeight - paddingBottom - margin
+            )
+            val markerHalf = dp(16f)
+            val markerRects = value.markers.map { model ->
+                val point = map.projection.toScreenLocation(model.position.toLatLng())
+                RouteMapLabelRect(
+                    point.x - markerHalf,
+                    point.y - markerHalf,
+                    point.x + markerHalf,
+                    point.y + markerHalf
+                )
+            }
+            val occupied = (markerRects + reservedLabelRects).toMutableList()
+            val acceptedIds = mutableSetOf<String>()
+            value.markers.sortedByDescending(::labelPriority).forEach { model ->
+                val point = map.projection.toScreenLocation(model.position.toLatLng())
+                val displayTitle = model.title.take(MAX_LABEL_CHARACTERS)
+                val candidates = labelCandidates(point, displayTitle)
+                val critical = model.role != RouteMapMarkerRole.VIA || model.selected
+                val chosen = RouteMapLabelPlacementPolicy.choose(
+                    candidates = candidates,
+                    safeRect = safeRect,
+                    occupied = occupied,
+                    critical = critical,
+                    previousSide = labelSides[model.stableId]
+                ) ?: return@forEach
+                acceptedIds += model.stableId
+                occupied += chosen.rect
+                labelSides[model.stableId] = chosen.side
+                val icon = createLabelIcon(displayTitle, chosen.side)
+                labelMarkers.remove(model.stableId)?.remove()
+                labelMarkers[model.stableId] = map.addMarker(
+                    MarkerOptions()
+                        .position(model.position.toLatLng())
+                        .icon(icon.descriptor)
+                        .anchor(icon.anchorX, icon.anchorY)
+                        .zIndex(8f)
+                ) ?: return@forEach
+            }
+            (labelMarkers.keys - acceptedIds).forEach { id ->
+                labelMarkers.remove(id)?.remove()
+                labelSides.remove(id)
+            }
+        }
+    }
+
+    private fun labelCandidates(point: Point, value: String): List<RouteMapLabelCandidate> {
+        val paint = labelTextPaint()
+        val width = paint.measureText(value).coerceAtMost(dp(MAX_LABEL_WIDTH_DP)) + dp(12f)
+        val height = dp(25f)
+        val gap = dp(20f)
+        val x = point.x.toFloat()
+        val y = point.y.toFloat()
+        return listOf(
+            RouteMapLabelCandidate(
+                RouteMapLabelSide.RIGHT,
+                RouteMapLabelRect(x + gap, y - height / 2f, x + gap + width, y + height / 2f)
+            ),
+            RouteMapLabelCandidate(
+                RouteMapLabelSide.LEFT,
+                RouteMapLabelRect(x - gap - width, y - height / 2f, x - gap, y + height / 2f)
+            ),
+            RouteMapLabelCandidate(
+                RouteMapLabelSide.TOP,
+                RouteMapLabelRect(x - width / 2f, y - gap - height, x + width / 2f, y - gap)
+            ),
+            RouteMapLabelCandidate(
+                RouteMapLabelSide.BOTTOM,
+                RouteMapLabelRect(x - width / 2f, y + gap, x + width / 2f, y + gap + height)
+            )
+        )
+    }
+
+    private fun createLabelIcon(value: String, side: RouteMapLabelSide): LabelIcon {
+        val textPaint = labelTextPaint()
+        val textWidth = textPaint.measureText(value).coerceAtMost(dp(MAX_LABEL_WIDTH_DP)).toInt()
+        val labelWidth = textWidth + dp(12f).toInt()
+        val labelHeight = dp(25f).toInt()
+        val gap = dp(18f).toInt()
+        val bitmapWidth = labelWidth + if (side == RouteMapLabelSide.RIGHT || side == RouteMapLabelSide.LEFT) gap else 0
+        val bitmapHeight = labelHeight + if (side == RouteMapLabelSide.TOP || side == RouteMapLabelSide.BOTTOM) gap else 0
+        val bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val left = if (side == RouteMapLabelSide.RIGHT) gap.toFloat() else 0f
+        val top = if (side == RouteMapLabelSide.BOTTOM) gap.toFloat() else 0f
+        val rect = RectF(left, top, left + labelWidth, top + labelHeight)
+        canvas.drawRoundRect(rect, dp(6f), dp(6f), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ContextCompat.getColor(context, R.color.bus_card_surface)
+            alpha = 235
+            style = Paint.Style.FILL
+        })
+        canvas.drawRoundRect(rect, dp(6f), dp(6f), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ContextCompat.getColor(context, R.color.bus_divider)
+            style = Paint.Style.STROKE
+            strokeWidth = dp(1f)
+        })
+        val baseline = top + labelHeight / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
+        canvas.drawText(value, left + dp(6f), baseline, textPaint)
+        val descriptor = BitmapDescriptorFactory.fromBitmap(bitmap)
+        return when (side) {
+            RouteMapLabelSide.RIGHT -> LabelIcon(descriptor, 0f, 0.5f)
+            RouteMapLabelSide.LEFT -> LabelIcon(descriptor, 1f, 0.5f)
+            RouteMapLabelSide.TOP -> LabelIcon(descriptor, 0.5f, 1f)
+            RouteMapLabelSide.BOTTOM -> LabelIcon(descriptor, 0.5f, 0f)
+        }
+    }
+
+    private fun labelTextPaint() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.bus_text_primary)
+        textSize = context.resources.displayMetrics.scaledDensity * 12f
+    }
+
+    private fun labelPriority(marker: RouteMapMarker): Int = when (marker.role) {
+        RouteMapMarkerRole.QUERY_ORIGIN,
+        RouteMapMarkerRole.QUERY_DESTINATION -> 4
+        RouteMapMarkerRole.BOARDING,
+        RouteMapMarkerRole.ALIGHTING,
+        RouteMapMarkerRole.TRANSFER -> 3
+        RouteMapMarkerRole.VIA -> if (marker.selected) 2 else 1
+    }
+
     private fun dp(value: Float): Float = value * context.resources.displayMetrics.density
 
     private data class RenderedMarker(val marker: Marker, val model: RouteMapMarker)
+
+    private data class LabelIcon(
+        val descriptor: BitmapDescriptor,
+        val anchorX: Float,
+        val anchorY: Float
+    )
 
     private data class RenderedLine(
         val model: RouteMapLine,
@@ -225,23 +472,47 @@ class GoogleRouteMapRenderer(
             outline?.remove()
         }
     }
+
+    private companion object {
+        const val MAX_LABEL_CHARACTERS = 22
+        const val MAX_LABEL_WIDTH_DP = 156f
+    }
 }
 
 private class RouteMapMarkerIconFactory(
-    context: Context,
+    private val context: Context,
     private val palette: RouteMapRenderPalette
 ) {
     private val density = context.resources.displayMetrics.density
+    private val cache = mutableMapOf<IconKey, BitmapDescriptor>()
 
     fun icon(marker: RouteMapMarker): BitmapDescriptor {
-        val baseSize = if (marker.role == RouteMapMarkerRole.VIA) 14f else 30f
-        val size = ((if (marker.selected) baseSize * 1.28f else baseSize) * density).toInt().coerceAtLeast(12)
+        val previousColorSlot = marker.legIndexes.minOrNull() ?: 0
+        val nextColorSlot = marker.legIndexes.maxOrNull() ?: previousColorSlot
+        val key = IconKey(
+            role = marker.role,
+            previousColorSlot = previousColorSlot.mod(palette.busColors.size),
+            nextColorSlot = nextColorSlot.mod(palette.busColors.size),
+            selected = marker.selected,
+            densityBucket = (density * 100).toInt()
+        )
+        return cache.getOrPut(key) { createIcon(key) }
+    }
+
+    private fun createIcon(key: IconKey): BitmapDescriptor {
+        val baseSize = when (key.role) {
+            RouteMapMarkerRole.VIA -> 14f
+            RouteMapMarkerRole.QUERY_ORIGIN,
+            RouteMapMarkerRole.QUERY_DESTINATION -> 36f
+            else -> 32f
+        }
+        val size = ((if (key.selected) baseSize * 1.18f else baseSize) * density)
+            .toInt()
+            .coerceAtLeast(12)
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = markerColor(marker)
-        }
+        val primaryColor = markerColor(key)
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = primaryColor }
         val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 2f * density
@@ -252,51 +523,109 @@ private class RouteMapMarkerIconFactory(
         val top = inset
         val right = size - inset
         val bottom = size - inset
-        when (marker.role) {
-            RouteMapMarkerRole.QUERY_ORIGIN -> {
-                val path = Path().apply {
-                    moveTo(size / 2f, top)
-                    lineTo(right, bottom)
-                    lineTo(left, bottom)
-                    close()
-                }
-                canvas.drawPath(path, fill)
-                canvas.drawPath(path, outline)
-            }
-            RouteMapMarkerRole.ALIGHTING,
+        when (key.role) {
+            RouteMapMarkerRole.QUERY_ORIGIN,
             RouteMapMarkerRole.QUERY_DESTINATION -> {
-                canvas.drawRoundRect(left, top, right, bottom, 4f * density, 4f * density, fill)
-                canvas.drawRoundRect(left, top, right, bottom, 4f * density, 4f * density, outline)
-            }
-            RouteMapMarkerRole.TRANSFER -> {
+                val centerY = size * 0.39f
+                val radius = size * 0.27f
                 val path = Path().apply {
-                    moveTo(size / 2f, top)
-                    lineTo(right, size / 2f)
+                    moveTo(size / 2f - radius * 0.7f, centerY + radius * 0.55f)
                     lineTo(size / 2f, bottom)
-                    lineTo(left, size / 2f)
+                    lineTo(size / 2f + radius * 0.7f, centerY + radius * 0.55f)
                     close()
                 }
                 canvas.drawPath(path, fill)
                 canvas.drawPath(path, outline)
+                canvas.drawCircle(size / 2f, centerY, radius, fill)
+                canvas.drawCircle(size / 2f, centerY, radius, outline)
+                canvas.drawCircle(size / 2f, centerY, radius * 0.36f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = palette.markerOutlineColor
+                    style = Paint.Style.FILL
+                })
             }
-            RouteMapMarkerRole.BOARDING,
-            RouteMapMarkerRole.VIA -> {
+            RouteMapMarkerRole.BOARDING -> {
                 canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, fill)
                 canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, outline)
+                drawVector(
+                    canvas,
+                    R.drawable.ic_route_map_bus_front,
+                    palette.markerOutlineColor,
+                    size,
+                    0.55f
+                )
             }
+            RouteMapMarkerRole.ALIGHTING -> {
+                val radius = (right - left) / 2f
+                canvas.drawCircle(size / 2f, size / 2f, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = primaryColor
+                    style = Paint.Style.STROKE
+                    strokeWidth = 4f * density
+                })
+                drawVector(canvas, R.drawable.ic_route_map_log_out, primaryColor, size, 0.58f)
+            }
+            RouteMapMarkerRole.TRANSFER -> {
+                val arcBounds = RectF(left, top, right, bottom)
+                val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 5f * density
+                    strokeCap = Paint.Cap.BUTT
+                }
+                ring.color = palette.busColors[key.previousColorSlot]
+                canvas.drawArc(arcBounds, -90f, 180f, false, ring)
+                ring.color = palette.busColors[key.nextColorSlot]
+                canvas.drawArc(arcBounds, 90f, 180f, false, ring)
+                drawVector(canvas, R.drawable.ic_route_map_transfer, palette.walkingColor, size, 0.52f)
+            }
+            RouteMapMarkerRole.VIA -> {
+                val neutral = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.FILL
+                    color = palette.walkingColor
+                }
+                canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, neutral)
+                canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, outline)
+            }
+        }
+        if (key.selected) {
+            canvas.drawCircle(size / 2f, size / 2f, size * 0.47f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = 2f * density
+                color = palette.selectedColor
+            })
         }
         return BitmapDescriptorFactory.fromBitmap(bitmap)
     }
 
+    private fun drawVector(
+        canvas: Canvas,
+        resource: Int,
+        @ColorInt tint: Int,
+        size: Int,
+        scale: Float
+    ) {
+        val drawable = AppCompatResources.getDrawable(context, resource)?.mutate() ?: return
+        DrawableCompat.setTint(drawable, tint)
+        val iconSize = (size * scale).toInt()
+        val inset = (size - iconSize) / 2
+        drawable.bounds = Rect(inset, inset, inset + iconSize, inset + iconSize)
+        drawable.draw(canvas)
+    }
+
     @ColorInt
-    private fun markerColor(marker: RouteMapMarker): Int {
-        if (marker.selected) return palette.selectedColor
-        return when (marker.role) {
+    private fun markerColor(key: IconKey): Int {
+        return when (key.role) {
             RouteMapMarkerRole.QUERY_ORIGIN -> palette.originColor
             RouteMapMarkerRole.QUERY_DESTINATION -> palette.destinationColor
-            else -> palette.busColors[(marker.legIndexes.minOrNull() ?: 0).mod(palette.busColors.size)]
+            else -> palette.busColors[key.previousColorSlot]
         }
     }
+
+    private data class IconKey(
+        val role: RouteMapMarkerRole,
+        val previousColorSlot: Int,
+        val nextColorSlot: Int,
+        val selected: Boolean,
+        val densityBucket: Int
+    )
 }
 
 private fun RouteMapCoordinate.toLatLng(): LatLng = LatLng(latitude, longitude)

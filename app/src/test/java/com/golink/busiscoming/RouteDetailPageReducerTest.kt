@@ -5,6 +5,10 @@ import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometryPoint
 import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.RouteDetailWalkingState
+import com.golink.busiscoming.data.model.PedestrianCoordinate
+import com.golink.busiscoming.data.model.PedestrianRoute
+import com.golink.busiscoming.data.model.PedestrianRoutePath
 import com.golink.busiscoming.ui.main.ProgressiveValue
 import com.golink.busiscoming.ui.main.RouteDetailPageEvent
 import com.golink.busiscoming.ui.main.RouteDetailPageReducer
@@ -81,6 +85,46 @@ class RouteDetailPageReducerTest {
         assertEquals(2, state.geometryGenerations.getValue(keyA))
     }
 
+    @Test
+    fun walkingSegmentsReplaceByStableIdAndRejectOldGenerationWithoutIncrementalAccumulation() {
+        var state = initial()
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingStarted(
+                PAGE,
+                1,
+                mapOf(
+                    "origin" to RouteDetailWalkingState.Loading,
+                    "destination" to RouteDetailWalkingState.Loading
+                )
+            )
+        )
+        val success = RouteDetailWalkingState.CsdiSuccess(pedestrianRoute())
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingSegmentChanged(PAGE, 1, "origin", success)
+        )
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingSegmentChanged(PAGE, 1, "origin", success)
+        )
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingStarted(
+                PAGE,
+                2,
+                mapOf("origin" to RouteDetailWalkingState.Loading)
+            )
+        )
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingSegmentChanged(PAGE, 1, "destination", success)
+        )
+
+        assertEquals(2, state.walkingGeneration)
+        assertEquals(mapOf("origin" to RouteDetailWalkingState.Loading), state.walkingSegments)
+    }
+
     private fun reduce(events: List<RouteDetailPageEvent>): RouteDetailPageState =
         events.fold(initial(), RouteDetailPageReducer::reduce)
 
@@ -97,6 +141,16 @@ class RouteDetailPageReducerTest {
     private fun geometry(key: RouteGeometryKey) = RouteGeometrySegment(
         key,
         listOf(RouteGeometryPoint("p", 22.3, 114.2))
+    )
+
+    private fun pedestrianRoute() = PedestrianRoute(
+        10.5,
+        0.2,
+        listOf(
+            PedestrianRoutePath(
+                listOf(PedestrianCoordinate(22.3, 114.1), PedestrianCoordinate(22.31, 114.11))
+            )
+        )
     )
 
     private companion object {

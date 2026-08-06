@@ -16,5 +16,12 @@ interface BusRouteRepository {
             .onFailure { callback.onFailure(it) }
     }
 
+    fun searchRoutesProgressively(
+        origin: Place,
+        destination: Place,
+        walkingTrigger: PedestrianRequestTrigger,
+        callback: BusRouteQueryCallback
+    ) = searchRoutesProgressively(origin, destination, callback)
+
     fun cancelProgressiveQueries() = Unit
 }

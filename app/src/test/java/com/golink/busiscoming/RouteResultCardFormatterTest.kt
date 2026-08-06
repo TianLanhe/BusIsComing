@@ -5,6 +5,7 @@ import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.ui.main.RouteCardActionPolicy
 import com.golink.busiscoming.ui.main.FirstRunRoutePreview
 import com.golink.busiscoming.ui.main.RouteResultCardFormatter
@@ -62,6 +63,22 @@ class RouteResultCardFormatterTest {
         assertEquals(
             "HK$ 20.4，耗時 34 分鐘，步行 456 米",
             RouteResultCardFormatter.infoAccessibility(route, text)
+        )
+    }
+
+    @Test
+    fun walkingFormatterShowsOnlyCheckingOrAnIntegerWithoutSourceQualifier() {
+        assertEquals(
+            "查詢中…",
+            RouteResultCardFormatter.walking(WalkingDistanceDisplayState.Loading, text)
+        )
+        assertEquals(
+            "124 米",
+            RouteResultCardFormatter.walking(WalkingDistanceDisplayState.CsdiSuccess(124), text)
+        )
+        assertEquals(
+            "456 米",
+            RouteResultCardFormatter.walking(WalkingDistanceDisplayState.CitybusFallback(456), text)
         )
     }
 
@@ -181,6 +198,9 @@ class RouteResultCardFormatterTest {
             R.string.route_card_summary -> "${args[0]} · 耗時 ${args[1]} 分鐘 · 步行 ${args[2]} 米"
             R.string.route_card_duration_value -> "${args[0]} 分鐘"
             R.string.route_card_walking_value -> "${args[0]} 米"
+            R.string.route_card_walking_loading -> "查詢中…"
+            R.string.route_card_info_loading_content_description ->
+                "${args[0]}，耗時 ${args[1]} 分鐘，步行距離查詢中"
             R.string.route_card_info_content_description ->
                 "${args[0]}，耗時 ${args[1]} 分鐘，步行 ${args[2]} 米"
             R.string.route_results_summary -> "共 ${args[0]} 條路線，${args[1]} 條直達"

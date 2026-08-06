@@ -4,7 +4,7 @@
 
 Google Play 商品頁只代表把控制權交給 Play；App 無法知道使用者是否看到評分介面或提交評分。因此功能必須以「打開商品詳情頁」為成功邊界，不能顯示已評分、不能記錄評分完成，也不能把 BusIsComing 的初始安裝來源當成能否評分的判斷條件。
 
-`add-app-update-check` 正在修改 `app-settings-support` 的同一個「暫不支援入口」Requirement，且其 Play 更新行為仍需要目前的網站 fallback。為避免評分契約意外改變更新流程，本 change 只共享低層 Play package 探測資訊，不直接改寫更新 action；實作及歸檔以該 change 先完成同步／歸檔為前置條件。
+`add-app-update-check` 正在修改 `app-settings-support` 的同一個「暫不支援入口」Requirement，且其 Play 更新行為仍需要目前的網站 fallback。為避免評分契約意外改變更新流程，本 change 只共享低層 Play package 探測資訊，不直接改寫更新 action；本次直接以該 change 目前已實作代碼、測試及 active delta 為基線，不要求先完成使用者自行進行的真實 Play 驗證或歸檔。
 
 ## Goals / Non-Goals
 
@@ -74,7 +74,7 @@ Google Play 商品頁只代表把控制權交給 Play；App 無法知道使用�
 
 ## Migration Plan
 
-1. 先完成、同步並歸檔 `add-app-update-check`，確認其 `app-settings-support` delta 已成為主規格。
+1. 核對 active `add-app-update-check` 的目前代碼、測試及 `app-settings-support` delta，直接作為評分實作基線；本次不要求先同步或歸檔，且保留其未完成真實 Play 人工驗證狀態。
 2. 擴展 Play 可用性探測並保留更新功能的相容投影，再加入獨立評分 navigator 與 UI 狀態矩陣。
 3. 移除設定列的 `unsupported_rate_app` 行為，但不刪除或改寫檢查更新流程。
 4. 若需回滾，只恢復評分列的暫不支援 action；新 detector 的相容投影可保留，不涉及使用者資料遷移。

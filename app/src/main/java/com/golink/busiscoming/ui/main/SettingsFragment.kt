@@ -1,22 +1,30 @@
 package com.golink.busiscoming.ui.main
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
 import com.golink.busiscoming.BuildConfig
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.local.AppThemePreferenceStore
 import com.golink.busiscoming.data.local.AppLanguageRepository
+import com.golink.busiscoming.data.local.AutoRefreshNoticeStore
+import com.golink.busiscoming.data.local.RouteAutoRefreshInterval
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.localization.AppLanguage
 import com.golink.busiscoming.data.localization.AppLanguageChoice
+import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.localization.LanguageSnapshot
 import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.data.model.AppUpdateState
@@ -24,11 +32,15 @@ import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailureKind
 import com.golink.busiscoming.data.update.AppUpdateExternalActions
 import com.golink.busiscoming.data.update.AppUpdateRuntime
+import com.golink.busiscoming.data.update.GooglePlayRatingNavigator
+import com.golink.busiscoming.data.update.PlayStoreAvailability
+import com.golink.busiscoming.data.update.PlayStoreAvailabilityDetector
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.ui.settings.AboutActivity
 import com.golink.busiscoming.ui.settings.AppSupportActions
 import com.golink.busiscoming.ui.settings.RouteTransferActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.button.MaterialButton
 
 class SettingsFragment : Fragment() {
     private var transitCodeShortcutValue: TextView? = null
@@ -81,6 +93,11 @@ class SettingsFragment : Fragment() {
             appearanceValue.setText(mode.labelRes())
         }
         renderThemeMode(themeStore.getMode())
+        val autoRefreshStore = RouteAutoRefreshSettingsStore(requireContext())
+        renderAutoRefreshSelector(
+            view.findViewById(R.id.settingsAutoRefreshOptions),
+            autoRefreshStore
+        )
         transitCodeShortcutValue = view.findViewById(R.id.settingsTransitCodeShortcutValue)
         updateRow = view.findViewById(R.id.settingsUpdateRow)
         updateSummary = view.findViewById(R.id.settingsUpdateSummary)
@@ -146,7 +163,7 @@ class SettingsFragment : Fragment() {
             AppSupportActions.sendFeedback(requireContext())
         }
         view.findViewById<View>(R.id.settingsRatingRow).setOnClickListener {
-            Toast.makeText(requireContext(), R.string.unsupported_rate_app, Toast.LENGTH_SHORT).show()
+            openGooglePlayRating()
         }
         updateRow?.setOnClickListener {
             manualUpdateCheckRequested = true
@@ -159,6 +176,90 @@ class SettingsFragment : Fragment() {
             AppSupportActions.openPrivacyPolicy(requireContext())
         }
     }
+
+    fun focusAutoRefreshSelector() {
+        val row = view?.findViewById<View>(R.id.settingsAutoRefreshRow) ?: return
+        view?.findViewById<View>(R.id.settingsRoot)?.post {
+            row.requestFocus()
+            row.parent?.requestChildFocus(row, row)
+        }
+    }
+
+    private fun renderAutoRefreshSelector(
+        container: LinearLayout,
+        store: RouteAutoRefreshSettingsStore
+    ) {
+        container.removeAllViews()
+        val choices = listOf(
+            RouteAutoRefreshInterval.OFF to R.string.auto_refresh_off,
+            RouteAutoRefreshInterval.MINUTES_1 to R.string.auto_refresh_one_minute,
+            RouteAutoRefreshInterval.MINUTES_2 to R.string.auto_refresh_two_minutes,
+            RouteAutoRefreshInterval.MINUTES_5 to R.string.auto_refresh_five_minutes,
+            RouteAutoRefreshInterval.MINUTES_10 to R.string.auto_refresh_ten_minutes
+        )
+        val columns = when {
+            resources.configuration.fontScale >= 1.8f -> 2
+            resources.configuration.fontScale >= 1.3f -> 3
+            resources.configuration.screenWidthDp < 360 -> 3
+            else -> 5
+        }
+        val selected = store.getInterval()
+        choices.chunked(columns).forEachIndexed { rowIndex, rowChoices ->
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                if (rowIndex > 0) setPadding(0, dp(4), 0, 0)
+            }
+            rowChoices.forEachIndexed { choiceIndex, (interval, labelRes) ->
+                val isSelected = interval == selected
+                val label = getString(labelRes)
+                row.addView(MaterialButton(requireContext()).apply {
+                    text = label
+                    textSize = 12f
+                    isAllCaps = false
+                    isCheckable = true
+                    isChecked = isSelected
+                    minWidth = 0
+                    minimumWidth = 0
+                    minimumHeight = dp(48)
+                    insetTop = 0
+                    insetBottom = 0
+                    setPadding(dp(2), 0, dp(2), 0)
+                    backgroundTintList = ColorStateList.valueOf(
+                        ContextCompat.getColor(
+                            requireContext(),
+                            if (isSelected) R.color.bus_chip_selected else R.color.bus_surface_variant
+                        )
+                    )
+                    setTextColor(
+                        ContextCompat.getColor(
+                            requireContext(),
+                            if (isSelected) R.color.bus_on_accent else R.color.bus_text_primary
+                        )
+                    )
+                    ViewCompat.setStateDescription(
+                        this,
+                        getString(
+                            if (isSelected) R.string.auto_refresh_selected
+                            else R.string.auto_refresh_not_selected
+                        )
+                    )
+                    setOnClickListener {
+                        store.setInterval(interval)
+                        AutoRefreshNoticeStore(requireContext()).complete()
+                        renderAutoRefreshSelector(container, store)
+                    }
+                }, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                    if (choiceIndex > 0) marginStart = dp(3)
+                })
+            }
+            container.addView(
+                row,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            )
+        }
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onResume() {
         super.onResume()
@@ -233,6 +334,62 @@ class SettingsFragment : Fragment() {
                 AppUpdateExternalActions.openPlayListing(context)
             }
             .show()
+    }
+
+    private fun openGooglePlayRating() {
+        val currentContext = context ?: return
+        val navigator = GooglePlayRatingNavigator()
+        when (PlayStoreAvailabilityDetector(currentContext).detect()) {
+            PlayStoreAvailability.AVAILABLE -> {
+                if (!navigator.openProductPage(currentContext)) showRatingNavigationFailure()
+            }
+            PlayStoreAvailability.DISABLED -> showRatingRecoveryDialog(
+                titleRes = R.string.rating_play_disabled_title,
+                messageRes = R.string.rating_play_disabled_message,
+                actionRes = R.string.rating_action_enable_play
+            ) { navigator.openPlayAppSettings(currentContext) }
+            PlayStoreAvailability.MISSING -> showRatingRecoveryDialog(
+                titleRes = R.string.rating_play_missing_title,
+                messageRes = R.string.rating_play_missing_message,
+                actionRes = R.string.rating_action_view_install_help
+            ) {
+                navigator.openOfficialHelp(
+                    currentContext,
+                    AppLanguageRuntime.snapshot().effectiveLanguage
+                )
+            }
+            PlayStoreAvailability.UNUSABLE -> showRatingRecoveryDialog(
+                titleRes = R.string.rating_play_unusable_title,
+                messageRes = R.string.rating_play_unusable_message,
+                actionRes = R.string.rating_action_app_settings
+            ) { navigator.openAppSettings(currentContext) }
+        }
+    }
+
+    private fun showRatingRecoveryDialog(
+        @StringRes titleRes: Int,
+        @StringRes messageRes: Int,
+        @StringRes actionRes: Int,
+        action: () -> Boolean
+    ) {
+        val currentContext = context ?: return
+        MaterialAlertDialogBuilder(currentContext)
+            .setTitle(titleRes)
+            .setMessage(messageRes)
+            .setNegativeButton(R.string.update_action_cancel, null)
+            .setPositiveButton(actionRes) { _, _ ->
+                if (!action()) showRatingNavigationFailure()
+            }
+            .show()
+    }
+
+    private fun showRatingNavigationFailure() {
+        val currentContext = context ?: return
+        Toast.makeText(
+            currentContext,
+            R.string.rating_external_navigation_failed,
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun requestTransitCodeShortcut(bypassXiaomiPermissionGate: Boolean = false) {

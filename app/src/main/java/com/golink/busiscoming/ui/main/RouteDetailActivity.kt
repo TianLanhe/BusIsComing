@@ -18,10 +18,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.localization.AppLanguageRuntime
+import com.golink.busiscoming.data.local.RouteAutoRefreshInterval
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsEvents
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.location.CurrentLocationCoordinator
 import com.golink.busiscoming.data.location.CurrentLocationResult
 import com.golink.busiscoming.data.location.LocationPermissionUtils
@@ -34,6 +38,7 @@ import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
+import com.golink.busiscoming.data.repository.CitybusP2pStopMapResolver
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.CitybusRouteGeometryRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
@@ -44,9 +49,10 @@ import com.golink.busiscoming.data.repository.RouteDetailDiagnostics
 import com.golink.busiscoming.data.repository.RouteGeometryLoadHandle
 import com.golink.busiscoming.data.repository.RouteGeometryRequest
 import com.golink.busiscoming.data.repository.RouteGeometryDataSource
+import com.golink.busiscoming.data.repository.PedestrianRouteProcessRuntime
+import com.golink.busiscoming.data.repository.PedestrianRouteRequestRuntime
 import com.golink.busiscoming.data.repository.SingleFlightRequestCoordinator
 import com.golink.busiscoming.data.repository.SingleFlightRequestHandle
-import com.golink.busiscoming.ui.common.applyStatusBarPadding
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -54,7 +60,7 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapView
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -70,6 +76,13 @@ class RouteDetailActivity : AppCompatActivity() {
     private val repository by lazy { RouteDetailRuntime.repositoryFactory() }
     private val geometryRepository by lazy { RouteDetailRuntime.geometryRepositoryFactory() }
     private val locationCoordinator by lazy { CurrentLocationCoordinator(this) }
+    private val walkingViewModel by lazy {
+        ViewModelProvider(this)[RouteDetailWalkingViewModel::class.java]
+    }
+    private val detailAutoRefreshController = ForegroundAutoRefreshController { generation ->
+        startDetailAutomaticRefresh(generation)
+    }
+    private val detailRefreshCycleCoordinator = RouteDetailRefreshCycleCoordinator()
     private val expandedLegIndexes = linkedSetOf<Int>()
     private val geometries = linkedMapOf<RouteGeometryKey, RouteGeometrySegment>()
     private val failedGeometryKeys = linkedSetOf<RouteGeometryKey>()
@@ -82,14 +95,15 @@ class RouteDetailActivity : AppCompatActivity() {
     private lateinit var listLayoutManager: LinearLayoutManager
     private lateinit var root: View
     private lateinit var sheet: MaterialCardView
+    private lateinit var sheetContent: View
     private lateinit var sheetBehavior: BottomSheetBehavior<MaterialCardView>
     private lateinit var sheetHandle: View
-    private lateinit var toolbar: MaterialToolbar
     private lateinit var floatingBack: MaterialButton
     private lateinit var mapView: MapView
     private lateinit var mapControls: View
     private lateinit var mapError: TextView
     private lateinit var sheetMapError: TextView
+    private lateinit var csdiAttribution: View
 
     private var renderer: GoogleRouteMapRenderer? = null
     private var lastPresentation: RouteMapPresentation? = null
@@ -107,6 +121,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private var etaGeneration = 0
     private val geometryHandles = mutableListOf<RouteGeometryLoadHandle>()
     private var detailRequestHandle: SingleFlightRequestHandle? = null
+    private var autoDetailRequestHandle: SingleFlightRequestHandle? = null
     private var geometryPendingCount = 0
     private var foreground = false
     private var destroyed = false
@@ -127,18 +142,30 @@ class RouteDetailActivity : AppCompatActivity() {
     private var pendingListPosition = RecyclerView.NO_POSITION
     private var pendingListOffset = 0
     private var lastEtaSuccessMillis: Long? = null
+    private lateinit var autoRefreshSettingsStore: RouteAutoRefreshSettingsStore
+    private var autoRefreshSettingsSubscription: AutoCloseable? = null
+    private var detailAutoRefreshBaselineRecorded = false
     private var summaryTouchStartY = 0f
     private var summaryTouchStartedCollapsed = false
+    private var walkingEventGeneration = 0
+    private var pendingSummaryTarget: PendingSummaryTarget? = null
+    private var summaryHighlightRunnable: Runnable? = null
+    private val walkingObserver: (RouteDetailWalkingSnapshot) -> Unit = { snapshot ->
+        mainHandler.post {
+            if (destroyed || !::pageState.isInitialized) return@post
+            dispatch(
+                RouteDetailPageEvent.WalkingStarted(
+                    pageGeneration,
+                    ++walkingEventGeneration,
+                    snapshot.segments
+                )
+            )
+            if (detail != null) renderDetail() else renderMap()
+        }
+    }
 
     private val mapLoadTimeout = Runnable {
         if (!destroyed && foreground && mapReady && !baseMapLoaded) onMapUnavailable()
-    }
-
-    private val etaTick = object : Runnable {
-        override fun run() {
-            if (!foreground) return
-            refreshFirstLegEta()
-        }
     }
 
     private val requestLocationPermission = registerForActivityResult(
@@ -165,6 +192,15 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        autoRefreshSettingsStore = RouteAutoRefreshSettingsStore(this)
+        detailAutoRefreshController.setInterval(autoRefreshSettingsStore.getInterval())
+        autoRefreshSettingsSubscription = RouteAutoRefreshSettingsEvents.observe { interval ->
+            mainHandler.post {
+                if (interval == RouteAutoRefreshInterval.OFF) cancelActiveDetailAutoRefresh()
+                detailAutoRefreshController.setInterval(interval)
+                updateDetailAutoRefreshEligibility()
+            }
+        }
         val decoded = intent.extras?.let(RouteDetailLaunchArgs::fromBundle)
         if (decoded == null) {
             finish()
@@ -180,6 +216,14 @@ class RouteDetailActivity : AppCompatActivity() {
         )
         syncPageStateFields()
         restorePageState(savedInstanceState)
+        args.routeDetailQuery?.let { query ->
+            walkingViewModel.observe(walkingObserver)
+            walkingViewModel.initialize(
+                query = query,
+                stopMapLoader = { RouteDetailRuntime.stopMapResolverFactory().resolveStopMap(it) },
+                runtime = RouteDetailRuntime.pedestrianRuntime
+            )
+        }
         setContentView(R.layout.activity_route_detail)
         bindViews()
         setupTimeline()
@@ -194,6 +238,7 @@ class RouteDetailActivity : AppCompatActivity() {
             repository.loadCachedRouteDetail(args.toRoute())?.let { cached ->
                 dispatch(RouteDetailPageEvent.DetailCacheAvailable(pageGeneration, cached))
                 renderDetail()
+                recordDetailAutoRefreshBaselineIfNeeded()
             }
             loadDetail()
             loadGeometry()
@@ -204,11 +249,9 @@ class RouteDetailActivity : AppCompatActivity() {
         super.onStart()
         if (::mapView.isInitialized) mapView.onStart()
         foreground = true
-        mainHandler.removeCallbacks(etaTick)
-        if (RouteDetailEtaRefreshPolicy.shouldRefreshOnForeground(System.currentTimeMillis(), lastEtaSuccessMillis)) {
+        updateDetailAutoRefreshEligibility()
+        if (lastEtaSuccessMillis == null) {
             refreshFirstLegEta()
-        } else {
-            mainHandler.postDelayed(etaTick, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
         }
         scheduleMapLoadTimeout()
         syncGeometryFailureState()
@@ -228,8 +271,9 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onStop() {
         foreground = false
+        cancelActiveDetailAutoRefresh()
+        updateDetailAutoRefreshEligibility()
         etaGeneration += 1
-        mainHandler.removeCallbacks(etaTick)
         mainHandler.removeCallbacks(mapLoadTimeout)
         if (::mapView.isInitialized) mapView.onStop()
         super.onStop()
@@ -270,12 +314,24 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        pendingSummaryTarget = null
+        summaryHighlightRunnable?.let(mainHandler::removeCallbacks)
+        summaryHighlightRunnable = null
         if (::pageState.isInitialized) dispatch(RouteDetailPageEvent.Destroyed(pageGeneration))
         detailGeneration += 1
         geometryGeneration += 1
         etaGeneration += 1
         detailRequestHandle?.cancel()
         detailRequestHandle = null
+        autoDetailRequestHandle?.cancel()
+        autoDetailRequestHandle = null
+        detailRefreshCycleCoordinator.invalidate()
+        detailAutoRefreshController.close()
+        autoRefreshSettingsSubscription?.close()
+        autoRefreshSettingsSubscription = null
+        if (::args.isInitialized && args.routeDetailQuery != null) {
+            walkingViewModel.clearObserver(walkingObserver)
+        }
         geometryHandles.forEach(RouteGeometryLoadHandle::close)
         geometryHandles.clear()
         renderer?.clear()
@@ -288,26 +344,30 @@ class RouteDetailActivity : AppCompatActivity() {
     private fun bindViews() {
         root = findViewById(R.id.routeDetailRoot)
         sheet = findViewById(R.id.routeDetailSheet)
+        sheetContent = findViewById(R.id.routeDetailSheetContent)
         sheetHandle = findViewById(R.id.routeDetailSheetHandle)
-        toolbar = findViewById(R.id.routeDetailToolbar)
         floatingBack = findViewById(R.id.routeDetailFloatingBack)
         mapView = findViewById(R.id.routeDetailMap)
         mapControls = findViewById(R.id.routeDetailMapControls)
         mapError = findViewById(R.id.routeDetailMapError)
         sheetMapError = findViewById(R.id.routeDetailSheetMapError)
+        csdiAttribution = findViewById(R.id.routeDetailCsdiAttribution)
 
-        toolbar.applyStatusBarPadding()
-        toolbar.navigationContentDescription = getString(R.string.route_detail_navigate_up)
-        toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         floatingBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         findViewById<MaterialButton>(R.id.routeDetailOverview).setOnClickListener {
             renderer?.fitOverview(animated = true, paddingPx = dimension(R.dimen.route_map_camera_padding))
         }
         findViewById<MaterialButton>(R.id.routeDetailLocation).setOnClickListener { onLocationClicked() }
+        csdiAttribution.setOnClickListener { showCsdiNotice() }
     }
 
     private fun setupTimeline() {
-        adapter = RouteDetailAdapter(::toggleLeg, ::retryDetail, ::onTimelineStopSelected)
+        adapter = RouteDetailAdapter(
+            ::toggleLeg,
+            ::retryDetail,
+            ::onTimelineStopSelected,
+            ::onSummarySegmentSelected
+        )
         listLayoutManager = LinearLayoutManager(this)
         list = findViewById<RecyclerView>(R.id.routeDetailList).apply {
             layoutManager = listLayoutManager
@@ -401,7 +461,10 @@ class RouteDetailActivity : AppCompatActivity() {
                     mainHandler.removeCallbacks(mapLoadTimeout)
                     if (mapUnavailable) onMapRecovered()
                 }
-                map.setOnCameraIdleListener { saveCamera(map) }
+                map.setOnCameraIdleListener {
+                    saveCamera(map)
+                    renderer?.onCameraIdle()
+                }
                 map.setOnCameraMoveStartedListener { reason ->
                     val origin = if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
                         RouteDetailCameraMoveOrigin.GESTURE
@@ -458,12 +521,17 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun loadDetail() {
+        if (!detailAutoRefreshController.canStartExternalQuery()) return
+        detailAutoRefreshController.setExternalBusy(true)
         val requestGeneration = ++detailGeneration
         dispatch(RouteDetailPageEvent.DetailStarted(pageGeneration, requestGeneration))
         if (detail != null) renderDetail()
         val languageVersion = AppLanguageRuntime.snapshot().version
         val route = args.toRoute()
-        val query = route.routeDetailQuery ?: return
+        val query = route.routeDetailQuery ?: run {
+            detailAutoRefreshController.setExternalBusy(false)
+            return
+        }
         detailRequestHandle?.cancel()
         detailRequestHandle = RouteDetailRuntime.detailRequestCoordinator.request(
             key = RouteDetailRequestIdentity.from(query),
@@ -475,6 +543,8 @@ class RouteDetailActivity : AppCompatActivity() {
                     dispatch(RouteDetailPageEvent.DetailSucceeded(pageGeneration, requestGeneration, it))
                     renderDetail()
                     validateLoadedGeometryAgainstDetail()
+                    detailAutoRefreshController.setExternalBusy(false)
+                    recordDetailAutoRefreshBaselineIfNeeded()
                 }.onFailure {
                     dispatch(
                         RouteDetailPageEvent.DetailFailed(
@@ -487,15 +557,20 @@ class RouteDetailActivity : AppCompatActivity() {
                         renderDetail()
                     } else {
                         showLaunchSummary(loading = false, failed = true)
+                        clearPendingSummaryTarget(announceUnavailable = true)
                     }
                     renderMap()
+                    detailAutoRefreshController.setExternalBusy(false)
+                    updateDetailAutoRefreshEligibility()
                 }
             }
         }
     }
 
     private fun retryDetail() {
+        if (!detailAutoRefreshController.canStartExternalQuery()) return
         showLaunchSummary(loading = true)
+        walkingViewModel.retry()
         loadDetail()
     }
 
@@ -700,27 +775,203 @@ class RouteDetailActivity : AppCompatActivity() {
             val state = runCatching { RouteDetailRuntime.etaResolver(query) }
                 .getOrElse { WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR) }
             mainHandler.post {
-                if (!foreground || !isCurrentLanguage(languageVersion)) return@post
+                if (
+                    !foreground ||
+                    !isCurrentEta(requestGeneration, languageVersion)
+                ) return@post
                 dispatch(RouteDetailPageEvent.EtaSucceeded(pageGeneration, requestGeneration, state))
                 if (state !is WaitTimeState.Unavailable) lastEtaSuccessMillis = System.currentTimeMillis()
                 if (detail != null) renderDetail() else showLaunchSummary(detailLoading, detailFailed)
-                mainHandler.removeCallbacks(etaTick)
-                mainHandler.postDelayed(etaTick, RouteDetailEtaRefreshPolicy.REFRESH_INTERVAL_MILLIS)
             }
         }
     }
 
-    private fun renderDetail() {
+    private fun recordDetailAutoRefreshBaselineIfNeeded() {
+        if (detailAutoRefreshBaselineRecorded || detail == null) return
+        detailAutoRefreshBaselineRecorded = true
+        detailAutoRefreshController.recordSuccessfulBaseline()
+        updateDetailAutoRefreshEligibility()
+    }
+
+    private fun updateDetailAutoRefreshEligibility() {
+        if (!::autoRefreshSettingsStore.isInitialized || !::args.isInitialized) return
+        detailAutoRefreshController.setInterval(autoRefreshSettingsStore.getInterval())
+        detailAutoRefreshController.setEligible(
+            foreground &&
+                args.routeDetailQuery != null &&
+                detail != null &&
+                detailAutoRefreshBaselineRecorded
+        )
+    }
+
+    private fun startDetailAutomaticRefresh(generation: Int) {
+        val currentDetail = detail
+        val query = args.routeDetailQuery
+        if (!foreground || currentDetail == null || query == null) {
+            detailAutoRefreshController.completeAutomatic(generation, success = false)
+            return
+        }
+        detailRefreshCycleCoordinator.begin(generation)
+        val languageVersion = AppLanguageRuntime.snapshot().version
+
+        val detailDomainGeneration = ++detailGeneration
+        dispatch(RouteDetailPageEvent.DetailStarted(pageGeneration, detailDomainGeneration))
+        renderDetail(updateWalking = false)
+        autoDetailRequestHandle?.cancel()
+        autoDetailRequestHandle = RouteDetailRuntime.detailRequestCoordinator.request(
+            key = RouteDetailRequestIdentity.from(query),
+            work = { repository.loadRouteDetail(args.toRoute()) }
+        ) { result ->
+            mainHandler.post {
+                if (!isActiveDetailAutoRefresh(generation, languageVersion)) return@post
+                val merged = result.getOrNull()?.let { candidate ->
+                    detail?.let { stable -> RouteDetailDynamicMerger.merge(stable, candidate) }
+                }
+                if (merged != null) {
+                    dispatch(
+                        RouteDetailPageEvent.DetailSucceeded(
+                            pageGeneration,
+                            detailDomainGeneration,
+                            merged
+                        )
+                    )
+                    renderDetail(updateWalking = false)
+                    finishDetailAutoDomain(
+                        generation,
+                        RouteDetailRefreshDomain.DYNAMIC_DETAIL,
+                        success = true
+                    )
+                } else {
+                    dispatch(
+                        RouteDetailPageEvent.DetailFailed(
+                            pageGeneration,
+                            detailDomainGeneration,
+                            "structure_mismatch_or_request_failed"
+                        )
+                    )
+                    renderDetail(updateWalking = false)
+                    finishDetailAutoDomain(
+                        generation,
+                        RouteDetailRefreshDomain.DYNAMIC_DETAIL,
+                        success = false
+                    )
+                }
+            }
+        }
+
+        val etaQuery = args.firstLegEtaQuery
+        if (etaQuery == null) {
+            finishDetailAutoDomain(
+                generation,
+                RouteDetailRefreshDomain.FIRST_LEG_ETA,
+                success = false
+            )
+        } else {
+            val etaDomainGeneration = ++etaGeneration
+            dispatch(RouteDetailPageEvent.EtaStarted(pageGeneration, etaDomainGeneration))
+            executor.execute {
+                val state = runCatching { RouteDetailRuntime.etaResolver(etaQuery) }
+                    .getOrElse { WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR) }
+                mainHandler.post {
+                    if (!isActiveDetailAutoRefresh(generation, languageVersion)) return@post
+                    val success = state !is WaitTimeState.Unavailable
+                    if (success) {
+                        dispatch(
+                            RouteDetailPageEvent.EtaSucceeded(
+                                pageGeneration,
+                                etaDomainGeneration,
+                                state
+                            )
+                        )
+                        lastEtaSuccessMillis = System.currentTimeMillis()
+                    } else {
+                        dispatch(
+                            RouteDetailPageEvent.EtaFailed(
+                                pageGeneration,
+                                etaDomainGeneration,
+                                "eta_unavailable"
+                            )
+                        )
+                    }
+                    renderDetail(updateWalking = false)
+                    finishDetailAutoDomain(
+                        generation,
+                        RouteDetailRefreshDomain.FIRST_LEG_ETA,
+                        success
+                    )
+                }
+            }
+        }
+    }
+
+    private fun finishDetailAutoDomain(
+        generation: Int,
+        domain: RouteDetailRefreshDomain,
+        success: Boolean
+    ) {
+        val result = detailRefreshCycleCoordinator.finish(generation, domain, success)
+        if (!result.accepted || !result.finished) return
+        detailAutoRefreshController.completeAutomatic(
+            generation,
+            success = result.anyDomainSucceeded
+        )
+    }
+
+    private fun isActiveDetailAutoRefresh(generation: Int, languageVersion: Long): Boolean =
+        foreground &&
+            isCurrentLanguage(languageVersion) &&
+            (detailAutoRefreshController.state as? ForegroundAutoRefreshState.Refreshing)
+                ?.generation == generation
+
+    private fun cancelActiveDetailAutoRefresh() {
+        val active = detailAutoRefreshController.state as? ForegroundAutoRefreshState.Refreshing
+            ?: return
+        autoDetailRequestHandle?.cancel()
+        autoDetailRequestHandle = null
+        detailRefreshCycleCoordinator.invalidate()
+        pageState.detail.valueOrNull()?.let { stable ->
+            dispatch(
+                RouteDetailPageEvent.DetailSucceeded(
+                    pageGeneration,
+                    pageState.detailGeneration,
+                    stable
+                )
+            )
+        }
+        pageState.eta.valueOrNull()?.let { stable ->
+            dispatch(
+                RouteDetailPageEvent.EtaSucceeded(
+                    pageGeneration,
+                    pageState.etaGeneration,
+                    stable
+                )
+            )
+        }
+        detailAutoRefreshController.completeAutomatic(active.generation, success = false)
+        if (detail != null) renderDetail(updateWalking = false)
+    }
+
+    private fun renderDetail(updateWalking: Boolean = true) {
         val value = detail ?: return
+        if (updateWalking) walkingViewModel.updateDetail(value)
         val dynamicStatus = when (pageState.detail) {
             is ProgressiveValue.Refreshing -> RouteDynamicDetailStatus.REFRESHING
             is ProgressiveValue.Failure -> RouteDynamicDetailStatus.STALE_AFTER_ERROR
             else -> RouteDynamicDetailStatus.CURRENT
         }
-        adapter.submitList(RouteDetailUiFormatter.items(value, expandedLegIndexes, waitTimeState, dynamicStatus)) {
+        adapter.submitList(
+            RouteDetailUiFormatter.items(
+                value,
+                expandedLegIndexes,
+                waitTimeState,
+                dynamicStatus,
+                pageState.walkingSegments
+            )
+        ) {
             adapter.selectTimelineItem(selectedTimelineId)
             restoreListPositionIfNeeded()
             scheduleSheetMetrics()
+            resolvePendingSummaryTarget()
         }
         renderMap()
     }
@@ -739,7 +990,11 @@ class RouteDetailActivity : AppCompatActivity() {
         )
         if (loading) items += RouteDetailUiItem.Loading
         if (failed) items += RouteDetailUiItem.Error
-        adapter.submitList(items) { restoreListPositionIfNeeded(); scheduleSheetMetrics() }
+        adapter.submitList(items) {
+            restoreListPositionIfNeeded()
+            scheduleSheetMetrics()
+            resolvePendingSummaryTarget()
+        }
     }
 
     private fun renderMap() {
@@ -750,11 +1005,13 @@ class RouteDetailActivity : AppCompatActivity() {
             queryDestination = args.queryDestination,
             geometries = geometries,
             selectedMarkerId = selectedMarkerId,
-            routePlan = routePlan
+            routePlan = routePlan,
+            walkingSegments = pageState.walkingSegments
         )
         lastPresentation = presentation
         RouteDetailRuntime.presentationObserver(presentation)
         renderer?.render(presentation)
+        updateCsdiAttributionVisibility()
         if (
             mapReady &&
             presentation.boundsPoints.isNotEmpty() &&
@@ -808,6 +1065,69 @@ class RouteDetailActivity : AppCompatActivity() {
         renderer?.focusMarker(marker.stableId)
     }
 
+    private fun onSummarySegmentSelected(segment: RouteSummarySegment) {
+        applyDetent(RouteDetailSheetDetent.FULL)
+        pendingSummaryTarget = PendingSummaryTarget(
+            pageGeneration = pageGeneration,
+            structureIdentity = currentStructureIdentity(),
+            targetId = segment.detailTargetId
+        )
+        if (!resolvePendingSummaryTarget() && detailFailed) {
+            clearPendingSummaryTarget(announceUnavailable = true)
+        }
+    }
+
+    private fun resolvePendingSummaryTarget(): Boolean {
+        val pending = pendingSummaryTarget ?: return false
+        if (
+            pending.pageGeneration != pageGeneration ||
+            pending.structureIdentity != currentStructureIdentity()
+        ) {
+            clearPendingSummaryTarget(announceUnavailable = false)
+            return false
+        }
+        val position = adapter.currentList.indexOfFirst { it.stableId == pending.targetId }
+        if (position < 0) return false
+        pendingSummaryTarget = null
+        listLayoutManager.scrollToPositionWithOffset(
+            position,
+            dimension(R.dimen.route_detail_timeline_focus_offset)
+        )
+        list.post {
+            adapter.selectTimelineItem(pending.targetId)
+            list.findViewHolderForAdapterPosition(position)?.itemView?.apply {
+                requestFocus()
+                announceForAccessibility(
+                    contentDescription ?: summaryTargetAnnouncement(pending.targetId)
+                )
+            }
+            summaryHighlightRunnable?.let(mainHandler::removeCallbacks)
+            val clear = Runnable { adapter.selectTimelineItem(selectedTimelineId) }
+            summaryHighlightRunnable = clear
+            mainHandler.postDelayed(clear, SUMMARY_TARGET_HIGHLIGHT_MILLIS)
+        }
+        return true
+    }
+
+    private fun currentStructureIdentity(): Int = args.routeDetailQuery
+        ?.let(RouteDetailRequestIdentity::from)
+        ?.hashCode()
+        ?: args.routeName.hashCode()
+
+    private fun clearPendingSummaryTarget(announceUnavailable: Boolean) {
+        if (pendingSummaryTarget == null) return
+        pendingSummaryTarget = null
+        if (announceUnavailable && foreground) {
+            root.announceForAccessibility(getString(R.string.route_detail_target_unavailable))
+        }
+    }
+
+    private fun summaryTargetAnnouncement(targetId: String): String = when {
+        targetId.startsWith("leg-") -> getString(R.string.route_detail_bus_segment)
+        targetId.startsWith("transfer-") -> getString(R.string.route_detail_same_stop_transfer)
+        else -> getString(R.string.route_detail_walk_unknown)
+    }
+
     private fun scrollToSelectedTimelineItem() {
         val stableId = selectedTimelineId ?: return
         list.post {
@@ -835,8 +1155,8 @@ class RouteDetailActivity : AppCompatActivity() {
     private fun updateDetentUi(value: RouteDetailSheetDetent) {
         detent = value
         val full = value == RouteDetailSheetDetent.FULL
-        toolbar.visibility = if (full) View.VISIBLE else View.GONE
         floatingBack.visibility = if (full) View.GONE else View.VISIBLE
+        sheetContent.setPadding(0, if (full) statusBarInset else 0, 0, 0)
         sheetHandle.contentDescription = getString(
             when (value) {
                 RouteDetailSheetDetent.SUMMARY -> R.string.route_detail_sheet_handle_summary
@@ -845,6 +1165,7 @@ class RouteDetailActivity : AppCompatActivity() {
             }
         )
         if (value == RouteDetailSheetDetent.SUMMARY) listLayoutManager.scrollToPositionWithOffset(0, 0)
+        updateCsdiAttributionVisibility()
         updateMapPadding()
     }
 
@@ -871,8 +1192,77 @@ class RouteDetailActivity : AppCompatActivity() {
             val sheetVisibleHeight = (root.height - sheet.top).coerceAtLeast(0)
             val bottomPadding = (sheetVisibleHeight + navigationBarInset)
                 .coerceAtMost((root.height - statusBarInset - 1).coerceAtLeast(0))
-            renderer?.updatePadding(0, statusBarInset, 0, bottomPadding)
+            if (::csdiAttribution.isInitialized) {
+                val params = csdiAttribution.layoutParams as ViewGroup.MarginLayoutParams
+                params.bottomMargin = sheetVisibleHeight + dimension(R.dimen.route_map_csdi_google_clearance)
+                csdiAttribution.layoutParams = params
+                csdiAttribution.post { updateRendererPadding(bottomPadding) }
+            } else {
+                updateRendererPadding(bottomPadding)
+            }
         }
+    }
+
+    private fun updateRendererPadding(bottomPadding: Int) {
+        if (!::mapView.isInitialized || mapView.width <= 0 || mapView.height <= 0) return
+        val reservedRects = if (
+            ::csdiAttribution.isInitialized &&
+            csdiAttribution.visibility == View.VISIBLE &&
+            csdiAttribution.width > 0 &&
+            csdiAttribution.height > 0
+        ) {
+            val mapLocation = IntArray(2)
+            val attributionLocation = IntArray(2)
+            mapView.getLocationOnScreen(mapLocation)
+            csdiAttribution.getLocationOnScreen(attributionLocation)
+            listOf(
+                RouteMapLabelRect(
+                    left = (attributionLocation[0] - mapLocation[0]).toFloat(),
+                    top = (attributionLocation[1] - mapLocation[1]).toFloat(),
+                    right = (attributionLocation[0] - mapLocation[0] + csdiAttribution.width).toFloat(),
+                    bottom = (attributionLocation[1] - mapLocation[1] + csdiAttribution.height).toFloat()
+                )
+            )
+        } else {
+            emptyList()
+        }
+        renderer?.updatePadding(
+            left = 0,
+            top = statusBarInset,
+            right = 0,
+            bottom = bottomPadding,
+            viewportWidth = mapView.width,
+            viewportHeight = mapView.height,
+            reservedLabelRects = reservedRects
+        )
+    }
+
+    private fun updateCsdiAttributionVisibility() {
+        if (!::csdiAttribution.isInitialized) return
+        val nextVisibility = if (
+            detent != RouteDetailSheetDetent.FULL &&
+            !mapUnavailable &&
+            renderer?.hasRenderedWalkingPaths() == true
+        ) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
+        if (csdiAttribution.visibility != nextVisibility) {
+            csdiAttribution.visibility = nextVisibility
+            updateMapPadding()
+        }
+    }
+
+    private fun showCsdiNotice() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.route_map_csdi_notice_title)
+            .setMessage(R.string.route_map_csdi_notice_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.route_map_csdi_open_source) { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(CSDI_PEDESTRIAN_SOURCE_URL)))
+            }
+            .show()
     }
 
     private fun onLocationClicked() {
@@ -1072,6 +1462,12 @@ class RouteDetailActivity : AppCompatActivity() {
 
     private fun dimension(resource: Int): Int = resources.getDimensionPixelSize(resource)
 
+    private data class PendingSummaryTarget(
+        val pageGeneration: Long,
+        val structureIdentity: Int,
+        val targetId: String
+    )
+
     private companion object {
         const val STATE_EXPANDED = "route_detail.expanded"
         const val STATE_DETENT = "route_detail.detent"
@@ -1091,6 +1487,9 @@ class RouteDetailActivity : AppCompatActivity() {
         const val MAP_LOAD_TIMEOUT_MILLIS = 15_000L
         const val GEOMETRY_RETRY_BACKOFF_MILLIS = 250L
         const val LOCATION_FOCUS_ZOOM = 16f
+        const val SUMMARY_TARGET_HIGHLIGHT_MILLIS = 900L
+        const val CSDI_PEDESTRIAN_SOURCE_URL =
+            "https://portal.csdi.gov.hk/csdi-webpage/apidoc/3d-pedestrian-route-search"
     }
 }
 
@@ -1122,6 +1521,10 @@ object RouteDetailRuntime {
     private val defaultGeometryRepositoryFactory: () -> RouteGeometryDataSource = { defaultGeometryRepository }
     private val defaultEtaResolver: (FirstLegEtaQuery) -> WaitTimeState =
         { query -> CitybusFirstLegEtaService().resolveWaitTime(query) }
+    private val defaultStopMapResolverFactory: () -> CitybusP2pStopMapResolver = {
+        CitybusP2pStopMapResolver()
+    }
+    private val defaultPedestrianRuntime: PedestrianRouteRequestRuntime = PedestrianRouteProcessRuntime.shared
     private val defaultMapsAvailabilityChecker: (Context) -> Boolean = { context ->
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
     }
@@ -1131,6 +1534,8 @@ object RouteDetailRuntime {
     @Volatile var detailRequestCoordinator = defaultDetailRequestCoordinator
     @Volatile var geometryRepositoryFactory: () -> RouteGeometryDataSource = defaultGeometryRepositoryFactory
     @Volatile var etaResolver: (FirstLegEtaQuery) -> WaitTimeState = defaultEtaResolver
+    @Volatile var stopMapResolverFactory: () -> CitybusP2pStopMapResolver = defaultStopMapResolverFactory
+    @Volatile var pedestrianRuntime: PedestrianRouteRequestRuntime = defaultPedestrianRuntime
     @Volatile var mapsAvailabilityChecker: (Context) -> Boolean = defaultMapsAvailabilityChecker
     @Volatile var presentationObserver: (RouteMapPresentation) -> Unit = defaultPresentationObserver
 
@@ -1142,6 +1547,8 @@ object RouteDetailRuntime {
         detailRequestCoordinator = defaultDetailRequestCoordinator
         geometryRepositoryFactory = defaultGeometryRepositoryFactory
         etaResolver = defaultEtaResolver
+        stopMapResolverFactory = defaultStopMapResolverFactory
+        pedestrianRuntime = defaultPedestrianRuntime
         mapsAvailabilityChecker = defaultMapsAvailabilityChecker
         presentationObserver = defaultPresentationObserver
     }

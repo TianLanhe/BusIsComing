@@ -24,6 +24,9 @@ import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.LocationPermissionUtils
 import com.golink.busiscoming.data.location.PlaceAttribution
 import com.golink.busiscoming.data.location.SystemLocationUtils
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsEvents
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
+import com.golink.busiscoming.data.local.AutoRefreshNoticeStore
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteCardStopPreview
@@ -32,12 +35,14 @@ import com.golink.busiscoming.data.model.RouteConfigValidator
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.repository.BusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
+import com.golink.busiscoming.data.repository.PedestrianRequestTrigger
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.PlacePairEditorView
 import com.golink.busiscoming.ui.common.ResultListDrivenAppBar
@@ -72,6 +77,9 @@ class SearchFragment : Fragment() {
     private val presentationState = SearchPresentationState()
     private val successfulQueryContextState = SuccessfulSearchContextState()
     private val refreshFeedbackState = RouteRefreshFeedbackState()
+    private val autoRefreshController = ForegroundAutoRefreshController { generation ->
+        startAutomaticRefresh(generation)
+    }
     private val currentResults: List<BusRouteOption>
         get() = routeQueryState.results
     private val sortField: SortField?
@@ -90,6 +98,12 @@ class SearchFragment : Fragment() {
     private var hasSubmittedQuery: Boolean = false
     private var successfulQueryOrigin: Place? = null
     private var successfulQueryDestination: Place? = null
+    private var autoQuerySnapshot: SearchQuerySnapshot? = null
+    private lateinit var autoRefreshSettingsStore: RouteAutoRefreshSettingsStore
+    private var autoRefreshSettingsSubscription: AutoCloseable? = null
+    private var autoRefreshNoticeController: AutoRefreshNoticeController? = null
+    private var fragmentStartedForAutoRefresh = false
+    private var destinationVisibleForAutoRefresh = false
     private var isViewStateRestored: Boolean = false
     private var hasPendingDestinationSelection: Boolean = false
     private var pendingScrollPosition: Int? = null
@@ -114,6 +128,7 @@ class SearchFragment : Fragment() {
     private lateinit var resultMetaContainer: View
     private lateinit var resultCount: TextView
     private lateinit var resultUpdatedAt: TextView
+    private lateinit var resultAutoRefreshProgress: ProgressBar
     private lateinit var inputContainer: View
     private lateinit var tripContext: View
     private lateinit var tripRouteText: TextView
@@ -166,6 +181,22 @@ class SearchFragment : Fragment() {
         appBar = view.findViewById(R.id.searchAppBar)
         ResultListDrivenAppBar.install(appBar)
         val context = requireContext()
+        autoRefreshSettingsStore = RouteAutoRefreshSettingsStore(context)
+        autoRefreshController.setInterval(autoRefreshSettingsStore.getInterval())
+        autoRefreshSettingsSubscription?.close()
+        autoRefreshSettingsSubscription = RouteAutoRefreshSettingsEvents.observe { interval ->
+            mainHandler.post {
+                autoRefreshController.setInterval(interval)
+                renderSearchAutoRefreshSummary()
+            }
+        }
+        autoRefreshNoticeController = AutoRefreshNoticeController(
+            context = context,
+            root = view.findViewById(R.id.autoRefreshNotice),
+            settingsStore = autoRefreshSettingsStore,
+            noticeStore = AutoRefreshNoticeStore(context),
+            onOpenSettings = { (activity as? MainActivity)?.openAutoRefreshSettings() }
+        )
         val placeEditor = view.findViewById<PlacePairEditorView>(R.id.searchPlacePairEditor)
         val originInput = placeEditor.originInput
         val destinationInput = placeEditor.destinationInput
@@ -204,6 +235,7 @@ class SearchFragment : Fragment() {
                 placeEditor.requestToolAlignment()
                 setCandidateScrollLock()
                 updateRefreshEnabled()
+                updateSearchAutoRefreshEligibility()
             },
             onPlaceSelected = {
                 invalidateCurrentPlaceRequest()
@@ -239,6 +271,7 @@ class SearchFragment : Fragment() {
                 placeEditor.requestToolAlignment()
                 setCandidateScrollLock()
                 updateRefreshEnabled()
+                updateSearchAutoRefreshEligibility()
             },
             onPlaceSelected = {
                 attributionState.clearDestination()
@@ -274,6 +307,7 @@ class SearchFragment : Fragment() {
         resultMetaContainer = resultControls.summaryContainer
         resultCount = resultControls.summaryText
         resultUpdatedAt = resultControls.updatedAtText
+        resultAutoRefreshProgress = resultControls.autoRefreshProgress
         inputContainer = view.findViewById(R.id.searchInputContainer)
         tripContext = view.findViewById(R.id.searchTripContext)
         tripRouteText = view.findViewById(R.id.searchTripRouteText)
@@ -379,6 +413,8 @@ class SearchFragment : Fragment() {
     }
 
     fun onDestinationSelected() {
+        destinationVisibleForAutoRefresh = true
+        updateSearchAutoRefreshEligibility()
         if (!isViewStateRestored) {
             hasPendingDestinationSelection = true
             return
@@ -393,6 +429,8 @@ class SearchFragment : Fragment() {
     }
 
     fun onDestinationHidden() {
+        destinationVisibleForAutoRefresh = false
+        updateSearchAutoRefreshEligibility()
         invalidateCurrentPlaceRequest()
         candidateLocationSnapshotRequestState.resetForNextGeneration()
         routeQueryCoordinator.invalidate()
@@ -406,6 +444,12 @@ class SearchFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        destinationVisibleForAutoRefresh = false
+        updateSearchAutoRefreshEligibility()
+        autoRefreshSettingsSubscription?.close()
+        autoRefreshSettingsSubscription = null
+        autoRefreshNoticeController?.close()
+        autoRefreshNoticeController = null
         invalidateCurrentPlaceRequest()
         candidateLocationSnapshotRequestState.resetForNextGeneration()
         routeQueryCoordinator.invalidate()
@@ -462,10 +506,24 @@ class SearchFragment : Fragment() {
     }
 
     override fun onDestroy() {
+        autoRefreshController.close()
         searchExecutor.shutdownNow()
         queryExecutor.shutdownNow()
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        fragmentStartedForAutoRefresh = true
+        updateSearchAutoRefreshEligibility()
+    }
+
+    override fun onStop() {
+        fragmentStartedForAutoRefresh = false
+        updateSearchAutoRefreshEligibility()
+        autoRefreshNoticeController?.interrupt()
+        super.onStop()
     }
 
     private fun requestCurrentOrigin(
@@ -562,20 +620,42 @@ class SearchFragment : Fragment() {
         destinationController?.setCurrentLocationSnapshot(snapshot)
     }
 
-    private fun query(preserveSort: Boolean = false) {
-        if (routeQueryState.isQueryInProgress || refreshFeedbackState.blocksQueries) return
-        val origin = originController?.selectedPlace
-        val destination = destinationController?.selectedPlace
+    private fun query(
+        preserveSort: Boolean = false,
+        automaticGeneration: Int? = null
+    ) {
+        if (
+            routeQueryState.isQueryInProgress ||
+            refreshFeedbackState.blocksQueries ||
+            (automaticGeneration == null && !autoRefreshController.canStartExternalQuery())
+        ) {
+            automaticGeneration?.let {
+                autoRefreshController.completeAutomatic(it, success = false)
+                renderSearchAutoRefreshSummary()
+            }
+            return
+        }
+        val automaticSnapshot = automaticGeneration?.let { autoQuerySnapshot }
+        val origin = automaticSnapshot?.origin ?: originController?.selectedPlace
+        val destination = automaticSnapshot?.destination ?: destinationController?.selectedPlace
         val validation = RouteConfigValidator.validate(getString(R.string.search_title), origin, destination)
         originCaptionRenderer?.setValidation(captionValidation(validation.originError))
         destinationCaptionRenderer?.setValidation(captionValidation(validation.destinationError))
-        if (!validation.isValid || origin == null || destination == null) return
+        if (!validation.isValid || origin == null || destination == null) {
+            automaticGeneration?.let {
+                autoRefreshController.completeAutomatic(it, success = false)
+                renderSearchAutoRefreshSummary()
+            }
+            return
+        }
 
         hasSubmittedQuery = true
         suppressCancelledQueryStatus = false
         invalidateCurrentPlaceRequest()
-        val isRefresh = preserveSort && currentResults.isNotEmpty()
+        val isAutomatic = automaticGeneration != null
+        val isRefresh = isAutomatic || (preserveSort && currentResults.isNotEmpty())
         if (!isRefresh) clearSuccessfulQuery()
+        if (!isAutomatic) autoRefreshController.setExternalBusy(true)
         routeQueryState.begin(refresh = isRefresh)
         if (!isRefresh) {
             presentationState.beginQuery(origin, destination)
@@ -587,13 +667,21 @@ class SearchFragment : Fragment() {
             sortControls.visibility = View.GONE
             resultMetaContainer.visibility = View.GONE
         }
-        val refreshToken = if (isRefresh) beginRefreshFeedback() else null
+        val refreshToken = if (isRefresh && !isAutomatic) beginRefreshFeedback() else null
         renderSearchUi()
+        renderSearchAutoRefreshSummary()
         updateRefreshEnabled()
         routeQueryCoordinator.query(origin, destination, object : RouteQueryCoordinator.Callback {
             override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
                 swipeRefresh.isRefreshing = false
-                if (isRefresh) {
+                if (isAutomatic) {
+                    if (!autoRefreshController.completeAutomatic(requireNotNull(automaticGeneration), success = true)) {
+                        routeQueryState.cancel()
+                        renderSearchAutoRefreshSummary()
+                        return
+                    }
+                    displayAutomaticResults(routes, origin, destination)
+                } else if (isRefresh) {
                     handleRefreshSuccess(
                         refreshToken = requireNotNull(refreshToken),
                         routes = routes,
@@ -611,6 +699,15 @@ class SearchFragment : Fragment() {
                         queryId = queryId
                     )
                 }
+                if (!isAutomatic) {
+                    autoQuerySnapshot = SearchQuerySnapshot(origin, destination)
+                    autoRefreshController.setExternalBusy(false)
+                    autoRefreshController.recordSuccessfulBaseline()
+                    updateSearchAutoRefreshEligibility()
+                }
+                autoRefreshNoticeController?.showAfterSuccessfulQuery(
+                    autoRefreshSettingsStore.getInterval()
+                )
             }
 
             override fun onRouteWaitTimeUpdated(
@@ -629,9 +726,22 @@ class SearchFragment : Fragment() {
                 updateRoute(routeId) { it.copy(stopPreview = preview) }
             }
 
+            override fun onRouteWalkingDistanceUpdated(
+                queryId: Int,
+                routeId: String,
+                state: WalkingDistanceDisplayState
+            ) {
+                updateRoute(routeId) { it.copy(walkingDistanceDisplayState = state) }
+            }
+
             override fun onFailure(queryId: Int, error: Throwable) {
                 swipeRefresh.isRefreshing = false
-                if (isRefresh) {
+                if (isAutomatic) {
+                    routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
+                    autoRefreshController.completeAutomatic(requireNotNull(automaticGeneration), success = false)
+                    renderSearchAutoRefreshSummary()
+                    updateRefreshEnabled()
+                } else if (isRefresh) {
                     handleRefreshFailure(requireNotNull(refreshToken))
                 } else {
                     routeQueryState.fail(getString(R.string.search_failed), preserveResults = false)
@@ -644,8 +754,95 @@ class SearchFragment : Fragment() {
                     renderSearchUi()
                     updateRefreshEnabled()
                 }
+                if (!isAutomatic) {
+                    autoRefreshController.setExternalBusy(false)
+                    updateSearchAutoRefreshEligibility()
+                }
             }
+        }, walkingTrigger = when {
+            isAutomatic -> PedestrianRequestTrigger.AUTOMATIC
+            isRefresh -> PedestrianRequestTrigger.MANUAL
+            else -> PedestrianRequestTrigger.INITIAL
         })
+    }
+
+    private fun startAutomaticRefresh(generation: Int) {
+        if (
+            !fragmentStartedForAutoRefresh ||
+            !destinationVisibleForAutoRefresh ||
+            autoQuerySnapshot == null ||
+            candidateScrollLock.isOuterScrollLocked() ||
+            presentationState.mode != SearchDisplayMode.RESULTS
+        ) {
+            autoRefreshController.completeAutomatic(generation, success = false)
+            renderSearchAutoRefreshSummary()
+            return
+        }
+        query(preserveSort = true, automaticGeneration = generation)
+    }
+
+    private fun updateSearchAutoRefreshEligibility() {
+        if (!::autoRefreshSettingsStore.isInitialized) return
+        autoRefreshController.setInterval(autoRefreshSettingsStore.getInterval())
+        autoRefreshController.setEligible(
+            fragmentStartedForAutoRefresh &&
+                destinationVisibleForAutoRefresh &&
+                autoQuerySnapshot != null &&
+                routeQueryState.updatedAtMillis != null &&
+                presentationState.mode == SearchDisplayMode.RESULTS &&
+                !candidateScrollLock.isOuterScrollLocked()
+        )
+        renderSearchAutoRefreshSummary()
+    }
+
+    private fun displayAutomaticResults(
+        routes: List<BusRouteOption>,
+        origin: Place,
+        destination: Place
+    ) {
+        val layoutManager = resultList.layoutManager as? LinearLayoutManager
+        val oldItems = resultAdapter.currentList.toList()
+        val oldPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+        val anchorId = oldItems.getOrNull(oldPosition)?.stableId
+        val anchorOffset = if (oldPosition == RecyclerView.NO_POSITION) 0 else {
+            layoutManager?.findViewByPosition(oldPosition)?.top ?: 0
+        }
+        routeQueryState.complete(
+            routes = routes,
+            preserveSort = true,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        successfulQueryOrigin = origin
+        successfulQueryDestination = destination
+        val nextItems = SearchRouteItemProjector.project(currentResults)
+        resultAdapter.submitList(nextItems) {
+            val nextPosition = RouteListViewportAnchor.positionAfterRefresh(
+                oldItems = oldItems,
+                newItems = resultAdapter.currentList,
+                anchorStableId = anchorId,
+                oldPosition = oldPosition
+            )
+            if (nextPosition >= 0) {
+                resultList.post {
+                    (resultList.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
+                }
+            }
+        }
+        resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        routeResultControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        resultMetaContainer.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
+        if (currentResults.isNotEmpty()) {
+            resultCount.text = RouteResultCardFormatter.resultSummary(
+                currentResults,
+                requireContext().localizedText()
+            )
+        }
+        renderSearchUi()
+        updateSortControls()
+        updateRefreshEnabled()
+        updateSearchAutoRefreshEligibility()
     }
 
     private fun restoreSubmittedQueryIfNeeded() {
@@ -681,6 +878,7 @@ class SearchFragment : Fragment() {
             R.string.updated_at,
             formatUpdatedAt(routeQueryState.updatedAtMillis)
         )
+        renderSearchAutoRefreshSummary()
         resultMetaContainer.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
         if (currentResults.isNotEmpty()) {
             successfulQueryOrigin = origin
@@ -837,7 +1035,24 @@ class SearchFragment : Fragment() {
 
     private fun updateRoute(routeId: String, transform: (BusRouteOption) -> BusRouteOption) {
         if (!routeQueryState.update(routeId, transform)) return
-        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
+        val layoutManager = resultList.layoutManager as? LinearLayoutManager
+        val firstPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+        val anchorId = if (firstPosition == RecyclerView.NO_POSITION) null else {
+            resultAdapter.currentList.getOrNull(firstPosition)?.stableId
+        }
+        val anchorOffset = if (firstPosition == RecyclerView.NO_POSITION) 0 else {
+            layoutManager?.findViewByPosition(firstPosition)?.top ?: 0
+        }
+        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults)) {
+            if (anchorId == null) return@submitList
+            val nextPosition = RouteListViewportAnchor.positionOf(resultAdapter.currentList, anchorId)
+            if (nextPosition >= 0) {
+                resultList.post {
+                    (resultList.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
+                }
+            }
+        }
         currentResults.firstOrNull { it.resultId == routeId }?.let(etaSheet::update)
     }
 
@@ -901,6 +1116,17 @@ class SearchFragment : Fragment() {
             !refreshFeedbackState.blocksQueries
     }
 
+    private fun renderSearchAutoRefreshSummary() {
+        if (!::resultAutoRefreshProgress.isInitialized || !::resultUpdatedAt.isInitialized) return
+        val refreshing = autoRefreshController.state is ForegroundAutoRefreshState.Refreshing
+        resultAutoRefreshProgress.visibility = if (refreshing) View.VISIBLE else View.GONE
+        resultUpdatedAt.text = if (refreshing) {
+            getString(R.string.auto_refresh_updating)
+        } else {
+            getString(R.string.updated_at, formatUpdatedAt(routeQueryState.updatedAtMillis))
+        }
+    }
+
     private fun setCandidateScrollLock() {
         candidateScrollLock.update(
             originCandidatesVisible = originController?.isCandidateVisible() == true,
@@ -947,10 +1173,13 @@ class SearchFragment : Fragment() {
     }
 
     private fun onSearchSelectionChanged() {
+        autoQuerySnapshot = null
+        autoRefreshController.invalidate()
         if (presentationState.mode == SearchDisplayMode.EDITING_RESULTS) {
             presentationState.onInputChanged()
             renderSearchUi()
             updateRefreshEnabled()
+            updateSearchAutoRefreshEligibility()
             return
         }
         hasSubmittedQuery = false
@@ -968,6 +1197,7 @@ class SearchFragment : Fragment() {
         clearSuccessfulQuery()
         renderSearchUi()
         updateRefreshEnabled()
+        updateSearchAutoRefreshEligibility()
     }
 
     private fun onPotentialSearchSelectionChanged() {
@@ -987,6 +1217,7 @@ class SearchFragment : Fragment() {
 
     private fun beginEditingCurrentTrip() {
         if (!presentationState.beginEditingResults()) return
+        updateSearchAutoRefreshEligibility()
         if (routeQueryState.isRefreshing) {
             routeQueryCoordinator.invalidate()
             routeQueryState.cancel()
@@ -1000,6 +1231,7 @@ class SearchFragment : Fragment() {
             }
         }
         updateRefreshEnabled()
+        updateSearchAutoRefreshEligibility()
     }
 
     private fun clearSuccessfulQuery() {

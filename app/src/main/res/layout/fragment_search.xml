@@ -139,6 +139,8 @@
                     android:layout_marginTop="6dp"
                     android:background="@color/bus_divider" />
             </com.golink.busiscoming.ui.main.SearchTripContextLayout>
+
+            <include layout="@layout/view_auto_refresh_notice" />
         </LinearLayout>
 
         <com.golink.busiscoming.ui.common.RouteResultControlsView

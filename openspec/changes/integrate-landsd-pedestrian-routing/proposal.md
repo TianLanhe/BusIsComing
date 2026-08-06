@@ -10,7 +10,7 @@ Citybus 提供的步行距離只適合作為概略資料，路線卡片與詳情
 - 路線卡片先以短文案顯示步行距離查詢中，完整 CSDI 分段成功後改用向上取整的總距離；任一必要分段最終失敗時回退完整 Citybus 距離。
 - 按步行距離排序時，已有數值的卡片依方向排序，查詢中卡片固定在數值之後並保持穩定相對順序；漸進完成只重排未置頂區域。
 - 路線詳情摘要只在全部必要分段成功時顯示 CSDI 總距離，否則回退 Citybus 總距離；各步行段獨立展示 CSDI 距離及向上取整的約略分鐘，失敗段只保留 Citybus 分段距離。
-- Google 地圖移除端點直線步行示意；成功分段按 CSDI 各子路徑分別繪製中性虛線，局部失敗不補畫假路徑，並在實際展示地政總署資料時顯示精簡署名及完整可開啟說明。
+- Google 地圖移除端點直線步行示意；成功分段只沿 CSDI 各有序子路徑及局部切線繪製較粗灰色開放折角，不顯示灰色實線、點線或虛線底圖；局部失敗不補畫假路徑，並在實際展示地政總署資料時顯示精簡署名及完整可開啟說明。
 - 保持 Citybus 總耗時、預計到達、各巴士段時間與 ETA 不變；第一版不提供 travel mode 選擇、轉向文字、開始導航、即時跟隨或重新規劃。
 - 實作及驗證完成後，在 `docs/technical-debt.md` 記錄 Citybus 總耗時／巴士時間與地政總署固定步速時間尚未統一的技術債及關閉條件。
 
@@ -31,6 +31,6 @@ Citybus 提供的步行距離只適合作為概略資料，路線卡片與詳情
 
 - 受影響代碼集中於路線查詢 progressive callback／排序、Citybus P2P 端點與詳情共享、步行資料 model／repository／process runtime、`RouteDetailPageState` reducer、時間線 formatter／adapter、`RouteMapPresentationBuilder`、Google Map renderer 及三語資源。
 - 新增無憑證 HTTPS 外部來源 `https://mapapi.hkmapservice.gov.hk/PedRoute/NAServer/route/solve`；不新增背景權限、磁碟快取、SQLite migration 或第三方 SDK，亦不得以 fixture 取代生產 HTTP。
-- 成功 CSDI 分段與路線組合只在記憶體保存 24 小時；失敗不快取。精確坐標、完整 URL、請求 JSON、站點 ID、使用者地點與軌跡不得寫入日誌或線上分析。
+- 成功 CSDI 分段與路線組合只在記憶體保存 24 小時；失敗不作成功結果快取。自動刷新對同一有向失敗 key 使用進程內退避資格，避免每分鐘重試風暴；手動刷新或重新進入可繞過一次，但不把失敗冒充可用結果。精確坐標、完整 URL、請求 JSON、站點 ID、使用者地點與軌跡不得寫入日誌或線上分析。
 - 需覆蓋三語、TalkBack、窄屏／大字體、亂序 callback、配置重建、部分失敗、排序移動、地圖子路徑與署名安全區；真實 Citybus／CSDI 只讀抽查受外部服務可用性限制，不能成為一般自動測試依賴。
 - 本 change 依賴目前已實作的路線詳情可靠結構、主線程 reducer、香港首幀與相機所有權；不得回退 `fix-route-detail-progressive-loading` 已建立的內容單調及局部降級行為。

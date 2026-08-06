@@ -22,7 +22,7 @@
 
 ## Impact
 
-- **前置依賴**：`add-app-update-check` 亦修改 `app-settings-support` 的同一既有 Requirement；本 change 可先完成提案，但實作與歸檔須在該 change 完成、同步及歸檔後進行，以其保留「應用評分暫不支援」的最新主規格為基線。
+- **前置基線**：`add-app-update-check` 亦修改 `app-settings-support` 的同一既有 Requirement；本 change 直接以其目前已實作代碼、測試及 active delta 為基線，本次不要求先完成真實 Play 人工驗證、同步或歸檔。評分實作不得改變更新功能的 Play／網站權威與 fallback。
 - **Android 代碼**：影響 `SettingsFragment`、設定支援 action、Google Play package probe／外部 Intent 導向及相應狀態 model；UI 只負責觸發與呈現，package／Intent 判斷集中於可測試元件。
 - **Manifest 與依賴**：沿用 `com.android.vending` package visibility；不新增 Play Core In-App Review、`QUERY_ALL_PACKAGES`、`REQUEST_INSTALL_PACKAGES` 或第三方商店依賴。
 - **外部系統**：依賴 Google Play package、BusIsComing 商品 ID、Android 系統應用詳情頁與 Google 官方說明 URL；Intent 不可解析或啟動例外均須留在設定頁並可恢復。

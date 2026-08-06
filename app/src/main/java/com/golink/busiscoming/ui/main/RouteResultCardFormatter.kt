@@ -2,6 +2,7 @@ package com.golink.busiscoming.ui.main
 
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.R
 import com.golink.busiscoming.ui.common.LocalizedText
 
@@ -52,10 +53,24 @@ object RouteResultCardFormatter {
     fun walking(walkingDistanceMeters: Int, text: LocalizedText): String =
         text.get(R.string.route_card_walking_value, arrayOf(walkingDistanceMeters))
 
+    fun walking(state: WalkingDistanceDisplayState, text: LocalizedText): String =
+        state.distanceMetersOrNull?.let { walking(it, text) }
+            ?: text.get(R.string.route_card_walking_loading, emptyArray())
+
     fun infoAccessibility(route: BusRouteOption, text: LocalizedText): String {
+        if (route.walkingDistanceDisplayState is WalkingDistanceDisplayState.Loading) {
+            return text.get(
+                R.string.route_card_info_loading_content_description,
+                arrayOf<Any>(price(route.priceHkd, text), route.durationMinutes)
+            )
+        }
         return text.get(
             R.string.route_card_info_content_description,
-            arrayOf<Any>(price(route.priceHkd, text), route.durationMinutes, route.walkingDistanceMeters)
+            arrayOf<Any>(
+                price(route.priceHkd, text),
+                route.durationMinutes,
+                requireNotNull(route.walkingDistanceDisplayState.distanceMetersOrNull)
+            )
         )
     }
 

@@ -19,8 +19,34 @@ data class BusRouteOption(
         priceHkd,
         durationMinutes,
         walkingDistanceMeters
-    )
+    ),
+    val walkingDistanceDisplayState: WalkingDistanceDisplayState =
+        WalkingDistanceDisplayState.CitybusFallback(walkingDistanceMeters)
 )
+
+sealed interface WalkingDistanceDisplayState {
+    val distanceMetersOrNull: Int?
+
+    data object Loading : WalkingDistanceDisplayState {
+        override val distanceMetersOrNull: Int? = null
+    }
+
+    data class CsdiSuccess(val distanceMeters: Int) : WalkingDistanceDisplayState {
+        init {
+            require(distanceMeters > 0) { "CSDI walking distance must be positive" }
+        }
+
+        override val distanceMetersOrNull: Int = distanceMeters
+    }
+
+    data class CitybusFallback(val distanceMeters: Int) : WalkingDistanceDisplayState {
+        init {
+            require(distanceMeters >= 0) { "Citybus walking distance must not be negative" }
+        }
+
+        override val distanceMetersOrNull: Int = distanceMeters
+    }
+}
 
 sealed class WaitTimeState {
     object Loading : WaitTimeState()

@@ -95,6 +95,23 @@
                 style="@style/SettingsRowValueText" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/settingsAutoRefreshRow"
+            style="@style/SettingsRow"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_auto_refresh" />
+
+            <LinearLayout
+                android:id="@+id/settingsAutoRefreshOptions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
+        </LinearLayout>
+
         <TextView
             style="@style/SettingsGroupLabel"
             android:text="@string/settings_group_route_data" />

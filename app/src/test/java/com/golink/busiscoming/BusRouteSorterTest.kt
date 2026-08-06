@@ -5,6 +5,7 @@ import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.model.toDisplayText
 import com.golink.busiscoming.data.repository.BusRouteSorter
 import org.junit.Assert.assertEquals
@@ -142,6 +143,33 @@ class BusRouteSorterTest {
         assertEquals(
             listOf("8P \u2192 A11", "82X \u2192 102", "8X", "8P \u2192 10 \u2192 85"),
             sorted.map { it.routeName }
+        )
+    }
+
+    @Test
+    fun walkingSortUsesDisplayDistanceKeepsLoadingLastAndPreservesInitialTieOrder() {
+        val progressive = listOf(
+            routes[0].copy(
+                walkingDistanceDisplayState = WalkingDistanceDisplayState.CsdiSuccess(300)
+            ),
+            routes[1].copy(walkingDistanceDisplayState = WalkingDistanceDisplayState.Loading),
+            routes[2].copy(
+                walkingDistanceDisplayState = WalkingDistanceDisplayState.CitybusFallback(200)
+            ),
+            routes[3].copy(
+                walkingDistanceDisplayState = WalkingDistanceDisplayState.CsdiSuccess(300)
+            )
+        )
+
+        assertEquals(
+            listOf("8P → A11", "82X → 102", "8P → 10 → 85", "8X"),
+            BusRouteSorter.sort(progressive, SortField.WALKING_DISTANCE, SortDirection.ASC)
+                .map { it.routeName }
+        )
+        assertEquals(
+            listOf("82X → 102", "8P → 10 → 85", "8P → A11", "8X"),
+            BusRouteSorter.sort(progressive, SortField.WALKING_DISTANCE, SortDirection.DESC)
+                .map { it.routeName }
         )
     }
 

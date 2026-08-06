@@ -7,6 +7,7 @@ import com.golink.busiscoming.data.model.RouteDetailTransferType
 import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.data.model.P2pRouteLeg
+import com.golink.busiscoming.data.model.RouteDetailWalkingState
 
 data class RouteMapCoordinate(
     val latitude: Double,
@@ -60,7 +61,8 @@ object RouteMapPresentationBuilder {
         queryDestination: RouteDetailQueryEndpoint?,
         geometries: Map<RouteGeometryKey, RouteGeometrySegment>,
         selectedMarkerId: String?,
-        routePlan: List<P2pRouteLeg> = emptyList()
+        routePlan: List<P2pRouteLeg> = emptyList(),
+        walkingSegments: Map<String, RouteDetailWalkingState> = emptyMap()
     ): RouteMapPresentation {
         val markers = mutableListOf<RouteMapMarker>()
         queryOrigin?.let { endpoint ->
@@ -124,39 +126,21 @@ object RouteMapPresentationBuilder {
                 )
             }
         }
-        detail?.transfers?.forEachIndexed { transferIndex, transfer ->
-            if (transfer.type == RouteDetailTransferType.WALK_TO_TRANSFER_STOP) {
-                val previousLeg = detail.legs.getOrNull(transferIndex)
-                val nextLeg = detail.legs.getOrNull(transferIndex + 1)
-                if (previousLeg != null && nextLeg != null) {
-                    lines += walkingLine(
-                        stableId = "walk:transfer:$transferIndex",
-                        from = previousLeg.alightingStop.coordinate(),
-                        to = nextLeg.boardingStop.coordinate()
+        walkingSegments.forEach { (segmentId, state) ->
+            if (state is RouteDetailWalkingState.CsdiSuccess) {
+                state.route.paths.forEachIndexed { pathIndex, path ->
+                    lines += RouteMapLine(
+                        stableId = "walk:$segmentId:path:$pathIndex",
+                        kind = RouteMapLineKind.WALKING,
+                        points = path.points.map { RouteMapCoordinate(it.latitude, it.longitude) }
                     )
                 }
             }
         }
-        val firstBoarding = detail?.legs?.firstOrNull()?.boardingStop
-        if (queryOrigin != null && firstBoarding != null) {
-            lines += walkingLine(
-                stableId = "walk:origin",
-                from = RouteMapCoordinate(queryOrigin.latitude, queryOrigin.longitude),
-                to = firstBoarding.coordinate()
-            )
-        }
-        val lastAlighting = detail?.legs?.lastOrNull()?.alightingStop
-        if (queryDestination != null && lastAlighting != null) {
-            lines += walkingLine(
-                stableId = "walk:destination",
-                from = lastAlighting.coordinate(),
-                to = RouteMapCoordinate(queryDestination.latitude, queryDestination.longitude)
-            )
-        }
 
         val boundsPoints = buildList {
             addAll(markers.map { it.position })
-            addAll(lines.filter { it.kind == RouteMapLineKind.BUS }.flatMap { it.points })
+            addAll(lines.flatMap { it.points })
         }
         return RouteMapPresentation(markers, lines, boundsPoints)
     }
@@ -232,16 +216,6 @@ object RouteMapPresentationBuilder {
             selected = selectedMarkerId == stableId || selectedMarkerId in timelineIds
         )
     }
-
-    private fun walkingLine(
-        stableId: String,
-        from: RouteMapCoordinate,
-        to: RouteMapCoordinate
-    ) = RouteMapLine(
-        stableId = stableId,
-        kind = RouteMapLineKind.WALKING,
-        points = listOf(from, to)
-    )
 
     private fun RouteDetailStop.coordinate(): RouteMapCoordinate {
         return RouteMapCoordinate(latitude, longitude)

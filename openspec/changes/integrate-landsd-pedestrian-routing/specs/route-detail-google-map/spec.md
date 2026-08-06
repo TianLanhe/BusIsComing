@@ -18,17 +18,19 @@
 #### Scenario: 展示同站轉乘
 - **WHEN** Citybus 詳情把兩段路線標記為同站轉乘
 - **THEN** 系統 SHALL 使用單一複合轉乘 marker
-- **AND** 系統 SHALL NOT 繪製步行虛線、步行距離或 CSDI 軌跡
+- **AND** 系統 SHALL NOT 繪製步行紋理、步行距離或 CSDI 軌跡
 
 #### Scenario: 展示成功步行轉乘軌跡
 - **WHEN** Citybus 詳情把兩段路線標記為步行轉乘且該 CSDI 分段成功
 - **THEN** 系統 SHALL 保留前段下車站與後段上車站兩個角色
-- **AND** 系統 SHALL 以中性細虛線依序繪製 CSDI 回應的每個獨立子路徑
+- **AND** 系統 SHALL 以綁定同一有序子路徑的透明承載 stroke 及較粗灰色開放折角依序繪製 CSDI 回應的每個獨立子路徑
+- **AND** 每個折角 SHALL 按所在位置的局部切線定向，地圖 SHALL NOT 另畫灰色實線、點線或虛線底圖
 - **AND** 系統 SHALL NOT 以坐標相同為由改寫 Citybus 轉乘類型
 
 #### Scenario: 展示成功首尾步行軌跡
 - **WHEN** 起點或終點必要步行段取得 CSDI 成功結果
-- **THEN** 系統 SHALL 以中性細虛線依序繪製該分段的每個獨立子路徑
+- **THEN** 系統 SHALL 以綁定同一有序子路徑的較粗灰色開放折角依序繪製該分段的每個獨立子路徑
+- **AND** 地圖 SHALL NOT 另畫灰色實線、點線或虛線底圖
 - **AND** 系統 SHALL 把軌跡描述為規劃預覽而非逐步導航或即時引導
 
 #### Scenario: 多個子路徑不補畫連接線
@@ -43,14 +45,14 @@
 
 #### Scenario: 漸進結果只更新對應軌跡
 - **WHEN** CSDI 分段以任意次序成功或有效狀態被替換
-- **THEN** renderer SHALL 依穩定子路徑身份只新增、更新或移除對應 line
+- **THEN** renderer SHALL 依穩定子路徑身份只新增、更新或移除對應 path presentation
 - **AND** 其他 marker、巴士幾何及成功步行軌跡 SHALL 保持不變
 
 #### Scenario: 地圖不顯示路線圖例
 - **WHEN** 地圖區域在摘要、半屏或全屏任一詳情窗檔位可見
 - **THEN** 頁面 SHALL NOT 顯示「巴士路線」、「步行連接」或等效浮動圖例
 - **AND** 圖例 SHALL NOT 保留空白容器、觸控目標或無障礙節點
-- **AND** 巴士實線、CSDI 步行虛線、marker、時間線及無障礙描述 SHALL 保持可用
+- **AND** 巴士實線、CSDI 步行開放折角、marker、時間線及無障礙描述 SHALL 保持可用
 
 #### Scenario: 移除圖例後地圖安全區
 - **WHEN** 圖例被移除且 WindowInsets、資料署名或 bottom sheet 高度改變
@@ -127,3 +129,4 @@
 - **WHEN** WindowInsets 或 bottom sheet 高度令地圖安全區改變
 - **THEN** CSDI 署名 SHALL 與 Google Logo、法律文字、返回、目前位置、全覽控件及詳情窗互相避讓
 - **AND** 署名 SHALL NOT 被裁切、遮擋或成為常駐路線圖例
+- **AND** 站名碰撞策略 SHALL 把目前可見署名矩形視為不可覆蓋的保留區域

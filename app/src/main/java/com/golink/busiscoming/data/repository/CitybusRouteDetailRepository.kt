@@ -23,8 +23,12 @@ class CitybusRouteDetailRepository(
 ) : RouteDetailRepository {
     private val activeStructureCache = cacheOwner?.structureCache ?: structureCache
     private val activeWalkingCache = cacheOwner?.walkingCache ?: walkingCache
-    private val resolvedRecoverySearcher: (P2pRouteRecoveryContext, String) -> List<BusRouteOption> =
-        recoverySearcher ?: CitybusBusRouteRepository(sessionRegistry = sessionRegistry)::searchRouteCandidatesForRecovery
+    private val resolvedRecoverySearcher: (P2pRouteRecoveryContext, String) -> List<BusRouteOption> by lazy(
+        LazyThreadSafetyMode.SYNCHRONIZED
+    ) {
+        recoverySearcher
+            ?: CitybusBusRouteRepository(sessionRegistry = sessionRegistry)::searchRouteCandidatesForRecovery
+    }
 
     override fun loadCachedRouteDetail(route: BusRouteOption): RouteDetail? {
         val query = route.routeDetailQuery ?: return null

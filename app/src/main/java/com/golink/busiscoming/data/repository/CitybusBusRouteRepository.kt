@@ -8,6 +8,7 @@ import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import com.golink.busiscoming.data.localization.LanguageSnapshot
 import java.io.IOException
@@ -44,7 +45,12 @@ class CitybusBusRouteRepository(
     private val stopPreviewResolver: RouteCardStopPreviewResolver = RouteCardStopPreviewResolver(
         stopMapResolver = stopMapResolver
     ),
-    private val stopPreviewWorkerCount: Int = DEFAULT_STOP_PREVIEW_WORKER_COUNT
+    private val stopPreviewWorkerCount: Int = DEFAULT_STOP_PREVIEW_WORKER_COUNT,
+    private val walkingDetailRepository: RouteDetailRepository = CitybusRouteDetailRepository(
+        sessionRegistry = sessionRegistry
+    ),
+    private val pedestrianRuntime: PedestrianRouteRequestRuntime = PedestrianRouteProcessRuntime.shared,
+    private val walkingWorkerCount: Int = DEFAULT_WALKING_WORKER_COUNT
 ) : BusRouteRepository {
     private val sessionScopeLock = Any()
     private var activeSessionScope: String? = null
@@ -54,6 +60,10 @@ class CitybusBusRouteRepository(
     private val stopPreviewScopeLock = Any()
     private var stopPreviewGeneration = 0
     private var activeStopPreviewExecutor: ExecutorService? = null
+    private val walkingScopeLock = Any()
+    private var walkingGeneration = 0
+    private var activeWalkingExecutor: ExecutorService? = null
+    private var activeWalkingSession: RouteWalkingCompletionSession? = null
 
     override fun searchRoutes(origin: Place, destination: Place): List<BusRouteOption> {
         val sessionScope = beginSessionScope()
@@ -186,11 +196,24 @@ class CitybusBusRouteRepository(
     override fun cancelProgressiveQueries() {
         cancelActiveEtaQueries()
         cancelActiveStopPreviewQueries()
+        cancelActiveWalkingQueries()
     }
 
     override fun searchRoutesProgressively(
         origin: Place,
         destination: Place,
+        callback: BusRouteQueryCallback
+    ) = searchRoutesProgressively(
+        origin,
+        destination,
+        PedestrianRequestTrigger.INITIAL,
+        callback
+    )
+
+    override fun searchRoutesProgressively(
+        origin: Place,
+        destination: Place,
+        walkingTrigger: PedestrianRequestTrigger,
         callback: BusRouteQueryCallback
     ) {
         val routes = try {
@@ -205,9 +228,17 @@ class CitybusBusRouteRepository(
             return
         }
 
-        callback.onInitialRoutes(routes)
-        startStopPreviewCompletion(routes, callback)
-        startEtaCompletion(routes, callback)
+        val progressiveRoutes = routes.map { route ->
+            if (route.routeDetailQuery?.recoveryContext != null) {
+                route.copy(walkingDistanceDisplayState = WalkingDistanceDisplayState.Loading)
+            } else {
+                route
+            }
+        }
+        callback.onInitialRoutes(progressiveRoutes)
+        startStopPreviewCompletion(progressiveRoutes, callback)
+        startEtaCompletion(progressiveRoutes, callback)
+        startWalkingCompletion(progressiveRoutes, walkingTrigger, callback)
     }
 
     fun buildRouteUrl(
@@ -342,6 +373,39 @@ class CitybusBusRouteRepository(
         previewExecutor.shutdown()
     }
 
+    private fun startWalkingCompletion(
+        routes: List<BusRouteOption>,
+        trigger: PedestrianRequestTrigger,
+        callback: BusRouteQueryCallback
+    ) {
+        if (routes.none { it.walkingDistanceDisplayState is WalkingDistanceDisplayState.Loading }) return
+        val executor = Executors.newFixedThreadPool(walkingWorkerCount.coerceAtLeast(2))
+        val generation: Int
+        val session: RouteWalkingCompletionSession
+        synchronized(walkingScopeLock) {
+            cancelActiveWalkingQueriesLocked()
+            walkingGeneration += 1
+            generation = walkingGeneration
+            session = RouteWalkingCompletionSession(
+                routes = routes,
+                stopMapLoader = stopMapResolver::resolveStopMap,
+                detailLoader = walkingDetailRepository::loadRouteDetail,
+                pedestrianRuntime = pedestrianRuntime,
+                sourceExecutor = executor,
+                trigger = trigger,
+                onUpdate = { routeId, state ->
+                    if (isWalkingGenerationActive(generation)) {
+                        callback.onRouteWalkingDistanceUpdated(routeId, state)
+                    }
+                }
+            )
+            activeWalkingExecutor = executor
+            activeWalkingSession = session
+        }
+        session.start()
+        executor.shutdown()
+    }
+
     private fun registerEtaExecutor(etaExecutor: ExecutorService): Int {
         synchronized(etaScopeLock) {
             cancelActiveEtaQueriesLocked()
@@ -411,6 +475,25 @@ class CitybusBusRouteRepository(
             }
         }
     }
+
+    private fun cancelActiveWalkingQueries() {
+        synchronized(walkingScopeLock) {
+            walkingGeneration += 1
+            cancelActiveWalkingQueriesLocked()
+        }
+    }
+
+    private fun cancelActiveWalkingQueriesLocked() {
+        activeWalkingSession?.close()
+        activeWalkingSession = null
+        activeWalkingExecutor?.shutdownNow()
+        activeWalkingExecutor = null
+    }
+
+    private fun isWalkingGenerationActive(generation: Int): Boolean =
+        synchronized(walkingScopeLock) {
+            walkingGeneration == generation && activeWalkingSession != null
+        }
 
     private fun etaRequestGroups(
         routes: List<BusRouteOption>,
@@ -489,6 +572,7 @@ class CitybusBusRouteRepository(
         private const val HONG_KONG_TIME_ZONE = "Asia/Hong_Kong"
         private const val DEFAULT_ETA_WORKER_COUNT = 3
         private const val DEFAULT_STOP_PREVIEW_WORKER_COUNT = 2
+        private const val DEFAULT_WALKING_WORKER_COUNT = 4
         private val SEARCH_MODES = listOf("T", "F", "W")
     }
 }

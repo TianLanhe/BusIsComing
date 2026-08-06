@@ -4,6 +4,7 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.ui.main.RouteQueryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -98,6 +99,24 @@ class RouteQueryStateTest {
         assertEquals(SortField.ROUTE, state.sortField)
         assertEquals(SortDirection.DESC, state.sortDirection)
         assertEquals(listOf("2", "1"), state.results.map { it.routeName })
+    }
+
+    @Test
+    fun `walking update preserves raw Citybus distance and only reorders walking sort`() {
+        val state = RouteQueryState()
+        state.complete(
+            listOf(route("first"), route("second")),
+            preserveSort = false,
+            updatedAtMillis = 1L
+        )
+
+        state.updateWalkingDistance("first", WalkingDistanceDisplayState.CsdiSuccess(500))
+        state.updateWalkingDistance("second", WalkingDistanceDisplayState.CsdiSuccess(100))
+        assertEquals(listOf("first", "second"), state.rawResults.map { it.routeName })
+        assertTrue(state.rawResults.all { it.walkingDistanceMeters == 100 })
+
+        state.toggleSort(SortField.WALKING_DISTANCE)
+        assertEquals(listOf("second", "first"), state.results.map { it.routeName })
     }
 
     @Test

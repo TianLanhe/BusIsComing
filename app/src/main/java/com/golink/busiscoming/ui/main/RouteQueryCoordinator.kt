@@ -4,8 +4,10 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.repository.BusRouteQueryCallback
 import com.golink.busiscoming.data.repository.BusRouteRepository
+import com.golink.busiscoming.data.repository.PedestrianRequestTrigger
 import com.golink.busiscoming.ui.navigation.RouteQueryGeneration
 import com.golink.busiscoming.data.localization.AppLanguageRuntime
 import java.util.concurrent.Executor
@@ -19,7 +21,12 @@ class RouteQueryCoordinator(
 ) {
     private val generation = RouteQueryGeneration()
 
-    fun query(origin: Place, destination: Place, callback: Callback): Int {
+    fun query(
+        origin: Place,
+        destination: Place,
+        callback: Callback,
+        walkingTrigger: PedestrianRequestTrigger = PedestrianRequestTrigger.INITIAL
+    ): Int {
         val queryId = generation.begin()
         val queryLanguageVersion = languageVersion()
         repository.cancelProgressiveQueries()
@@ -27,6 +34,7 @@ class RouteQueryCoordinator(
             repository.searchRoutesProgressively(
                 origin,
                 destination,
+                walkingTrigger,
                 object : BusRouteQueryCallback {
                     override fun onInitialRoutes(routes: List<BusRouteOption>) {
                         dispatch(queryId, queryLanguageVersion) {
@@ -49,6 +57,15 @@ class RouteQueryCoordinator(
                     ) {
                         dispatch(queryId, queryLanguageVersion) {
                             callback.onRouteStopPreviewUpdated(queryId, routeId, preview)
+                        }
+                    }
+
+                    override fun onRouteWalkingDistanceUpdated(
+                        routeId: String,
+                        state: WalkingDistanceDisplayState
+                    ) {
+                        dispatch(queryId, queryLanguageVersion) {
+                            callback.onRouteWalkingDistanceUpdated(queryId, routeId, state)
                         }
                     }
 
@@ -94,6 +111,12 @@ class RouteQueryCoordinator(
             routeId: String,
             preview: RouteCardStopPreview
         )
+
+        fun onRouteWalkingDistanceUpdated(
+            queryId: Int,
+            routeId: String,
+            state: WalkingDistanceDisplayState
+        ) = Unit
 
         fun onFailure(queryId: Int, error: Throwable)
     }

@@ -44,7 +44,16 @@
     <string name="settings_version_prefix">Version</string>
     <string name="about_description">Save your regular journeys and compare bus options before you leave.</string>
     <string name="website_url">https://www.busiscoming.com</string>
-    <string name="unsupported_rate_app">App ratings are not available yet</string>
+    <string name="rating_play_disabled_title">Google Play is disabled</string>
+    <string name="rating_play_disabled_message">To rate the app on Google Play, enable Google Play in system settings first.</string>
+    <string name="rating_play_missing_title">Google Play not found</string>
+    <string name="rating_play_missing_message">Google Play is not installed on this device. You can view Google’s official help for ways to find or restore it.</string>
+    <string name="rating_play_unusable_title">Google Play is unavailable</string>
+    <string name="rating_play_unusable_message">We cannot confirm that Google Play can open the store listing right now. You can review BusIsComing’s app settings and try again.</string>
+    <string name="rating_action_enable_play">Enable Google Play</string>
+    <string name="rating_action_view_install_help">View setup help</string>
+    <string name="rating_action_app_settings">App settings</string>
+    <string name="rating_external_navigation_failed">Couldn’t open the selected page. Try again later.</string>
     <string name="update_status_never_checked">Tap to check for a new version</string>
     <string name="update_status_checking">Checking for updates…</string>
     <string name="update_status_up_to_date">You’re up to date</string>

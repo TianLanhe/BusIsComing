@@ -5,6 +5,7 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.ProgressBar
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.model.SortField
 import com.google.android.material.button.MaterialButton
@@ -17,6 +18,7 @@ class RouteResultControlsView @JvmOverloads constructor(
     val summaryContainer = findAfterInflate<android.view.View>(R.id.resultSummaryContainer)
     val summaryText = findAfterInflate<TextView>(R.id.resultSummaryText)
     val updatedAtText = findAfterInflate<TextView>(R.id.resultUpdatedAtText)
+    val autoRefreshProgress = findAfterInflate<ProgressBar>(R.id.resultAutoRefreshProgress)
     val sortButtons: Map<SortField, MaterialButton> = mapOf(
         SortField.ROUTE to findAfterInflate(R.id.sortRouteButton),
         SortField.PRICE to findAfterInflate(R.id.sortPriceButton),

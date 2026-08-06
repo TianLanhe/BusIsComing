@@ -7,6 +7,7 @@ import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.ui.main.BusRouteItemDiff
 import com.golink.busiscoming.ui.main.RouteCardItem
 import com.golink.busiscoming.ui.main.RouteQueryState
@@ -36,6 +37,14 @@ class BusRouteAdapterDiffTest {
         )
         assertTrue(BusRouteItemDiff.areItemsTheSame(original, stopUpdated))
         assertFalse(BusRouteItemDiff.areContentsTheSame(original, stopUpdated))
+
+        val walkingUpdated = original.copy(
+            route = original.route.copy(
+                walkingDistanceDisplayState = WalkingDistanceDisplayState.CsdiSuccess(88)
+            )
+        )
+        assertTrue(BusRouteItemDiff.areItemsTheSame(original, walkingUpdated))
+        assertFalse(BusRouteItemDiff.areContentsTheSame(original, walkingUpdated))
     }
 
     @Test

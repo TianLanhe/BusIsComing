@@ -31,3 +31,8 @@
 - **WHEN** 卡片由查詢中變為 CSDI 成功或 Citybus 回退
 - **THEN** 該卡片 SHALL 保持相同 result identity
 - **AND** 系統 SHALL NOT 增加、刪除或重複任何路線結果
+
+#### Scenario: 步行重排保持目前閱讀位置
+- **WHEN** CSDI 漸進狀態令目前步行排序結果發生位置變化
+- **THEN** 系統 SHALL 在提交前保存第一可見路線 stable id 與相對列表頂部 pixel offset，並在提交後恢復
+- **AND** 若該路線已消失，系統 SHALL 選擇新排序中最接近的下一張路線而非跳至列表頂部

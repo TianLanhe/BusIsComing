@@ -44,7 +44,16 @@
     <string name="settings_version_prefix">版本</string>
     <string name="about_description">保存常用行程，出门前快速比较公交路线。</string>
     <string name="website_url">https://www.busiscoming.com</string>
-    <string name="unsupported_rate_app">暂不支持应用评分</string>
+    <string name="rating_play_disabled_title">Google Play 已停用</string>
+    <string name="rating_play_disabled_message">如需前往 Google Play 评分，请先在系统设置中启用 Google Play。</string>
+    <string name="rating_play_missing_title">未找到 Google Play</string>
+    <string name="rating_play_missing_message">这台设备未安装 Google Play。你可以查看 Google 官方说明，了解如何查找或恢复 Google Play。</string>
+    <string name="rating_play_unusable_title">Google Play 当前不可用</string>
+    <string name="rating_play_unusable_message">目前无法确认 Google Play 可以打开商品页面。你可以查看 BusIsComing 的应用设置后重试。</string>
+    <string name="rating_action_enable_play">前往启用</string>
+    <string name="rating_action_view_install_help">查看安装说明</string>
+    <string name="rating_action_app_settings">应用设置</string>
+    <string name="rating_external_navigation_failed">暂时无法打开所选页面，请稍后重试。</string>
     <string name="update_status_never_checked">点按以检查新版本</string>
     <string name="update_status_checking">正在检查更新…</string>
     <string name="update_status_up_to_date">当前已是最新版本</string>

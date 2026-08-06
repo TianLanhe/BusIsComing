@@ -122,8 +122,14 @@
 #### Scenario: 基礎路線決定結果 cycle 完成
 - **WHEN** 自動查詢已返回基礎路線結果
 - **THEN** 系統 SHALL 將結果自動刷新 cycle 視為完成
-- **AND** 後續 ETA 與站點預覽 SHALL 仍可按既有 generation 漸進更新
-- **AND** 系統 SHALL NOT 等待全部 ETA 或預覽才安排下一個間隔
+- **AND** 後續 ETA、站點預覽與 CSDI walking SHALL 仍可按目前 query generation、result id 及 segment id 漸進更新
+- **AND** 系統 SHALL NOT 等待全部 ETA、預覽或 CSDI 才安排下一個間隔
+
+#### Scenario: 新基礎結果更新 CSDI consumer
+- **WHEN** 自動刷新接受一組新的基礎路線結果
+- **THEN** 舊結果專屬 CSDI consumer SHALL 失效，仍有效成功 cache SHALL 可由新結果重用
+- **AND** `AUTOMATIC` SHALL 只為不在 walking 失敗退避中的缺失 key 建立新 flight
+- **AND** 舊 query generation 的 CSDI callback SHALL NOT 修改新列表
 
 ### Requirement: 詳情每個週期並發刷新動態詳情與首程 ETA
 系統 SHALL 在路線詳情的每個自動刷新 cycle 並發刷新 Citybus 動態詳情與首程 ETA，讓兩個資料域獨立發布可靠成功內容，並在兩者都到達 terminal 狀態後才完成 cycle。
@@ -160,6 +166,11 @@
 - **WHEN** 動態詳情或 ETA 在自動 cycle 中更新
 - **THEN** 系統 SHALL 保持地圖相機、bottom sheet detent、展開乘車段、選中 marker／timeline 及列表位置
 - **AND** 系統 SHALL NOT 因動態值更新重建整頁或搶回使用者相機
+
+#### Scenario: 詳情自動刷新不接管 walking domain
+- **WHEN** 詳情 automatic cycle 開始、完成或失敗
+- **THEN** 系統 SHALL 保持目前 walking generation、CSDI 成功／Loading／fallback、步行 paths 及相機內容
+- **AND** 本 cycle SHALL NOT 建立 CSDI flight、清除摘要 pending target 或以新 Citybus 詳情替換 walking domain
 
 ### Requirement: 首次自動刷新提示全 App 只完成一次
 系統 SHALL 在使用者尚未明確選擇刷新設定且首次成功顯示常用或臨時查詢結果時立即提供自動刷新說明，並 SHALL 以可恢復的持久化狀態確保完整提示只需完成一次。

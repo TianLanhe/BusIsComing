@@ -4,6 +4,9 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.PedestrianCoordinate
+import com.golink.busiscoming.data.model.PedestrianRoute
+import com.golink.busiscoming.data.model.PedestrianRoutePath
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
@@ -12,6 +15,7 @@ import com.golink.busiscoming.data.model.RouteDetailTransfer
 import com.golink.busiscoming.data.model.RouteDetailTransferType
 import com.golink.busiscoming.data.model.RouteDetailWalkingKind
 import com.golink.busiscoming.data.model.RouteDetailWalkingSegment
+import com.golink.busiscoming.data.model.RouteDetailWalkingState
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteDetailUiFormatter
@@ -93,7 +97,7 @@ class RouteDetailUiFormatterTest {
     }
 
     @Test
-    fun eachLegExpandsIndependentlyOutsideItsBusCardAndOnlyFirstLegHasLiveEta() {
+    fun eachLegExpandsIndependentlyAndBusLegsDoNotRepeatLiveEta() {
         val collapsed = RouteDetailUiFormatter.items(detail(), emptySet(), WaitTimeState.Available(6))
         assertTrue(collapsed.none { it is RouteDetailUiItem.ViaStop })
         assertEquals(2, collapsed.filterIsInstance<RouteDetailUiItem.ViaToggle>().size)
@@ -101,9 +105,8 @@ class RouteDetailUiFormatterTest {
         val expanded = RouteDetailUiFormatter.items(detail(), setOf(1), WaitTimeState.Available(6))
         assertEquals(6, expanded.filterIsInstance<RouteDetailUiItem.ViaStop>().size)
         val busLegs = expanded.filterIsInstance<RouteDetailUiItem.BusLeg>()
-        assertEquals(6, (busLegs.first().liveEta as WaitTimeState.Available).minutes)
-        assertNull(busLegs[1].liveEta)
         assertFalse(busLegs[0].colorKey == busLegs[1].colorKey)
+        assertEquals(9.7, busLegs[0].fareHkd!!, 0.0)
         assertTrue(expanded.indexOfFirst { it is RouteDetailUiItem.ViaToggle && it.legIndex == 1 } >
             expanded.indexOfFirst { it is RouteDetailUiItem.BusLeg && it.legIndex == 1 })
     }
@@ -143,7 +146,71 @@ class RouteDetailUiFormatterTest {
     }
 
     @Test
-    fun everyWaitStateStaysOnTheFirstLegOnly() {
+    fun csdiSegmentsRoundOnlyForDisplayAndSummaryRoundsAfterRawSum() {
+        val states = mapOf(
+            "origin" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(100.2, 1.01)),
+            "transfer:0" to RouteDetailWalkingState.SameStop,
+            "destination" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(100.2, 0.01))
+        )
+
+        val items = RouteDetailUiFormatter.items(
+            detail().copy(transfers = listOf(RouteDetailTransfer(RouteDetailTransferType.SAME_STOP))),
+            emptySet(),
+            WaitTimeState.Loading,
+            walkingSegments = states
+        )
+        val summary = items.filterIsInstance<RouteDetailUiItem.Summary>().single()
+        val walking = items.filterIsInstance<RouteDetailUiItem.Walking>()
+
+        assertEquals(201, summary.walkingDistanceMeters)
+        assertTrue(summary.isWalkingDistanceComplete)
+        assertFalse(summary.isWalkingDistanceLoading)
+        assertEquals(101, walking.single { it.kind == RouteDetailWalkingKind.ORIGIN }.distanceMeters)
+        assertEquals(2, walking.single { it.kind == RouteDetailWalkingKind.ORIGIN }.approximateMinutes)
+        assertEquals(1, walking.single { it.kind == RouteDetailWalkingKind.DESTINATION }.approximateMinutes)
+        assertTrue(walking.none { it.kind == RouteDetailWalkingKind.TRANSFER })
+    }
+
+    @Test
+    fun loadingAndFallbackNeverMixSourcesInSummaryButKeepSegmentSuccess() {
+        val loadingItems = RouteDetailUiFormatter.items(
+            detail(),
+            emptySet(),
+            WaitTimeState.Loading,
+            walkingSegments = mapOf(
+                "origin" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(100.2, 1.01)),
+                "transfer:0" to RouteDetailWalkingState.Loading,
+                "destination" to RouteDetailWalkingState.Loading
+            )
+        )
+        val loadingSummary = loadingItems.filterIsInstance<RouteDetailUiItem.Summary>().single()
+        assertTrue(loadingSummary.isWalkingDistanceLoading)
+        assertEquals(378, loadingSummary.walkingDistanceMeters)
+
+        val fallbackItems = RouteDetailUiFormatter.items(
+            detail(),
+            emptySet(),
+            WaitTimeState.Loading,
+            walkingSegments = mapOf(
+                "origin" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(100.2, 1.01)),
+                "transfer:0" to RouteDetailWalkingState.CitybusFallback(null),
+                "destination" to RouteDetailWalkingState.Loading
+            )
+        )
+        val fallbackSummary = fallbackItems.filterIsInstance<RouteDetailUiItem.Summary>().single()
+        val fallbackTransfer = fallbackItems.filterIsInstance<RouteDetailUiItem.Walking>()
+            .single { it.kind == RouteDetailWalkingKind.TRANSFER }
+
+        assertEquals(378, fallbackSummary.walkingDistanceMeters)
+        assertFalse(fallbackSummary.isWalkingDistanceComplete)
+        assertFalse(fallbackSummary.isWalkingDistanceLoading)
+        assertTrue(fallbackTransfer.isUnavailable)
+        assertEquals(101, fallbackItems.filterIsInstance<RouteDetailUiItem.Walking>()
+            .single { it.kind == RouteDetailWalkingKind.ORIGIN }.distanceMeters)
+    }
+
+    @Test
+    fun everyWaitStateStaysOnTheSummaryOnly() {
         val states = buildList<WaitTimeState> {
             add(WaitTimeState.Loading)
             add(WaitTimeState.NoArrivals)
@@ -151,11 +218,43 @@ class RouteDetailUiFormatterTest {
         }
 
         states.forEach { state ->
-            val legs = RouteDetailUiFormatter.items(detail(), emptySet(), state)
-                .filterIsInstance<RouteDetailUiItem.BusLeg>()
-            assertEquals(state, legs.first().liveEta)
-            assertNull(legs[1].liveEta)
+            val items = RouteDetailUiFormatter.items(detail(), emptySet(), state)
+            assertEquals(
+                state,
+                items.filterIsInstance<RouteDetailUiItem.Summary>().single().firstLegEta
+            )
+            assertEquals(2, items.filterIsInstance<RouteDetailUiItem.BusLeg>().size)
         }
+    }
+
+    @Test
+    fun summarySegmentsAreCompleteStableAndUseAuthoritativeDurations() {
+        val states = mapOf(
+            "origin" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(100.0, 1.01)),
+            "transfer:0" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(80.0, 2.01)),
+            "destination" to RouteDetailWalkingState.CsdiSuccess(pedestrianRoute(60.0, 0.01))
+        )
+
+        val summary = RouteDetailUiFormatter.items(
+            detail(),
+            emptySet(),
+            WaitTimeState.Loading,
+            walkingSegments = states
+        ).filterIsInstance<RouteDetailUiItem.Summary>().single()
+
+        assertEquals(
+            listOf(
+                "walk-origin",
+                "leg-0-card",
+                "walk-transfer-0",
+                "leg-1-card",
+                "walk-destination"
+            ),
+            summary.segments.map { it.detailTargetId }
+        )
+        assertEquals(listOf(2, 21, 3, 21, 1), summary.segments.map { it.durationMinutes })
+        assertEquals(21, RouteDetailUiFormatter.plannedMinutesBetween("23:52", "00:13"))
+        assertNull(RouteDetailUiFormatter.plannedMinutesBetween("--", "00:13"))
     }
 
     @Test
@@ -230,5 +329,18 @@ class RouteDetailUiFormatterTest {
         longitude = 114.0,
         routeVariant = "variant",
         role = role
+    )
+
+    private fun pedestrianRoute(distance: Double, minutes: Double) = PedestrianRoute(
+        rawDistanceMeters = distance,
+        rawTimeMinutes = minutes,
+        paths = listOf(
+            PedestrianRoutePath(
+                listOf(
+                    PedestrianCoordinate(22.3, 114.1),
+                    PedestrianCoordinate(22.31, 114.11)
+                )
+            )
+        )
     )
 }

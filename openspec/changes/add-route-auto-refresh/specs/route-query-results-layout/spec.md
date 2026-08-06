@@ -84,6 +84,11 @@
 - **THEN** 系統 SHALL 保持原 stable identity 的選擇或已開啟內容
 - **AND** 系統 SHALL NOT 主動關閉、切換或重置該互動
 
+#### Scenario: 漸進 CSDI 重排共用視口錨點
+- **WHEN** 自動刷新基礎列表提交後，CSDI walking 更新令目前步行排序再次改變
+- **THEN** 系統 SHALL 使用與自動刷新相同的 stable-id＋pixel-offset 錨點政策提交新 projection
+- **AND** ETA、站點預覽、CSDI 與基礎結果 SHALL NOT 各自重複排序或無理由把列表移至頂部
+
 #### Scenario: 手動刷新保持既有回饋
 - **WHEN** 用戶明確觸發下拉刷新
 - **THEN** 系統 SHALL 繼續使用既有固定進行中浮層、成功勾號、失敗提示及手動刷新滾動語義

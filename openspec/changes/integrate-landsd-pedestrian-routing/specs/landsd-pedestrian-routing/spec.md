@@ -133,10 +133,16 @@
 - **WHEN** 路線組合命中但只有部分必要分段仍在成功 TTL 內
 - **THEN** 系統 SHALL 立即發布已有成功分段並只為缺失 key 建立或加入 flight
 
-#### Scenario: 失敗後重新進入或刷新
-- **WHEN** 某分段先前最終失敗，且使用者重新進入詳情或觸發新的路線刷新
-- **THEN** 系統 SHALL 重用仍有效的成功 cache 並重新嘗試該失敗分段
-- **AND** 先前失敗 SHALL NOT 阻止新的 flight
+#### Scenario: 失敗後手動刷新或重新進入
+- **WHEN** 某分段先前最終失敗，且使用者明確觸發手動路線刷新或重新進入詳情
+- **THEN** 系統 SHALL 重用仍有效的成功 cache 並允許該手勢繞過一次目前失敗退避以重新嘗試該分段
+- **AND** 先前失敗 SHALL NOT 被當作成功結果返回或阻止這一次新 flight
+
+#### Scenario: 自動刷新遵守失敗退避
+- **WHEN** `AUTOMATIC` 路線刷新在同一有向 request key 的失敗退避到期前建立新結果
+- **THEN** 系統 SHALL 保持該段 Citybus 回退而不建立新的 CSDI flight
+- **AND** 初次退避 SHALL 為 5 分鐘，連續失敗 SHALL 指數增加且最長不超過 30 分鐘
+- **AND** CSDI 成功 SHALL 立即清除該 key 的失敗退避資格
 
 #### Scenario: 成功快取過期
 - **WHEN** 成功分段或路線組合保存超過 24 小時
@@ -174,6 +180,11 @@
 - **WHEN** callback 的 query generation、page generation、walking domain generation、result identity 或 segment id 不再匹配目前 consumer
 - **THEN** 系統 SHALL 忽略該 callback
 - **AND** 已成功的新查詢或新頁面內容 SHALL 保持不變
+
+#### Scenario: 基礎結果完成後步行仍可漸進
+- **WHEN** 自動刷新已因基礎路線回應完成 cycle，而目前 query generation 的 CSDI flight 稍後完成
+- **THEN** 有效 callback SHALL 仍可更新對應 result id 與 segment id 的步行狀態
+- **AND** 該 callback SHALL NOT 延長已完成 cycle、重設排程或更新另一個 query generation
 
 ### Requirement: 步行診斷不得記錄可重建行程資料
 系統 SHALL 只以匿名 flight 識別與分類事件診斷 CSDI runtime，並 SHALL NOT 在 release 分析或日誌中保存可重建使用者行程的請求及回應資料。

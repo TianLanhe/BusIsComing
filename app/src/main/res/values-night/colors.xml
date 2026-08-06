@@ -18,6 +18,8 @@
     <color name="bus_state_surface">#FF172522</color>
     <color name="bus_chip_surface">#FF20312D</color>
     <color name="bus_chip_selected">#FF72D3C1</color>
+    <color name="bus_auto_refresh_notice_surface">#FF18322C</color>
+    <color name="bus_auto_refresh_notice_border">#FF72D3C1</color>
     <color name="bus_navigation_indicator">#FF294740</color>
     <color name="bus_on_accent">#FF08241E</color>
     <color name="bus_wait_accent">#FF72D3C1</color>
@@ -41,4 +43,6 @@
     <color name="route_map_bus_outline">#FF101715</color>
     <color name="route_map_marker_outline">#FFF7FAF8</color>
     <color name="route_map_selected">#FFFF8A70</color>
+    <color name="lands_department_logo_green">#FF39A248</color>
+    <color name="lands_department_logo_gray">#FF71706E</color>
 </resources>

@@ -65,6 +65,7 @@ import com.golink.busiscoming.data.model.RoutePinSnapshot
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
 import com.golink.busiscoming.data.model.WaitTimeState
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.model.WalkingTimeCalculator
 import com.golink.busiscoming.data.model.UpdateChannel
 import com.golink.busiscoming.data.model.UpdateCheckTrigger
@@ -77,6 +78,10 @@ import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.PinnedRouteRepository
 import com.golink.busiscoming.data.repository.RouteEndpointSnapshot
+import com.golink.busiscoming.data.repository.PedestrianRequestTrigger
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsEvents
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
+import com.golink.busiscoming.data.local.AutoRefreshNoticeStore
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.service.BusMonitorNotificationChannelManager
 import com.golink.busiscoming.service.MonitorNotificationHealth
@@ -146,6 +151,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var resultSummaryContainer: LinearLayout
     private lateinit var resultSummaryText: TextView
     private lateinit var resultUpdatedAtText: TextView
+    private lateinit var resultAutoRefreshProgress: ProgressBar
     private lateinit var resultStatusCard: MaterialCardView
     private lateinit var resultStatusProgress: ProgressBar
     private lateinit var resultStatusTitle: TextView
@@ -177,6 +183,8 @@ class MainActivity : AppCompatActivity() {
     private val sortDirection: SortDirection
         get() = routeQueryState.sortDirection
     private var currentQueryContext: QueryContext? = null
+    private var frequentAutoQuerySnapshot: RouteEndpointSnapshot? = null
+    private var activeFrequentQuerySnapshot: RouteEndpointSnapshot? = null
     private val isQueryInProgress: Boolean
         get() = routeQueryState.isQueryInProgress || activePinQueryId != null
     private var preserveSortOnNextResults: Boolean = false
@@ -193,6 +201,13 @@ class MainActivity : AppCompatActivity() {
     private var savedRouteUsageSession = SavedRouteUsageSession()
     private val shownLocationFallbackToasts = mutableSetOf<LocationFallbackToast>()
     private var appUpdateSubscription: AutoCloseable? = null
+    private lateinit var autoRefreshSettingsStore: RouteAutoRefreshSettingsStore
+    private var autoRefreshSettingsSubscription: AutoCloseable? = null
+    private var autoRefreshNoticeController: AutoRefreshNoticeController? = null
+    private var appStartedForAutoRefresh = false
+    private val frequentAutoRefreshController = ForegroundAutoRefreshController { generation ->
+        startFrequentAutomaticRefresh(generation)
+    }
     private var updatePromptDialog: AlertDialog? = null
     private var updateDownloadedSnackbar: Snackbar? = null
     private var hasRequestedAutomaticUpdateCheck = false
@@ -206,6 +221,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingFrequentViewport: RefreshViewport? = null
     private var activePinQueryId: Int? = null
     private var activePinQueryIsRefresh: Boolean = false
+    private var activePinQueryIsAutomatic: Boolean = false
     private var frequentProjectionGeneration: Int = 0
     private var pinReadFailureShown: Boolean = false
     private var pinGestureStartsInExcludedArea: Boolean = false
@@ -215,6 +231,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        autoRefreshSettingsStore = RouteAutoRefreshSettingsStore(this)
+        frequentAutoRefreshController.setInterval(autoRefreshSettingsStore.getInterval())
+        autoRefreshSettingsSubscription = RouteAutoRefreshSettingsEvents.observe { interval ->
+            mainHandler.post {
+                frequentAutoRefreshController.setInterval(interval)
+                renderFrequentAutoRefreshSummary()
+            }
+        }
         configureLegacyImeWindow()
         restoreSavedRouteUsageSession(savedInstanceState)
         restoreFrequentQueryState(savedInstanceState)
@@ -293,6 +317,11 @@ class MainActivity : AppCompatActivity() {
         removeLegacyImeNavigationListener()
         appUpdateSubscription?.close()
         appUpdateSubscription = null
+        autoRefreshSettingsSubscription?.close()
+        autoRefreshSettingsSubscription = null
+        autoRefreshNoticeController?.close()
+        autoRefreshNoticeController = null
+        frequentAutoRefreshController.close()
         updatePromptDialog?.dismiss()
         updatePromptDialog = null
         updateDownloadedSnackbar?.dismiss()
@@ -325,11 +354,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        appStartedForAutoRefresh = true
+        updateFrequentAutoRefreshEligibility()
         appUpdateSubscription?.close()
         appUpdateSubscription = AppUpdateRuntime.coordinator.observe(::handleAppUpdateState)
     }
 
     override fun onStop() {
+        appStartedForAutoRefresh = false
+        updateFrequentAutoRefreshEligibility()
+        autoRefreshNoticeController?.interrupt()
         appUpdateSubscription?.close()
         appUpdateSubscription = null
         super.onStop()
@@ -525,6 +559,15 @@ class MainActivity : AppCompatActivity() {
         resultSummaryContainer = root.findViewById(R.id.resultSummaryContainer)
         resultSummaryText = root.findViewById(R.id.resultSummaryText)
         resultUpdatedAtText = root.findViewById(R.id.resultUpdatedAtText)
+        resultAutoRefreshProgress = root.findViewById(R.id.resultAutoRefreshProgress)
+        autoRefreshNoticeController?.close()
+        autoRefreshNoticeController = AutoRefreshNoticeController(
+            context = this,
+            root = root.findViewById(R.id.autoRefreshNotice),
+            settingsStore = autoRefreshSettingsStore,
+            noticeStore = AutoRefreshNoticeStore(this),
+            onOpenSettings = ::openAutoRefreshSettings
+        )
         resultStatusCard = root.findViewById(R.id.resultStatusCard)
         resultStatusProgress = root.findViewById(R.id.resultStatusProgress)
         resultStatusTitle = root.findViewById(R.id.resultStatusTitle)
@@ -1043,6 +1086,7 @@ class MainActivity : AppCompatActivity() {
             .commit()
         destinationState.select(destination)
         (next as? SearchFragment)?.onDestinationSelected()
+        updateFrequentAutoRefreshEligibility()
         return true
     }
 
@@ -1246,6 +1290,58 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun startFrequentAutomaticRefresh(generation: Int) {
+        val queryContext = currentQueryContext as? QueryContext.Saved
+        val snapshot = frequentAutoQuerySnapshot
+        if (
+            !appStartedForAutoRefresh ||
+            destinationState.selected != TopLevelDestination.FREQUENT_ROUTES ||
+            queryContext == null ||
+            snapshot == null ||
+            isQueryInProgress
+        ) {
+            frequentAutoRefreshController.completeAutomatic(generation, success = false)
+            renderFrequentAutoRefreshSummary()
+            return
+        }
+        queryRoute(
+            origin = snapshot.origin,
+            destination = snapshot.destination,
+            sourceRoute = routeConfigRepository.getById(queryContext.routeId),
+            queryContext = queryContext,
+            recordUsage = false,
+            preserveSort = true,
+            automaticGeneration = generation
+        )
+    }
+
+    private fun updateFrequentAutoRefreshEligibility() {
+        if (!::autoRefreshSettingsStore.isInitialized) return
+        frequentAutoRefreshController.setInterval(autoRefreshSettingsStore.getInterval())
+        frequentAutoRefreshController.setEligible(
+            appStartedForAutoRefresh &&
+                destinationState.selected == TopLevelDestination.FREQUENT_ROUTES &&
+                currentQueryContext is QueryContext.Saved &&
+                frequentAutoQuerySnapshot != null &&
+                routeQueryState.updatedAtMillis != null
+        )
+        if (
+            !appStartedForAutoRefresh ||
+            destinationState.selected != TopLevelDestination.FREQUENT_ROUTES
+        ) {
+            autoRefreshNoticeController?.interrupt()
+        }
+        renderFrequentAutoRefreshSummary()
+    }
+
+    fun openAutoRefreshSettings() {
+        if (!::topLevelNav.isInitialized) return
+        topLevelNav.selectedItemId = R.id.navigation_settings
+        supportFragmentManager.executePendingTransactions()
+        (supportFragmentManager.findFragmentByTag(TAG_SETTINGS) as? SettingsFragment)
+            ?.focusAutoRefreshSelector()
+    }
+
     private fun queryRoute(
         origin: Place,
         destination: Place,
@@ -1253,11 +1349,17 @@ class MainActivity : AppCompatActivity() {
         queryContext: QueryContext,
         recordUsage: Boolean = true,
         preserveSort: Boolean = false,
-        isRefresh: Boolean = false
+        isRefresh: Boolean = false,
+        automaticGeneration: Int? = null
     ) {
         if (isQueryInProgress) {
             resultSwipeRefresh.isRefreshing = false
+            automaticGeneration?.let { frequentAutoRefreshController.completeAutomatic(it, success = false) }
             return
+        }
+
+        if (automaticGeneration == null) {
+            frequentAutoRefreshController.setExternalBusy(true)
         }
 
         val shouldRecordRouteUsage = sourceRoute?.let { route ->
@@ -1273,11 +1375,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         currentQueryContext = queryContext
+        activeFrequentQuerySnapshot = RouteEndpointSnapshot(origin, destination)
         frequentProjectionGeneration += 1
         preserveSortOnNextResults = preserveSort
-        routeQueryState.begin(refresh = isRefresh)
+        routeQueryState.begin(refresh = isRefresh || automaticGeneration != null)
         renderHomeShell()
-        if (isRefresh) {
+        if (automaticGeneration != null) {
+            renderFrequentAutoRefreshSummary()
+        } else if (isRefresh) {
             resultSwipeRefresh.isRefreshing = false
         } else {
             showLoadingState()
@@ -1287,7 +1392,7 @@ class MainActivity : AppCompatActivity() {
             destination,
             object : RouteQueryCoordinator.Callback {
                 override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
-                    acceptInitialRoutesAwaitingPins(queryId, routes)
+                    acceptInitialRoutesAwaitingPins(queryId, routes, automaticGeneration)
                 }
 
                 override fun onRouteWaitTimeUpdated(
@@ -1306,11 +1411,26 @@ class MainActivity : AppCompatActivity() {
                     updateRouteStopPreview(routeId, preview)
                 }
 
+                override fun onRouteWalkingDistanceUpdated(
+                    queryId: Int,
+                    routeId: String,
+                    state: WalkingDistanceDisplayState
+                ) {
+                    if (!routeQueryState.updateWalkingDistance(routeId, state)) return
+                    if (activePinQueryId != null) return
+                    renderProjectedResultsPreservingViewport()
+                }
+
                 override fun onFailure(queryId: Int, error: Throwable) {
                     Log.e(LOG_TAG, "Bus route query failed", error)
                     savedRoutePinLoadGate.invalidate()
                     activePinQueryId = null
-                    if (isRefresh) {
+                    if (automaticGeneration != null) {
+                        routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
+                        frequentAutoRefreshController.completeAutomatic(automaticGeneration, success = false)
+                        renderFrequentAutoRefreshSummary()
+                        updateSwipeRefreshState()
+                    } else if (isRefresh) {
                         handleRefreshFailure(queryId)
                     } else {
                         routeQueryState.fail(getString(R.string.route_query_failed), preserveResults = false)
@@ -1318,11 +1438,20 @@ class MainActivity : AppCompatActivity() {
                         displayFailure()
                         finishQueryLoading()
                     }
+                    if (automaticGeneration == null) {
+                        frequentAutoRefreshController.setExternalBusy(false)
+                    }
                 }
+            },
+            walkingTrigger = when {
+                automaticGeneration != null -> PedestrianRequestTrigger.AUTOMATIC
+                isRefresh -> PedestrianRequestTrigger.MANUAL
+                else -> PedestrianRequestTrigger.INITIAL
             }
         )
         activePinQueryId = queryId
         activePinQueryIsRefresh = isRefresh
+        activePinQueryIsAutomatic = automaticGeneration != null
         val journeyId = (queryContext as QueryContext.Saved).routeId
         savedRoutePinLoadGate.begin(
             queryId = queryId,
@@ -1336,13 +1465,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun acceptInitialRoutesAwaitingPins(queryId: Int, routes: List<BusRouteOption>) {
+    private fun acceptInitialRoutesAwaitingPins(
+        queryId: Int,
+        routes: List<BusRouteOption>,
+        automaticGeneration: Int? = null
+    ) {
         routeQueryState.complete(
             routes = routes,
             preserveSort = preserveSortOnNextResults,
             updatedAtMillis = System.currentTimeMillis()
         )
         preserveSortOnNextResults = false
+        frequentAutoQuerySnapshot = activeFrequentQuerySnapshot
+        autoRefreshNoticeController?.showAfterSuccessfulQuery(
+            autoRefreshSettingsStore.getInterval()
+        )
+        if (automaticGeneration != null) {
+            frequentAutoRefreshController.completeAutomatic(automaticGeneration, success = true)
+            renderFrequentAutoRefreshSummary()
+        } else {
+            frequentAutoRefreshController.setExternalBusy(false)
+            frequentAutoRefreshController.recordSuccessfulBaseline()
+        }
+        updateFrequentAutoRefreshEligibility()
         savedRoutePinLoadGate.acceptRoutes(queryId, routes)?.let(::finishPinGatedQuery)
     }
 
@@ -1387,7 +1532,15 @@ class MainActivity : AppCompatActivity() {
         }
         updateSortControls()
         updateResultSummary(completion.routes)
-        if (activePinQueryIsRefresh) {
+        if (activePinQueryIsAutomatic) {
+            updateResultSummary(completion.routes)
+            if (completion.routes.isEmpty()) {
+                displayResults(emptyList())
+            } else {
+                renderProjectedResultsPreservingViewport()
+            }
+            updateSwipeRefreshState()
+        } else if (activePinQueryIsRefresh) {
             handleRefreshSuccess(completion.queryId, completion.routes)
         } else {
             displayResults(routeQueryState.rawResults)
@@ -2076,19 +2229,31 @@ class MainActivity : AppCompatActivity() {
             return
         }
         resultSummaryText.text = RouteResultCardFormatter.resultSummary(routes, localizedText())
-        val updatedAt = routeQueryState.updatedAtMillis ?: System.currentTimeMillis()
-        resultUpdatedAtText.text = getString(
-            R.string.updated_at,
-            RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))
-        )
         resultSummaryContainer.visibility = View.VISIBLE
+        renderFrequentAutoRefreshSummary()
         updateStickyResultControlsVisibility()
+    }
+
+    private fun renderFrequentAutoRefreshSummary() {
+        if (!::resultUpdatedAtText.isInitialized || resultSummaryContainer.visibility != View.VISIBLE) return
+        val refreshing = frequentAutoRefreshController.state is ForegroundAutoRefreshState.Refreshing
+        resultAutoRefreshProgress.visibility = if (refreshing) View.VISIBLE else View.GONE
+        resultUpdatedAtText.text = if (refreshing) {
+            getString(R.string.auto_refresh_updating)
+        } else {
+            val updatedAt = routeQueryState.updatedAtMillis ?: System.currentTimeMillis()
+            getString(
+                R.string.updated_at,
+                RESULT_TIME_FORMAT.get()!!.format(Date(updatedAt))
+            )
+        }
     }
 
     private fun hideResultSummary() {
         resultSummaryContainer.visibility = View.GONE
         resultSummaryText.text = ""
         resultUpdatedAtText.text = ""
+        resultAutoRefreshProgress.visibility = View.GONE
         updateStickyResultControlsVisibility()
     }
 
@@ -2106,6 +2271,10 @@ class MainActivity : AppCompatActivity() {
     private fun clearResults() {
         invalidateActiveQuery()
         currentQueryContext = null
+        frequentAutoQuerySnapshot = null
+        activeFrequentQuerySnapshot = null
+        frequentAutoRefreshController.invalidate()
+        updateFrequentAutoRefreshEligibility()
         routeQueryState.clear()
         setQueryLoading(false)
         preserveSortOnNextResults = false
@@ -2123,7 +2292,10 @@ class MainActivity : AppCompatActivity() {
         routeQueryCoordinator.invalidate()
         savedRoutePinLoadGate.invalidate()
         activePinQueryId = null
+        activePinQueryIsRefresh = false
+        activePinQueryIsAutomatic = false
         routeQueryState.cancel()
+        frequentAutoRefreshController.setExternalBusy(false)
         cancelRefreshFeedback()
         if (::queryButton.isInitialized) {
             setQueryLoading(false)

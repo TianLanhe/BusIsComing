@@ -20,6 +20,8 @@ class AboutActivity : AppCompatActivity() {
         findViewById<View>(R.id.aboutBackButton).setOnClickListener { finish() }
         findViewById<TextView>(R.id.aboutVersionText).text =
             "${getString(R.string.settings_version_prefix)} ${BuildConfig.VERSION_NAME}"
+        findViewById<TextView>(R.id.aboutLucideLicense).text =
+            resources.openRawResource(R.raw.lucide_license).bufferedReader().use { it.readText() }
         findViewById<View>(R.id.aboutWebsiteLink).setOnClickListener {
             AppSupportActions.openWebsite(this)
         }
