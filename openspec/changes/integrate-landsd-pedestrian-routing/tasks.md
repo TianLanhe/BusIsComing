@@ -29,7 +29,7 @@
 - [x] 4.3 更新 `BusRouteCardBinder`／formatter 與繁中、簡中、英文資源，使 cache 未命中時只顯示 `查詢中…`／`查询中…`／`Checking…`，成功或回退只顯示整數米且不加來源或「約」。
 - [x] 4.4 更新 `BusRouteSorter`、`PinnedRouteProjector` 及常用／搜尋結果狀態，使數值依方向排序、Loading 永遠置後、相同值與 Loading 按初始索引穩定；只有步行排序因更新移位且置頂 token 區不動。
 - [x] 4.5 擴展 coordinator、formatter、adapter diff 與 sorting 測試，覆蓋 cache 首幀、亂序／重複 callback、任一段失敗立即整體回退、步行與非步行排序、常用置頂、搜尋全量及卡片總耗時／到達／ETA 不變。
-- [ ] 4.6 以可跨 configuration change 的邏輯查詢會話保存訂閱與原始步行 snapshot，驗證旋轉、主題及語言切換只替換 observer／重新格式化，不重請 CSDI 或讓舊 callback 覆蓋新查詢。
+- [x] 4.6 以可跨 configuration change 的邏輯查詢會話保存訂閱與原始步行 snapshot，驗證旋轉、主題及語言切換只替換 observer／重新格式化，不重請 CSDI 或讓舊 callback 覆蓋新查詢。
 - [x] 4.7 把 ETA、站點預覽、CSDI 與自動刷新基礎結果接入同一結果 projection，補充基礎結果已完成 cycle 後 CSDI 仍可更新、下一 query generation 取消舊 consumer、只排序一次及 stable-id＋pixel-offset 視口錨點測試。
 
 ## 5. 詳情分段狀態、摘要與時間線
@@ -38,7 +38,7 @@
 - [x] 5.2 讓詳情邏輯會話訂閱共享 pedestrian runtime，重用卡片成功 cache、提升排隊 flight，並在 configuration change 保持訂閱、真正返回時解除；Citybus 詳情、ETA、巴士幾何及 CSDI SHALL 保持資料域並發與局部降級。
 - [x] 5.3 更新 `RouteDetailUiFormatter`／adapter：成功段展示向上取整米數與至少 1 分鐘的約略時間，SameStop 不顯示 0 值，失敗段只顯示 Citybus 分段米數，連 Citybus 米數亦缺失時顯示三語「距離暫不可用」。
 - [x] 5.4 更新詳情摘要：等待必要段時顯示查詢中，全部成功時用原始 CSDI 分段先加總再向上取整，任一最終失敗時立即完整回退 Citybus 卡片總距離且保留其他成功分段。
-- [ ] 5.5 加入 reducer、formatter、adapter 與 Activity 整合測試，證明 CSDI 只影響分段步行距離／約略時間／軌跡，Citybus 總耗時、預計到達、巴士段計劃時間與首程 ETA 均不被重算。
+- [x] 5.5 加入 reducer、formatter、adapter 與 Activity 整合測試，證明 CSDI 只影響分段步行距離／約略時間／軌跡，Citybus 總耗時、預計到達、巴士段計劃時間與首程 ETA 均不被重算。
 
 ## 6. Google 地圖步行軌跡、相機與署名
 
@@ -46,20 +46,20 @@
 - [x] 6.2 更新 `RouteMapPresentationBuilder` 與 `GoogleRouteMapRenderer`，移除端點直線步行示意，只沿每個 CSDI path 的同一有序 geometry 以屏幕投影固定間距＋局部切線的較粗灰色開放折角增量渲染；不得顯示灰色底線或在子路徑間補線，單段失敗不得清空 marker、巴士幾何或其他成功步行 path。
 - [x] 6.3 擴展相機 policy 與測試：Map 首幀固定香港、可靠端點／站點結構到達後最多自動 fit 一次、使用者手勢取得相機所有權、晚到巴士幾何／步行 paths 不移動相機，全覽按目前全部可靠內容重新計算。
 - [x] 6.4 按官方條款加入地政總署官方標誌、三語雙行精簡署名及可開啟的完整來源／版權／免責說明；只在至少一條 CSDI path 實際顯示時出現，沒有 path 時隱藏。
-- [ ] 6.5 更新地圖 padding／安全區、站名碰撞保留矩形與無障礙語義，驗證 CSDI 署名不遮擋 Google Logo、Google 法律文字、返回、目前位置、全覽控件、站名或 bottom sheet，且不重新引入常駐路線圖例。
-- [ ] 6.6 擴展 renderer、camera、Activity 及 process recreation 測試，覆蓋多 paths、漸進新增／移除、過期 callback、先手勢後結構、全覽、署名顯隱及重新開啟恢復初始摘要／相機。
+- [x] 6.5 更新地圖 padding／安全區、站名碰撞保留矩形與無障礙語義，驗證 CSDI 署名不遮擋 Google Logo、Google 法律文字、返回、目前位置、全覽控件、站名或 bottom sheet，且不重新引入常駐路線圖例。
+- [x] 6.6 擴展 renderer、camera、Activity 及 process recreation 測試，覆蓋多 paths、漸進新增／移除、過期 callback、先手勢後結構、全覽、署名顯隱及重新開啟恢復初始摘要／相機。
 
 ## 7. 多語、無障礙與整合回歸
 
-- [ ] 7.1 完整審校繁中、獨立簡中及英文的查詢中、距離不可用、約略時間、CSDI 來源／版權／免責與 content description，並檢查窄屏、大字體及 RTL 非需求邊界不造成裁切或核心內容丟失。
+- [x] 7.1 完整審校繁中、獨立簡中及英文的查詢中、距離不可用、約略時間、CSDI 來源／版權／免責與 content description，並檢查窄屏、大字體及 RTL 非需求邊界不造成裁切或核心內容丟失。
 - [x] 7.2 執行受影響的 repository、parser、cache、coordinator、sorter、formatter、reducer、presentation、renderer 與 camera focused tests，修復任何 Citybus 詳情、ETA、置頂或監控回退回歸。
-- [ ] 7.3 使用 fake Citybus／CSDI 延遲與失敗矩陣驗證最多 5 個並發、共享端點不隨候選路線線性增加、不同完成次序內容單調、取消／重入及成功 cache 與失敗重試。
+- [x] 7.3 使用 fake Citybus／CSDI 延遲與失敗矩陣驗證最多 5 個並發、共享端點不隨候選路線線性增加、不同完成次序內容單調、取消／重入及成功 cache 與失敗重試。
 
 ## 8. 裝置驗收、完整構建與技術債
 
-- [ ] 8.1 在不接管既有模擬器的前提下，定義並啟動本任務自有 Google Play／Google Maps 設備畫像，驗收香港首幀、卡片漸進距離、詳情局部成功、真實多子路徑、相機所有權、全覽及署名安全區，完成後關閉該模擬器。
-- [ ] 8.2 在繁中、簡中、英文、淺色、深色、約 360dp、font scale 1.3／2.0 與 TalkBack 場景驗收卡片短文案、時間線、署名、觸控／朗讀語義及 Google attribution 不被遮擋。
-- [ ] 8.3 對少量可復現香港端點執行只讀 Citybus + CSDI 真實抽查，核對固定參數、距離／時間／多 paths、30 米門禁及 single-flight 計數；記錄外部可用性限制且 SHALL NOT 讓一般測試依賴服務成功。
+- [x] 8.1 在不接管既有模擬器的前提下，定義並啟動本任務自有 Google Play／Google Maps 設備畫像，驗收香港首幀、卡片漸進距離、詳情局部成功、真實多子路徑、相機所有權、全覽及署名安全區，完成後關閉該模擬器。
+- [x] 8.2 在繁中、簡中、英文、淺色、深色、約 360dp、font scale 1.3／2.0 與 TalkBack 場景驗收卡片短文案、時間線、署名、觸控／朗讀語義及 Google attribution 不被遮擋。
+- [x] 8.3 對少量可復現香港端點執行只讀 Citybus + CSDI 真實抽查，核對固定參數、距離／時間／多 paths、30 米門禁及 single-flight 計數；記錄外部可用性限制且 SHALL NOT 讓一般測試依賴服務成功。
 - [x] 8.4 執行 `./gradlew build`，確認生產 HTTP 未被 fixture 取代、沒有新增 key／權限／SQLite schema／背景服務或敏感日誌，並核對全部 OpenSpec scenarios 已由自動化或明確人工證據覆蓋。
 - [x] 8.5 僅在實作與上述驗證完成後更新 `docs/technical-debt.md`：記錄 Citybus 總耗時／巴士時間與 CSDI 固定 1 m/s 分段分鐘仍不一致、通知監控個人步速保持獨立，以及以統一步速、時間依賴公交、轉乘重算、清楚標示與回歸測試作關閉條件。
 - [x] 8.6 重新執行 `openspec validate integrate-landsd-pedestrian-routing --strict`，如實勾選 tasks，檢查 `git status --short` 與 staged diff 只包含本 change 授權範圍後按 apply 流程提交。

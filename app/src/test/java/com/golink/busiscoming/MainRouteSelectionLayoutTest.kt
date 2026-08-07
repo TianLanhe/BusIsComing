@@ -11,8 +11,8 @@ class MainRouteSelectionLayoutTest {
     private val placePairLayout = File("src/main/res/layout/view_place_pair_editor.xml").readText()
     private val mainActivity = File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val searchFragment = File("src/main/java/com/golink/busiscoming/ui/main/SearchFragment.kt").readText()
-    private val routeQueryCoordinator =
-        File("src/main/java/com/golink/busiscoming/ui/main/RouteQueryCoordinator.kt").readText()
+    private val routeQuerySession =
+        File("src/main/java/com/golink/busiscoming/ui/main/RouteQuerySession.kt").readText()
 
     @Test
     fun frequentRoutesKeepsSavedRouteQueryAndResultsSurface() {
@@ -92,8 +92,8 @@ class MainRouteSelectionLayoutTest {
         assertTrue(searchLayout.contains("@+id/searchSaveButton"))
         assertTrue(searchFragment.contains("PlaceInputController"))
         assertTrue(searchFragment.contains("TemporaryRouteSaveDialog.show"))
-        assertTrue(searchFragment.contains("RouteQueryCoordinator"))
-        assertTrue(routeQueryCoordinator.contains("searchRoutesProgressively"))
+        assertTrue(searchFragment.contains("RouteQuerySessionViewModel"))
+        assertTrue(routeQuerySession.contains("searchRoutesProgressively"))
     }
 
     @Test

@@ -15,6 +15,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.core.view.doOnNextLayout
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -29,20 +30,16 @@ import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.local.AutoRefreshNoticeStore
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.Place
-import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.data.model.RouteConfigValidationError
 import com.golink.busiscoming.data.model.RouteConfigValidator
 import com.golink.busiscoming.data.model.SortDirection
 import com.golink.busiscoming.data.model.SortField
-import com.golink.busiscoming.data.model.WaitTimeState
-import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.repository.BusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusPlaceSearchRepository
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
-import com.golink.busiscoming.data.repository.PedestrianRequestTrigger
 import com.golink.busiscoming.ui.common.PlaceInputController
 import com.golink.busiscoming.ui.common.PlacePairEditorView
 import com.golink.busiscoming.ui.common.ResultListDrivenAppBar
@@ -59,17 +56,12 @@ import java.util.Locale
 class SearchFragment : Fragment() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val searchExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val queryExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val busRouteRepository: BusRouteRepository = busRouteRepositoryFactory()
+    private val routeQuerySessionViewModel by lazy {
+        ViewModelProvider(this)[RouteQuerySessionViewModel::class.java]
+    }
     private val currentPlaceRequestState = SearchCurrentPlaceRequestState()
     private val candidateLocationSnapshotRequestState =
         SearchCandidateLocationSnapshotRequestState()
-    private val routeQueryCoordinator = RouteQueryCoordinator(
-        repository = busRouteRepository,
-        executor = queryExecutor,
-        postToOwner = { runnable -> mainHandler.post(runnable) },
-        isOwnerActive = ::isViewActive
-    )
     private var originController: PlaceInputController? = null
     private var destinationController: PlaceInputController? = null
     private val attributionState = SearchPlaceAttributionState()
@@ -110,6 +102,10 @@ class SearchFragment : Fragment() {
     private var pendingScrollOffset: Int = 0
     private var refreshFeedbackGeneration: Int = 0
     private var refreshFinishRunnable: Runnable? = null
+    private var activeRouteQueryRequest: ActiveSearchRouteQueryRequest? = null
+    private var appliedRouteQueryId: Int? = null
+    private val routeQuerySessionObserver: (RouteQuerySessionSnapshot) -> Unit =
+        ::onRouteQuerySessionSnapshot
     private lateinit var resultAdapter: BusRouteAdapter
     private lateinit var etaSheet: EtaArrivalsBottomSheet
     private lateinit var resultList: RecyclerView
@@ -150,6 +146,7 @@ class SearchFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        routeQuerySessionViewModel.initialize(busRouteRepositoryFactory)
         restoredOrigin = savedInstanceState?.placeFor(STATE_ORIGIN)
         restoredDestination = savedInstanceState?.placeFor(STATE_DESTINATION)
         restoredOriginInput = savedInstanceState?.getString(STATE_ORIGIN_INPUT)
@@ -392,6 +389,7 @@ class SearchFragment : Fragment() {
                 true
             }
         }
+        routeQuerySessionViewModel.observe(routeQuerySessionObserver)
     }
 
     override fun onViewStateRestored(savedInstanceState: Bundle?) {
@@ -433,8 +431,10 @@ class SearchFragment : Fragment() {
         updateSearchAutoRefreshEligibility()
         invalidateCurrentPlaceRequest()
         candidateLocationSnapshotRequestState.resetForNextGeneration()
-        routeQueryCoordinator.invalidate()
-        routeQueryState.cancel()
+        if (!isConfigurationRecreation()) {
+            routeQuerySessionViewModel.invalidate()
+            routeQueryState.cancel()
+        }
         presentationState.cancelQuery()
         suppressCancelledQueryStatus = true
         cancelRefreshFeedback()
@@ -452,8 +452,11 @@ class SearchFragment : Fragment() {
         autoRefreshNoticeController = null
         invalidateCurrentPlaceRequest()
         candidateLocationSnapshotRequestState.resetForNextGeneration()
-        routeQueryCoordinator.invalidate()
-        routeQueryState.cancel()
+        routeQuerySessionViewModel.clearObserver(routeQuerySessionObserver)
+        if (!isConfigurationRecreation()) {
+            routeQuerySessionViewModel.invalidate()
+            routeQueryState.cancel()
+        }
         cancelRefreshFeedback()
         originController?.dispose()
         destinationController?.dispose()
@@ -508,7 +511,6 @@ class SearchFragment : Fragment() {
     override fun onDestroy() {
         autoRefreshController.close()
         searchExecutor.shutdownNow()
-        queryExecutor.shutdownNow()
         mainHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -671,99 +673,169 @@ class SearchFragment : Fragment() {
         renderSearchUi()
         renderSearchAutoRefreshSummary()
         updateRefreshEnabled()
-        routeQueryCoordinator.query(origin, destination, object : RouteQueryCoordinator.Callback {
-            override fun onInitialRoutes(queryId: Int, routes: List<BusRouteOption>) {
-                swipeRefresh.isRefreshing = false
-                if (isAutomatic) {
-                    if (!autoRefreshController.completeAutomatic(requireNotNull(automaticGeneration), success = true)) {
-                        routeQueryState.cancel()
-                        renderSearchAutoRefreshSummary()
-                        return
-                    }
-                    displayAutomaticResults(routes, origin, destination)
-                } else if (isRefresh) {
-                    handleRefreshSuccess(
-                        refreshToken = requireNotNull(refreshToken),
-                        routes = routes,
-                        origin = origin,
-                        destination = destination,
-                        preserveSort = preserveSort
-                    )
+        val trigger = when {
+            isAutomatic -> RouteQueryTrigger.AUTOMATIC
+            isRefresh -> RouteQueryTrigger.MANUAL
+            else -> RouteQueryTrigger.INITIAL
+        }
+        val queryId = routeQuerySessionViewModel.start(origin, destination, trigger)
+        if (queryId == null) {
+            routeQueryState.cancel()
+            refreshToken?.let(::handleRefreshFailure)
+            if (isAutomatic) {
+                autoRefreshController.completeAutomatic(requireNotNull(automaticGeneration), success = false)
+                renderSearchAutoRefreshSummary()
+            } else {
+                autoRefreshController.setExternalBusy(false)
+            }
+            updateRefreshEnabled()
+            return
+        }
+        appliedRouteQueryId = null
+        activeRouteQueryRequest = ActiveSearchRouteQueryRequest(
+            queryId = queryId,
+            origin = origin,
+            destination = destination,
+            preserveSort = preserveSort,
+            isRefresh = isRefresh,
+            automaticGeneration = automaticGeneration,
+            refreshToken = refreshToken
+        )
+    }
+
+    private fun onRouteQuerySessionSnapshot(snapshot: RouteQuerySessionSnapshot) {
+        if (!isViewActive()) return
+        when (snapshot.phase) {
+            RouteQuerySessionPhase.IN_FLIGHT -> return
+            RouteQuerySessionPhase.FAILED -> handleRouteQuerySessionFailure(snapshot)
+            RouteQuerySessionPhase.BASE_AVAILABLE -> {
+                if (appliedRouteQueryId == snapshot.queryId) {
+                    applyProgressiveRouteSnapshot(snapshot.routes)
                 } else {
-                    displayInitialResults(
-                        routes = routes,
-                        preserveSort = preserveSort,
-                        origin = origin,
-                        destination = destination,
-                        updatePresentation = true,
-                        queryId = queryId
-                    )
+                    appliedRouteQueryId = snapshot.queryId
+                    handleRouteQuerySessionBase(snapshot)
                 }
-                if (!isAutomatic) {
-                    autoQuerySnapshot = SearchQuerySnapshot(origin, destination)
-                    autoRefreshController.setExternalBusy(false)
-                    autoRefreshController.recordSuccessfulBaseline()
-                    updateSearchAutoRefreshEligibility()
+            }
+        }
+    }
+
+    private fun handleRouteQuerySessionBase(snapshot: RouteQuerySessionSnapshot) {
+        swipeRefresh.isRefreshing = false
+        restoredShouldRequery = false
+        val request = activeRouteQueryRequest?.takeIf { it.queryId == snapshot.queryId }
+        val origin = request?.origin ?: snapshot.origin
+        val destination = request?.destination ?: snapshot.destination
+        val automaticGeneration = request?.automaticGeneration
+        when {
+            automaticGeneration != null -> {
+                if (!autoRefreshController.completeAutomatic(automaticGeneration, success = true)) {
+                    routeQueryState.cancel()
+                    renderSearchAutoRefreshSummary()
+                    return
                 }
-                autoRefreshNoticeController?.showAfterSuccessfulQuery(
-                    autoRefreshSettingsStore.getInterval()
+                displayAutomaticResults(snapshot.routes, origin, destination)
+            }
+            request?.isRefresh == true -> handleRefreshSuccess(
+                refreshToken = requireNotNull(request.refreshToken),
+                routes = snapshot.routes,
+                origin = origin,
+                destination = destination,
+                preserveSort = request.preserveSort
+            )
+            else -> {
+                if (presentationState.querySnapshot == null) {
+                    presentationState.beginQuery(origin, destination)
+                }
+                displayInitialResults(
+                    routes = snapshot.routes,
+                    preserveSort = request?.preserveSort ?: true,
+                    origin = origin,
+                    destination = destination,
+                    updatePresentation = true,
+                    queryId = snapshot.queryId
                 )
             }
+        }
+        autoQuerySnapshot = SearchQuerySnapshot(origin, destination)
+        if (automaticGeneration == null) {
+            autoRefreshController.setExternalBusy(false)
+            autoRefreshController.recordSuccessfulBaseline()
+        }
+        updateSearchAutoRefreshEligibility()
+        autoRefreshNoticeController?.showAfterSuccessfulQuery(
+            autoRefreshSettingsStore.getInterval()
+        )
+        activeRouteQueryRequest = null
+    }
 
-            override fun onRouteWaitTimeUpdated(
-                queryId: Int,
-                routeId: String,
-                waitTimeState: WaitTimeState
-            ) {
-                updateRoute(routeId) { it.copy(waitTimeState = waitTimeState) }
+    private fun handleRouteQuerySessionFailure(snapshot: RouteQuerySessionSnapshot) {
+        if (appliedRouteQueryId == snapshot.queryId) return
+        appliedRouteQueryId = snapshot.queryId
+        swipeRefresh.isRefreshing = false
+        val request = activeRouteQueryRequest?.takeIf { it.queryId == snapshot.queryId }
+        val automaticGeneration = request?.automaticGeneration
+        when {
+            automaticGeneration != null -> {
+                routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
+                autoRefreshController.completeAutomatic(automaticGeneration, success = false)
+                renderSearchAutoRefreshSummary()
+                updateRefreshEnabled()
             }
-
-            override fun onRouteStopPreviewUpdated(
-                queryId: Int,
-                routeId: String,
-                preview: RouteCardStopPreview
-            ) {
-                updateRoute(routeId) { it.copy(stopPreview = preview) }
+            request?.isRefresh == true -> handleRefreshFailure(requireNotNull(request.refreshToken))
+            snapshot.routes.isNotEmpty() -> {
+                routeQueryState.complete(snapshot.routes, preserveSort = true, updatedAtMillis = System.currentTimeMillis())
+                routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
+                displayInitialResults(
+                    snapshot.routes,
+                    preserveSort = true,
+                    origin = snapshot.origin,
+                    destination = snapshot.destination,
+                    updatePresentation = true,
+                    queryId = snapshot.queryId
+                )
             }
-
-            override fun onRouteWalkingDistanceUpdated(
-                queryId: Int,
-                routeId: String,
-                state: WalkingDistanceDisplayState
-            ) {
-                updateRoute(routeId) { it.copy(walkingDistanceDisplayState = state) }
+            else -> {
+                routeQueryState.fail(getString(R.string.search_failed), preserveResults = false)
+                presentationState.failQuery()
+                clearSuccessfulQuery()
+                resultAdapter.submitList(emptyList())
+                resultList.visibility = View.GONE
+                routeResultControls.visibility = View.GONE
+                sortControls.visibility = View.GONE
+                renderSearchUi()
+                updateRefreshEnabled()
             }
+        }
+        if (automaticGeneration == null) {
+            autoRefreshController.setExternalBusy(false)
+            updateSearchAutoRefreshEligibility()
+        }
+        activeRouteQueryRequest = null
+    }
 
-            override fun onFailure(queryId: Int, error: Throwable) {
-                swipeRefresh.isRefreshing = false
-                if (isAutomatic) {
-                    routeQueryState.fail(getString(R.string.refresh_failed), preserveResults = true)
-                    autoRefreshController.completeAutomatic(requireNotNull(automaticGeneration), success = false)
-                    renderSearchAutoRefreshSummary()
-                    updateRefreshEnabled()
-                } else if (isRefresh) {
-                    handleRefreshFailure(requireNotNull(refreshToken))
-                } else {
-                    routeQueryState.fail(getString(R.string.search_failed), preserveResults = false)
-                    presentationState.failQuery()
-                    clearSuccessfulQuery()
-                    resultAdapter.submitList(emptyList())
-                    resultList.visibility = View.GONE
-                    routeResultControls.visibility = View.GONE
-                    sortControls.visibility = View.GONE
-                    renderSearchUi()
-                    updateRefreshEnabled()
+    private fun applyProgressiveRouteSnapshot(routes: List<BusRouteOption>) {
+        if (!routeQueryState.replaceProgressiveSnapshot(routes)) return
+        val layoutManager = resultList.layoutManager as? LinearLayoutManager
+        val oldItems = resultAdapter.currentList.toList()
+        val oldPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
+        val anchorId = oldItems.getOrNull(oldPosition)?.stableId
+        val anchorOffset = if (oldPosition == RecyclerView.NO_POSITION) 0 else {
+            layoutManager?.findViewByPosition(oldPosition)?.top ?: 0
+        }
+        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults)) {
+            val nextPosition = RouteListViewportAnchor.positionAfterRefresh(
+                oldItems,
+                resultAdapter.currentList,
+                anchorId,
+                oldPosition
+            )
+            if (nextPosition >= 0) {
+                resultList.post {
+                    (resultList.layoutManager as? LinearLayoutManager)
+                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
                 }
-                if (!isAutomatic) {
-                    autoRefreshController.setExternalBusy(false)
-                    updateSearchAutoRefreshEligibility()
-                }
             }
-        }, walkingTrigger = when {
-            isAutomatic -> PedestrianRequestTrigger.AUTOMATIC
-            isRefresh -> PedestrianRequestTrigger.MANUAL
-            else -> PedestrianRequestTrigger.INITIAL
-        })
+        }
     }
 
     private fun startAutomaticRefresh(generation: Int) {
@@ -847,6 +919,10 @@ class SearchFragment : Fragment() {
 
     private fun restoreSubmittedQueryIfNeeded() {
         if (!restoredShouldRequery) return
+        if (routeQuerySessionViewModel.latestSnapshot != null) {
+            restoredShouldRequery = false
+            return
+        }
         restoredShouldRequery = false
         if (originController?.selectedPlace != null && destinationController?.selectedPlace != null) {
             query(preserveSort = true)
@@ -1184,7 +1260,7 @@ class SearchFragment : Fragment() {
         }
         hasSubmittedQuery = false
         suppressCancelledQueryStatus = false
-        routeQueryCoordinator.invalidate()
+        routeQuerySessionViewModel.invalidate()
         routeQueryState.clear()
         presentationState.onInputChanged()
         cancelRefreshFeedback()
@@ -1219,7 +1295,7 @@ class SearchFragment : Fragment() {
         if (!presentationState.beginEditingResults()) return
         updateSearchAutoRefreshEligibility()
         if (routeQueryState.isRefreshing) {
-            routeQueryCoordinator.invalidate()
+            routeQuerySessionViewModel.invalidate()
             routeQueryState.cancel()
             cancelRefreshFeedback()
             swipeRefresh.isRefreshing = false
@@ -1375,6 +1451,19 @@ class SearchFragment : Fragment() {
         currentPlaceRequestState.invalidate()
         originController?.setExternalLoading(false)
     }
+
+    private fun isConfigurationRecreation(): Boolean =
+        activity?.isChangingConfigurations == true
+
+    private data class ActiveSearchRouteQueryRequest(
+        val queryId: Int,
+        val origin: Place,
+        val destination: Place,
+        val preserveSort: Boolean,
+        val isRefresh: Boolean,
+        val automaticGeneration: Int?,
+        val refreshToken: Int?
+    )
 
     private data class StatusCardContent(
         val title: Int,

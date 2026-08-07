@@ -112,6 +112,15 @@ class RouteQueryState {
         return updateInternal(routeId, transform)
     }
 
+    fun replaceProgressiveSnapshot(routes: List<BusRouteOption>): Boolean {
+        if (routes == rawResults) return false
+        rawResults = routes
+        results = sortField?.let { field ->
+            BusRouteSorter.sort(rawResults, field, sortDirection)
+        } ?: rawResults
+        return true
+    }
+
     fun clear() {
         rawResults = emptyList()
         results = emptyList()

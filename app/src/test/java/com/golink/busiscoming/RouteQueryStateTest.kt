@@ -120,6 +120,27 @@ class RouteQueryStateTest {
     }
 
     @Test
+    fun `progressive snapshot replaces raw state and performs one projection with current sort`() {
+        val state = RouteQueryState()
+        state.complete(
+            listOf(route("first"), route("second")),
+            preserveSort = false,
+            updatedAtMillis = 1L
+        )
+        state.toggleSort(SortField.WALKING_DISTANCE)
+
+        val next = listOf(
+            route("first").copy(walkingDistanceDisplayState = WalkingDistanceDisplayState.CsdiSuccess(500)),
+            route("second").copy(walkingDistanceDisplayState = WalkingDistanceDisplayState.CsdiSuccess(100))
+        )
+        assertTrue(state.replaceProgressiveSnapshot(next))
+
+        assertEquals(next, state.rawResults)
+        assertEquals(listOf("second", "first"), state.results.map { it.routeName })
+        assertFalse(state.replaceProgressiveSnapshot(next))
+    }
+
+    @Test
     fun `clear resets query metadata`() {
         val state = RouteQueryState()
         state.begin(refresh = false)

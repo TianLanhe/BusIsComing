@@ -31,6 +31,8 @@ import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
 import com.golink.busiscoming.data.model.RouteDetailStopRole
+import com.golink.busiscoming.data.model.RouteDetailTransfer
+import com.golink.busiscoming.data.model.RouteDetailTransferType
 import com.golink.busiscoming.data.model.RouteDetailWalkingKind
 import com.golink.busiscoming.data.model.RouteDetailWalkingSegment
 import com.golink.busiscoming.ui.main.RouteDetailActivity
@@ -42,6 +44,8 @@ import com.golink.busiscoming.ui.main.RideStopCountState
 import com.golink.busiscoming.ui.main.RouteDetailCameraPolicy
 import com.golink.busiscoming.ui.main.RouteDetailCameraOwner
 import com.golink.busiscoming.ui.main.RouteMapPresentation
+import com.golink.busiscoming.ui.main.RouteMapMarkerRole
+import com.golink.busiscoming.ui.main.RouteSummarySegmentKind
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.swipeLeft
 import androidx.test.espresso.UiController
@@ -553,6 +557,74 @@ class RouteDetailActivityTest {
                 it.kind == com.golink.busiscoming.ui.main.RouteMapLineKind.BUS
             }
             assertTrue(finalBusLines.any { it.stableId == retainedLineId })
+        }
+    }
+
+    @Test
+    fun sameStopTransferWithMissingTimesAndFaresKeepsCompositeMarkerAndContinuousTimeline() {
+        val sameStopDetail = twoLegDetail().copy(
+            transfers = listOf(RouteDetailTransfer(RouteDetailTransferType.SAME_STOP)),
+            plannedDepartureTime = null,
+            plannedArrivalTime = null,
+            legs = twoLegDetail().legs.map { leg ->
+                leg.copy(
+                    fareHkd = null,
+                    plannedBoardingTime = null,
+                    plannedAlightingTime = null
+                )
+            }
+        )
+        RouteDetailRuntime.repositoryFactory = {
+            object : com.golink.busiscoming.data.repository.RouteDetailRepository {
+                override fun loadRouteDetail(route: BusRouteOption): RouteDetail = sameStopDetail
+            }
+        }
+        RouteDetailRuntime.mapsAvailabilityChecker = { false }
+        val latestPresentation = AtomicReference<RouteMapPresentation>()
+        RouteDetailRuntime.presentationObserver = latestPresentation::set
+
+        ActivityScenario.launch<RouteDetailActivity>(intent(twoLegRouteWithDetailQuery())).use { scenario ->
+            waitForTimelineItems(scenario)
+            val deadline = SystemClock.uptimeMillis() + 3_000L
+            while (
+                SystemClock.uptimeMillis() < deadline &&
+                latestPresentation.get()?.markers?.none { it.role == RouteMapMarkerRole.TRANSFER } != false
+            ) {
+                Thread.sleep(50L)
+            }
+            scenario.onActivity { activity ->
+                val items = (activity.findViewById<RecyclerView>(R.id.routeDetailList).adapter as RouteDetailAdapter)
+                    .currentList
+                val summary = items.filterIsInstance<RouteDetailUiItem.Summary>().single()
+                assertEquals(
+                    listOf(
+                        RouteSummarySegmentKind.WALKING,
+                        RouteSummarySegmentKind.BUS,
+                        RouteSummarySegmentKind.SAME_STOP_TRANSFER,
+                        RouteSummarySegmentKind.BUS,
+                        RouteSummarySegmentKind.WALKING
+                    ),
+                    summary.segments.map { it.kind }
+                )
+                assertTrue(
+                    items.any {
+                        it is RouteDetailUiItem.Transfer &&
+                            it.type == RouteDetailTransferType.SAME_STOP
+                    }
+                )
+                assertTrue(
+                    items.filterIsInstance<RouteDetailUiItem.Walking>()
+                        .none { it.kind == RouteDetailWalkingKind.TRANSFER }
+                )
+                assertTrue(items.filterIsInstance<RouteDetailUiItem.BusLeg>().all { it.fareHkd == null })
+                assertTrue(items.filterIsInstance<RouteDetailUiItem.Stop>().all { it.plannedTime == null })
+            }
+            val transfer = requireNotNull(latestPresentation.get()).markers.single {
+                it.role == RouteMapMarkerRole.TRANSFER
+            }
+            assertEquals(setOf(0, 1), transfer.legIndexes)
+            assertEquals(listOf("82X", "102"), transfer.routeLabels)
+            assertEquals(2, transfer.timelineStopIds.size)
         }
     }
 

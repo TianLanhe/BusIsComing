@@ -59,7 +59,7 @@
 - [x] 7.1 運行所有新增及受影響 JVM 測試，至少覆蓋 presentation、formatter、跨午夜耗時、站數／ETA 狀態、cache 邊界、碰撞策略、sheet policy、renderer identity 及過期 generation。
 - [x] 7.2 運行受影響 instrumentation 測試，覆蓋 22dp 可見／48dp 有效操作高度、水平觸控不重疊、水平捲動、分段跳轉／高亮／焦點／朗讀、時間線 rail、票價／ETA 去重與全屏 chrome。
 - [x] 7.3 運行 `./gradlew build`，修復本 change 引入的編譯、lint 或測試失敗；無法運行時記錄具體原因及未覆蓋風險，不得宣稱完整驗證。
-- [ ] 7.4 使用本任務自有 AVD 驗證單段、多段、同站換乘、異站步行換乘、缺失 geometry／時間／票價與局部失敗；逐段核對 marker 角色、站名避讓、摘要次序及時間線連續性。
+- [x] 7.4 使用本任務自有 AVD 驗證單段、多段、同站換乘、異站步行換乘、缺失 geometry／時間／票價與局部失敗；逐段核對 marker 角色、站名避讓、摘要次序及時間線連續性。
 - [x] 7.5 在固定直線、急彎、S 彎、反向 geometry、不同 zoom 與 bottom sheet padding 下再次做最終方向驗收；任何折角未嚴格貼合局部軌跡或拐角漂移均視為未完成。
 - [x] 7.6 完成繁體／簡體／英文、淺／深色、約 360dp／窄屏、font scale 1.0／1.3／2.0 與 TalkBack 矩陣，確認第三方名稱原文、Google attribution、安全區、48dp 操作及列表終點可達。
 - [x] 7.7 檢查 OpenSpec scenarios 與驗證證據逐項可追溯，執行 `openspec validate optimize-route-detail-ui --strict`，核對 `git status --short` 與提交範圍後按 `/opsx-apply` 規則提交。

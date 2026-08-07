@@ -125,6 +125,53 @@ class RouteDetailPageReducerTest {
         assertEquals(mapOf("origin" to RouteDetailWalkingState.Loading), state.walkingSegments)
     }
 
+    @Test
+    fun walkingCompletionCannotRecalculateCitybusTimesFareOrEtaDomains() {
+        val authoritative = RouteDetail(
+            routeName = "A",
+            priceHkd = 12.3,
+            durationMinutes = 47,
+            walkingDistanceMeters = 500,
+            legs = emptyList(),
+            plannedDepartureTime = "23:40",
+            plannedArrivalTime = "00:27"
+        )
+        val eta = WaitTimeState.Available(9)
+        var state = initial()
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.DetailCacheAvailable(PAGE, authoritative)
+        )
+        state = RouteDetailPageReducer.reduce(state, RouteDetailPageEvent.EtaStarted(PAGE, 1))
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.EtaSucceeded(PAGE, 1, eta)
+        )
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingStarted(
+                PAGE,
+                1,
+                mapOf("origin" to RouteDetailWalkingState.Loading)
+            )
+        )
+        state = RouteDetailPageReducer.reduce(
+            state,
+            RouteDetailPageEvent.WalkingSegmentChanged(
+                PAGE,
+                1,
+                "origin",
+                RouteDetailWalkingState.CsdiSuccess(pedestrianRoute())
+            )
+        )
+
+        assertEquals(authoritative, state.detail.valueOrNull())
+        assertEquals(eta, state.eta.valueOrNull())
+        assertEquals(47, state.detail.valueOrNull()!!.durationMinutes)
+        assertEquals("00:27", state.detail.valueOrNull()!!.plannedArrivalTime)
+        assertEquals(12.3, state.detail.valueOrNull()!!.priceHkd, 0.0)
+    }
+
     private fun reduce(events: List<RouteDetailPageEvent>): RouteDetailPageState =
         events.fold(initial(), RouteDetailPageReducer::reduce)
 

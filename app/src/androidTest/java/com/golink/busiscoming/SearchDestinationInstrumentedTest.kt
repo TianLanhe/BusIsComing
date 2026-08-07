@@ -46,8 +46,11 @@ import androidx.test.rule.GrantPermissionRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.golink.busiscoming.data.local.RouteAutoRefreshInterval
+import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.location.CurrentPlaceSelectionResult
 import com.golink.busiscoming.data.location.CurrentLocationSnapshot
 import com.golink.busiscoming.data.location.PlaceAttribution
@@ -58,6 +61,7 @@ import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRoutePlan
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.RouteCardStopPreview
+import com.golink.busiscoming.data.model.WalkingDistanceDisplayState
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteDetailLeg
 import com.golink.busiscoming.data.model.RouteDetailStop
@@ -69,16 +73,21 @@ import com.golink.busiscoming.data.repository.PlaceSearchRepository
 import com.golink.busiscoming.data.repository.RouteConfigRepository
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.ui.main.MainActivity
+import com.golink.busiscoming.ui.main.ForegroundAutoRefreshController
+import com.golink.busiscoming.ui.main.ForegroundAutoRefreshState
 import com.golink.busiscoming.ui.main.RouteConfigSaveGateway
 import com.golink.busiscoming.ui.main.SearchFragment
+import com.golink.busiscoming.ui.main.RouteQueryState
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputLayout
 import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.CoreMatchers.startsWith
 import org.hamcrest.Matcher
 import org.junit.After
+import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -1257,7 +1266,7 @@ class SearchDestinationInstrumentedTest {
     }
 
     @Test
-    fun recreationRestoresInputsWithoutFakeFoldThenFoldsOnlyAfterTheNewQuerySucceeds() {
+    fun recreationRetainsSuccessfulLogicalQueryWithoutRepeatingRepositoryOrUnfoldingResults() {
         val routeRepository = CapturingRouteRepository()
         installDependencies(routeRepository)
 
@@ -1268,31 +1277,209 @@ class SearchDestinationInstrumentedTest {
             selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
             onView(withId(R.id.searchQueryButton)).perform(click())
             waitUntil { routeRepository.callbacks.size == 1 }
-            val oldFragmentCallback = routeRepository.callbacks[0]
-            oldFragmentCallback.onInitialRoutes(listOf(route("重建前路線")))
+            routeRepository.callbacks[0].onInitialRoutes(listOf(route("重建前路線")))
             waitForText("重建前路線")
             onView(withId(R.id.searchTripContext)).check(matches(isDisplayed()))
 
             scenario.recreate()
 
-            waitUntil { routeRepository.callbacks.size == 2 }
-            onView(withId(R.id.placePairOriginInput)).check(matches(withText("測試起點")))
-            onView(withId(R.id.placePairDestinationInput)).check(matches(withText("測試終點")))
-            onView(withId(R.id.searchInputContainer)).check(matches(isDisplayed()))
-            onView(withId(R.id.searchTripContext))
-                .check(matches(withEffectiveVisibility(GONE)))
-
-            oldFragmentCallback.onInitialRoutes(listOf(route("過期舊 Fragment 路線")))
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            assertViewAbsent("過期舊 Fragment 路線")
-            onView(withId(R.id.searchTripContext))
-                .check(matches(withEffectiveVisibility(GONE)))
-
-            routeRepository.callbacks[1].onInitialRoutes(listOf(route("重建後路線")))
-            waitForText("重建後路線")
+            waitForText("重建前路線")
+            assertEquals(1, routeRepository.callbacks.size)
             onView(withId(R.id.searchTripContext)).check(matches(isDisplayed()))
             onView(withId(R.id.searchInputContainer))
                 .check(matches(withEffectiveVisibility(GONE)))
+        }
+    }
+
+    @Test
+    fun recreationDuringProgressiveWalkingKeepsOneRepositoryQueryAndUpdatesReplacementView() {
+        val routeRepository = CapturingRouteRepository()
+        installDependencies(routeRepository)
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            onView(withId(R.id.navigation_search)).perform(click())
+            selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+            selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+            onView(withId(R.id.searchQueryButton)).perform(click())
+            waitUntil { routeRepository.callbacks.size == 1 }
+            routeRepository.callbacks.single().onInitialRoutes(
+                listOf(
+                    route("步行重建路線").copy(
+                        walkingDistanceDisplayState = WalkingDistanceDisplayState.Loading
+                    )
+                )
+            )
+            waitForText("步行重建路線")
+
+            scenario.recreate()
+
+            waitForText("步行重建路線")
+            assertEquals(1, routeRepository.callbacks.size)
+            routeRepository.callbacks.single().onRouteWalkingDistanceUpdated(
+                "步行重建路線",
+                WalkingDistanceDisplayState.CsdiSuccess(88)
+            )
+            waitUntil {
+                var state: WalkingDistanceDisplayState? = null
+                scenario.onActivity { activity ->
+                    val fragment = activity.supportFragmentManager.fragments
+                        .filterIsInstance<SearchFragment>()
+                        .firstOrNull()
+                    val queryState = fragment?.javaClass
+                        ?.getDeclaredField("routeQueryState")
+                        ?.apply { isAccessible = true }
+                        ?.get(fragment) as? RouteQueryState
+                    state = queryState?.rawResults?.singleOrNull()?.walkingDistanceDisplayState
+                }
+                state == WalkingDistanceDisplayState.CsdiSuccess(88)
+            }
+        }
+    }
+
+    @Test
+    fun autoRefreshOwnerFollowsEditingNavigationLifecycleRecreationAndSettings() {
+        val routeRepository = ImmediateRouteRepository()
+        installDependencies(routeRepository)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val settings = RouteAutoRefreshSettingsStore(context)
+        val originalInterval = settings.getInterval()
+        settings.setInterval(RouteAutoRefreshInterval.MINUTES_1)
+
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                onView(withId(R.id.navigation_search)).perform(click())
+                selectPlace(R.id.placePairOriginInput, "o", "測試起點")
+                selectPlace(R.id.placePairDestinationInput, "d", "測試終點")
+                onView(withId(R.id.searchQueryButton)).perform(click())
+                waitForText("測試路線")
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Waiting::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+
+                onView(withId(R.id.searchEditButton)).perform(click())
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Paused::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+                selectPlace(R.id.placePairDestinationInput, "d2", "第二終點")
+                onView(withId(R.id.searchQueryButton)).perform(click())
+                waitUntil { routeRepository.queryCount == 2 }
+                waitForText("測試路線")
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Waiting::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+
+                val queryCountBeforeLifecycleChanges = routeRepository.queryCount
+
+                scenario.moveToState(Lifecycle.State.CREATED)
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Paused::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Waiting::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+
+                scenario.recreate()
+                waitForText("測試路線")
+                assertEquals(queryCountBeforeLifecycleChanges, routeRepository.queryCount)
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Waiting::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+
+                onView(withId(R.id.navigation_frequent_routes)).perform(click())
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Paused::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+                onView(withId(R.id.navigation_search)).perform(click())
+                waitForText("測試路線")
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Waiting::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+
+                settings.setInterval(RouteAutoRefreshInterval.MINUTES_2)
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Waiting::class.java,
+                    frequent = ForegroundAutoRefreshState.Paused::class.java
+                )
+                settings.setInterval(RouteAutoRefreshInterval.OFF)
+                waitForAutoRefreshStates(
+                    scenario,
+                    search = ForegroundAutoRefreshState.Disabled::class.java,
+                    frequent = ForegroundAutoRefreshState.Disabled::class.java
+                )
+                assertEquals(queryCountBeforeLifecycleChanges, routeRepository.queryCount)
+            }
+        } finally {
+            settings.setInterval(originalInterval)
+        }
+    }
+
+    @Test
+    fun realTemporaryResultsCompleteTwoOneMinuteCyclesAndResumeWhenOverdue() {
+        assumeTrue(
+            InstrumentationRegistry.getArguments().getString(ARG_RUN_REAL_AUTO_REFRESH) == "true"
+        )
+        SearchFragment.placeSearchRepositoryFactory = { RealServicePlaceRepository() }
+        SearchFragment.currentPlaceRequestOverride = { _, callback ->
+            callback(CurrentPlaceSelectionResult.Failure)
+        }
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val settings = RouteAutoRefreshSettingsStore(context)
+        val originalInterval = settings.getInterval()
+        settings.setInterval(RouteAutoRefreshInterval.MINUTES_1)
+
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                onView(withId(R.id.navigation_search)).perform(click())
+                selectPlace(R.id.placePairOriginInput, "real-o", "柴灣測試點")
+                selectPlace(R.id.placePairDestinationInput, "real-d", "中環測試點")
+                onView(withId(R.id.searchQueryButton)).perform(click())
+                waitUntil(45_000L) {
+                    currentSearchAppliedQueryId(scenario) != null &&
+                        currentSearchAutoRefreshState(scenario) is ForegroundAutoRefreshState.Waiting
+                }
+                val initialQueryId = requireNotNull(currentSearchAppliedQueryId(scenario))
+
+                waitUntil(90_000L) {
+                    (currentSearchAppliedQueryId(scenario) ?: 0) >= initialQueryId + 1 &&
+                        currentSearchAutoRefreshState(scenario) is ForegroundAutoRefreshState.Waiting
+                }
+                val afterFirstAutomatic = requireNotNull(currentSearchAppliedQueryId(scenario))
+                assertSearchHasCompletedSnapshot(scenario)
+
+                scenario.moveToState(Lifecycle.State.CREATED)
+                waitUntil {
+                    currentSearchAutoRefreshState(scenario) is ForegroundAutoRefreshState.Paused
+                }
+                Thread.sleep(65_000L)
+                assertEquals(afterFirstAutomatic, currentSearchAppliedQueryId(scenario))
+
+                scenario.moveToState(Lifecycle.State.RESUMED)
+                waitUntil(45_000L) {
+                    (currentSearchAppliedQueryId(scenario) ?: 0) >= afterFirstAutomatic + 1 &&
+                        currentSearchAutoRefreshState(scenario) is ForegroundAutoRefreshState.Waiting
+                }
+                assertSearchHasCompletedSnapshot(scenario)
+            }
+        } finally {
+            settings.setInterval(originalInterval)
         }
     }
 
@@ -1553,6 +1740,71 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    private fun waitForAutoRefreshStates(
+        scenario: ActivityScenario<MainActivity>,
+        search: Class<out ForegroundAutoRefreshState>,
+        frequent: Class<out ForegroundAutoRefreshState>
+    ) {
+        waitUntil {
+            var matches = false
+            scenario.onActivity { activity ->
+                val searchFragment = activity.supportFragmentManager
+                    .findFragmentByTag("search") as SearchFragment
+                matches = search.isInstance(searchFragment.autoRefreshStateForTest()) &&
+                    frequent.isInstance(activity.frequentAutoRefreshStateForTest())
+            }
+            matches
+        }
+    }
+
+    private fun currentSearchAutoRefreshState(
+        scenario: ActivityScenario<MainActivity>
+    ): ForegroundAutoRefreshState {
+        var state: ForegroundAutoRefreshState? = null
+        scenario.onActivity { activity ->
+            val search = activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+            state = search.autoRefreshStateForTest()
+        }
+        return requireNotNull(state)
+    }
+
+    private fun currentSearchAppliedQueryId(scenario: ActivityScenario<MainActivity>): Int? {
+        var queryId: Int? = null
+        scenario.onActivity { activity ->
+            val search = activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+            queryId = SearchFragment::class.java.getDeclaredField("appliedRouteQueryId")
+                .apply { isAccessible = true }
+                .get(search) as? Int
+        }
+        return queryId
+    }
+
+    private fun assertSearchHasCompletedSnapshot(scenario: ActivityScenario<MainActivity>) {
+        scenario.onActivity { activity ->
+            val search = activity.supportFragmentManager.findFragmentByTag("search") as SearchFragment
+            val state = SearchFragment::class.java.getDeclaredField("routeQueryState")
+                .apply { isAccessible = true }
+                .get(search) as RouteQueryState
+            assertNotNull(state.updatedAtMillis)
+        }
+    }
+
+    private fun SearchFragment.autoRefreshStateForTest(): ForegroundAutoRefreshState {
+        val controller = SearchFragment::class.java
+            .getDeclaredField("autoRefreshController")
+            .apply { isAccessible = true }
+            .get(this) as ForegroundAutoRefreshController
+        return controller.state
+    }
+
+    private fun MainActivity.frequentAutoRefreshStateForTest(): ForegroundAutoRefreshState {
+        val controller = MainActivity::class.java
+            .getDeclaredField("frequentAutoRefreshController")
+            .apply { isAccessible = true }
+            .get(this) as ForegroundAutoRefreshController
+        return controller.state
+    }
+
     private fun waitForOriginHint(expected: String) {
         waitUntil {
             var hint = ""
@@ -1800,6 +2052,14 @@ class SearchDestinationInstrumentedTest {
         }
     }
 
+    private class RealServicePlaceRepository : PlaceSearchRepository {
+        override fun searchPlaces(keyword: String): List<Place> = when (keyword) {
+            "real-o" -> listOf(Place("柴灣測試點", 22.2624, 114.2344))
+            "real-d" -> listOf(Place("中環測試點", 22.2842, 114.1567))
+            else -> emptyList()
+        }
+    }
+
     private class ImmediateRouteRepository : BusRouteRepository {
         @Volatile
         var queryCount = 0
@@ -1898,6 +2158,8 @@ class SearchDestinationInstrumentedTest {
     }
 
     private companion object {
+        const val ARG_RUN_REAL_AUTO_REFRESH = "runRealAutoRefresh"
+
         data class OuterViewport(
             val appBarTop: Int,
             val firstResultPosition: Int,

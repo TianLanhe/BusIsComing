@@ -20,7 +20,17 @@ import com.golink.busiscoming.data.local.AppThemePreferenceStore
 import com.golink.busiscoming.data.localization.AppLanguageChoice
 import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
+import com.golink.busiscoming.data.model.PedestrianRoute
+import com.golink.busiscoming.data.model.PedestrianRoutePath
 import com.golink.busiscoming.data.model.RouteDetail
+import com.golink.busiscoming.data.repository.CsdiPedestrianRequest
+import com.golink.busiscoming.data.repository.CsdiPedestrianResponse
+import com.golink.busiscoming.data.repository.CitybusP2pStopMapResolver
+import com.golink.busiscoming.data.repository.PedestrianRequestPriority
+import com.golink.busiscoming.data.repository.PedestrianRequestTrigger
+import com.golink.busiscoming.data.repository.PedestrianRouteRequestRuntime
+import com.golink.busiscoming.data.repository.PedestrianSubscription
 import com.golink.busiscoming.data.repository.RouteDetailRepository
 import com.golink.busiscoming.data.repository.RouteGeometryDataSource
 import com.golink.busiscoming.data.repository.RouteGeometryLoadHandle
@@ -70,6 +80,10 @@ class RouteDetailVisualMatrixInstrumentedTest {
             }
         }
         RouteDetailRuntime.etaResolver = { DemoScreenshotFixtures.primaryRoute().waitTimeState }
+        RouteDetailRuntime.stopMapResolverFactory = {
+            CitybusP2pStopMapResolver(stopMapFetcher = { _, _ -> demoStopMapResponse() })
+        }
+        RouteDetailRuntime.pedestrianRuntime = immediatePedestrianRuntime()
         RouteDetailRuntime.geometryRepositoryFactory = {
             object : RouteGeometryDataSource {
                 override fun loadGeometries(
@@ -93,6 +107,7 @@ class RouteDetailVisualMatrixInstrumentedTest {
                 configure(language, theme)
                 ActivityScenario.launch<RouteDetailActivity>(intent()).use { scenario ->
                     waitForDetail(scenario)
+                    waitForCsdiAttribution(scenario)
                     waitForUi()
                     scenario.onActivity { activity ->
                         assertTouchTargets(activity)
@@ -105,7 +120,7 @@ class RouteDetailVisualMatrixInstrumentedTest {
                             activity.findViewById<MaterialCardView>(R.id.routeDetailSheet)
                         ).state = BottomSheetBehavior.STATE_EXPANDED
                     }
-                    waitForUi()
+                    waitForFullDetent(scenario)
                     scenario.onActivity { activity ->
                         assertEquals(fontScale, activity.resources.configuration.fontScale, 0.01f)
                         assertEquals(360, activity.resources.displayMetrics.widthPixels * 160 / activity.resources.displayMetrics.densityDpi)
@@ -160,6 +175,19 @@ class RouteDetailVisualMatrixInstrumentedTest {
         )
     }
 
+    private fun waitForFullDetent(scenario: ActivityScenario<RouteDetailActivity>) {
+        waitUntil {
+            var expanded = false
+            scenario.onActivity { activity ->
+                expanded = BottomSheetBehavior.from(
+                    activity.findViewById<MaterialCardView>(R.id.routeDetailSheet)
+                ).state == BottomSheetBehavior.STATE_EXPANDED &&
+                    activity.findViewById<View>(R.id.routeDetailFloatingBack).visibility == View.GONE
+            }
+            expanded
+        }
+    }
+
     private fun waitForDetail(scenario: ActivityScenario<RouteDetailActivity>) {
         waitUntil {
             val count = AtomicInteger()
@@ -171,8 +199,52 @@ class RouteDetailVisualMatrixInstrumentedTest {
     }
 
     private fun intent(): Intent = Intent(context, RouteDetailActivity::class.java).putExtras(
-        RouteDetailLaunchArgs.fromRoute(DemoScreenshotFixtures.primaryRoute()).toBundle()
+        RouteDetailLaunchArgs.fromRoute(
+            DemoScreenshotFixtures.primaryRoute().let { route ->
+                route.copy(
+                    routeDetailQuery = route.routeDetailQuery?.copy(
+                        recoveryContext = P2pRouteRecoveryContext(
+                            originLatitude = 22.2798,
+                            originLongitude = 114.1798,
+                            destinationLatitude = 22.2806,
+                            destinationLongitude = 114.1806,
+                            searchMode = "T"
+                        )
+                    )
+                )
+            }
+        ).toBundle()
     )
+
+    private fun immediatePedestrianRuntime(): PedestrianRouteRequestRuntime =
+        object : PedestrianRouteRequestRuntime {
+            override fun subscribe(
+                request: CsdiPedestrianRequest,
+                priority: PedestrianRequestPriority,
+                trigger: PedestrianRequestTrigger,
+                callback: (CsdiPedestrianResponse) -> Unit
+            ): PedestrianSubscription {
+                callback(
+                    CsdiPedestrianResponse.Success(
+                        PedestrianRoute(
+                            rawDistanceMeters = 88.2,
+                            rawTimeMinutes = 1.47,
+                            paths = listOf(PedestrianRoutePath(listOf(request.start, request.end)))
+                        )
+                    )
+                )
+                return PedestrianSubscription {}
+            }
+        }
+
+    private fun demoStopMapResponse(): String = """
+        <iframe onload="
+            addstoponmap('28X-DEMO-1-1',114.1801,22.2801,'S','1','1 - 海庭苑平台','28X-DEMO-1','O','N','114.1801','22.2801');
+            addstoponmap('28X-DEMO-1-4',114.1804,22.2804,'E','4','4 - 景澄站北','28X-DEMO-1','O','N','114.1804','22.2804');
+            addstoponmap('86-DEMO-1-1',114.1801,22.2801,'S','1','1 - 景澄站南','86-DEMO-1','O','N','114.1801','22.2801');
+            addstoponmap('86-DEMO-1-4',114.1804,22.2804,'E','4','4 - 松嶺邨總站','86-DEMO-1','O','N','114.1804','22.2804');
+        "></iframe>
+    """.trimIndent()
 
     private fun longContentDetail(): RouteDetail {
         val original = DemoScreenshotFixtures.routeDetail()
@@ -244,6 +316,26 @@ class RouteDetailVisualMatrixInstrumentedTest {
         val location = IntArray(2)
         requireNotNull(watermark).getLocationOnScreen(location)
         assertTrue("Google watermark must remain above the summary sheet", location[1] + watermark.height <= sheet.top)
+        val csdi = activity.findViewById<View>(R.id.routeDetailCsdiAttribution)
+        assertTrue("CSDI attribution must be visible with rendered walking paths", csdi.isShown)
+        val csdiBounds = Rect()
+        val watermarkBounds = Rect()
+        val sheetBounds = Rect()
+        assertTrue(csdi.getGlobalVisibleRect(csdiBounds))
+        assertTrue(watermark.getGlobalVisibleRect(watermarkBounds))
+        assertTrue(sheet.getGlobalVisibleRect(sheetBounds))
+        assertTrue(!Rect.intersects(csdiBounds, watermarkBounds))
+        assertTrue(!Rect.intersects(csdiBounds, sheetBounds))
+    }
+
+    private fun waitForCsdiAttribution(scenario: ActivityScenario<RouteDetailActivity>) {
+        waitUntil {
+            var visible = false
+            scenario.onActivity { activity ->
+                visible = activity.findViewById<View>(R.id.routeDetailCsdiAttribution).isShown
+            }
+            visible
+        }
     }
 
     private fun findViewWithTag(root: View, tag: String): View? {

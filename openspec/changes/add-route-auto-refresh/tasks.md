@@ -21,14 +21,14 @@
 
 ## 4. 常用與臨時結果自動刷新
 
-- [ ] 4.1 先新增結果 owner 測試，明確區分 `INITIAL`、`MANUAL`、`AUTOMATIC`，覆蓋首次成功含 0 條建立 timer、首次失敗不重試／不提示，以及初始／手動進行時自動 trigger 被拒絕
+- [x] 4.1 先新增結果 owner 測試，明確區分 `INITIAL`、`MANUAL`、`AUTOMATIC`，覆蓋首次成功含 0 條建立 timer、首次失敗不重試／不提示，以及初始／手動進行時自動 trigger 被拒絕
 - [x] 4.2 為常用結果保存原 query identity／起終點並接入 controller，確保 automatic 不更新行程使用次數、最近使用時間或真實排序
 - [x] 4.3 為臨時結果保存首次成功查詢的完整 Place 名稱與精確座標快照並接入 controller，確保目前位置不重新定位且不自動保存行程
 - [x] 4.4 在兩個結果 owner 接入 destination／前後台／鎖屏／編輯／候選展開／清空／切換行程 eligibility 及 generation invalidation，進入詳情時暫停結果 owner，返回時按 due 或剩餘時間恢復
 - [x] 4.5 讓 automatic 成功含空結果按完成時排序與既有 pin identity 更新、基礎路線回應即結束 cycle、後續 ETA／預覽繼續漸進；automatic 失敗保留舊結果與最後成功時間且不顯示警告
 - [x] 4.6 新增 stable-id viewport anchor policy 與測試，保存第一可見 route 及 pixel offset，route 消失時選最近下一項，並保持已開啟 ETA／選中 route 而不滾動頂部
 - [x] 4.7 在共用結果摘要加入小型 progress + `正在更新` automatic 狀態，成功靜默顯示新時間、失敗恢復舊時間；確認手動固定浮層、成功勾號、失敗 Toast 與滾動頂部語義完全不變
-- [ ] 4.8 先以測試鎖定基礎列表完成 cycle 後 ETA／預覽／CSDI 仍可漸進、新 query generation 取消舊 CSDI consumer、`AUTOMATIC` 服從 walking 失敗退避，以及所有更新共用單次 projection 與 stable-id＋pixel-offset anchor，再接入結果 owner
+- [x] 4.8 先以測試鎖定基礎列表完成 cycle 後 ETA／預覽／CSDI 仍可漸進、新 query generation 取消舊 CSDI consumer、`AUTOMATIC` 服從 walking 失敗退避，以及所有更新共用單次 projection 與 stable-id＋pixel-offset anchor，再接入結果 owner
 
 ## 5. 路線詳情雙資料域 cycle
 
@@ -52,9 +52,9 @@
 
 ## 7. 生命週期、真實網絡與視覺驗收
 
-- [ ] 7.1 以 lifecycle／navigation instrumentation 覆蓋常用→詳情→返回、臨時編輯→新查詢、前後台、鎖屏、configuration change、語言切換、改間隔與關閉，確認任何時刻只有目前可見 owner 能發起一次自動刷新
-- [ ] 7.2 在香港繁體／簡體／英文、明暗主題、360dp、font scale 1.0／1.3／2.0、TalkBack 與系統動畫停用下驗收 selector、首次橫幅、日常摘要及詳情 refreshing，嚴格依 UI 合同保留截圖證據
-- [ ] 7.3 只啟動本任務自有且符合 Google／螢幕畫像的模擬器，使用生產 Citybus／ETA 路徑讓常用或臨時結果及詳情各完成至少兩個 1 分鐘週期，驗證動態內容、部分失敗、前後台暫停與返回到期
+- [x] 7.1 以 lifecycle／navigation instrumentation 覆蓋常用→詳情→返回、臨時編輯→新查詢、前後台、鎖屏、configuration change、語言切換、改間隔與關閉，確認任何時刻只有目前可見 owner 能發起一次自動刷新
+- [x] 7.2 在香港繁體／簡體／英文、明暗主題、360dp、font scale 1.0／1.3／2.0、TalkBack 與系統動畫停用下驗收 selector、首次橫幅、日常摘要及詳情 refreshing，嚴格依 UI 合同保留截圖證據
+- [x] 7.3 只啟動本任務自有且符合 Google／螢幕畫像的模擬器，使用生產 Citybus／ETA 路徑讓常用或臨時結果及詳情各完成至少兩個 1 分鐘週期，驗證動態內容、部分失敗、前後台暫停與返回到期
 - [x] 7.4 完成裝置驗證後關閉本任務啟動的全部模擬器，不操作、停止或重啟任務開始前已運行的任何 AVD
 
 ## 8. 回歸、構建與完成檢查
