@@ -50,8 +50,8 @@
     <string name="rating_play_missing_message">Google Play is not installed on this device. You can view Google’s official help for ways to find or restore it.</string>
     <string name="rating_play_unusable_title">Google Play is unavailable</string>
     <string name="rating_play_unusable_message">We cannot confirm that Google Play can open the store listing right now. You can review BusIsComing’s app settings and try again.</string>
-    <string name="rating_action_enable_play">Enable Google Play</string>
-    <string name="rating_action_view_install_help">View setup help</string>
+    <string name="rating_action_enable_play">Enable</string>
+    <string name="rating_action_view_install_help">Install help</string>
     <string name="rating_action_app_settings">App settings</string>
     <string name="rating_external_navigation_failed">Couldn’t open the selected page. Try again later.</string>
     <string name="update_status_never_checked">Tap to check for a new version</string>

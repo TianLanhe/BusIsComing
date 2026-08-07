@@ -20,16 +20,16 @@
 - [x] 4.1 在繁體、獨立簡體及自然英文資源加入 Play 停用、缺失、不可用、外部啟動失敗、`前往啟用`、`查看安裝說明`、`應用設定` 與取消文案，避免宣稱已完成評分
 - [x] 4.2 把 `SettingsFragment` 的 `unsupported_rate_app` action 改為呼叫評分流程；可用時直接打開商品頁，其他三態各顯示唯一對應的 Material 對話框及恢復操作
 - [x] 4.3 確保從 Google Play、系統設定或官方說明返回，以及 configuration change／Fragment 重建時不保存或重播 pending 外部導航；只有再次點擊才重新探測
-- [ ] 4.4 新增 Fragment instrumentation 測試，覆蓋四種 Play 狀態、取消、每個恢復 action、啟動失敗、返回不自動續辦與無瀏覽器 fallback
+- [x] 4.4 新增 Fragment instrumentation 測試，覆蓋四種 Play 狀態、取消、每個恢復 action、啟動失敗、返回不自動續辦與無瀏覽器 fallback
 
 ## 5. UI、無障礙與真實裝置驗收
 
-- [ ] 5.1 在香港繁體／簡體／英文、明暗主題、360dp 與大型字體檢查設定列及三種對話框，確認無裁切、按鈕可理解且 TalkBack 依序讀取狀態與操作
+- [x] 5.1 在香港繁體／簡體／英文、明暗主題、360dp 與大型字體檢查設定列及三種對話框，確認無裁切、按鈕可理解且 TalkBack 依序讀取狀態與操作
 - [ ] 5.2 只使用本任務啟動且具 Play Store 的適配模擬器或測試裝置，確認一次點擊可打開 BusIsComing 官方商品詳情頁；只記錄「商品頁已打開」，不得宣稱評分已提交
-- [ ] 5.3 只使用本任務啟動的無 Play／可停用 Play 測試設備驗證缺失、停用、重新啟用後再次點擊及不可用分支，完成後關閉本任務啟動的全部模擬器
+- [x] 5.3 只使用本任務啟動的無 Play／可停用 Play 測試設備驗證缺失、停用、重新啟用後再次點擊及不可用分支，完成後關閉本任務啟動的全部模擬器
 
 ## 6. 回歸與完成檢查
 
-- [ ] 6.1 運行評分 detector／navigator／Settings instrumentation 定向測試及既有 app update 渠道、手動檢查與外部 action 回歸測試
+- [x] 6.1 運行評分 detector／navigator／Settings instrumentation 定向測試及既有 app update 渠道、手動檢查與外部 action 回歸測試
 - [x] 6.2 運行 `./gradlew build` 與 `openspec validate --all --strict --no-interactive`，如實記錄任何無法完成的真實 Play 限制
 - [x] 6.3 檢查 `git status --short`、變更 diff 與 tasks 勾選，確認沒有 In-App Review、安裝權限、第三方 APK、更新流程改寫或無關重構後再按倉庫規則提交

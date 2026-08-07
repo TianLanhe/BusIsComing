@@ -33,10 +33,19 @@ object GooglePlayRatingLinks {
     }}"
 }
 
-class GooglePlayRatingNavigator {
+interface GooglePlayRatingActions {
+    fun openProductPage(context: Context): Boolean
+    fun openPlayAppSettings(context: Context): Boolean
+    fun openAppSettings(context: Context): Boolean
+    fun openOfficialHelp(context: Context, language: AppLanguage): Boolean
+}
+
+class GooglePlayRatingNavigator : GooglePlayRatingActions {
+    override fun openProductPage(context: Context): Boolean = openProductPage(context, ::start)
+
     fun openProductPage(
         context: Context,
-        starter: (Context, RatingExternalTarget) -> Unit = ::start
+        starter: (Context, RatingExternalTarget) -> Unit
     ): Boolean = open(
         context,
         RatingExternalTarget(
@@ -47,9 +56,11 @@ class GooglePlayRatingNavigator {
         starter
     )
 
+    override fun openPlayAppSettings(context: Context): Boolean = openPlayAppSettings(context, ::start)
+
     fun openPlayAppSettings(
         context: Context,
-        starter: (Context, RatingExternalTarget) -> Unit = ::start
+        starter: (Context, RatingExternalTarget) -> Unit
     ): Boolean = open(
         context,
         RatingExternalTarget(
@@ -59,9 +70,11 @@ class GooglePlayRatingNavigator {
         starter
     )
 
+    override fun openAppSettings(context: Context): Boolean = openAppSettings(context, ::start)
+
     fun openAppSettings(
         context: Context,
-        starter: (Context, RatingExternalTarget) -> Unit = ::start
+        starter: (Context, RatingExternalTarget) -> Unit
     ): Boolean = open(
         context,
         RatingExternalTarget(
@@ -71,10 +84,13 @@ class GooglePlayRatingNavigator {
         starter
     )
 
+    override fun openOfficialHelp(context: Context, language: AppLanguage): Boolean =
+        openOfficialHelp(context, language, ::start)
+
     fun openOfficialHelp(
         context: Context,
         language: AppLanguage,
-        starter: (Context, RatingExternalTarget) -> Unit = ::start
+        starter: (Context, RatingExternalTarget) -> Unit
     ): Boolean = open(
         context,
         RatingExternalTarget(
@@ -118,5 +134,20 @@ class GooglePlayRatingNavigator {
             }
             context.startActivity(intent)
         }
+    }
+}
+
+object GooglePlayRatingRuntime {
+    @Volatile
+    internal var availabilityResolver: (Context) -> PlayStoreAvailability = {
+        PlayStoreAvailabilityDetector(it).detect()
+    }
+
+    @Volatile
+    internal var navigatorFactory: () -> GooglePlayRatingActions = { GooglePlayRatingNavigator() }
+
+    internal fun reset() {
+        availabilityResolver = { PlayStoreAvailabilityDetector(it).detect() }
+        navigatorFactory = { GooglePlayRatingNavigator() }
     }
 }

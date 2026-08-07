@@ -14,6 +14,7 @@ import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
 import com.golink.busiscoming.BuildConfig
 import com.golink.busiscoming.R
@@ -32,9 +33,8 @@ import com.golink.busiscoming.data.model.UpdateCheckTrigger
 import com.golink.busiscoming.data.model.UpdateFailureKind
 import com.golink.busiscoming.data.update.AppUpdateExternalActions
 import com.golink.busiscoming.data.update.AppUpdateRuntime
-import com.golink.busiscoming.data.update.GooglePlayRatingNavigator
+import com.golink.busiscoming.data.update.GooglePlayRatingRuntime
 import com.golink.busiscoming.data.update.PlayStoreAvailability
-import com.golink.busiscoming.data.update.PlayStoreAvailabilityDetector
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.ui.settings.AboutActivity
 import com.golink.busiscoming.ui.settings.AppSupportActions
@@ -179,10 +179,21 @@ class SettingsFragment : Fragment() {
 
     fun focusAutoRefreshSelector() {
         val row = view?.findViewById<View>(R.id.settingsAutoRefreshRow) ?: return
-        view?.findViewById<View>(R.id.settingsRoot)?.post {
-            row.requestFocus()
-            row.parent?.requestChildFocus(row, row)
+        val root = view?.findViewById<NestedScrollView>(R.id.settingsRoot) ?: return
+        root.post {
+            val selected = findSelectedAutoRefreshButton(row) ?: row
+            selected.requestFocusFromTouch()
+            root.smoothScrollTo(0, row.top)
         }
+    }
+
+    private fun findSelectedAutoRefreshButton(view: View): MaterialButton? {
+        if (view is MaterialButton && view.isChecked) return view
+        if (view !is ViewGroup) return null
+        for (index in 0 until view.childCount) {
+            findSelectedAutoRefreshButton(view.getChildAt(index))?.let { return it }
+        }
+        return null
     }
 
     private fun renderAutoRefreshSelector(
@@ -338,8 +349,8 @@ class SettingsFragment : Fragment() {
 
     private fun openGooglePlayRating() {
         val currentContext = context ?: return
-        val navigator = GooglePlayRatingNavigator()
-        when (PlayStoreAvailabilityDetector(currentContext).detect()) {
+        val navigator = GooglePlayRatingRuntime.navigatorFactory()
+        when (GooglePlayRatingRuntime.availabilityResolver(currentContext)) {
             PlayStoreAvailability.AVAILABLE -> {
                 if (!navigator.openProductPage(currentContext)) showRatingNavigationFailure()
             }

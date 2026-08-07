@@ -132,7 +132,7 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 
 ### 8. 步行 path 由 presentation model 增量渲染並遵守署名
 
-`RouteMapPresentationBuilder` 不再由端點製造步行直線。只有 `CSDISuccess` 生成 path presentation；每個子路徑的 stable id 為 `walk:<segmentId>:path:<index>`，保留上游有序點列與 path 邊界。`GoogleRouteMapRenderer` 使用綁定該同一有序 path 的透明承載 stroke 與較粗灰色開放折角 stamp，讓每個折角由 SDK 按所在位置局部切線定向；不得另畫灰色實線、點線或虛線底圖，也不得在子路徑空隙補線。Loading、SameStop、失敗或回退均不生成 path presentation，marker 及其他成功 bus／walk paths 保持。renderer 只按 stable id 增刪差異；若 stamp 無法可靠建立，省略該步行紋理而不使用手工 Marker、整段 bearing 或固定角度圖標。
+`RouteMapPresentationBuilder` 不再由端點製造步行直線。只有 `CSDISuccess` 生成 path presentation；每個子路徑的 stable id 為 `walk:<segmentId>:path:<index>`，保留上游有序點列與 path 邊界。`GoogleRouteMapRenderer` 在 camera idle／padding 更新後把該同一有序 path 投影到屏幕，以固定屏幕間距插值並按每個位置的局部屏幕切線放置較粗灰色開放折角 marker；不得另畫灰色實線、點線或虛線底圖，也不得在子路徑空隙補線。Loading、SameStop、失敗或回退均不生成 path presentation，marker 及其他成功 bus／walk paths 保持。renderer 只按 stable id 增刪差異；若 projection 或局部切線無法可靠取得，省略該步行折角而不使用整段 bearing、固定角度或脫離 geometry 的圖標。
 
 地圖建立仍以香港中心作首幀。可靠站點結構到達後，用查詢起終點及所有可靠站點自動 fit 最多一次；晚到 bus geometry 或 pedestrian paths 不移動相機。使用者任何手勢把所有權交給 USER，之後異步結果不得自動 fit。使用者點擊「全覽」時，才以目前全部 marker、bus geometry 及 pedestrian paths 計算完整 bounds。
 

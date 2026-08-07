@@ -39,6 +39,7 @@ class ForegroundAutoRefreshController(
     private var lastAttemptFinishedAt: Long? = null
     private var activeGeneration: Int? = null
     private var generation = 0
+    private var scheduleToken = 0L
     private var scheduleHandle: AutoRefreshScheduleHandle? = null
     private var lastObservedNow = Long.MIN_VALUE
     private var closed = false
@@ -96,6 +97,7 @@ class ForegroundAutoRefreshController(
     override fun close() {
         if (closed) return
         closed = true
+        scheduleToken += 1
         scheduleHandle?.cancel()
         scheduleHandle = null
         activeGeneration = null
@@ -103,6 +105,7 @@ class ForegroundAutoRefreshController(
     }
 
     private fun reschedule() {
+        val token = ++scheduleToken
         scheduleHandle?.cancel()
         scheduleHandle = null
         if (closed) return
@@ -127,13 +130,14 @@ class ForegroundAutoRefreshController(
         state = ForegroundAutoRefreshState.Waiting(dueAt)
         val delay = (dueAt - now()).coerceAtLeast(0L)
         if (delay == 0L) {
-            triggerAutomatic()
+            triggerAutomatic(token)
         } else {
-            scheduleHandle = scheduler.schedule(delay, ::triggerAutomatic)
+            scheduleHandle = scheduler.schedule(delay) { triggerAutomatic(token) }
         }
     }
 
-    private fun triggerAutomatic() {
+    private fun triggerAutomatic(token: Long) {
+        if (token != scheduleToken) return
         scheduleHandle = null
         if (closed || interval == RouteAutoRefreshInterval.OFF || !eligible || externalBusy || activeGeneration != null) {
             reschedule()

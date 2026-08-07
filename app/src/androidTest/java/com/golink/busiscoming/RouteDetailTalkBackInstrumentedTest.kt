@@ -8,10 +8,6 @@ import android.os.SystemClock
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.model.BusRouteOption
@@ -87,7 +83,8 @@ class RouteDetailTalkBackInstrumentedTest {
             )
 
             assertTrue(handle.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            onView(withId(R.id.routeDetailToolbar)).check(matches(isDisplayed()))
+            val floatingBackId = "${context.packageName}:id/${context.resources.getResourceEntryName(R.id.routeDetailFloatingBack)}"
+            waitUntil("full-screen chrome") { findNode(floatingBackId) == null }
 
             val expandedHandle = waitForNode(R.id.routeDetailSheetHandle)
             assertEquals(

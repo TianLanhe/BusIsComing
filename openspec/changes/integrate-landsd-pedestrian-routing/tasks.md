@@ -43,7 +43,7 @@
 ## 6. Google 地圖步行軌跡、相機與署名
 
 - [x] 6.1 先擴展 `RouteMapPresentationBuilderTest`，鎖定每個 CSDI 子路徑獨立 stable id、有序點列及 path 邊界，以及 Loading／SameStop／失敗／回退不生成任何步行直線或連接線。
-- [x] 6.2 更新 `RouteMapPresentationBuilder` 與 `GoogleRouteMapRenderer`，移除端點直線步行示意，只沿每個 CSDI path 的同一有序 geometry 以透明承載 stroke＋較粗灰色開放折角增量渲染；不得顯示灰色底線或在子路徑間補線，單段失敗不得清空 marker、巴士幾何或其他成功步行 path。
+- [x] 6.2 更新 `RouteMapPresentationBuilder` 與 `GoogleRouteMapRenderer`，移除端點直線步行示意，只沿每個 CSDI path 的同一有序 geometry 以屏幕投影固定間距＋局部切線的較粗灰色開放折角增量渲染；不得顯示灰色底線或在子路徑間補線，單段失敗不得清空 marker、巴士幾何或其他成功步行 path。
 - [x] 6.3 擴展相機 policy 與測試：Map 首幀固定香港、可靠端點／站點結構到達後最多自動 fit 一次、使用者手勢取得相機所有權、晚到巴士幾何／步行 paths 不移動相機，全覽按目前全部可靠內容重新計算。
 - [x] 6.4 按官方條款加入地政總署官方標誌、三語雙行精簡署名及可開啟的完整來源／版權／免責說明；只在至少一條 CSDI path 實際顯示時出現，沒有 path 時隱藏。
 - [ ] 6.5 更新地圖 padding／安全區、站名碰撞保留矩形與無障礙語義，驗證 CSDI 署名不遮擋 Google Logo、Google 法律文字、返回、目前位置、全覽控件、站名或 bottom sheet，且不重新引入常駐路線圖例。
@@ -60,6 +60,6 @@
 - [ ] 8.1 在不接管既有模擬器的前提下，定義並啟動本任務自有 Google Play／Google Maps 設備畫像，驗收香港首幀、卡片漸進距離、詳情局部成功、真實多子路徑、相機所有權、全覽及署名安全區，完成後關閉該模擬器。
 - [ ] 8.2 在繁中、簡中、英文、淺色、深色、約 360dp、font scale 1.3／2.0 與 TalkBack 場景驗收卡片短文案、時間線、署名、觸控／朗讀語義及 Google attribution 不被遮擋。
 - [ ] 8.3 對少量可復現香港端點執行只讀 Citybus + CSDI 真實抽查，核對固定參數、距離／時間／多 paths、30 米門禁及 single-flight 計數；記錄外部可用性限制且 SHALL NOT 讓一般測試依賴服務成功。
-- [ ] 8.4 執行 `./gradlew build`，確認生產 HTTP 未被 fixture 取代、沒有新增 key／權限／SQLite schema／背景服務或敏感日誌，並核對全部 OpenSpec scenarios 已由自動化或明確人工證據覆蓋。
-- [ ] 8.5 僅在實作與上述驗證完成後更新 `docs/technical-debt.md`：記錄 Citybus 總耗時／巴士時間與 CSDI 固定 1 m/s 分段分鐘仍不一致、通知監控個人步速保持獨立，以及以統一步速、時間依賴公交、轉乘重算、清楚標示與回歸測試作關閉條件。
+- [x] 8.4 執行 `./gradlew build`，確認生產 HTTP 未被 fixture 取代、沒有新增 key／權限／SQLite schema／背景服務或敏感日誌，並核對全部 OpenSpec scenarios 已由自動化或明確人工證據覆蓋。
+- [x] 8.5 僅在實作與上述驗證完成後更新 `docs/technical-debt.md`：記錄 Citybus 總耗時／巴士時間與 CSDI 固定 1 m/s 分段分鐘仍不一致、通知監控個人步速保持獨立，以及以統一步速、時間依賴公交、轉乘重算、清楚標示與回歸測試作關閉條件。
 - [x] 8.6 重新執行 `openspec validate integrate-landsd-pedestrian-routing --strict`，如實勾選 tasks，檢查 `git status --short` 與 staged diff 只包含本 change 授權範圍後按 apply 流程提交。

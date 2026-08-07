@@ -118,7 +118,12 @@ class RouteDetailVisualMatrixInstrumentedTest {
                             expectedNightMode,
                             activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
                         )
-                        assertTrue(collectText(activity.window.decorView).contains(expectedTitle(language)))
+                        assertTrue(removedTitle(language) !in collectText(activity.window.decorView))
+                        assertEquals(
+                            View.GONE,
+                            activity.findViewById<View>(R.id.routeDetailFloatingBack).visibility
+                        )
+                        assertTrue(activity.findViewById<View>(R.id.routeDetailSheetContent).paddingTop > 0)
                         activity.findViewById<RecyclerView>(R.id.routeDetailList).scrollToPosition(4)
                     }
                     waitForUi()
@@ -207,7 +212,6 @@ class RouteDetailVisualMatrixInstrumentedTest {
         val minimum = (48f * activity.resources.displayMetrics.density).toInt()
         listOf(
             R.id.routeDetailFloatingBack,
-            R.id.routeDetailToolbar,
             R.id.routeDetailSheetHandle,
             R.id.routeDetailLocation,
             R.id.routeDetailOverview
@@ -289,7 +293,7 @@ class RouteDetailVisualMatrixInstrumentedTest {
         descriptor.use { FileInputStream(it.fileDescriptor).use(FileInputStream::readBytes) }
     }
 
-    private fun expectedTitle(language: AppLanguageChoice): String = when (language) {
+    private fun removedTitle(language: AppLanguageChoice): String = when (language) {
         AppLanguageChoice.TRADITIONAL_CHINESE -> "路線詳情"
         AppLanguageChoice.SIMPLIFIED_CHINESE -> "路线详情"
         AppLanguageChoice.ENGLISH -> "Route details"

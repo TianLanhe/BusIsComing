@@ -14,6 +14,7 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
 import com.golink.busiscoming.data.model.P2pRouteLeg
 import com.golink.busiscoming.data.model.P2pRoutePlan
+import com.golink.busiscoming.data.model.P2pRouteRecoveryContext
 import com.golink.busiscoming.data.model.Place
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.main.RouteDetailActivity
@@ -25,19 +26,36 @@ import com.golink.busiscoming.ui.main.RouteMapLineKind
 import com.golink.busiscoming.ui.main.RouteMapPresentation
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CopyOnWriteArrayList
+import com.golink.busiscoming.data.repository.PedestrianRouteRuntime
+import com.golink.busiscoming.data.repository.PedestrianRuntimeDiagnosticEvent
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class RouteDetailRealServiceInstrumentedTest {
+    private lateinit var pedestrianRuntime: PedestrianRouteRuntime
+    private val pedestrianEvents = CopyOnWriteArrayList<PedestrianRuntimeDiagnosticEvent>()
+
+    @Before
+    fun setUpPedestrianDiagnostics() {
+        pedestrianEvents.clear()
+        pedestrianRuntime = PedestrianRouteRuntime(diagnosticObserver = pedestrianEvents::add)
+        RouteDetailRuntime.pedestrianRuntime = pedestrianRuntime
+    }
+
     @After
-    fun resetRuntime() = RouteDetailRuntime.reset()
+    fun resetRuntime() {
+        pedestrianRuntime.close()
+        RouteDetailRuntime.reset()
+    }
 
     @Test
     fun realSingleLegCitybusRendersEveryStopRoadGeometryWalksAndGoogleBaseMap() {
@@ -140,7 +158,8 @@ class RouteDetailRealServiceInstrumentedTest {
             expectedBusLineStart = RouteMapCoordinate(22.264897461791, 114.24161529313),
             expectedBusLineEnd = RouteMapCoordinate(22.262470011791, 114.23424341313),
             inspectionFocus = RouteMapCoordinate(22.26302, 114.23795),
-            inspectionZoom = 18.5f
+            inspectionZoom = 18.5f,
+            minimumWalkingLines = 0
         )
     }
 
@@ -154,16 +173,28 @@ class RouteDetailRealServiceInstrumentedTest {
         expectedBusLineStart: RouteMapCoordinate? = null,
         expectedBusLineEnd: RouteMapCoordinate? = null,
         inspectionFocus: RouteMapCoordinate? = null,
-        inspectionZoom: Float = 16f
+        inspectionZoom: Float = 16f,
+        minimumWalkingLines: Int = 2
     ) {
-        val launchArgs = RouteDetailLaunchArgs.fromRoute(route, origin, destination)
+        val routeWithRecoveryContext = route.copy(
+            routeDetailQuery = route.routeDetailQuery?.copy(
+                recoveryContext = P2pRouteRecoveryContext(
+                    originLatitude = origin.latitude,
+                    originLongitude = origin.longitude,
+                    destinationLatitude = destination.latitude,
+                    destinationLongitude = destination.longitude,
+                    searchMode = "T"
+                )
+            )
+        )
+        val launchArgs = RouteDetailLaunchArgs.fromRoute(routeWithRecoveryContext, origin, destination)
         val intent = Intent(ApplicationProvider.getApplicationContext(), RouteDetailActivity::class.java)
             .putExtras(launchArgs.toBundle())
         val latestPresentation = AtomicReference<RouteMapPresentation>()
         RouteDetailRuntime.presentationObserver = latestPresentation::set
 
         ActivityScenario.launch<RouteDetailActivity>(intent).use { scenario ->
-            waitForRealContent(scenario, latestPresentation, expectedBusLines)
+            waitForRealContent(scenario, latestPresentation, expectedBusLines, minimumWalkingLines)
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             Thread.sleep(500L)
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
@@ -187,7 +218,10 @@ class RouteDetailRealServiceInstrumentedTest {
                 assertTrue(
                     presentation.lines.filter { it.kind == RouteMapLineKind.BUS }.all { it.points.size > 2 }
                 )
-                assertTrue(presentation.lines.count { it.kind == RouteMapLineKind.WALKING } >= 2)
+                assertTrue(
+                    "Expected at least $minimumWalkingLines real CSDI walking paths; events=$pedestrianEvents",
+                    presentation.lines.count { it.kind == RouteMapLineKind.WALKING } >= minimumWalkingLines
+                )
                 val busLine = presentation.lines.singleOrNull { it.kind == RouteMapLineKind.BUS }
                 expectedBusLineStart?.let { expected ->
                     assertNotNull(busLine)
@@ -227,7 +261,8 @@ class RouteDetailRealServiceInstrumentedTest {
     private fun waitForRealContent(
         scenario: ActivityScenario<RouteDetailActivity>,
         latestPresentation: AtomicReference<RouteMapPresentation>,
-        expectedBusLines: Int
+        expectedBusLines: Int,
+        minimumWalkingLines: Int
     ) {
         val deadline = SystemClock.uptimeMillis() + 30_000L
         while (SystemClock.uptimeMillis() < deadline) {
@@ -237,7 +272,8 @@ class RouteDetailRealServiceInstrumentedTest {
                     findViewWithTag(activity.window.decorView, "GoogleWatermark")?.visibility == View.VISIBLE &&
                     readBooleanField(activity, "baseMapLoaded") &&
                     latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.BUS } == expectedBusLines &&
-                    latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.WALKING }?.let { it >= 2 } == true
+                    latestPresentation.get()?.lines?.count { it.kind == RouteMapLineKind.WALKING }
+                        ?.let { it >= minimumWalkingLines } == true
             }
             if (ready) return
             Thread.sleep(250)

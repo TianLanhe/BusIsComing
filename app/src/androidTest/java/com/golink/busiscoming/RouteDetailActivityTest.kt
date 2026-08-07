@@ -1,8 +1,11 @@
 package com.golink.busiscoming
 
 import android.content.Intent
+import android.graphics.Rect
 import android.view.View
 import android.view.MotionEvent
+import android.view.ViewGroup
+import android.widget.HorizontalScrollView
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -101,6 +104,58 @@ class RouteDetailActivityTest {
     }
 
     @Test
+    fun compactSummaryKeepsFortyEightDpTouchHeightAndJourneyAccessibilityOrder() {
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            waitForTimelineItems(scenario)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            scenario.onActivity { activity ->
+                val list = activity.findViewById<RecyclerView>(R.id.routeDetailList)
+                val summaryRoot = requireNotNull(list.findViewHolderForAdapterPosition(0)).itemView as ViewGroup
+                val content = summaryRoot.getChildAt(0) as ViewGroup
+                val scroll = (0 until content.childCount)
+                    .map(content::getChildAt)
+                    .filterIsInstance<HorizontalScrollView>()
+                    .single()
+                val row = scroll.getChildAt(0) as ViewGroup
+                val adapter = list.adapter as RouteDetailAdapter
+                val summary = adapter.currentList.filterIsInstance<RouteDetailUiItem.Summary>().single()
+
+                assertEquals(summary.segments.size, row.childCount)
+                val visibleHeight = (22f * activity.resources.displayMetrics.density).toInt()
+                for (index in 0 until row.childCount) {
+                    val target = row.getChildAt(index)
+                    assertEquals(visibleHeight, target.height)
+                    assertTrue(target.isClickable)
+                    assertTrue(target.isFocusable)
+                    assertTrue(!target.contentDescription.isNullOrBlank())
+                    if (index > 0) assertTrue(row.getChildAt(index - 1).right <= target.left)
+                }
+
+                val first = row.getChildAt(0)
+                val bounds = Rect(0, 0, first.width, first.height)
+                content.offsetDescendantRectToMyCoords(first, bounds)
+                val minimumTouchHeight = (48f * activity.resources.displayMetrics.density).toInt()
+                val expandedTop = bounds.top - (minimumTouchHeight - bounds.height()) / 2
+                val eventY = (expandedTop + 1).toFloat()
+                val eventX = bounds.centerX().toFloat()
+                val delegate = requireNotNull(content.touchDelegate)
+                val downTime = SystemClock.uptimeMillis()
+                val down = MotionEvent.obtain(downTime, downTime, MotionEvent.ACTION_DOWN, eventX, eventY, 0)
+                val up = MotionEvent.obtain(downTime, downTime + 16L, MotionEvent.ACTION_UP, eventX, eventY, 0)
+                try {
+                    assertTrue(delegate.onTouchEvent(down))
+                    assertTrue(delegate.onTouchEvent(up))
+                } finally {
+                    down.recycle()
+                    up.recycle()
+                }
+            }
+            waitForSheetState(scenario, BottomSheetBehavior.STATE_EXPANDED)
+            assertFullScreenChrome(scenario)
+        }
+    }
+
+    @Test
     fun mapCameraStartsOverHongKongBeforeRouteDataCompletes() {
         val release = CountDownLatch(1)
         RouteDetailRuntime.repositoryFactory = {
@@ -171,7 +226,7 @@ class RouteDetailActivityTest {
     }
 
     @Test
-    fun toolbarNavigateUpFinishesTheFullScreenPage() {
+    fun floatingBackFinishesThePageFromMapVisibleState() {
         val scenario = ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery()))
         try {
             onView(withId(R.id.routeDetailFloatingBack)).perform(click())
@@ -193,16 +248,11 @@ class RouteDetailActivityTest {
                 target.dispatchTouchEvent(MotionEvent.obtain(now, now + 120L, MotionEvent.ACTION_UP, target.width / 2f, 8f, 0))
             }
             waitForSheetState(scenario, BottomSheetBehavior.STATE_EXPANDED)
-            onView(withId(R.id.routeDetailToolbar)).check(matches(isDisplayed()))
-            scenario.onActivity { activity ->
-                assertEquals(
-                    BottomSheetBehavior.STATE_EXPANDED,
-                    BottomSheetBehavior.from(activity.findViewById(R.id.routeDetailSheet)).state
-                )
-            }
+            assertFullScreenChrome(scenario)
 
             scenario.recreate()
-            onView(withId(R.id.routeDetailToolbar)).check(matches(isDisplayed()))
+            waitForSheetState(scenario, BottomSheetBehavior.STATE_EXPANDED)
+            assertFullScreenChrome(scenario)
         }
     }
 
@@ -225,11 +275,12 @@ class RouteDetailActivityTest {
     @Test
     fun unavailableBaseMapForcesFullTextDetails() {
         RouteDetailRuntime.mapsAvailabilityChecker = { false }
-        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use {
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
             onView(withId(R.id.routeDetailMapError)).check(matches(isDisplayed()))
             onView(withId(R.id.routeDetailSheetMapError)).check(matches(isDisplayed()))
-            onView(withId(R.id.routeDetailToolbar)).check(matches(isDisplayed()))
             onView(withText("上車站")).check(matches(isDisplayed()))
+            waitForSheetState(scenario, BottomSheetBehavior.STATE_EXPANDED)
+            assertFullScreenChrome(scenario)
         }
     }
 
@@ -262,7 +313,7 @@ class RouteDetailActivityTest {
     }
 
     @Test
-    fun etaRefreshStopsInBackgroundAndRefreshesStaleValueOnReturn() {
+    fun etaDoesNotRefreshImmediatelyWhenReturningBeforeAutoRefreshDeadline() {
         val etaCalls = AtomicInteger()
         RouteDetailRuntime.etaResolver = {
             etaCalls.incrementAndGet()
@@ -270,17 +321,13 @@ class RouteDetailActivityTest {
         }
         ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
             waitForValue(etaCalls, 1)
-            scenario.onActivity { activity ->
-                activity.javaClass.getDeclaredField("lastEtaSuccessMillis").apply {
-                    isAccessible = true
-                }.set(activity, 0L)
-            }
 
             scenario.moveToState(Lifecycle.State.CREATED)
             Thread.sleep(150L)
             assertEquals(1, etaCalls.get())
             scenario.moveToState(Lifecycle.State.RESUMED)
-            waitForValue(etaCalls, 2)
+            Thread.sleep(300L)
+            assertEquals(1, etaCalls.get())
         }
     }
 
@@ -429,6 +476,7 @@ class RouteDetailActivityTest {
                 waitForTimelineItems(scenario)
                 onView(withText("上車站")).check(matches(isDisplayed()))
                 onView(withText("1 個途經站")).perform(clickClickableParent())
+                waitForExpandedViaToggle(scenario)
                 onView(withText("1 個途經站 · 收起")).check(matches(withEffectiveVisibility(VISIBLE)))
 
                 scenario.recreate()
@@ -601,6 +649,18 @@ class RouteDetailActivityTest {
         }
         scenario.onActivity { activity ->
             assertEquals(expectedState, BottomSheetBehavior.from<android.view.View>(activity.findViewById(R.id.routeDetailSheet)).state)
+        }
+    }
+
+    private fun assertFullScreenChrome(scenario: ActivityScenario<RouteDetailActivity>) {
+        scenario.onActivity { activity ->
+            assertEquals(
+                BottomSheetBehavior.STATE_EXPANDED,
+                BottomSheetBehavior.from<View>(activity.findViewById(R.id.routeDetailSheet)).state
+            )
+            assertEquals(View.GONE, activity.findViewById<View>(R.id.routeDetailFloatingBack).visibility)
+            assertTrue(activity.findViewById<View>(R.id.routeDetailSheetContent).paddingTop > 0)
+            assertTrue(activity.findViewById<RecyclerView>(R.id.routeDetailList).adapter?.itemCount?.let { it > 0 } == true)
         }
     }
 

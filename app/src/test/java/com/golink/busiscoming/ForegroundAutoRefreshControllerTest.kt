@@ -79,6 +79,54 @@ class ForegroundAutoRefreshControllerTest {
         assertFalse(controller.canStartExternalQuery())
     }
 
+    @Test
+    fun intervalChangesFailureCooldownAndClockRollbackKeepOneDueTrigger() {
+        val clock = FakeClock(100_000)
+        val scheduler = FakeScheduler(clock)
+        val generations = mutableListOf<Int>()
+        val controller = ForegroundAutoRefreshController(clock::now, scheduler) { generations += it }
+        controller.setEligible(true)
+        controller.recordSuccessfulBaseline()
+
+        controller.setInterval(RouteAutoRefreshInterval.MINUTES_2)
+        scheduler.advanceBy(60_001)
+        assertTrue(generations.isEmpty())
+        controller.setInterval(RouteAutoRefreshInterval.MINUTES_1)
+        assertEquals(listOf(1), generations)
+
+        scheduler.advanceBy(20_000)
+        controller.completeAutomatic(1, success = false)
+        scheduler.advanceBy(59_999)
+        assertEquals(1, generations.size)
+        clock.value -= 30_000
+        scheduler.advanceBy(30_001)
+        assertEquals(listOf(1, 2), generations)
+
+        controller.completeAutomatic(2, success = true)
+        controller.setInterval(RouteAutoRefreshInterval.MINUTES_10)
+        scheduler.advanceBy(60_000)
+        assertEquals(2, generations.size)
+    }
+
+    @Test
+    fun cancelledScheduleCallbackCannotTriggerAfterReschedule() {
+        val clock = FakeClock(0)
+        val scheduler = FakeScheduler(clock)
+        val generations = mutableListOf<Int>()
+        val controller = ForegroundAutoRefreshController(clock::now, scheduler) { generations += it }
+        controller.setEligible(true)
+        controller.recordSuccessfulBaseline()
+
+        val staleTask = scheduler.latestTask()
+        controller.setInterval(RouteAutoRefreshInterval.MINUTES_2)
+        staleTask.action()
+
+        assertTrue(generations.isEmpty())
+        assertEquals(ForegroundAutoRefreshState.Waiting(120_000), controller.state)
+        scheduler.advanceBy(120_000)
+        assertEquals(listOf(1), generations)
+    }
+
     private class FakeClock(var value: Long) {
         fun now(): Long = value
     }
@@ -91,6 +139,8 @@ class ForegroundAutoRefreshControllerTest {
             return AutoRefreshScheduleHandle { task.cancelled = true }
         }
 
+        fun latestTask(): Task = tasks.last()
+
         fun advanceBy(delta: Long) {
             clock.value += delta
             while (true) {
@@ -101,6 +151,6 @@ class ForegroundAutoRefreshControllerTest {
             }
         }
 
-        private data class Task(val at: Long, val action: () -> Unit, var cancelled: Boolean = false)
+        data class Task(val at: Long, val action: () -> Unit, var cancelled: Boolean = false)
     }
 }

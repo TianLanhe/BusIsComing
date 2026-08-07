@@ -27,5 +27,5 @@
 - 主要影響路線詳情 Activity／persistent bottom sheet、地圖展示模型與 GoogleMap renderer、摘要 formatter、時間線 RecyclerView／adapter，以及三語字串與無障礙描述。
 - 需要新增或調整本地 VectorDrawable；下車圖標採用 Lucide `log-out` 並隨 App 保留 ISC 第三方許可告知。現有 `ic_walking_person` 必須按原比例復用。
 - 不改變 repository／parser 的外部接口或 domain 欄位權威；巴士摘要分段耗時及單段票價只可使用本次新鮮 Citybus 動態詳情，成功步行段耗時只可使用目前 walking domain 的 CSDI `Total_Time`；Citybus fallback／SameStop 不顯示步行耗時，任何動態值均不能寫入或讀自 24 小時結構快取。
-- 方向折角依賴目前 Google Maps SDK 的 polyline stamp/style 能力；正式串接前須以固定 S 彎及反向 geometry 在任務自有裝置驗證局部切線定向、透明步行承載與穩定間距。若能力不成立，應停止實作並修訂設計，不得以手工旋轉 Marker 降級。
+- 方向折角先以 Google Maps SDK 的 polyline stamp/style 做裝置 spike；實測因 SDK 重採樣而形成密集鋸齒，不能保持已確認的尺寸與間距。正式方案改由 renderer 在 camera idle／padding 更新後把同一有序 geometry 投影到屏幕，以固定屏幕間距插值並按每個位置的局部屏幕切線放置扁平折角 marker；不得使用整段 bearing、固定角度或脫離軌跡的手工位置。
 - 驗證涵蓋純 Kotlin formatter／碰撞規則、renderer 差量更新與失敗降級、摘要 pending target／generation、三語、360dp／窄屏、大字體、明暗模式、TalkBack，以及單段、多段、同站／異站換乘與反向彎道的裝置視覺驗收。

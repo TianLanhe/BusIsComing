@@ -8,8 +8,8 @@
 - [x] 2.1 先新增 `RouteAutoRefreshSettingsStore` 測試，覆蓋缺失／未知值預設 1 分鐘、關閉／1／2／5／10 分鐘持久化、升級與重新讀取
 - [x] 2.2 先新增 `AutoRefreshNoticeStore` 測試，覆蓋初始未完成、完整展示／點擊設定／明確重選目前值後完成、進程重啟保持及中斷不完成
 - [x] 2.3 實作兩個 store 與可觀察設定通知，不修改 SQLite、已保存行程或 `.bicroutes`
-- [ ] 2.4 先以 fake monotonic clock／scheduler 編寫 `ForegroundAutoRefreshController` 狀態測試，覆蓋每個間隔前 1ms／剛好／後 1ms、Disabled／Waiting／Paused／Refreshing、pause/resume、到期立即一次、無 catch-up 及任一時刻最多一個 trigger
-- [ ] 2.5 補充 controller 測試，覆蓋 `max(lastSuccessfulAt + interval, lastAttemptFinishedAt + interval)`、失敗完整冷卻、改短／改長間隔、刷新中關閉、時鐘回撥與過期 callback
+- [x] 2.4 先以 fake monotonic clock／scheduler 編寫 `ForegroundAutoRefreshController` 狀態測試，覆蓋每個間隔前 1ms／剛好／後 1ms、Disabled／Waiting／Paused／Refreshing、pause/resume、到期立即一次、無 catch-up 及任一時刻最多一個 trigger
+- [x] 2.5 補充 controller 測試，覆蓋 `max(lastSuccessfulAt + interval, lastAttemptFinishedAt + interval)`、失敗完整冷卻、改短／改長間隔、刷新中關閉、時鐘回撥與過期 callback
 - [x] 2.6 實作不持有 Activity、View 或 repository 的純 `ForegroundAutoRefreshController`，由頁面 owner 提供 eligibility、generation 與 attempt 完成事件
 
 ## 3. 設定頁行內 segmented selector
@@ -17,7 +17,7 @@
 - [x] 3.1 新增三語 `自動刷新`、`關閉` 與 1／2／5／10 分鐘精簡文案、選中狀態及 TalkBack 描述，保持香港繁體、獨立簡體與自然英文
 - [x] 3.2 在偏好分組的語言項之後加入行內 segmented selector，360dp／字體 1.0 時五項一行，空間不足或字體 1.3／2.0 時以 wrap／reflow 完整展示且每項至少 48dp 熱區
 - [x] 3.3 綁定一次點擊即保存與目前可見 controller 重算；重新點擊目前值不重載但標記 notice 已完成，關閉時立即取消 timer 並 invalidate in-flight automatic generation
-- [ ] 3.4 新增 Settings instrumentation／layout 測試，覆蓋預設與五個選項、重選目前值、旋轉／重建、三語、明暗、360dp、font scale 1.0／1.3／2.0、TalkBack 選中狀態及無 radio dialog
+- [x] 3.4 新增 Settings instrumentation／layout 測試，覆蓋預設與五個選項、重選目前值、旋轉／重建、三語、明暗、360dp、font scale 1.0／1.3／2.0、TalkBack 選中狀態及無 radio dialog
 
 ## 4. 常用與臨時結果自動刷新
 
@@ -48,7 +48,7 @@
 - [x] 6.4 實作約 200ms slide+fade 進場、完全可見 5 秒、約 200ms 退場與由滿至空倒數；使用系統建議 timeout 延長無障礙時長，動畫停用時 snap 但仍保留完整可見時長
 - [x] 6.5 綁定全域 notice 完成規則：自然完整展示、點擊 `設定` 或設定頁明確選擇才完成；提前離頁／背景／重建不完成且下次成功結果重播，詳情頁永不展示
 - [x] 6.6 實作 `設定` deep navigation，打開設定 destination 並捲動／聚焦 selector，同時保持原查詢上下文與結果；TalkBack polite 宣告一次、不搶焦點且 action 至少 48dp
-- [ ] 6.7 新增 instrumentation 與 screenshot 結構斷言，嚴格檢查兩入口插入位置、無圖示／關閉鍵、border／圓角／倒數線、非 Snackbar／Toast／Dialog／Bottom Sheet、可繼續操作及完成／中斷持久化
+- [x] 6.7 新增 instrumentation 與 screenshot 結構斷言，嚴格檢查兩入口插入位置、無圖示／關閉鍵、border／圓角／倒數線、非 Snackbar／Toast／Dialog／Bottom Sheet、可繼續操作及完成／中斷持久化
 
 ## 7. 生命週期、真實網絡與視覺驗收
 
@@ -60,5 +60,5 @@
 ## 8. 回歸、構建與完成檢查
 
 - [x] 8.1 運行 settings store、notice、controller、結果 owner、viewport anchor、詳情 coordinator／reducer 的全部定向 JVM 測試及既有手動下拉刷新、排序、置頂、ETA、詳情漸進載入回歸測試
-- [ ] 8.2 運行新增 instrumentation／screenshot 測試與 `./gradlew build`，如實記錄未完成的真實網絡、TalkBack 或設備畫像限制
+- [x] 8.2 運行新增 instrumentation／screenshot 測試與 `./gradlew build`，如實記錄未完成的真實網絡、TalkBack 或設備畫像限制
 - [x] 8.3 運行 `openspec validate --all --strict --no-interactive`，檢查 `git status --short`、變更 diff、tasks 勾選及無 `Service`／`AlarmManager`／`WorkManager`／geometry refresh／無關重構後再按倉庫規則提交

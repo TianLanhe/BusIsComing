@@ -7,7 +7,8 @@
 - **WHEN** 一段巴士 geometry 包含直線、彎道或 S 彎
 - **THEN** 地圖 SHALL 在帶白色描邊的分段色實線上稀疏重複稍粗的白色開放折角
 - **AND** 每個折角 SHALL 隨其所在位置的局部曲線轉向
-- **AND** 系統 SHALL NOT 使用整段起終點 bearing、手工角度、字體 glyph 或獨立 Marker 定向折角
+- **AND** renderer SHALL 由同一有序 geometry 的屏幕投影按固定屏幕間距取得位置，並按每個位置的局部屏幕切線定向扁平折角 marker
+- **AND** 系統 SHALL NOT 使用整段起終點 bearing、固定角度、字體 glyph 或脫離 geometry 的手工位置
 
 #### Scenario: 有序 geometry 反轉
 - **WHEN** 測試或上游資料把同一條 geometry 的點序反轉
@@ -28,13 +29,13 @@
 
 #### Scenario: 相機及增量更新保持紋理貼合
 - **WHEN** 相機縮放、平移、bottom sheet padding 或漸進資料更新改變
-- **THEN** 已顯示折角 SHALL 保持由同一 polyline 路徑排布及定向
+- **THEN** renderer SHALL 在 camera idle 或 padding 更新後，重新由同一有序 geometry 的目前屏幕投影排布及定向折角
 - **AND** 增量 renderer SHALL NOT 造成折角相對路徑漂移、跳角或反向
 
-#### Scenario: 方向紋理無法可靠建立
-- **WHEN** 某段 polyline stamp 或等效內建路徑樣式無法建立或渲染結果不能保證局部切線方向
-- **THEN** 系統 SHALL 保留可靠巴士實線或省略該步行紋理並記錄安全診斷
-- **AND** 系統 SHALL NOT 回退為可能方向錯誤的手工 Marker 或固定角度圖標
+#### Scenario: 方向折角無法可靠建立
+- **WHEN** 目前 projection 不可用或某段 geometry 不能產生可靠的局部屏幕切線
+- **THEN** 系統 SHALL 保留可靠巴士實線或省略該步行折角並記錄安全診斷
+- **AND** 系統 SHALL NOT 回退為整段 bearing、固定角度或脫離 geometry 的圖標
 
 ### Requirement: 地圖站名按角色優先級動態避讓
 系統 SHALL 以目前相機 projection、可見地圖範圍及固定角色優先級放置站名，讓關鍵站名可辨識而普通途經站不形成文字牆。
