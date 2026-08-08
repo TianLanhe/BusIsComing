@@ -7,6 +7,7 @@
     <dimen name="route_map_camera_padding">48dp</dimen>
     <dimen name="route_map_controls_top_margin">96dp</dimen>
     <dimen name="route_detail_sheet_swipe_threshold">48dp</dimen>
+    <dimen name="route_detail_min_touch_target">48dp</dimen>
     <dimen name="route_detail_timeline_focus_offset">72dp</dimen>
     <dimen name="route_map_csdi_google_clearance">52dp</dimen>
 </resources>

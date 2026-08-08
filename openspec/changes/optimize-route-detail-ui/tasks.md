@@ -64,3 +64,27 @@
 - [x] 7.6 完成繁體／簡體／英文、淺／深色、約 360dp／窄屏、font scale 1.0／1.3／2.0 與 TalkBack 矩陣，確認第三方名稱原文、Google attribution、安全區、48dp 操作及列表終點可達。
 - [x] 7.7 檢查 OpenSpec scenarios 與驗證證據逐項可追溯，執行 `openspec validate optimize-route-detail-ui --strict`，核對 `git status --short` 與提交範圍後按 `/opsx-apply` 規則提交。
 - [x] 7.8 關閉本任務啟動的全部 AVD，確認未操作、重啟或關閉任務開始前已運行的任何模擬器。
+
+## 8. 首次實作後的方向紋理與拖動性能修訂
+
+- [x] 8.1 先補充純 placement 失敗測試，覆蓋可見視口＋overscan、屏外超長 geometry 不稀釋密度、36dp 巴士／14dp 步行間距、直線、急彎、S 彎、反向點序、短線段、多 path 及異常 cap；測試巴士 glyph 約 5.5dp／1.2dp 且全部像素留在 7dp 色線內，步行 glyph 約 9dp／2.4dp。
+- [x] 8.2 重構方向 placement 為 viewport-local 屏幕折線取樣與局部切線安全窗口；急彎無安全窗口時移位或省略，禁止整段 bearing、任一單邊 segment 冒充及跨 CSDI path 補接。
+- [x] 8.3 為每條 rendered line 實作方向 marker pool 與 icon cache，重排只更新 position／rotation／icon 並按數量差額增刪；以 renderer 測試證明未改變 marker 不再全量 remove／add。
+- [x] 8.4 先為 bottom sheet transition policy 補充測試：多個 slide event 不要求方向／label relayout，向上最多一次下一 detent 安全 padding，向下保留較大 padding，最終 stable detent 只要求一次精確提交，取消／過期 callback 無效。
+- [x] 8.5 修改 `RouteDetailActivity`／renderer：拖動開始只淡出 label，slide frame 只以 translation 移動 CSDI 並套用必要候選 padding，停靠後才提交正式 margin、精確 padding、一次方向／站名重排及淡入；不得逐幀修改 CSDI `layoutParams`、重建 bitmap 或重置相機。
+
+## 9. 首次實作後的摘要與把手尺寸修訂
+
+- [x] 9.1 先更新 layout／instrumentation 測試，鎖定 28dp 把手可見高度、36×4dp 橫線、至少 48dp 透明操作區、三 detent 語義及不遮擋摘要 action。
+- [x] 9.2 把把手可見容器改為 28dp，使用 TouchDelegate／等效方式保留至少 48dp 操作；保持點擊切換、拖動、TalkBack 單一節點及內容驅動 sheet metrics。
+- [x] 9.3 先更新摘要 layout／instrumentation 測試，鎖定第二行 30dp、真實 `ic_walking_person` 24dp 等比、路線號約 17sp、耗時約 12sp、2dp gap、共同底部 baseline、content-wrap、單行捲動及至少 48dp 操作；同時證明第一行 21sp 與第三行 13sp 未改變。
+- [x] 9.4 只調整 `RouteDetailAdapter` 第二行階段視覺尺寸並保持第一、三行、資料權威、點擊跳轉、pending target、水平觸控邊界與多語語義不變。
+
+## 10. 修訂後驗證與提交
+
+- [x] 10.1 運行新增及受影響 JVM／instrumentation 測試，覆蓋 viewport placement、拐角安全、marker pool、sheet transition、28dp／48dp 把手、30dp 摘要與既有 route-detail 回歸。
+- [x] 10.2 使用本任務新啟動且符合 API、Google Play、約 360dp、直向、語言、主題及 font scale 畫像的 AVD，在直線／急彎／S 彎／反向／多 path 與至少兩個 zoom 下核對方向密度、線內包絡、步行細節及無補線。
+- [x] 10.3 在同一任務自有 AVD 連續拖動 SUMMARY↔HALF↔FULL 並採樣，確認 first-party 熱路徑不再逐幀 remove／add 方向／label marker 或重設 CSDI layout，且拖動期間路線保留、標籤淡出、署名跟手、停靠只重排一次。
+- [x] 10.4 完成繁體／簡體／英文、淺／深色、360dp、font scale 1.0／1.3／2.0 與 TalkBack 視覺矩陣，核對把手、摘要、方向紋理、Google attribution、CSDI 安全區及列表終點可達。
+- [x] 10.5 運行 `./gradlew build`、`openspec validate optimize-route-detail-ui --strict` 與全 change 交叉驗證；檢查 `git status --short`、提交範圍及未驗證外部環境風險後按 `/opsx-apply` 規則提交。
+- [x] 10.6 關閉本輪啟動的全部 AVD，確認未操作、重啟或關閉任務開始前已運行的任何模擬器。

@@ -7,6 +7,10 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.swipeDown
+import androidx.test.espresso.action.ViewActions.swipeUp
+import androidx.test.espresso.matcher.ViewMatchers.withId
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteGeometrySegment
@@ -28,6 +32,7 @@ import com.golink.busiscoming.ui.main.RouteMapMarkerRole
 import com.golink.busiscoming.ui.main.RouteMapPresentation
 import com.golink.busiscoming.ui.main.RouteMapRenderPalette
 import com.google.android.gms.maps.MapsInitializer
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import java.io.File
 import java.io.FileOutputStream
 import org.junit.After
@@ -78,12 +83,50 @@ class RouteMapDirectionInstrumentedTest {
         ActivityScenario.launch<RouteDetailActivity>(intent).use { scenario ->
             val renderer = waitForRenderer(scenario)
             renderAndCapture(scenario, renderer, busPresentation(), BUS_SCREENSHOT)
+            captureAtZoom(scenario, renderer, BUS_HIGH_ZOOM_SCREENSHOT)
             renderAndCapture(scenario, renderer, walkingPresentation(), WALKING_SCREENSHOT)
+            captureAtZoom(scenario, renderer, WALKING_HIGH_ZOOM_SCREENSHOT)
             assertTrue(renderer.hasRenderedWalkingPaths())
+            if (InstrumentationRegistry.getArguments().getString(ARG_RUN_DRAG_PERFORMANCE) == "true") {
+                verifyDragDoesNotRelayoutOverlaysPerFrame(renderer)
+            }
             if (InstrumentationRegistry.getArguments().getString(ARG_HOLD_FOR_INSPECTION) == "true") {
-                SystemClock.sleep(30_000L)
+                val holdMillis = InstrumentationRegistry.getArguments()
+                    .getString(ARG_HOLD_DURATION_MILLIS)
+                    ?.toLongOrNull()
+                    ?.coerceIn(1_000L, 180_000L)
+                    ?: 30_000L
+                SystemClock.sleep(holdMillis)
             }
         }
+    }
+
+    private fun verifyDragDoesNotRelayoutOverlaysPerFrame(
+        renderer: GoogleRouteMapRenderer
+    ) {
+        instrumentation.uiAutomation.executeShellCommand(
+            "dumpsys gfxinfo ${instrumentation.targetContext.packageName} reset"
+        ).close()
+        SystemClock.sleep(500L)
+        var before = renderer.performanceSnapshot()
+        repeat(2) {
+            onView(withId(R.id.routeDetailSheetHandle)).perform(swipeUp())
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(400L)
+            var after = renderer.performanceSnapshot()
+            assertTrue(after.directionRelayouts - before.directionRelayouts <= 2)
+            assertTrue(after.labelRelayouts - before.labelRelayouts <= 2)
+            before = after
+
+            onView(withId(R.id.routeDetailSheetHandle)).perform(swipeDown())
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(400L)
+            after = renderer.performanceSnapshot()
+            assertTrue(after.directionRelayouts - before.directionRelayouts <= 2)
+            assertTrue(after.labelRelayouts - before.labelRelayouts <= 2)
+            before = after
+        }
+        assertTrue(before.activeDirectionMarkers >= 0)
     }
 
     @Test
@@ -129,12 +172,32 @@ class RouteMapDirectionInstrumentedTest {
         }
     }
 
+    private fun captureAtZoom(
+        scenario: ActivityScenario<RouteDetailActivity>,
+        renderer: GoogleRouteMapRenderer,
+        screenshotName: String
+    ) {
+        scenario.onActivity { activity ->
+            BottomSheetBehavior.from<android.view.View>(
+                activity.findViewById(R.id.routeDetailSheet)
+            ).state = BottomSheetBehavior.STATE_COLLAPSED
+            renderer.focusCoordinate(point(22.2817, 114.1555), zoom = 16f)
+        }
+        instrumentation.waitForIdleSync()
+        SystemClock.sleep(2_000L)
+        scenario.onActivity { activity ->
+            val screenshot = instrumentation.uiAutomation.takeScreenshot()
+            val output = File(requireNotNull(activity.getExternalFilesDir(null)), screenshotName)
+            FileOutputStream(output).use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
+
     private fun waitForRenderer(
         scenario: ActivityScenario<RouteDetailActivity>
     ): GoogleRouteMapRenderer {
         var renderer: GoogleRouteMapRenderer? = null
         var baseMapLoaded = false
-        val deadline = SystemClock.uptimeMillis() + 15_000L
+        val deadline = SystemClock.uptimeMillis() + 30_000L
         while (SystemClock.uptimeMillis() < deadline && (renderer == null || !baseMapLoaded)) {
             scenario.onActivity { activity ->
                 renderer = activity.javaClass.getDeclaredField("renderer").apply {
@@ -196,7 +259,11 @@ class RouteMapDirectionInstrumentedTest {
     private companion object {
         const val ARG_RUN_DIRECTION_SPIKE = "runRouteMapDirectionSpike"
         const val ARG_HOLD_FOR_INSPECTION = "holdRouteMapDirectionSpike"
+        const val ARG_HOLD_DURATION_MILLIS = "holdRouteMapDirectionSpikeDurationMillis"
+        const val ARG_RUN_DRAG_PERFORMANCE = "runRouteMapDragPerformance"
         const val BUS_SCREENSHOT = "route-map-direction-spike-bus.png"
         const val WALKING_SCREENSHOT = "route-map-direction-spike-walking.png"
+        const val BUS_HIGH_ZOOM_SCREENSHOT = "route-map-direction-spike-bus-high-zoom.png"
+        const val WALKING_HIGH_ZOOM_SCREENSHOT = "route-map-direction-spike-walking-high-zoom.png"
     }
 }

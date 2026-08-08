@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.location.LocationManager
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.MotionEvent
+import android.view.TouchDelegate
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -104,6 +106,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private lateinit var mapError: TextView
     private lateinit var sheetMapError: TextView
     private lateinit var csdiAttribution: View
+    private lateinit var csdiAttributionSurface: View
 
     private var renderer: GoogleRouteMapRenderer? = null
     private var lastPresentation: RouteMapPresentation? = null
@@ -150,6 +153,11 @@ class RouteDetailActivity : AppCompatActivity() {
     private var walkingEventGeneration = 0
     private var pendingSummaryTarget: PendingSummaryTarget? = null
     private var summaryHighlightRunnable: Runnable? = null
+    private val mapTransitionPolicy by lazy {
+        RouteDetailMapTransitionPolicy(dimension(R.dimen.route_detail_sheet_swipe_threshold))
+    }
+    private var mapTransitionGeneration: Long? = null
+    private var stableSheetVisibleHeight = 0
     private val walkingObserver: (RouteDetailWalkingSnapshot) -> Unit = { snapshot ->
         mainHandler.post {
             if (destroyed || !::pageState.isInitialized) return@post
@@ -352,6 +360,7 @@ class RouteDetailActivity : AppCompatActivity() {
         mapError = findViewById(R.id.routeDetailMapError)
         sheetMapError = findViewById(R.id.routeDetailSheetMapError)
         csdiAttribution = findViewById(R.id.routeDetailCsdiAttribution)
+        csdiAttributionSurface = findViewById(R.id.routeDetailCsdiAttributionSurface)
 
         floatingBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         findViewById<MaterialButton>(R.id.routeDetailOverview).setOnClickListener {
@@ -359,6 +368,7 @@ class RouteDetailActivity : AppCompatActivity() {
         }
         findViewById<MaterialButton>(R.id.routeDetailLocation).setOnClickListener { onLocationClicked() }
         csdiAttribution.setOnClickListener { showCsdiNotice() }
+        installSheetHandleTouchDelegate()
     }
 
     private fun setupTimeline() {
@@ -406,17 +416,22 @@ class RouteDetailActivity : AppCompatActivity() {
             isDraggable = true
             addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
                 override fun onStateChanged(bottomSheet: View, newState: Int) {
+                    if (newState == BottomSheetBehavior.STATE_DRAGGING) {
+                        beginMapTransition(bottomSheet)
+                        return
+                    }
                     val next = when (newState) {
                         BottomSheetBehavior.STATE_COLLAPSED -> RouteDetailSheetDetent.SUMMARY
                         BottomSheetBehavior.STATE_HALF_EXPANDED -> RouteDetailSheetDetent.HALF
                         BottomSheetBehavior.STATE_EXPANDED -> RouteDetailSheetDetent.FULL
                         else -> null
                     } ?: return
-                    updateDetentUi(next)
+                    updateDetentUi(next, commitMapLayout = false)
+                    commitStableMapLayout()
                 }
 
                 override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                    updateMapPadding()
+                    onMapTransitionSlide(bottomSheet)
                 }
             })
         }
@@ -435,7 +450,7 @@ class RouteDetailActivity : AppCompatActivity() {
             navigationBarInset = navigation.bottom
             updateTopMargin(floatingBack, dimension(R.dimen.route_map_edge_margin) + statusBarInset)
             updateTopMargin(mapControls, dimension(R.dimen.route_map_controls_top_margin) + statusBarInset)
-            updateMapPadding()
+            commitStableMapLayout()
             insets
         }
         ViewCompat.requestApplyInsets(root)
@@ -487,7 +502,7 @@ class RouteDetailActivity : AppCompatActivity() {
                 restoreCamera(map)
                 renderMap()
                 updateMyLocationLayer()
-                updateMapPadding()
+                commitStableMapLayout()
                 scheduleMapLoadTimeout()
             }
         }.onFailure { onMapUnavailable() }
@@ -510,7 +525,7 @@ class RouteDetailActivity : AppCompatActivity() {
         mapError.visibility = View.GONE
         sheetMapError.visibility = View.GONE
         findViewById<View>(R.id.routeDetailMapControls).visibility = View.VISIBLE
-        updateMapPadding()
+        commitStableMapLayout()
     }
 
     private fun scheduleMapLoadTimeout() {
@@ -1011,7 +1026,7 @@ class RouteDetailActivity : AppCompatActivity() {
         lastPresentation = presentation
         RouteDetailRuntime.presentationObserver(presentation)
         renderer?.render(presentation)
-        updateCsdiAttributionVisibility()
+        if (updateCsdiAttributionVisibility()) commitStableMapLayout()
         if (
             mapReady &&
             presentation.boundsPoints.isNotEmpty() &&
@@ -1148,11 +1163,15 @@ class RouteDetailActivity : AppCompatActivity() {
             RouteDetailSheetDetent.HALF -> BottomSheetBehavior.STATE_HALF_EXPANDED
             RouteDetailSheetDetent.FULL -> BottomSheetBehavior.STATE_EXPANDED
         }
+        val alreadyStable = sheetBehavior.state == state
         sheetBehavior.state = state
-        updateDetentUi(value)
+        updateDetentUi(value, commitMapLayout = alreadyStable)
     }
 
-    private fun updateDetentUi(value: RouteDetailSheetDetent) {
+    private fun updateDetentUi(
+        value: RouteDetailSheetDetent,
+        commitMapLayout: Boolean = true
+    ) {
         detent = value
         val full = value == RouteDetailSheetDetent.FULL
         floatingBack.visibility = if (full) View.GONE else View.VISIBLE
@@ -1166,7 +1185,7 @@ class RouteDetailActivity : AppCompatActivity() {
         )
         if (value == RouteDetailSheetDetent.SUMMARY) listLayoutManager.scrollToPositionWithOffset(0, 0)
         updateCsdiAttributionVisibility()
-        updateMapPadding()
+        if (commitMapLayout) commitStableMapLayout()
     }
 
     private fun scheduleSheetMetrics() {
@@ -1182,23 +1201,89 @@ class RouteDetailActivity : AppCompatActivity() {
             val metrics = RouteDetailSheetPolicy.metrics(root.height, summaryHeight)
             sheetBehavior.peekHeight = metrics.summaryHeight
             sheetBehavior.halfExpandedRatio = metrics.halfExpandedRatio.coerceIn(0.01f, 0.99f)
-            updateMapPadding()
+            commitStableMapLayout()
         }
     }
 
-    private fun updateMapPadding() {
+    private fun beginMapTransition(bottomSheet: View) {
+        if (mapTransitionGeneration != null || root.height <= 0) return
+        val visibleHeight = stableSheetVisibleHeight.takeIf { it > 0 }
+            ?: (root.height - bottomSheet.top).coerceAtLeast(0)
+        mapTransitionGeneration = mapTransitionPolicy.begin(visibleHeight)
+        renderer?.beginViewportTransition()
+    }
+
+    private fun onMapTransitionSlide(bottomSheet: View) {
+        if (
+            root.height <= 0 ||
+            (sheetBehavior.state != BottomSheetBehavior.STATE_DRAGGING &&
+                sheetBehavior.state != BottomSheetBehavior.STATE_SETTLING)
+        ) return
+        beginMapTransition(bottomSheet)
+        val generation = mapTransitionGeneration ?: return
+        val visibleHeight = (root.height - bottomSheet.top).coerceAtLeast(0)
+        when (
+            val action = mapTransitionPolicy.slide(
+                generation = generation,
+                visibleHeight = visibleHeight,
+                upwardCandidatePadding = bottomPaddingForVisibleHeight(nextUpwardDetentVisibleHeight())
+            )
+        ) {
+            RouteDetailMapTransitionAction.Ignore -> Unit
+            is RouteDetailMapTransitionAction.TranslateAttribution -> {
+                csdiAttribution.translationY = action.translationY.toFloat()
+            }
+            is RouteDetailMapTransitionAction.ApplyCandidatePadding -> {
+                csdiAttribution.translationY = action.attributionTranslationY.toFloat()
+                updateRendererPadding(action.bottomPadding)
+            }
+            is RouteDetailMapTransitionAction.CommitStablePadding -> Unit
+        }
+    }
+
+    private fun nextUpwardDetentVisibleHeight(): Int = when (detent) {
+        RouteDetailSheetDetent.SUMMARY ->
+            (root.height * sheetBehavior.halfExpandedRatio).toInt()
+        RouteDetailSheetDetent.HALF,
+        RouteDetailSheetDetent.FULL -> root.height - statusBarInset
+    }.coerceAtLeast(0)
+
+    private fun bottomPaddingForVisibleHeight(visibleHeight: Int): Int =
+        (visibleHeight + navigationBarInset)
+            .coerceAtMost((root.height - statusBarInset - 1).coerceAtLeast(0))
+
+    private fun commitStableMapLayout() {
         if (!::sheet.isInitialized || root.height <= 0) return
         sheet.post {
+            if (
+                mapTransitionGeneration != null &&
+                (sheetBehavior.state == BottomSheetBehavior.STATE_DRAGGING ||
+                    sheetBehavior.state == BottomSheetBehavior.STATE_SETTLING)
+            ) return@post
             val sheetVisibleHeight = (root.height - sheet.top).coerceAtLeast(0)
-            val bottomPadding = (sheetVisibleHeight + navigationBarInset)
-                .coerceAtMost((root.height - statusBarInset - 1).coerceAtLeast(0))
+            val bottomPadding = bottomPaddingForVisibleHeight(sheetVisibleHeight)
+            val transitionGeneration = mapTransitionGeneration
+            if (transitionGeneration != null) {
+                mapTransitionPolicy.settle(transitionGeneration, sheetVisibleHeight)
+                mapTransitionGeneration = null
+            }
+            stableSheetVisibleHeight = sheetVisibleHeight
             if (::csdiAttribution.isInitialized) {
+                csdiAttribution.translationY = 0f
                 val params = csdiAttribution.layoutParams as ViewGroup.MarginLayoutParams
-                params.bottomMargin = sheetVisibleHeight + dimension(R.dimen.route_map_csdi_google_clearance)
-                csdiAttribution.layoutParams = params
-                csdiAttribution.post { updateRendererPadding(bottomPadding) }
+                val desiredBottomMargin = sheetVisibleHeight +
+                    dimension(R.dimen.route_map_csdi_google_clearance)
+                if (params.bottomMargin != desiredBottomMargin) {
+                    params.bottomMargin = desiredBottomMargin
+                    csdiAttribution.layoutParams = params
+                }
+                csdiAttribution.post {
+                    updateRendererPadding(bottomPadding)
+                    if (transitionGeneration != null) renderer?.endViewportTransition()
+                }
             } else {
                 updateRendererPadding(bottomPadding)
+                if (transitionGeneration != null) renderer?.endViewportTransition()
             }
         }
     }
@@ -1206,21 +1291,21 @@ class RouteDetailActivity : AppCompatActivity() {
     private fun updateRendererPadding(bottomPadding: Int) {
         if (!::mapView.isInitialized || mapView.width <= 0 || mapView.height <= 0) return
         val reservedRects = if (
-            ::csdiAttribution.isInitialized &&
+            ::csdiAttributionSurface.isInitialized &&
             csdiAttribution.visibility == View.VISIBLE &&
-            csdiAttribution.width > 0 &&
-            csdiAttribution.height > 0
+            csdiAttributionSurface.width > 0 &&
+            csdiAttributionSurface.height > 0
         ) {
             val mapLocation = IntArray(2)
             val attributionLocation = IntArray(2)
             mapView.getLocationOnScreen(mapLocation)
-            csdiAttribution.getLocationOnScreen(attributionLocation)
+            csdiAttributionSurface.getLocationOnScreen(attributionLocation)
             listOf(
                 RouteMapLabelRect(
                     left = (attributionLocation[0] - mapLocation[0]).toFloat(),
                     top = (attributionLocation[1] - mapLocation[1]).toFloat(),
-                    right = (attributionLocation[0] - mapLocation[0] + csdiAttribution.width).toFloat(),
-                    bottom = (attributionLocation[1] - mapLocation[1] + csdiAttribution.height).toFloat()
+                    right = (attributionLocation[0] - mapLocation[0] + csdiAttributionSurface.width).toFloat(),
+                    bottom = (attributionLocation[1] - mapLocation[1] + csdiAttributionSurface.height).toFloat()
                 )
             )
         } else {
@@ -1237,8 +1322,8 @@ class RouteDetailActivity : AppCompatActivity() {
         )
     }
 
-    private fun updateCsdiAttributionVisibility() {
-        if (!::csdiAttribution.isInitialized) return
+    private fun updateCsdiAttributionVisibility(): Boolean {
+        if (!::csdiAttribution.isInitialized) return false
         val nextVisibility = if (
             detent != RouteDetailSheetDetent.FULL &&
             !mapUnavailable &&
@@ -1250,7 +1335,22 @@ class RouteDetailActivity : AppCompatActivity() {
         }
         if (csdiAttribution.visibility != nextVisibility) {
             csdiAttribution.visibility = nextVisibility
-            updateMapPadding()
+            return true
+        }
+        return false
+    }
+
+    private fun installSheetHandleTouchDelegate() {
+        sheet.post {
+            val bounds = Rect(0, 0, sheetHandle.width, sheetHandle.height)
+            sheet.offsetDescendantRectToMyCoords(sheetHandle, bounds)
+            val touchWidth = dimension(R.dimen.route_detail_min_touch_target)
+            val touchHeight = dimension(R.dimen.route_detail_min_touch_target)
+            val centerX = bounds.centerX()
+            bounds.left = centerX - touchWidth / 2
+            bounds.right = bounds.left + touchWidth
+            bounds.bottom = bounds.top + touchHeight
+            sheet.touchDelegate = TouchDelegate(bounds, sheetHandle)
         }
     }
 

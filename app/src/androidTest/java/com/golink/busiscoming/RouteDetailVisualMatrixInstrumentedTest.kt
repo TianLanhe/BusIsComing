@@ -13,6 +13,11 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.recyclerview.widget.RecyclerView
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.pressBack
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.AppLanguageRepository
@@ -114,7 +119,12 @@ class RouteDetailVisualMatrixInstrumentedTest {
                         assertMapControlsVisibleAndLegendAbsent(activity)
                         assertAttributionIsNotCovered(activity)
                         saveScreenshot(activity, screenshotName(language, theme, fontScale, "summary"))
+                        assertTrue(
+                            activity.findViewById<View>(R.id.routeDetailCsdiAttribution).performClick()
+                        )
                     }
+                    onView(withText(R.string.route_map_csdi_notice_title)).check(matches(isDisplayed()))
+                    pressBack()
                     scenario.onActivity { activity ->
                         BottomSheetBehavior.from(
                             activity.findViewById<MaterialCardView>(R.id.routeDetailSheet)
@@ -284,7 +294,6 @@ class RouteDetailVisualMatrixInstrumentedTest {
         val minimum = (48f * activity.resources.displayMetrics.density).toInt()
         listOf(
             R.id.routeDetailFloatingBack,
-            R.id.routeDetailSheetHandle,
             R.id.routeDetailLocation,
             R.id.routeDetailOverview
         ).forEach { id ->
@@ -294,6 +303,11 @@ class RouteDetailVisualMatrixInstrumentedTest {
                 assertTrue("Touch target height is under 48dp for id=$id", view.height >= minimum)
             }
         }
+        val handle = activity.findViewById<View>(R.id.routeDetailSheetHandle)
+        val expectedVisibleHeight = (28f * activity.resources.displayMetrics.density).toInt()
+        assertEquals(expectedVisibleHeight, handle.height)
+        val sheet = activity.findViewById<View>(R.id.routeDetailSheet)
+        assertTrue("Handle must retain an expanded touch delegate", sheet.touchDelegate != null)
     }
 
     private fun assertMapControlsVisibleAndLegendAbsent(activity: RouteDetailActivity) {
@@ -317,11 +331,12 @@ class RouteDetailVisualMatrixInstrumentedTest {
         requireNotNull(watermark).getLocationOnScreen(location)
         assertTrue("Google watermark must remain above the summary sheet", location[1] + watermark.height <= sheet.top)
         val csdi = activity.findViewById<View>(R.id.routeDetailCsdiAttribution)
+        val csdiSurface = activity.findViewById<View>(R.id.routeDetailCsdiAttributionSurface)
         assertTrue("CSDI attribution must be visible with rendered walking paths", csdi.isShown)
         val csdiBounds = Rect()
         val watermarkBounds = Rect()
         val sheetBounds = Rect()
-        assertTrue(csdi.getGlobalVisibleRect(csdiBounds))
+        assertTrue(csdiSurface.getGlobalVisibleRect(csdiBounds))
         assertTrue(watermark.getGlobalVisibleRect(watermarkBounds))
         assertTrue(sheet.getGlobalVisibleRect(sheetBounds))
         assertTrue(!Rect.intersects(csdiBounds, watermarkBounds))

@@ -6,7 +6,7 @@
 
 `integrate-landsd-pedestrian-routing` 會在結果基礎列表到達後繼續漸進更新步行狀態與步行排序。兩個 change 同批實作時必須共用 query generation、result identity、單次 projection 與 viewport anchor；自動刷新不能把 CSDI callback 當成 cycle 未完成，也不能讓每分鐘刷新繞過 walking runtime 對失敗 key 的退避。
 
-設定頁目前的偏好順序是外觀主題、語言。新偏好須同時控制常用結果、臨時結果及詳情，不建立三套互相漂移的設定。產品已確認預設為 1 分鐘，選項為關閉／1／2／5／10 分鐘，且只在目前頁面可見及 App 前台時運行。
+設定頁目前的偏好順序是外觀主題、語言。新偏好須同時控制常用結果、臨時結果及詳情，不建立三套互相漂移的設定。產品已確認預設為 1 分鐘，選項為關閉／1／2／5／10 分鐘，且只在目前頁面可見及 App 前台時運行。既有五段行內按鈕在窄屏與大型字體下過大、突兀且搶奪設定頁層級，本次改為與相鄰偏好一致的標準設定行，並把選項移入單選對話框。
 
 首次說明橫幅的 UI 已單獨確認為硬驗收合同：它不是 Snackbar、Toast、Dialog 或 Bottom Sheet；沒有左側圖示與關閉鍵；位於 AppBar 正常排版空間、查詢上下文之後及結果摘要之前，完整展示 5 秒後自動消失。實作必須遵循 `docs/ui-style-guide.md`、`docs/localization-guidelines.md` 與 `docs/localization-validation-matrix.md`。
 
@@ -81,7 +81,7 @@ controller 的可觀察狀態及轉移如下：
 
 ### 5. 一次性 notice 與日常刷新回饋分離
 
-`AutoRefreshNoticeStore` 保存全 App 的「已完成首次說明」布林值。僅當設定尚未被使用者明確選擇、notice 未完成，且常用或臨時查詢首次成功顯示結果（包括 0 條）時立即插入橫幅；詳情頁永不展示。橫幅的 `設定` 操作打開設定 destination，scroll／focus 到自動刷新 selector，並保留原查詢上下文與結果。
+`AutoRefreshNoticeStore` 保存全 App 的「已完成首次說明」布林值。僅當設定尚未被使用者明確選擇、notice 未完成，且常用或臨時查詢首次成功顯示結果（包括 0 條）時立即插入橫幅；詳情頁永不展示。橫幅的 `設定` 操作打開設定 destination，scroll／focus 到整個自動刷新標準設定行但不自動打開對話框，並保留原查詢上下文與結果。
 
 notice 只在以下任一條件成立時標記完成：
 
@@ -93,20 +93,22 @@ notice 只在以下任一條件成立時標記完成：
 
 日常刷新不復用首次橫幅：結果摘要把更新時間暫時替換為小型 progress +「正在更新」，成功後直接顯示新時間；詳情只在對應動態區域使用現有 `Refreshing` 語義。沒有成功動畫、成功 Toast 或自動失敗警告。
 
-### 6. 首次橫幅與設定 selector 採用硬 UI 合同
+### 6. 首次橫幅與標準設定行採用硬 UI 合同
 
 常用頁在 query controls／目前行程上下文之後、sticky result controls 之前插入橫幅；搜尋頁在完整編輯器或折疊臨時行程上下文之後、共用 result controls 之前插入。它佔正常 AppBar layout 空間，不 overlay 結果卡、不 dim 頁面，頁面在顯示期間仍可捲動與操作。
 
 橫幅使用語義淺綠表面、綠色 1dp border、14dp 圓角、克制陰影與底部 3dp 倒數線；左側只有兩行 `自動刷新已開啟`、`每 N 分鐘更新`，右側文字 action `設定` 至少 48dp 觸控區。沒有左上／左側圖示、關閉按鈕或額外說明。進場 slide + fade 約 200ms，完全可見計時後退場 slide + fade 約 200ms；系統動畫停用時立即切換進／出狀態但仍保留完整可見時長。TalkBack polite announce 一次，不搶焦點。
 
-設定頁在 `偏好` 內依序顯示外觀主題、語言、自動刷新。selector 為行內單選 segmented control，一次點擊立即生效，選中值使用清楚的 container／文字／狀態描述，不再打開 radio dialog。360dp 與正常字體時五項保持一行；寬度或 2.0 字體不足時容器 reflow／換行並可把 action 區移到獨立 trailing row，不縮小字體、不裁切、不重疊。兩處 UI 均使用三語資源、theme semantic colors 及最少 48dp 操作熱區。
+設定頁在 `偏好` 內依序顯示外觀主題、語言、自動刷新。自動刷新使用與前兩項一致的標準設定行：左側為標題，右側顯示目前值，整行至少 48dp 且可點擊；不在頁面內直接平鋪五個按鈕。點擊設定行以 `MaterialAlertDialogBuilder.setSingleChoiceItems` 打開單選對話框，完整列出關閉／1／2／5／10 分鐘並勾選目前值。選擇任何項目後立即保存、通知目前可見 controller、更新設定行右側值並關閉對話框，不顯示成功 Toast 或二次確認；重新選擇目前值同樣關閉對話框並完成首次提示 notice，但不觸發可見重載。
+
+首次橫幅的 `設定` deep navigation 捲動並聚焦整個自動刷新設定行，而不是已移除的分段按鈕；焦點朗讀標題及目前值，使用者再啟用該行打開對話框。窄屏、大型字體及三語環境讓標準設定行和對話框自然換行／擴高，不縮小字體、不裁切、不重疊，也不依賴橫向捲動。兩處 UI 均使用三語資源、theme semantic colors 及最少 48dp 操作熱區。
 
 ### 7. 驗證以狀態邊界、UI 合同與真實兩週期分層
 
 - 純 JVM：fake monotonic／wall clock、scheduler 與 settings store，覆蓋每個間隔的前 1ms／剛好／後 1ms、pause/resume、改間隔、off、attempt finish 冷卻、時鐘回撥、無 catch-up 及任一時刻最多一個 trigger。
 - 結果 owner：覆蓋 0 條成功、初次失敗、後續空結果恢復、固定臨時座標、usage 不變、排序／pin、stable-id viewport anchor、編輯／切換 invalidation、過期 callback、開啟 ETA selection 不被關閉。
 - 詳情 reducer：覆蓋兩 domain 並發與所有完成排列、單方成功／失敗、結構 mismatch、語言／頁面 generation、無 geometry request、相機／bottom sheet／展開／選中狀態保持。
-- Instrumentation／screenshot：三語 × 明暗 × 360dp × font scale 1.0／1.3／2.0，驗證 selector 與橫幅精確層級、border／圓角／倒數線、無圖示／關閉鍵、非 overlay、TalkBack polite、動畫停用及 Settings deep focus。
+- Instrumentation／screenshot：三語 × 明暗 × 360dp × font scale 1.0／1.3／2.0，驗證標準設定行、目前值、單選對話框與橫幅精確層級、border／圓角／倒數線、無圖示／關閉鍵、非 overlay、TalkBack polite、動畫停用及 Settings deep focus。
 - 真實裝置：只啟動本任務自有且符合畫像的模擬器，對常用或臨時結果及詳情完成至少兩個 1 分鐘 Citybus／ETA 週期，驗證前後台暫停與返回到期；完成後關閉本任務啟動的全部模擬器。
 
 ## Risks / Trade-offs
@@ -118,13 +120,13 @@ notice 只在以下任一條件成立時標記完成：
 - [多入口 timer 造成重複請求] → 每個可見 owner 使用同一 controller policy，destination/lifecycle eligibility 保證只有目前頁面可接受 trigger，generation 丟棄舊 callback。
 - [Citybus 詳情結構在週期中變更] → 完整 parse／validate，mismatch 只丟棄此次動態 domain；不以新回應重建目前頁面或污染可靠 cache。
 - [一次性橫幅過強或過弱] → 保持 5 秒高辨識樣式但不遮擋、不搶焦點、可繼續操作，且全 App 僅完成一次。
-- [大型字體令五段 selector 或橫幅 action 擁擠] → 使用 wrap/reflow 與獨立 trailing action row；禁止縮字、裁切或依賴橫向捲動才能讀取選項。
+- [大型字體令設定值或橫幅 action 擁擠] → 標準設定行與 Material 單選對話框自然擴高／換行，橫幅 action 可移到獨立 trailing row；禁止縮字、裁切或依賴橫向捲動才能理解目前值與全部選項。
 
 ## Migration Plan
 
 1. 核對 active `fix-route-detail-progressive-loading` 的已實作 reducer、測試及 delta，直接作為詳情刷新基線；本次不要求先同步或歸檔。
 2. 加入偏好與 notice store；缺少 key 的既有安裝按 1 分鐘初始化，不修改 SQLite 或已保存行程。
-3. 先接入共用 controller 與結果 trigger 類型，再接入詳情雙 domain cycle，最後加入設定 selector、首次橫幅與日常回饋。
+3. 先接入共用 controller 與結果 trigger 類型，再接入詳情雙 domain cycle，最後加入自動刷新標準設定行、Material 單選對話框、首次橫幅與日常回饋。
 4. rollout 若需回滾，可把預設／runtime feature gate 收斂為 `OFF` 並移除 UI 入口；所有新增偏好都可安全忽略或清除，無資料格式回滾。
 
 ## Open Questions

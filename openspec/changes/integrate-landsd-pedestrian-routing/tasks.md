@@ -63,3 +63,16 @@
 - [x] 8.4 執行 `./gradlew build`，確認生產 HTTP 未被 fixture 取代、沒有新增 key／權限／SQLite schema／背景服務或敏感日誌，並核對全部 OpenSpec scenarios 已由自動化或明確人工證據覆蓋。
 - [x] 8.5 僅在實作與上述驗證完成後更新 `docs/technical-debt.md`：記錄 Citybus 總耗時／巴士時間與 CSDI 固定 1 m/s 分段分鐘仍不一致、通知監控個人步速保持獨立，以及以統一步速、時間依賴公交、轉乘重算、清楚標示與回歸測試作關閉條件。
 - [x] 8.6 重新執行 `openspec validate integrate-landsd-pedestrian-routing --strict`，如實勾選 tasks，檢查 `git status --short` 與 staged diff 只包含本 change 授權範圍後按 apply 流程提交。
+
+## 9. 精簡 CSDI 署名
+
+- [x] 9.1 先補充署名 layout／instrumentation 測試，鎖定可見背景約 116×29dp、官方標誌約 15dp、既有雙行三語內容、淺色低對比 surface，以及不含粗描邊或厚重陰影。
+- [x] 9.2 更新 CSDI 署名資源與 layout，在保持官方標誌比例及相同兩行內容的前提下縮小可見尺寸，並讓可見短署名字體放大在約 1.3 倍封頂。
+- [x] 9.3 以 `TouchDelegate` 或等效機制提供至少 48dp 有效觸控區，保持完整對話框正常跟隨系統字體比例，並驗證 TalkBack 只產生一個可理解操作節點。
+- [x] 9.4 把站名碰撞保留區改為可見署名矩形加必要安全邊距，不以觸控矩形擴大視覺避讓；bottom sheet 拖動期間以 `translationY` 跟隨，僅在穩定 detent 更新精確 margin。
+
+## 10. 署名回歸與完成檢查
+
+- [x] 10.1 在繁中、簡中、英文、明暗主題、約 360dp、font scale 1.0／1.3／2.0 與 TalkBack 場景量測署名、標誌及有效觸控區，確認 Google Logo、法律文字、站名、地圖控件和 bottom sheet 均不被遮擋。
+- [x] 10.2 在任務自有 Google Maps 模擬器驗證實際 CSDI path 顯隱、拖動流暢度及完整說明入口，完成後關閉本任務啟動的全部模擬器。
+- [x] 10.3 執行受影響的 focused tests、`./gradlew build` 與 `openspec validate integrate-landsd-pedestrian-routing --strict`，如實記錄真實網絡或設備限制並核對 diff 僅含授權範圍。

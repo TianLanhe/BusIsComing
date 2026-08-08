@@ -126,7 +126,7 @@ class RouteDetailAdapter(
                 segmentTargets += target
                 segmentRow.addView(target, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    dp(22)
+                    dp(30)
                 ).apply { if (index > 0) marginStart = dp(2) })
             }
             content.addView(HorizontalScrollView(root.context).apply {
@@ -191,7 +191,7 @@ class RouteDetailAdapter(
                 gravity = Gravity.BOTTOM
                 isBaselineAligned = true
                 setPadding(dp(4), dp(2), dp(4), dp(2))
-                minimumHeight = dp(22)
+                minimumHeight = dp(30)
                 background = rounded(
                     when (segment.kind) {
                         RouteSummarySegmentKind.BUS -> legColor(segment.colorKey ?: 0)
@@ -203,7 +203,7 @@ class RouteDetailAdapter(
             }
             when (segment.kind) {
                 RouteSummarySegmentKind.BUS -> visible.addView(
-                    text(segment.routeLabel.orEmpty(), 14f, true, R.color.bus_on_route_badge)
+                    text(segment.routeLabel.orEmpty(), 17f, true, R.color.bus_on_route_badge)
                 )
                 RouteSummarySegmentKind.WALKING,
                 RouteSummarySegmentKind.SAME_STOP_TRANSFER -> visible.addView(ImageView(root.context).apply {
@@ -216,12 +216,12 @@ class RouteDetailAdapter(
                     )
                     imageTintList = ColorStateList.valueOf(color(R.color.bus_text_secondary))
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
+                    layoutParams = LinearLayout.LayoutParams(dp(24), dp(24))
                 })
             }
             segment.durationMinutes?.let { minutes ->
                 visible.addView(
-                    text(minutes.toString(), 10f, false, if (segment.kind == RouteSummarySegmentKind.BUS) {
+                    text(minutes.toString(), 12f, false, if (segment.kind == RouteSummarySegmentKind.BUS) {
                         R.color.bus_on_route_badge
                     } else {
                         R.color.bus_text_secondary
@@ -242,14 +242,14 @@ class RouteDetailAdapter(
                 "$label, ${root.context.getString(R.string.route_card_duration_value, it)}"
             } ?: label
             return FrameLayout(root.context).apply {
-                minimumHeight = dp(22)
+                minimumHeight = dp(30)
                 isClickable = true
                 isFocusable = true
                 contentDescription = description
                 foreground = ContextCompat.getDrawable(root.context, android.R.drawable.list_selector_background)
                 addView(visible, FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    dp(22),
+                    dp(30),
                     Gravity.CENTER_VERTICAL
                 ))
                 setOnClickListener { onSummarySegmentSelected(segment) }

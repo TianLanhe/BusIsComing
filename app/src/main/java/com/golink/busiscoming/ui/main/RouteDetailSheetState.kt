@@ -49,3 +49,61 @@ object RouteDetailSheetPolicy {
     private const val HALF_TARGET_RATIO = 0.55f
     private const val MAX_VISIBLE_RATIO = 0.95f
 }
+
+internal sealed interface RouteDetailMapTransitionAction {
+    data object Ignore : RouteDetailMapTransitionAction
+    data class TranslateAttribution(val translationY: Int) : RouteDetailMapTransitionAction
+    data class ApplyCandidatePadding(
+        val bottomPadding: Int,
+        val attributionTranslationY: Int
+    ) : RouteDetailMapTransitionAction
+    data class CommitStablePadding(val bottomPadding: Int) : RouteDetailMapTransitionAction
+}
+
+internal class RouteDetailMapTransitionPolicy(
+    private val candidateThresholdPx: Int = 64
+) {
+    private var generation = 0L
+    private var activeGeneration: Long? = null
+    private var stableVisibleHeight = 0
+    private var candidateApplied = false
+
+    fun begin(stableVisibleHeight: Int): Long {
+        generation += 1L
+        activeGeneration = generation
+        this.stableVisibleHeight = stableVisibleHeight
+        candidateApplied = false
+        return generation
+    }
+
+    fun slide(
+        generation: Long,
+        visibleHeight: Int,
+        upwardCandidatePadding: Int
+    ): RouteDetailMapTransitionAction {
+        if (generation != activeGeneration) return RouteDetailMapTransitionAction.Ignore
+        val translationY = stableVisibleHeight - visibleHeight
+        val upwardDistance = visibleHeight - stableVisibleHeight
+        if (!candidateApplied && upwardDistance >= candidateThresholdPx) {
+            candidateApplied = true
+            return RouteDetailMapTransitionAction.ApplyCandidatePadding(
+                upwardCandidatePadding,
+                translationY
+            )
+        }
+        return RouteDetailMapTransitionAction.TranslateAttribution(translationY)
+    }
+
+    fun settle(
+        generation: Long,
+        stableVisibleHeight: Int
+    ): RouteDetailMapTransitionAction {
+        if (generation != activeGeneration) return RouteDetailMapTransitionAction.Ignore
+        activeGeneration = null
+        return RouteDetailMapTransitionAction.CommitStablePadding(stableVisibleHeight)
+    }
+
+    fun cancel(generation: Long) {
+        if (generation == activeGeneration) activeGeneration = null
+    }
+}

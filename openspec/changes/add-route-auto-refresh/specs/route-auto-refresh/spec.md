@@ -189,7 +189,7 @@
 #### Scenario: 用戶點擊橫幅設定
 - **WHEN** 用戶點擊首次橫幅的 `設定`
 - **THEN** 系統 SHALL 立即把 notice 標記為已完成
-- **AND** 系統 SHALL 打開設定 destination 並捲動或聚焦自動刷新 selector
+- **AND** 系統 SHALL 打開設定 destination 並捲動及聚焦整個自動刷新標準設定行，而 SHALL NOT 自動打開單選對話框
 - **AND** 原查詢上下文與結果 SHALL 保持可返回
 
 #### Scenario: 用戶明確選擇任一刷新設定

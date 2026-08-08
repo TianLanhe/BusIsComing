@@ -12,7 +12,7 @@
 - [x] 2.5 補充 controller 測試，覆蓋 `max(lastSuccessfulAt + interval, lastAttemptFinishedAt + interval)`、失敗完整冷卻、改短／改長間隔、刷新中關閉、時鐘回撥與過期 callback
 - [x] 2.6 實作不持有 Activity、View 或 repository 的純 `ForegroundAutoRefreshController`，由頁面 owner 提供 eligibility、generation 與 attempt 完成事件
 
-## 3. 設定頁行內 segmented selector
+## 3. 首次實作：設定頁行內 segmented selector（由第 9 節取代）
 
 - [x] 3.1 新增三語 `自動刷新`、`關閉` 與 1／2／5／10 分鐘精簡文案、選中狀態及 TalkBack 描述，保持香港繁體、獨立簡體與自然英文
 - [x] 3.2 在偏好分組的語言項之後加入行內 segmented selector，360dp／字體 1.0 時五項一行，空間不足或字體 1.3／2.0 時以 wrap／reflow 完整展示且每項至少 48dp 熱區
@@ -62,3 +62,16 @@
 - [x] 8.1 運行 settings store、notice、controller、結果 owner、viewport anchor、詳情 coordinator／reducer 的全部定向 JVM 測試及既有手動下拉刷新、排序、置頂、ETA、詳情漸進載入回歸測試
 - [x] 8.2 運行新增 instrumentation／screenshot 測試與 `./gradlew build`，如實記錄未完成的真實網絡、TalkBack 或設備畫像限制
 - [x] 8.3 運行 `openspec validate --all --strict --no-interactive`，檢查 `git status --short`、變更 diff、tasks 勾選及無 `Service`／`AlarmManager`／`WorkManager`／geometry refresh／無關重構後再按倉庫規則提交
+
+## 9. 自動刷新設定入口精簡
+
+- [x] 9.1 先更新 Settings layout／instrumentation 測試，把五段行內 selector 的斷言改為標準設定行、右側目前值及 Material 單選對話框，覆蓋預設值與關閉／1／2／5／10 分鐘選中狀態。
+- [x] 9.2 以與外觀主題及語言一致的標準設定行取代五段行內按鈕，保持位於語言之後、整行至少 48dp、右側顯示目前值，並移除 selector 專用 layout／狀態描述而不改動 settings store。
+- [x] 9.3 使用 `MaterialAlertDialogBuilder.setSingleChoiceItems` 顯示五個選項；選擇後立即保存、更新可見 controller 與設定行、關閉對話框且不顯示 Toast 或二次確認。
+- [x] 9.4 保留重新選擇目前值完成首次 notice 但不執行可見重載的語義，並把首次橫幅 deep navigation 的捲動／焦點目標改為整個自動刷新設定行。
+- [x] 9.5 在繁中、簡中、英文、明暗主題、約 360dp、font scale 1.0／1.3／2.0 與 TalkBack 場景驗證設定行、目前值、對話框選中狀態、自然換行／擴高及至少 48dp 操作熱區。
+
+## 10. 設定入口回歸與完成檢查
+
+- [x] 10.1 運行 settings store、notice、controller 與 Settings focused tests，證明僅替換入口 UI，預設值、即時生效、關閉 timer、重新選擇 notice 及前台生命週期契約不變。
+- [x] 10.2 執行 `./gradlew build` 與 `openspec validate add-route-auto-refresh --strict`，檢查無殘留五段 selector、無自動打開對話框、無無關刷新邏輯改動，並核對 diff 僅含授權範圍。

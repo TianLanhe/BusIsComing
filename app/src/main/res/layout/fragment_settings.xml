@@ -98,18 +98,27 @@
         <LinearLayout
             android:id="@+id/settingsAutoRefreshRow"
             style="@style/SettingsRow"
-            android:layout_marginTop="8dp">
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="horizontal">
 
             <TextView
                 style="@style/SettingsRowText"
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:text="@string/settings_auto_refresh" />
 
-            <LinearLayout
-                android:id="@+id/settingsAutoRefreshOptions"
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/settingsAutoRefreshValue"
+                style="@style/SettingsRowValueText"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="vertical" />
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="0dp"
+                android:gravity="end"
+                android:textAlignment="viewEnd" />
         </LinearLayout>
 
         <TextView

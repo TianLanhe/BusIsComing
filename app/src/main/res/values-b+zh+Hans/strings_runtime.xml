@@ -71,6 +71,7 @@
     <string name="route_map_csdi_notice_message">步行距离、约略时间及轨迹来自香港特别行政区政府地政总署，并经 CSDI Portal 提供。数据按现状提供；政府及相关机构不保证准确性、完整性、及时性或适用性，也不对使用、无法使用或依赖数据造成的损失承担责任。\n\n来源：3D Pedestrian Route Search API\n条款：https://portal.csdi.gov.hk/csdi-webpage/doc/TNC</string>
     <string name="route_map_csdi_open_source">打开来源</string>
     <string name="settings_auto_refresh">自动刷新</string>
+    <string name="settings_auto_refresh_value_accessibility">自动刷新，当前为%1$s</string>
     <string name="auto_refresh_off">关闭</string>
     <string name="auto_refresh_one_minute">1 分钟</string>
     <string name="auto_refresh_two_minutes">2 分钟</string>

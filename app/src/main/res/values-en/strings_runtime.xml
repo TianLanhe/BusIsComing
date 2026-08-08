@@ -71,6 +71,7 @@
     <string name="route_map_csdi_notice_message">Walking distance, approximate time and paths are provided by the Lands Department of the Government of the Hong Kong Special Administrative Region through the CSDI Portal. Data are provided as is and as available. The Government and relevant organisations do not warrant accuracy, completeness, timeliness or fitness, and accept no liability for loss arising from use, inability to use or reliance on the data.\n\nSource: 3D Pedestrian Route Search API\nTerms: https://portal.csdi.gov.hk/csdi-webpage/doc/TNC</string>
     <string name="route_map_csdi_open_source">Open source</string>
     <string name="settings_auto_refresh">Auto refresh</string>
+    <string name="settings_auto_refresh_value_accessibility">Auto refresh, currently %1$s</string>
     <string name="auto_refresh_off">Off</string>
     <string name="auto_refresh_one_minute">1 min</string>
     <string name="auto_refresh_two_minutes">2 min</string>

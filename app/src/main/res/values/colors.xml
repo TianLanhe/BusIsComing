@@ -15,6 +15,7 @@
     <color name="bus_surface">#FFF8FAF9</color>
     <color name="bus_surface_variant">#FFE8EFEC</color>
     <color name="bus_card_surface">#FFFFFFFF</color>
+    <color name="route_map_csdi_surface">#EAF7FAF9</color>
     <color name="bus_state_surface">#FFFFFFFF</color>
     <color name="bus_chip_surface">#FFFFFFFF</color>
     <color name="bus_chip_selected">#FF145C54</color>

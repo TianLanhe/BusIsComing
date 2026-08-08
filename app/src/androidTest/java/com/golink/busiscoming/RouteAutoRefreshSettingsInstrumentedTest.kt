@@ -5,14 +5,17 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.view.View
-import android.view.ViewGroup
-import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.view.ViewCompat
 import androidx.test.core.app.ActivityScenario
+import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isChecked
 import androidx.test.espresso.matcher.ViewMatchers.withId
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.AppLanguageRepository
@@ -22,12 +25,10 @@ import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.localization.AppLanguageChoice
 import com.golink.busiscoming.data.model.AppThemeMode
 import com.golink.busiscoming.ui.main.MainActivity
-import com.google.android.material.button.MaterialButton
 import java.io.File
 import java.io.FileOutputStream
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -77,7 +78,7 @@ class RouteAutoRefreshSettingsInstrumentedTest {
     }
 
     @Test
-    fun selectorFitsLanguageThemeFontMatrixAndExposesSelectedSemantics() {
+    fun settingsRowFitsLanguageThemeFontMatrixAndDialogExposesSelectedSemantics() {
         val languages = listOf(
             AppLanguageChoice.TRADITIONAL_CHINESE,
             AppLanguageChoice.SIMPLIFIED_CHINESE,
@@ -95,34 +96,23 @@ class RouteAutoRefreshSettingsInstrumentedTest {
                         onView(withId(R.id.navigation_settings)).perform(click())
                         waitForSettings()
                         scenario.onActivity { activity ->
-                            val container = activity.findViewById<LinearLayout>(R.id.settingsAutoRefreshOptions)
-                            val buttons = buttons(container)
-                            assertEquals(5, buttons.size)
-                            assertEquals(
-                                when {
-                                    fontScale >= 1.8f -> 3
-                                    fontScale >= 1.3f -> 2
-                                    else -> 1
-                                },
-                                container.childCount
-                            )
-                            assertEquals(1, buttons.count(MaterialButton::isChecked))
+                            val row = activity.findViewById<View>(R.id.settingsAutoRefreshRow)
+                            val value = activity.findViewById<TextView>(R.id.settingsAutoRefreshValue)
                             assertEquals(
                                 activity.getString(R.string.auto_refresh_one_minute),
-                                buttons.single(MaterialButton::isChecked).text.toString()
+                                value.text.toString()
                             )
-                            val selectedDescription = activity.getString(R.string.auto_refresh_selected)
-                            val unselectedDescription = activity.getString(R.string.auto_refresh_not_selected)
                             val minimum = (48f * activity.resources.displayMetrics.density).toInt()
-                            buttons.forEach { button ->
-                                assertTrue(button.height >= minimum)
-                                assertEquals(
-                                    if (button.isChecked) selectedDescription else unselectedDescription,
-                                    ViewCompat.getStateDescription(button)?.toString()
-                                )
-                                assertTrue(button.isClickable)
-                                assertTrue(button.isFocusable)
-                            }
+                            assertTrue(row.height >= minimum)
+                            assertTrue(row.isClickable)
+                            assertTrue(row.isFocusable)
+                            assertEquals(
+                                activity.getString(
+                                    R.string.settings_auto_refresh_value_accessibility,
+                                    value.text
+                                ),
+                                row.contentDescription.toString()
+                            )
                             val night = activity.resources.configuration.uiMode and
                                 Configuration.UI_MODE_NIGHT_MASK
                             assertEquals(
@@ -134,7 +124,13 @@ class RouteAutoRefreshSettingsInstrumentedTest {
                                 activity,
                                 "auto-refresh-settings-${language.name.lowercase()}-${theme.name.lowercase()}-$fontScale.png"
                             )
+                            assertTrue(row.performClick())
                         }
+                        instrumentation.waitForIdleSync()
+                        onView(withText(R.string.auto_refresh_one_minute))
+                            .inRoot(isDialog())
+                            .check(matches(isChecked()))
+                        pressBack()
                     }
                 }
             }
@@ -142,34 +138,33 @@ class RouteAutoRefreshSettingsInstrumentedTest {
     }
 
     @Test
-    fun everyChoicePersistsAndReselectionSurvivesRecreationWithoutDialog() {
+    fun everyDialogChoicePersistsAndReselectionSurvivesRecreation() {
         configure(AppLanguageChoice.ENGLISH, AppThemeMode.LIGHT)
         executeShell("settings put system font_scale 1.0")
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.navigation_settings)).perform(click())
             waitForSettings()
             RouteAutoRefreshInterval.entries.forEachIndexed { index, interval ->
-                scenario.onActivity { activity ->
-                    val button = buttons(
-                        activity.findViewById(R.id.settingsAutoRefreshOptions)
-                    )[index]
-                    assertTrue(button.performClick())
-                }
+                onView(withId(R.id.settingsAutoRefreshRow)).perform(click())
+                onView(withText(choiceLabel(index))).inRoot(isDialog()).perform(click())
                 instrumentation.waitForIdleSync()
                 assertEquals(interval, RouteAutoRefreshSettingsStore(context).getInterval())
+                scenario.onActivity { activity ->
+                    assertEquals(
+                        activity.getString(choiceLabel(index)),
+                        activity.findViewById<TextView>(R.id.settingsAutoRefreshValue).text.toString()
+                    )
+                }
             }
-            scenario.onActivity { activity ->
-                val buttons = buttons(activity.findViewById(R.id.settingsAutoRefreshOptions))
-                val selected = buttons.last()
-                assertTrue(selected.isChecked)
-                assertTrue(selected.performClick())
-                assertFalse(activity.supportFragmentManager.fragments.any { it is androidx.fragment.app.DialogFragment })
-            }
+            onView(withId(R.id.settingsAutoRefreshRow)).perform(click())
+            onView(withText(R.string.auto_refresh_ten_minutes)).inRoot(isDialog()).perform(click())
             scenario.recreate()
             waitForSettings()
             scenario.onActivity { activity ->
-                val buttons = buttons(activity.findViewById(R.id.settingsAutoRefreshOptions))
-                assertTrue(buttons.last().isChecked)
+                assertEquals(
+                    activity.getString(R.string.auto_refresh_ten_minutes),
+                    activity.findViewById<TextView>(R.id.settingsAutoRefreshValue).text.toString()
+                )
                 assertEquals(RouteAutoRefreshInterval.MINUTES_10, RouteAutoRefreshSettingsStore(activity).getInterval())
             }
         }
@@ -182,13 +177,13 @@ class RouteAutoRefreshSettingsInstrumentedTest {
         executeShell("cmd locale set-app-locales ${context.packageName} --locales ${language.localeTag()}")
     }
 
-    private fun buttons(root: View): List<MaterialButton> = buildList {
-        fun visit(view: View) {
-            if (view is MaterialButton) add(view)
-            if (view is ViewGroup) for (index in 0 until view.childCount) visit(view.getChildAt(index))
-        }
-        visit(root)
-    }
+    private fun choiceLabel(index: Int): Int = listOf(
+        R.string.auto_refresh_off,
+        R.string.auto_refresh_one_minute,
+        R.string.auto_refresh_two_minutes,
+        R.string.auto_refresh_five_minutes,
+        R.string.auto_refresh_ten_minutes
+    )[index]
 
     private fun waitForSettings() {
         val deadline = SystemClock.uptimeMillis() + 8_000L

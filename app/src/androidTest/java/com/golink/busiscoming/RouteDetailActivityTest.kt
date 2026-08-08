@@ -125,7 +125,7 @@ class RouteDetailActivityTest {
                 val summary = adapter.currentList.filterIsInstance<RouteDetailUiItem.Summary>().single()
 
                 assertEquals(summary.segments.size, row.childCount)
-                val visibleHeight = (22f * activity.resources.displayMetrics.density).toInt()
+                val visibleHeight = (30f * activity.resources.displayMetrics.density).toInt()
                 for (index in 0 until row.childCount) {
                     val target = row.getChildAt(index)
                     assertEquals(visibleHeight, target.height)

@@ -100,66 +100,72 @@
             app:iconTint="@color/bus_text_primary" />
     </LinearLayout>
 
-    <com.google.android.material.card.MaterialCardView
+    <FrameLayout
         android:id="@+id/routeDetailCsdiAttribution"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="116dp"
+        android:layout_height="48dp"
         android:layout_gravity="bottom|start"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="56dp"
         android:clickable="true"
         android:contentDescription="@string/route_map_csdi_attribution_accessibility"
-        android:elevation="4dp"
         android:focusable="true"
-        android:visibility="gone"
-        app:cardBackgroundColor="@color/bus_card_surface"
-        app:cardCornerRadius="8dp"
-        app:cardElevation="0dp"
-        app:strokeColor="@color/bus_divider"
-        app:strokeWidth="1dp">
+        android:visibility="gone">
 
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="8dp"
-            android:paddingTop="6dp"
-            android:paddingEnd="10dp"
-            android:paddingBottom="6dp">
-
-            <ImageView
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_lands_department_logo" />
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/routeDetailCsdiAttributionSurface"
+            android:layout_width="116dp"
+            android:layout_height="29dp"
+            android:layout_gravity="bottom"
+            android:importantForAccessibility="no"
+            app:cardBackgroundColor="@color/route_map_csdi_surface"
+            app:cardCornerRadius="6dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp">
 
             <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="7dp"
-                android:orientation="vertical">
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:includeFontPadding="false"
-                    android:maxLines="1"
-                    android:text="@string/route_map_csdi_attribution_line_one"
-                    android:textColor="@color/bus_text_primary"
-                    android:textSize="11sp" />
+                <ImageView
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:importantForAccessibility="no"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_lands_department_logo" />
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:includeFontPadding="false"
-                    android:maxLines="1"
-                    android:text="@string/route_map_csdi_attribution_line_two"
-                    android:textColor="@color/bus_text_secondary"
-                    android:textSize="10sp" />
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <com.golink.busiscoming.ui.common.MaxFontScaleTextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:text="@string/route_map_csdi_attribution_line_one"
+                        android:textColor="@color/bus_text_primary"
+                        android:textSize="7sp" />
+
+                    <com.golink.busiscoming.ui.common.MaxFontScaleTextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:text="@string/route_map_csdi_attribution_line_two"
+                        android:textColor="@color/bus_text_secondary"
+                        android:textSize="7sp" />
+                </LinearLayout>
             </LinearLayout>
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
 
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/routeDetailSheet"
@@ -198,7 +204,7 @@
             <FrameLayout
                 android:id="@+id/routeDetailSheetHandle"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="28dp"
                 android:clickable="true"
                 android:contentDescription="@string/route_detail_sheet_handle_summary"
                 android:focusable="true">

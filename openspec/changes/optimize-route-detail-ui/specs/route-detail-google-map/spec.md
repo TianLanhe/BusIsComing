@@ -5,10 +5,23 @@
 
 #### Scenario: 彎曲巴士 geometry 顯示方向
 - **WHEN** 一段巴士 geometry 包含直線、彎道或 S 彎
-- **THEN** 地圖 SHALL 在帶白色描邊的分段色實線上稀疏重複稍粗的白色開放折角
+- **THEN** 地圖 SHALL 在 9dp 白色描邊與 7dp 分段色核心組成的巴士實線上重複白色淺開放折角
+- **AND** 折角完整視覺包絡 SHALL 約為 5.5dp、描邊約為 1.2dp、固定屏幕間距約為 36dp，且全部非透明像素 SHALL 保持在 7dp 分段色核心內
 - **AND** 每個折角 SHALL 隨其所在位置的局部曲線轉向
 - **AND** renderer SHALL 由同一有序 geometry 的屏幕投影按固定屏幕間距取得位置，並按每個位置的局部屏幕切線定向扁平折角 marker
 - **AND** 系統 SHALL NOT 使用整段起終點 bearing、固定角度、字體 glyph 或脫離 geometry 的手工位置
+
+#### Scenario: 可見視口保持固定方向密度
+- **WHEN** 同一條巴士或步行 path 在目前 zoom 只有部分 geometry 位於地圖安全視口
+- **THEN** 系統 SHALL 只對安全視口與少量 overscan 相交的有序屏幕線段按固定間距生成方向折角
+- **AND** 屏外 geometry 長度 SHALL NOT 消耗可見折角數量上限或放大目前視口內的間距
+- **AND** 異常 marker 上限 SHALL 在視口裁切後套用且 SHALL NOT 稀釋正常可見密度
+
+#### Scenario: 拐角只放置可完整貼合的折角
+- **WHEN** 候選位置鄰近急彎、S 彎轉折或局部線段短於完整方向折角所需窗口
+- **THEN** 系統 SHALL 使用候選位置前後的局部切線窗口判定完整 glyph 是否能沿軌跡容納
+- **AND** 系統 SHALL 把候選移至鄰近安全線段或省略該折角
+- **AND** 巴士折角 SHALL NOT 越出分段色核心，方向折角 SHALL NOT 以任一單邊線段角度漂離拐角
 
 #### Scenario: 有序 geometry 反轉
 - **WHEN** 測試或上游資料把同一條 geometry 的點序反轉
@@ -17,7 +30,7 @@
 
 #### Scenario: 地圖步行軌跡顯示方向
 - **WHEN** 起點步行、異站換乘步行或終點步行取得包含一個或更多有序 `geometry.paths` 的 CSDI 成功結果
-- **THEN** 地圖 SHALL 只以較粗的灰色開放折角沿每個 CSDI 有序子路徑顯示前進方向
+- **THEN** 地圖 SHALL 只以約 9dp、描邊約 2.4dp、固定屏幕間距約 14dp 的灰色開放折角沿每個 CSDI 有序子路徑顯示前進方向
 - **AND** 每個折角 SHALL 按所在位置的局部切線定向，子路徑空隙及端點之間 SHALL NOT 補畫直線
 - **AND** 地圖 SHALL NOT 顯示灰色實線、點線或虛線底圖
 - **AND** 系統 SHALL 把該軌跡描述為規劃預覽而非逐步導航或即時引導
@@ -28,9 +41,10 @@
 - **AND** 地圖 SHALL NOT 為該段建立開放折角、直線、虛假軌跡或失敗佔位線
 
 #### Scenario: 相機及增量更新保持紋理貼合
-- **WHEN** 相機縮放、平移、bottom sheet padding 或漸進資料更新改變
-- **THEN** renderer SHALL 在 camera idle 或 padding 更新後，重新由同一有序 geometry 的目前屏幕投影排布及定向折角
-- **AND** 增量 renderer SHALL NOT 造成折角相對路徑漂移、跳角或反向
+- **WHEN** 相機縮放／平移完成、bottom sheet 到達穩定檔位或漸進資料更新改變有效 path
+- **THEN** renderer SHALL 在 camera idle 或穩定檔位 padding 提交後，重新由同一有序 geometry 的目前屏幕投影排布及定向折角
+- **AND** renderer SHALL 復用既有方向 marker，只更新位置、旋轉與圖標並按數量差額增刪
+- **AND** 增量 renderer SHALL NOT 全量移除再新增未改變的折角，亦 SHALL NOT 造成折角相對路徑漂移、跳角或反向
 
 #### Scenario: 方向折角無法可靠建立
 - **WHEN** 目前 projection 不可用或某段 geometry 不能產生可靠的局部屏幕切線
@@ -63,6 +77,27 @@
 - **THEN** 地圖標籤 SHALL 使用該原文、單行限寬及省略呈現
 - **AND** 完整名稱 SHALL 保留於 marker 互動、時間線及無障礙描述
 - **AND** App SHALL NOT 自行翻譯或因語言切換改寫第三方站名
+
+### Requirement: 詳情窗拖動期間避免逐幀重建地圖內容
+系統 SHALL 在 persistent bottom sheet 連續拖動期間以輕量過渡保持地圖可讀，並只在安全檔位預留或最終停靠時提交昂貴的 padding 與 overlay 重排。
+
+#### Scenario: 開始拖動詳情窗
+- **WHEN** bottom sheet 從摘要、半屏或全屏穩定檔位進入拖動
+- **THEN** 地圖 SHALL 保留巴士實線、方向折角、站點 marker、目前相機及選中狀態
+- **AND** 站名 SHALL 淡出或暫時隱藏而 SHALL NOT 被逐幀移除及重建
+
+#### Scenario: 連續拖動 frame
+- **WHEN** 使用者持續拖動 bottom sheet 並產生多個 slide 回呼
+- **THEN** CSDI 署名 SHALL 以不觸發重新 layout 的位置變換跟隨詳情窗
+- **AND** 向上拖動 SHALL 最多預留一次下一檔位安全 padding，向下拖動 SHALL 暫時保留起始較大的安全 padding
+- **AND** 系統 SHALL NOT 在每個 slide frame 重建方向 marker、站名 bitmap、站名 marker 或 CSDI layout
+- **AND** 系統 SHALL NOT 因拖動重置相機 target、zoom 或使用者選中內容
+
+#### Scenario: 詳情窗完成停靠
+- **WHEN** bottom sheet 最終到達摘要、半屏或全屏穩定檔位
+- **THEN** 系統 SHALL 提交一次精確地圖 padding 及 CSDI 正式位置
+- **AND** 系統 SHALL 只按最終 projection 重排一次可見方向及站名並恢復標籤可見性
+- **AND** 被取消或過期的過渡 callback SHALL NOT 重排目前頁面
 
 ## MODIFIED Requirements
 

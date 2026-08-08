@@ -136,7 +136,9 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 
 地圖建立仍以香港中心作首幀。可靠站點結構到達後，用查詢起終點及所有可靠站點自動 fit 最多一次；晚到 bus geometry 或 pedestrian paths 不移動相機。使用者任何手勢把所有權交給 USER，之後異步結果不得自動 fit。使用者點擊「全覽」時，才以目前全部 marker、bus geometry 及 pedestrian paths 計算完整 bounds。
 
-第一條 CSDI path 實際顯示時，在地圖左下安全區、Google Logo 與 bottom sheet 上方顯示官方地政總署標誌及雙行短署名：繁中 `步行：地政總署 · CSDI`／`© 香港特區政府`，簡中及英文使用獨立資源；點擊可開啟完整來源、版權及免責說明。全部沒有 CSDI path 時隱藏。署名與 map padding 必須避免遮擋 Google Logo、法律文字、返回、定位及全覽控件，並作為站名碰撞模型的保留矩形；不以另一個常駐圖例取代。
+第一條 CSDI path 實際顯示時，在地圖左下安全區、Google Logo 與 bottom sheet 上方顯示官方地政總署標誌及雙行短署名：繁中 `步行：地政總署 · CSDI`／`© 香港特區政府`，簡中及英文使用獨立資源；點擊可開啟完整來源、版權及免責說明。可見署名背景以約 116×29dp 為基準，官方標誌約 15dp，保留相同雙行內容，使用低對比淺色半透明 surface，不加入粗描邊或厚重陰影。可見短署名的字體放大在約 1.3 倍封頂，完整說明對話框仍跟隨系統字體比例；外觀尺寸不承擔觸控下限，另以 `TouchDelegate` 提供至少 48dp 的有效觸控區，避免為了可點擊而放大視覺塊。
+
+全部沒有 CSDI path 時隱藏署名。署名與 map padding 必須避免遮擋 Google Logo、法律文字、返回、定位及全覽控件；站名碰撞模型只保留可見矩形加必要安全邊距，不把 48dp 觸控矩形當作視覺碰撞範圍。bottom sheet 拖動期間只透過 `translationY` 跟隨安全邊界，停在穩定 detent 後才更新精確 layout margin，避免每一幀重設 layout。不得以另一個常駐圖例取代署名。
 
 **否決方案：**保留端點直線直到 path 到達會短暫展示錯誤走法；path 失敗後畫直線會讓使用者誤認為真實導航；等待晚到 geometry 再首次 fit 會重現信息集中出現與搶鏡頭。
 
@@ -163,14 +165,15 @@ round6(startLat,startLon) -> round6(endLat,endLon) + travelMode=3
 - **[大量漸進卡片移動可能令使用者迷失]** → 只有主動選擇步行排序時移動，Loading 固定在數值後且 tie-break 穩定，置頂區域不動。
 - **[邏輯會話未正確結束可能持有訂閱]** → ViewModel／session owner 不持有 Activity、View 或 GoogleMap；新查詢、返回與 clear 均有明確 close 測試，最後訂閱觸發排隊／在途取消。
 - **[混合 Google 底圖與地政總署 overlay 的署名空間有限]** → 使用官方標誌、可見精簡來源／版權及可開啟完整說明，按 Insets 與 sheet 動態避讓，人工驗證 Google attribution 及控件不被遮擋。
+- **[壓縮署名後在大型字體或 TalkBack 下難以閱讀／點擊]** → 可見短署名字體放大在約 1.3 倍封頂，完整對話框保持正常系統字體比例；以獨立 48dp `TouchDelegate` 和完整 content description 提供無障礙操作，不膨脹可見背景或碰撞矩形。
 
 ## Migration Plan
 
 1. 先建立純 model、request builder／parser、兩個 30 米門禁、取整與 segment planner 測試；加入可注入 fixture fetcher，生產預設仍走真實 HTTPS。
 2. 實作進程級雙層 cache、優先隊列、global-5 single-flight、可取消 HTTP、重試及匿名診斷；以純並發測試證明上限、去重、訂閱與完成順序。
 3. 把路線查詢接入 Citybus 詳情／端點規劃與 walking callback，新增卡片顯示狀態、`INITIAL／MANUAL／AUTOMATIC` 退避語義、統一 projection 及 viewport anchor；保留原 `walkingDistanceMeters` 和既有 result identity。
-4. 擴展詳情邏輯會話、page reducer、formatter、adapter 與 presentation model，移除步行直線並沿每個 CSDI path 加入局部切線開放折角、相機門禁與署名 overlay。
-5. 完成 focused tests、`./gradlew build`、三語／TalkBack／窄屏與任務自有 Google Maps 模擬器驗收，再作少量 Citybus + CSDI 只讀抽查並記錄外部驗證限制。
+4. 擴展詳情邏輯會話、page reducer、formatter、adapter 與 presentation model，移除步行直線並沿每個 CSDI path 加入局部切線開放折角、相機門禁與約 116×29dp 精簡署名 overlay；以獨立 48dp 觸控區和拖動 translation 維持可操作性及流暢度。
+5. 完成 focused tests、`./gradlew build`、三語／TalkBack／窄屏／大型字體與任務自有 Google Maps 模擬器驗收，量測署名可見尺寸、標誌、觸控區和安全區，再作少量 Citybus + CSDI 只讀抽查並記錄外部驗證限制。
 6. 實作與驗證完成後更新 `docs/technical-debt.md`，再按 OpenSpec apply 流程核對 tasks、嚴格驗證及提交。
 
 沒有持久化 schema 或資料遷移。若需回退，可回退本 change 的程式與資源提交；Citybus 原始距離、時間與既有詳情／地圖資料仍保留，進程重啟即清除新增 cache，不需清理使用者資料。

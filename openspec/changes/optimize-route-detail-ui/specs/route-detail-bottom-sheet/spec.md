@@ -13,9 +13,10 @@
 #### Scenario: 分段按內容緊湊排布
 - **WHEN** 摘要行動鏈在一般 360dp、100% 字體顯示
 - **THEN** 每塊 SHALL 按內容包裹寬度而非等寬或彈性拉伸
-- **AND** 可見底色 SHALL 貼合約 18dp 圖標／路線內容，總可見高度約 22dp，並只保留約 2dp 上下留白
+- **AND** 可見底色總高度 SHALL 約為 30dp，現有等比 `ic_walking_person` SHALL 約為 24dp，路線號 SHALL 約為 17sp，小號耗時 SHALL 約為 12sp
 - **AND** 圖標或路線號與小號分段耗時 SHALL 共用底部基線
 - **AND** 耗時 SHALL 使用較小字級而不得另佔一行或下沉為獨立角落
+- **AND** 第一層總耗時／預計到達 SHALL 保持目前約 21sp、字重與排版，第三層統計 SHALL 保持目前約 13sp 與間距
 
 #### Scenario: 行動鏈超出可用寬度
 - **WHEN** 多乘車段、長路線號或窄屏令行動鏈寬度超出容器
@@ -65,6 +66,20 @@
 - **WHEN** 步行段仍在 Loading、回退 Citybus 距離、端點不可用，或相鄰巴士為 SameStop
 - **THEN** 對應摘要分段 SHALL 保持步行或同站換乘語義
 - **AND** 系統 SHALL NOT 顯示步行耗時、零值或以距離推算分鐘
+
+### Requirement: 路線詳情把手壓縮可見空白並保持可操作
+系統 SHALL 以較小可見高度展示 persistent bottom sheet 把手，同時保留拖動、檔位切換及無障礙操作能力。
+
+#### Scenario: 顯示摘要或半屏把手
+- **WHEN** bottom sheet 顯示摘要、半屏或全屏內容
+- **THEN** 把手可見容器高度 SHALL 約為 28dp，內部橫線 SHALL 保持約 36×4dp 並水平／垂直居中
+- **AND** 系統 SHALL NOT 為原 48dp 可見容器保留多餘頂部或底部空白
+
+#### Scenario: 操作緊湊把手
+- **WHEN** 使用者點擊、拖動或以 TalkBack 聚焦把手
+- **THEN** 把手 SHALL 保留至少 48dp 的透明有效操作範圍及目前檔位描述
+- **AND** 透明範圍 SHALL NOT 遮擋摘要階段或建立重複無障礙節點
+- **AND** 點擊切換檔位、拖動手勢及三檔狀態機 SHALL 保持可用
 
 ### Requirement: 乘車段資訊去除重複並保留票價
 系統 SHALL 在時間線中以無邊框乘車段展示路線、方向及必要單段票價，並 SHALL 把首程即時 ETA 及總乘坐站數集中於摘要第三層。

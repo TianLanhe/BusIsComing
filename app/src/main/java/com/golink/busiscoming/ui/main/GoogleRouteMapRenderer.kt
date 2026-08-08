@@ -1,5 +1,6 @@
 package com.golink.busiscoming.ui.main
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
@@ -26,9 +27,7 @@ import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.maps.model.Polyline
 import com.google.android.gms.maps.model.PolylineOptions
-import kotlin.math.atan2
-import kotlin.math.hypot
-import kotlin.math.max
+import kotlin.math.ceil
 
 data class RouteMapRenderPalette(
     val busColors: IntArray,
@@ -57,6 +56,12 @@ data class RouteMapRenderPalette(
     }
 }
 
+internal data class RouteMapRendererPerformanceSnapshot(
+    val directionRelayouts: Int,
+    val labelRelayouts: Int,
+    val activeDirectionMarkers: Int
+)
+
 class GoogleRouteMapRenderer(
     private val context: Context,
     private val map: GoogleMap,
@@ -64,11 +69,24 @@ class GoogleRouteMapRenderer(
     private val onMarkerSelected: (String) -> Unit
 ) {
     private val markerIcons = RouteMapMarkerIconFactory(context, palette)
+    private val density = context.resources.displayMetrics.density
+    private val busDirectionStyle = RouteMapDirectionStyle.bus(density)
+    private val walkingDirectionStyle = RouteMapDirectionStyle.walking(density)
     private val busDirectionIcon by lazy {
-        createDirectionArrowIcon(dp(16f), dp(11f), dp(2.2f), palette.busOutlineColor)
+        createDirectionArrowIcon(
+            busDirectionStyle.glyphWidth,
+            busDirectionStyle.glyphHeight,
+            busDirectionStyle.strokeWidth,
+            palette.busOutlineColor
+        )
     }
     private val walkingDirectionIcon by lazy {
-        createDirectionArrowIcon(dp(24f), dp(17f), dp(4.2f), palette.walkingColor)
+        createDirectionArrowIcon(
+            walkingDirectionStyle.glyphWidth,
+            walkingDirectionStyle.glyphHeight,
+            walkingDirectionStyle.strokeWidth,
+            palette.walkingColor
+        )
     }
     private val markers = mutableMapOf<String, RenderedMarker>()
     private val labelMarkers = mutableMapOf<String, Marker>()
@@ -82,6 +100,11 @@ class GoogleRouteMapRenderer(
     private var viewportWidth = 0
     private var viewportHeight = 0
     private var reservedLabelRects: List<RouteMapLabelRect> = emptyList()
+    private var viewportTransitionActive = false
+    private var labelAlpha = 1f
+    private var labelAnimator: ValueAnimator? = null
+    private var directionRelayoutCount = 0
+    private var labelRelayoutCount = 0
 
     init {
         map.uiSettings.apply {
@@ -117,8 +140,10 @@ class GoogleRouteMapRenderer(
         val nextLineIds = value.lines.mapTo(mutableSetOf()) { it.stableId }
         (lines.keys - nextLineIds).forEach { id -> lines.remove(id)?.remove() }
         value.lines.forEach { model -> renderLine(model) }
-        relayoutDirectionArrows()
-        relayoutLabels()
+        if (!viewportTransitionActive) {
+            relayoutDirectionArrows()
+            relayoutLabels()
+        }
     }
 
     fun updatePadding(
@@ -130,6 +155,11 @@ class GoogleRouteMapRenderer(
         viewportHeight: Int,
         reservedLabelRects: List<RouteMapLabelRect> = emptyList()
     ) {
+        val paddingChanged = paddingLeft != left || paddingTop != top ||
+            paddingRight != right || paddingBottom != bottom
+        val viewportChanged = this.viewportWidth != viewportWidth || this.viewportHeight != viewportHeight
+        val reservedChanged = this.reservedLabelRects != reservedLabelRects
+        if (!paddingChanged && !viewportChanged && !reservedChanged) return
         paddingLeft = left
         paddingTop = top
         paddingRight = right
@@ -137,19 +167,53 @@ class GoogleRouteMapRenderer(
         this.viewportWidth = viewportWidth
         this.viewportHeight = viewportHeight
         this.reservedLabelRects = reservedLabelRects
-        map.setPadding(left, top, right, bottom)
+        if (paddingChanged) map.setPadding(left, top, right, bottom)
+        if (!viewportTransitionActive) {
+            relayoutDirectionArrows()
+            relayoutLabels()
+        }
+    }
+
+    fun onCameraIdle() {
+        if (viewportTransitionActive) return
         relayoutDirectionArrows()
         relayoutLabels()
     }
 
-    fun onCameraIdle() {
+    fun beginViewportTransition() {
+        if (viewportTransitionActive) return
+        viewportTransitionActive = true
+        labelAnimator?.cancel()
+        labelAnimator = null
+        labelAlpha = 0f
+        labelMarkers.values.forEach { it.alpha = 0f }
+    }
+
+    fun endViewportTransition() {
+        if (!viewportTransitionActive) return
+        viewportTransitionActive = false
         relayoutDirectionArrows()
         relayoutLabels()
+        labelAnimator?.cancel()
+        labelAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = LABEL_FADE_DURATION_MILLIS
+            addUpdateListener { animator ->
+                labelAlpha = animator.animatedValue as Float
+                labelMarkers.values.forEach { it.alpha = labelAlpha }
+            }
+            start()
+        }
     }
 
     fun hasRenderedWalkingPaths(): Boolean = lines.values.any {
         it.model.kind == RouteMapLineKind.WALKING
     }
+
+    internal fun performanceSnapshot() = RouteMapRendererPerformanceSnapshot(
+        directionRelayouts = directionRelayoutCount,
+        labelRelayouts = labelRelayoutCount,
+        activeDirectionMarkers = lines.values.sumOf { it.arrows.size }
+    )
 
     fun fitOverview(animated: Boolean, paddingPx: Int): Boolean {
         val points = presentation?.boundsPoints.orEmpty()
@@ -182,6 +246,8 @@ class GoogleRouteMapRenderer(
     }
 
     fun clear() {
+        labelAnimator?.cancel()
+        labelAnimator = null
         markers.values.forEach { it.marker.remove() }
         labelMarkers.values.forEach(Marker::remove)
         lines.values.forEach(RenderedLine::remove)
@@ -224,9 +290,21 @@ class GoogleRouteMapRenderer(
     private fun renderLine(model: RouteMapLine) {
         val rendered = lines[model.stableId]
         if (rendered?.model == model) return
-        rendered?.remove()
         val points = model.points.map(RouteMapCoordinate::toLatLng)
-        if (points.size < 2) return
+        if (points.size < 2) {
+            lines.remove(model.stableId)?.remove()
+            return
+        }
+        if (rendered != null && rendered.model.kind == model.kind) {
+            rendered.model = model
+            rendered.outline?.points = points
+            rendered.core?.points = points
+            if (model.kind == RouteMapLineKind.BUS) {
+                rendered.core?.color = palette.busColors[(model.colorSlot ?: 0).mod(palette.busColors.size)]
+            }
+            return
+        }
+        rendered?.remove()
         lines[model.stableId] = when (model.kind) {
             RouteMapLineKind.BUS -> {
                 val color = palette.busColors[(model.colorSlot ?: 0).mod(palette.busColors.size)]
@@ -252,8 +330,8 @@ class GoogleRouteMapRenderer(
         strokeWidthPx: Float,
         @ColorInt color: Int
     ): BitmapDescriptor {
-        val width = widthPx.toInt().coerceAtLeast(1)
-        val height = heightPx.toInt().coerceAtLeast(1)
+        val width = ceil(widthPx.toDouble()).toInt().coerceAtLeast(1)
+        val height = ceil(heightPx.toDouble()).toInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val inset = strokeWidthPx / 2f + 1f
@@ -274,68 +352,61 @@ class GoogleRouteMapRenderer(
     }
 
     private fun relayoutDirectionArrows() {
+        if (viewportWidth <= 0 || viewportHeight <= 0) return
+        directionRelayoutCount += 1
+        val viewport = RouteMapScreenRect(
+            paddingLeft.toFloat(),
+            paddingTop.toFloat(),
+            (viewportWidth - paddingRight).toFloat(),
+            (viewportHeight - paddingBottom).toFloat()
+        )
         lines.values.forEach { rendered ->
-            rendered.arrows.forEach(Marker::remove)
-            rendered.arrows = directionArrowPlacements(rendered.model).mapNotNull { placement ->
-                map.addMarker(
+            val style = if (rendered.model.kind == RouteMapLineKind.BUS) {
+                busDirectionStyle
+            } else {
+                walkingDirectionStyle
+            }
+            val icon = if (rendered.model.kind == RouteMapLineKind.BUS) {
+                busDirectionIcon
+            } else {
+                walkingDirectionIcon
+            }
+            val zIndex = if (rendered.model.kind == RouteMapLineKind.BUS) 4f else 3f
+            val placements = RouteMapDirectionPlacementPolicy.place(
+                points = rendered.model.points.map { coordinate ->
+                    map.projection.toScreenLocation(coordinate.toLatLng()).let { point ->
+                        RouteMapScreenPoint(point.x.toFloat(), point.y.toFloat())
+                    }
+                },
+                viewport = viewport,
+                style = style,
+                maxPlacements = MAX_DIRECTION_ARROWS_PER_LINE
+            )
+            syncPooledItems(
+                existing = rendered.arrows,
+                desired = placements,
+                create = { placement ->
+                    map.addMarker(
                     MarkerOptions()
-                        .position(map.projection.fromScreenLocation(placement.point))
-                        .icon(
-                            if (rendered.model.kind == RouteMapLineKind.BUS) {
-                                busDirectionIcon
-                            } else {
-                                walkingDirectionIcon
-                            }
-                        )
+                        .position(map.projection.fromScreenLocation(placement.point.toAndroidPoint()))
+                        .icon(icon)
                         .anchor(0.5f, 0.5f)
                         .flat(true)
                         .rotation(placement.rotation)
-                        .zIndex(if (rendered.model.kind == RouteMapLineKind.BUS) 4f else 3f)
-                )
-            }
+                        .zIndex(zIndex)
+                    )
+                },
+                update = { marker, placement ->
+                    marker.position = map.projection.fromScreenLocation(placement.point.toAndroidPoint())
+                    marker.rotation = placement.rotation
+                    marker.zIndex = zIndex
+                },
+                remove = Marker::remove
+            )
         }
     }
 
-    private fun directionArrowPlacements(model: RouteMapLine): List<DirectionArrowPlacement> {
-        val screenPoints = model.points.map { map.projection.toScreenLocation(it.toLatLng()) }
-        if (screenPoints.size < 2) return emptyList()
-        val segments = screenPoints.zipWithNext().mapNotNull { (start, end) ->
-            val dx = (end.x - start.x).toFloat()
-            val dy = (end.y - start.y).toFloat()
-            val length = hypot(dx, dy)
-            if (length < 1f) null else DirectionScreenSegment(start, end, length, dx, dy)
-        }
-        val totalLength = segments.sumOf { it.length.toDouble() }.toFloat()
-        if (totalLength < 1f) return emptyList()
-        val preferredSpacing = dp(if (model.kind == RouteMapLineKind.BUS) 44f else 60f)
-        val spacing = max(preferredSpacing, totalLength / MAX_DIRECTION_ARROWS_PER_LINE)
-        val targets = buildList {
-            if (totalLength <= spacing) {
-                add(totalLength / 2f)
-            } else {
-                var target = spacing / 2f
-                while (target < totalLength) {
-                    add(target)
-                    target += spacing
-                }
-            }
-        }
-        return targets.mapNotNull { target ->
-            var traversed = 0f
-            segments.firstNotNullOfOrNull { segment ->
-                if (target > traversed + segment.length) {
-                    traversed += segment.length
-                    null
-                } else {
-                    val fraction = ((target - traversed) / segment.length).coerceIn(0f, 1f)
-                    val x = segment.start.x + segment.dx * fraction
-                    val y = segment.start.y + segment.dy * fraction
-                    val rotation = Math.toDegrees(atan2(segment.dx, -segment.dy).toDouble()).toFloat()
-                    DirectionArrowPlacement(Point(x.toInt(), y.toInt()), rotation)
-                }
-            }
-        }
-    }
+    private fun RouteMapScreenPoint.toAndroidPoint() = Point(x.toInt(), y.toInt())
 
     private fun accessibleTitle(marker: RouteMapMarker): String {
         val firstRoute = marker.routeLabels.firstOrNull().orEmpty()
@@ -357,6 +428,7 @@ class GoogleRouteMapRenderer(
     private fun relayoutLabels() {
         val value = presentation ?: return
         if (viewportWidth <= 0 || viewportHeight <= 0) return
+        labelRelayoutCount += 1
         runCatching {
             val screenWidth = viewportWidth.toFloat()
             val screenHeight = viewportHeight.toFloat()
@@ -401,6 +473,7 @@ class GoogleRouteMapRenderer(
                         .position(model.position.toLatLng())
                         .icon(icon.descriptor)
                         .anchor(icon.anchorX, icon.anchorY)
+                        .alpha(labelAlpha)
                         .zIndex(8f)
                 ) ?: return@forEach
             }
@@ -501,10 +574,10 @@ class GoogleRouteMapRenderer(
     )
 
     private data class RenderedLine(
-        val model: RouteMapLine,
+        var model: RouteMapLine,
         val core: Polyline?,
         val outline: Polyline?,
-        var arrows: List<Marker> = emptyList()
+        val arrows: MutableList<Marker> = mutableListOf()
     ) {
         fun remove() {
             core?.remove()
@@ -513,23 +586,11 @@ class GoogleRouteMapRenderer(
         }
     }
 
-    private data class DirectionScreenSegment(
-        val start: Point,
-        val end: Point,
-        val length: Float,
-        val dx: Float,
-        val dy: Float
-    )
-
-    private data class DirectionArrowPlacement(
-        val point: Point,
-        val rotation: Float
-    )
-
     private companion object {
         const val MAX_LABEL_CHARACTERS = 22
         const val MAX_LABEL_WIDTH_DP = 156f
-        const val MAX_DIRECTION_ARROWS_PER_LINE = 80f
+        const val MAX_DIRECTION_ARROWS_PER_LINE = 80
+        const val LABEL_FADE_DURATION_MILLIS = 140L
     }
 }
 
