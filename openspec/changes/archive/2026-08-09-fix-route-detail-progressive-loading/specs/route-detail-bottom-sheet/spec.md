@@ -26,7 +26,7 @@
 - **THEN** 步行 cache key SHALL 優先使用該 identifier
 - **AND** identifier 缺失時 SHALL 使用送入 P2P 查詢的規範化坐標
 
-#### Scenario: 計劃時間、分段票價與 ETA 不進入一天快取
+#### Scenario: 計劃時間與 ETA 不進入一天快取
 - **WHEN** 詳情包含計劃上車、下車、到達時間、分段票價或 DATA.GOV.HK 即時 ETA
 - **THEN** 系統 SHALL 使用本次查詢資料或各自既有短期刷新策略
 - **AND** 系統 SHALL NOT 將這些易變欄位作為一天詳情快取的一部分重用
@@ -57,7 +57,7 @@
 ### Requirement: 路線詳情摘要展示可判定的完整方案指標
 系統 SHALL 在 persistent bottom sheet 的摘要區展示路線鏈、總耗時、預計到達時間、總票價、乘坐站數、步行距離及可用首程即時 ETA，並 SHALL 明確處理站數可靠性、卡片摘要與完整分段的差異。
 
-#### Scenario: 顯示路線摘要與可靠乘坐站數
+#### Scenario: 顯示路線摘要
 - **WHEN** 系統有可用路線結果摘要
 - **THEN** 摘要 SHALL 展示路線鏈、總耗時與總票價
 - **AND** 有最終預計到達時間時摘要 SHALL 展示 `預計 HH:mm 到達` 或目前語言等效文案

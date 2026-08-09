@@ -9,7 +9,7 @@
 - **THEN** 步行人物圖示旁 SHALL 依目前語言顯示 `查詢中…`、`查询中…` 或 `Checking…`
 - **AND** 系統 SHALL NOT 同時顯示舊 Citybus 距離、來源或「約」字樣
 
-#### Scenario: 成功展示 CSDI 總步行距離
+#### Scenario: 展示步行距離
 - **WHEN** 路線的所有必要非同站步行段均取得 CSDI 成功結果
 - **THEN** 結果卡片 SHALL 展示各段原始米數先相加再向上取整的總距離及米單位
 - **AND** 結果卡片 SHALL NOT 展示資料來源或「約」字樣

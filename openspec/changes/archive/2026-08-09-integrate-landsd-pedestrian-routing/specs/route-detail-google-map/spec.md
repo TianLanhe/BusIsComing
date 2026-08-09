@@ -20,14 +20,14 @@
 - **THEN** 系統 SHALL 使用單一複合轉乘 marker
 - **AND** 系統 SHALL NOT 繪製步行紋理、步行距離或 CSDI 軌跡
 
-#### Scenario: 展示成功步行轉乘軌跡
+#### Scenario: 展示步行轉乘
 - **WHEN** Citybus 詳情把兩段路線標記為步行轉乘且該 CSDI 分段成功
 - **THEN** 系統 SHALL 保留前段下車站與後段上車站兩個角色
 - **AND** 系統 SHALL 把同一有序子路徑投影到屏幕，以固定屏幕間距及較粗灰色開放折角依序繪製 CSDI 回應的每個獨立子路徑
 - **AND** 每個折角 SHALL 按所在位置的局部屏幕切線定向，地圖 SHALL NOT 另畫灰色實線、點線或虛線底圖
 - **AND** 系統 SHALL NOT 以坐標相同為由改寫 Citybus 轉乘類型
 
-#### Scenario: 展示成功首尾步行軌跡
+#### Scenario: 展示首尾步行
 - **WHEN** 起點或終點必要步行段取得 CSDI 成功結果
 - **THEN** 系統 SHALL 以綁定同一有序子路徑的較粗灰色開放折角依序繪製該分段的每個獨立子路徑
 - **AND** 地圖 SHALL NOT 另畫灰色實線、點線或虛線底圖
@@ -67,7 +67,7 @@
 - **THEN** 地圖 SHALL 以預設香港中心及適當城市層級顯示
 - **AND** 地圖 SHALL NOT 先定位至 `(0,0)`、非洲或以設備位置取代查詢路線
 
-#### Scenario: 可靠結構首次到達時自動全覽
+#### Scenario: 首次完整路線全覽
 - **WHEN** 查詢端點及可靠巴士站結構首次可用，且使用者尚未操作地圖
 - **THEN** 地圖 SHALL 最多一次調整相機以包含查詢起點、所有可靠站點及查詢終點
 - **AND** 遠離路線的設備目前位置 SHALL NOT 強制加入初始 bounds
@@ -76,10 +76,15 @@
 - **WHEN** 初始結構全覽已完成後，巴士道路幾何或 CSDI 步行 paths 漸進到達
 - **THEN** 地圖 SHALL 增量繪製內容而 SHALL NOT 自動改變 target、zoom、bearing 或 tilt
 
-#### Scenario: 使用者先操作地圖
+#### Scenario: 使用者手勢取得鏡頭所有權
 - **WHEN** 使用者在可靠站點結構完成前已平移、縮放或以其他手勢操作地圖
 - **THEN** 後續站點、巴士幾何及 CSDI paths SHALL NOT 觸發自動全覽
 - **AND** 相機所有權 SHALL 保持由使用者控制
+
+#### Scenario: 程式相機動畫不冒充使用者手勢
+- **WHEN** 系統因首次全覽、全覽控件、目前位置或站點選擇而移動相機
+- **THEN** 系統 SHALL NOT 將該程式移動誤判為使用者手勢
+- **AND** 系統 SHALL 正確保存移動後的相機 snapshot
 
 #### Scenario: bottom sheet 改變高度
 - **WHEN** bottom sheet 在三個檔位之間移動

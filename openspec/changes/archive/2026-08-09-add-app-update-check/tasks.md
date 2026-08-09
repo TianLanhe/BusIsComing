@@ -58,7 +58,7 @@
 ## 7. 裝置與發布鏈驗收
 
 - [x] 7.1 在無可用 Google Play 的 API 25 與 API 30+ 模擬器驗證：非 Play 安裝走三語網站頁、Play 初始安裝只顯示 Play 暫不可用，且 App 不請求未知來源安裝權限。
-- [ ] 7.2 使用 Google Play internal test／Internal App Sharing、已擁有 App 的帳號及較高 `versionCode` 真實驗證資格判斷、flexible 下載、取消／返回、下載完成、`completeUpdate()` 與升級後清除小紅點；mock 結果不得取代此門檻。
+- [x] 7.2 使用 Google Play internal test／Internal App Sharing、已擁有 App 的帳號及較高 `versionCode` 真實驗證資格判斷、flexible 下載、取消／返回、下載完成、`completeUpdate()` 與升級後清除小紅點；mock 結果不得取代此門檻。
 - [x] 7.3 人工驗證繁體／簡體／英文 × 淺／深色、360dp、font scale 1.0／1.3／2.0 與 TalkBack，確認設定摘要、小紅點、三個 Dialog 操作及下載完成提示不裁切且朗讀完整。
 - [x] 7.4 已按固定順序驗證網站 v11 正式包：metadata 為 `versionCode=11`、`versionName=1.0`、`sizeBytes=6094814`，下載 APK 的 application ID 為 `com.golink.busiscoming`，Play app signing SHA-256 為 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`，且響應使用 `Cache-Control: no-store`。
 - [x] 7.5 以確定性測試驗證 `ERROR_APP_NOT_OWNED` 網站矩陣：只有較高版本形成 Play 渠道可靠更新，相等、較低、網絡或非法資料均保留 AppNotOwned；網站 v11 APK、metadata 與發佈鏈已完成驗證，真實帳號重現 AppNotOwned 屬可選補充證據，不取代 7.2 的 IAS flexible flow 門檻。

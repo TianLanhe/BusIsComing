@@ -2,9 +2,9 @@
 
 ## 文件目的
 
-本文件記錄更新檢查的長期渠道決策、狀態語義、網站 metadata 契約與發布驗證邊界。畫面文案與三語要求見 `localization-guidelines.md`；尚未關閉的真實 Google Play 驗收見 `technical-debt.md`。
+本文件記錄更新檢查的長期渠道決策、狀態語義、網站 metadata 契約、Google Play 評分入口邊界與發布驗證證據。畫面文案與三語要求見 `localization-guidelines.md`。
 
-目前 App 版本由 `app/build.gradle.kts` 定義；截至本次文檔同步為 `versionCode=12`、`versionName=1.0`。下文的 v11 數據只是一筆歷史發布證據，不代表目前版本。
+目前 App 版本由 `app/build.gradle.kts` 定義；截至本次文檔同步為 `versionCode=16`、`versionName=1.1`。下文的 v11 數據只是一筆歷史發布證據，不代表目前版本。
 
 ## 整體流程
 
@@ -71,6 +71,19 @@ Play Core 的 `AppUpdateInfo` 提供可用 `versionCode`，但不提供目標 `v
 
 Debug APK 無法代表 Google Play 的正式交付與帳號擁有權，因此在安裝來源、Play package、Play Core 與網站請求前短路。手動檢查顯示受控的不支援提示，自動檢查保持靜默；已通過 24 小時閘門的自動嘗試仍記錄嘗試時間，但不寫入可靠更新快照。
 
+## 與 Google Play 應用評分的邊界
+
+設定頁的「在 Google Play 評分」與更新檢查共享同一組 Play App 可用性探測，但不共享安裝來源、更新狀態、網站後備或 Play Core 結果。評分入口無論 App 從何處安裝，都只嘗試開啟 `market://details?id=com.golink.busiscoming`，並把 Intent 明確限制在 `com.android.vending`；不回退瀏覽器、網站 APK、其他商店或 App 內評分 API。
+
+探測與恢復行為為：
+
+- `AVAILABLE`：直接開啟 BusIsComing 的 Google Play 商品頁；啟動失敗顯示受控錯誤，不改走其他渠道。
+- `DISABLED`：引導至 Google Play App 的系統詳情設定。
+- `MISSING`：按目前 App 語言開啟 Google 官方安裝／啟用 Play 說明頁。
+- `UNUSABLE`：引導至 BusIsComing 的 App 系統詳情設定，讓使用者自行檢查裝置限制。
+
+從任何外部頁返回後都不自動續接或重複跳轉；使用者再次點擊時重新探測。評分失敗不得改變更新渠道、可靠更新快照、小紅點或提醒狀態；更新檢查失敗亦不得隱藏評分入口。
+
 ## 自動檢查、提醒與狀態
 
 - 自動檢查在冷啟動首個主要畫面可用後執行，距上次嘗試未滿 24 小時便結束；手動檢查不受這個門檻限制。
@@ -128,8 +141,8 @@ downloadUrl
 4. Google Play app signing key 的 SHA-256 必須為 `33:D0:0B:A0:B0:3A:EA:3F:38:2D:82:42:93:CE:03:5F:9D:8C:92:B3:A4:C1:E6:6E:AE:DF:F8:2D:BD:04:8D:58`；不得以 upload key `AC:B1:8B:84:F0:67:E9:CE:4D:AD:EA:D5:B2:97:7C:1E:F4:06:2E:3D:DE:39:52:A6:E3:CC:36:8B:D5:D7:43:69` 簽署網站候選包。
 5. 從實際 APK 產生 `sizeBytes`、APK SHA-256 及 metadata，驗證下載響應與 APK bytes 一致後才公開網站版本。
 
-## 歷史發布證據與目前缺口
+## 歷史發布與真實驗收證據
 
 2026-08-03 曾對網站 v11 發布鏈完成只讀核對：metadata 為 `versionCode=11`、`versionName=1.0`、`sizeBytes=6094814`，APK application ID 為 `com.golink.busiscoming`，簽名符合上述 Play app signing key，下載響應使用 `Cache-Control: no-store`。這筆證據證明當時網站包、metadata 與 Play 簽名鏈一致，不代表目前網站版本，也不取代 flexible update 驗收。
 
-目前唯一尚未關閉的更新發布門檻，是以同一 Internal App Sharing 渠道的較低版本與較高版本，在真實裝置和已擁有 App 的 Play 帳號上完成 flexible update、取消／返回、下載完成、`completeUpdate()` 及升級後狀態清理。具體關閉條件見 `technical-debt.md` 的 TD-002。
+2026-08-10，使用者確認已以符合資格的 Google Play 渠道及真實裝置完成人工 flexible update 驗收，並完成取消／返回、下載、前台恢復、`completeUpdate()`、升級及狀態清理檢查；對應 OpenSpec 任務 7.2 已勾選並隨 `2026-08-09-add-app-update-check` 歸檔。這項結論來自使用者提供的人工驗收結果，本次文件同步未重新操作真實 Play 帳號或裝置。

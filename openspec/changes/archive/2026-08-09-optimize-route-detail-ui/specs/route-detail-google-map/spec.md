@@ -154,7 +154,7 @@
 - **THEN** 每個子路徑 SHALL 以 `步行分段 + path 次序` 形成穩定渲染身份並獨立繪製
 - **AND** 系統 SHALL NOT 在子路徑空隙、首尾 marker 或其他幾何之間補畫直線
 
-#### Scenario: 漸進結果只更新對應步行軌跡
+#### Scenario: 漸進結果只更新對應軌跡
 - **WHEN** CSDI 分段以任意次序成功或有效狀態被替換
 - **THEN** renderer SHALL 依穩定子路徑身份只新增、更新或移除對應 path presentation
 - **AND** 其他 marker、巴士幾何及成功步行軌跡 SHALL 保持不變
@@ -178,7 +178,7 @@
 - **THEN** 返回按鈕 SHALL 以圓形浮動控件顯示在地圖左上安全區域
 - **AND** 畫面 SHALL NOT 同時顯示第二個頁面返回入口
 
-#### Scenario: 全屏不顯示屏內返回與標題
+#### Scenario: 全屏返回入口
 - **WHEN** bottom sheet 進入全屏態
 - **THEN** 地圖浮動返回按鈕 SHALL 隨地圖隱藏
 - **AND** 詳情窗 SHALL NOT 顯示「路線詳情」標題、Toolbar、App Bar 或任何屏內返回按鈕

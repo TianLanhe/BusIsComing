@@ -12,3 +12,8 @@
 - **WHEN** 用戶在設定頁點擊 `檢查更新`
 - **THEN** 系統 SHALL 發起或附著到 `app-update-check` 定義的手動更新檢查
 - **AND** 系統 SHALL NOT 顯示檢查更新暫不支援提示
+
+#### Scenario: 點擊語言入口
+- **WHEN** 用戶在設定頁點擊 `語言`
+- **THEN** 系統 SHALL 顯示 Toast `暫不支援語言切換`
+- **AND** 系統 SHALL NOT 改變 App locale、Citybus 查詢語言或 Google 地址語言

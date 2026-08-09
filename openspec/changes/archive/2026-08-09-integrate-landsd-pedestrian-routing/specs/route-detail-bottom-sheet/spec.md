@@ -3,12 +3,12 @@
 ### Requirement: 路線詳情辨識並展示分段步行完整性
 系統 SHALL 分別規劃與展示起點、每次步行換乘及終點步行段，讓各段 CSDI 距離、約略時間與失敗回退獨立漸進更新；系統 SHALL NOT 從總距離反推未知分段。
 
-#### Scenario: 單段路線 CSDI 完整
+#### Scenario: 單段路線完整距離
 - **WHEN** 單段路線的起點至上車站及下車站至終點兩個必要 CSDI 請求均成功
 - **THEN** 時間線 SHALL 在對應首尾步行段分別展示各自向上取整的米數及約略分鐘
 - **AND** 詳情 SHALL 將兩段標記為 CSDI 成功
 
-#### Scenario: 多段路線 CSDI 完整
+#### Scenario: 多段路線完整距離
 - **WHEN** 多段路線的起點、每次步行換乘及終點必要 CSDI 請求均成功
 - **THEN** 時間線 SHALL 依實際方案次序展示每段距離及約略分鐘
 - **AND** 非同站步行段數量 SHALL 等於乘車段數加一
@@ -24,7 +24,7 @@
 - **THEN** 時間線 SHALL 保留該段步行語義並展示目前語言的查詢中狀態
 - **AND** 其他已成功或已回退的分段 SHALL 保持可見
 
-#### Scenario: 單一 CSDI 分段失敗但 Citybus 距離可用
+#### Scenario: 只有部分距離
 - **WHEN** 一個必要 CSDI 分段最終失敗而對應 Citybus 分段距離可用
 - **THEN** 時間線 SHALL 在該段展示 Citybus 米數
 - **AND** 該段 SHALL NOT 展示 CSDI 約略分鐘或步行軌跡
@@ -35,7 +35,7 @@
 - **THEN** 時間線 SHALL 保留步行語義並顯示目前語言的「距離暫不可用」
 - **AND** 系統 SHALL NOT 以零值、總距離差額或直線距離補出該段
 
-#### Scenario: 三語兼容 Citybus 分段語義
+#### Scenario: 三語兼容解析
 - **WHEN** 繁體、簡體或英文 Citybus 詳情以 `showtimetable1(...)` 或對應 HTML 標籤提供轉乘類型及後備步行距離
 - **THEN** 系統 SHALL 解析相同的步行段次序、SameStop 語義及可用後備米數
 - **AND** parser SHALL NOT 只依賴繁體 `步行距離(約)` 文本
@@ -55,13 +55,13 @@
 - **AND** 路線牌 SHALL 使用與該段實線一致的顏色
 - **AND** 粗實線 SHALL 只表達路線分段，不表達車輛即時狀態或官方路線色
 
-#### Scenario: 巴士上下車位置不突出節點
+#### Scenario: 上下車站作為路線段端點
 - **WHEN** 某段巴士詳情展示成功
 - **THEN** 分段色實線 SHALL 連續穿過該段上車、途經及下車內容
 - **AND** UI SHALL NOT 在上車或下車位置放大節點、額外空心圓或帶框卡片
 - **AND** 上下車角色 SHALL 由站名、位置及本地化語義清楚表達
 
-#### Scenario: 時間線步行段使用輕量點線
+#### Scenario: 步行段使用細虛線
 - **WHEN** 詳情包含起點、步行換乘或終點步行段
 - **THEN** 詳情 UI SHALL 使用中性灰色輕量點線及步行人物圖示展示該段
 - **AND** CSDI 成功時 SHALL 共同展示向上取整的距離與約略分鐘
@@ -104,18 +104,34 @@
 - **AND** 摘要 SHALL 展示各乘車段途經站數之和且 SHALL NOT 重複計算上下車或換乘端點
 - **AND** 有可靠首程即時 ETA 時摘要 SHALL 以緊湊形式展示該狀態
 
+#### Scenario: 相鄰上下車乘車段
+- **WHEN** 一個已驗證乘車段的上車站與下車站相鄰且沒有途經站
+- **THEN** 該段 SHALL 為摘要乘坐站數貢獻 1 站
+- **AND** 兩個相鄰上下車乘車段 SHALL 合計為 2 站，即使兩段為同站換乘
+
+#### Scenario: 可靠站序仍在載入
+- **WHEN** 頁面尚未取得已驗證站序或未過期結構快取
+- **THEN** 摘要 SHALL 使用目前語言展示站數載入狀態
+- **AND** 摘要 SHALL NOT 使用 plan 差值、空集合或預設整數顯示 `0 站`
+
+#### Scenario: 站序最終不可用
+- **WHEN** 詳情請求、受控恢復或站序完整性驗證最終失敗
+- **AND** 頁面沒有可用的已驗證結構快取
+- **THEN** 摘要 SHALL 使用目前語言展示站數暫時無法載入
+- **AND** 摘要 SHALL NOT 把失敗或未知狀態格式化為 `0 站`
+
 #### Scenario: 完整 CSDI 步行分段仍在取得
 - **WHEN** 所有必要非同站步行段尚未全部成功且尚無分段最終失敗
 - **THEN** 詳情摘要的步行信息 SHALL 顯示目前語言的查詢中狀態
 - **AND** 其他已取得的摘要與分段內容 SHALL 漸進顯示而不被清空
 
-#### Scenario: 完整 CSDI 步行分段可用
+#### Scenario: 完整步行分段距離可用
 - **WHEN** 起點、所有必要步行換乘與終點分段均取得 CSDI 成功結果
 - **THEN** 詳情摘要 SHALL 顯示各段原始距離相加後再向上取整的總米數
 - **AND** 摘要 SHALL 使用已確認的步行人物圖示與距離
 - **AND** 系統 SHALL NOT 將完整合計回填至路線卡片原始 Citybus 欄位或改變 result identity
 
-#### Scenario: 完整 CSDI 合計不可用
+#### Scenario: 完整步行合計不可判定
 - **WHEN** 任一必要 CSDI 步行段最終失敗、端點來源衝突或不可可靠確定
 - **THEN** 詳情摘要 SHALL 立即完整回退顯示 `ppsearch_p3.php` 路線卡片 Citybus 總步行距離
 - **AND** 摘要 SHALL NOT 加上來源或「約」字樣

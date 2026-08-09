@@ -3,7 +3,6 @@
 ## Purpose
 TBD - created by archiving change add-settings-and-support-entrypoints. Update Purpose after archive.
 ## Requirements
-
 ### Requirement: 主頁可進入 App 設定頁
 系統 SHALL 在主頁提供克制且清楚的 App 設定入口，讓用戶可從普通主頁、首次引導頁或臨時查詢狀態進入設定頁。
 
@@ -36,8 +35,8 @@ TBD - created by archiving change add-settings-and-support-entrypoints. Update P
 
 #### Scenario: 偏好分組
 - **WHEN** 用戶查看設定頁 `偏好` 分組
-- **THEN** 系統 SHALL 依序顯示 `外觀主題` 與 `語言` 入口
-- **AND** `外觀主題` SHALL 位於 `語言` 之前
+- **THEN** 系統 SHALL 依序顯示 `外觀主題`、`語言` 與 `自動刷新`
+- **AND** `自動刷新` SHALL 位於 `語言` 之後
 
 #### Scenario: 路線資料分組
 - **WHEN** 用戶查看設定頁 `路線資料` 分組
@@ -61,17 +60,17 @@ TBD - created by archiving change add-settings-and-support-entrypoints. Update P
 - **THEN** 系統 SHALL 關閉設定頁並回到主頁
 
 ### Requirement: 暫不支援入口提供明確 Toast
-系統 SHALL 保留應用評分與檢查更新入口為可點擊狀態，但本期僅提供目前語言的暫不支援提示。
+系統 SHALL 保留應用評分與檢查更新入口為可點擊狀態；應用評分 SHALL 交由 `google-play-app-rating` 提供 Google Play 商品導向及恢復行為，檢查更新 SHALL 交由 `app-update-check` 提供實際版本檢查及更新行為。
 
 #### Scenario: 點擊應用評分入口
 - **WHEN** 用戶在設定頁點擊 `應用評分`
-- **THEN** 系統 SHALL 以目前 App 語言顯示暫不支援提示
-- **AND** 系統 SHALL NOT 打開商店頁或 Play In-App Review
+- **THEN** 系統 SHALL 依 `google-play-app-rating` 檢查官方 Google Play 狀態並打開商品頁或提供對應恢復操作
+- **AND** 系統 SHALL NOT 顯示應用評分暫不支援提示或啟動 Play In-App Review
 
 #### Scenario: 點擊檢查更新入口
 - **WHEN** 用戶在設定頁點擊 `檢查更新`
-- **THEN** 系統 SHALL 以目前 App 語言顯示暫不支援提示
-- **AND** 系統 SHALL NOT 發起網路更新檢查、Play In-App Updates 或自建更新流程
+- **THEN** 系統 SHALL 發起或附著到 `app-update-check` 定義的手動更新檢查
+- **AND** 系統 SHALL NOT 顯示檢查更新暫不支援提示
 
 #### Scenario: 點擊語言入口
 - **WHEN** 用戶在設定頁點擊 `語言`
@@ -335,3 +334,45 @@ TBD - created by archiving change add-settings-and-support-entrypoints. Update P
 - **WHEN** App 使用繁體中文、簡體中文或英文，以及淺色或深色模式
 - **THEN** 需要權限、等待、成功、已存在、不支援及失敗回饋 SHALL 使用對應語言資源及語意色
 - **AND** 狀態文字 SHALL NOT 與設定列圖示或其他內容重疊
+
+### Requirement: 設定頁以標準設定行及單選對話框管理自動刷新
+系統 SHALL 在偏好分組以標準設定行顯示自動刷新目前值，並 SHALL 讓用戶透過 Material 單選對話框選擇關閉、1、2、5 或 10 分鐘。
+
+#### Scenario: 顯示自動刷新設定行
+- **WHEN** 用戶查看設定頁偏好分組
+- **THEN** 系統 SHALL 在語言項之後顯示與外觀主題及語言一致的 `自動刷新` 標準設定行
+- **AND** 設定行左側 SHALL 顯示標題，右側 SHALL 顯示目前持久化值
+- **AND** 設定頁 SHALL NOT 在頁面內直接平鋪五個間隔按鈕
+
+#### Scenario: 打開單選對話框
+- **WHEN** 用戶啟用自動刷新設定行
+- **THEN** 系統 SHALL 打開 Material 單選對話框
+- **AND** 對話框 SHALL 完整顯示 `關閉`、`1 分鐘`、`2 分鐘`、`5 分鐘`、`10 分鐘` 五個互斥選項
+- **AND** 目前持久化選項 SHALL 顯示為已選中
+
+#### Scenario: 選擇不同間隔
+- **WHEN** 用戶在對話框選擇任一不同選項
+- **THEN** 系統 SHALL 立即保存並套用該值
+- **AND** 系統 SHALL 關閉對話框並立即更新設定行右側目前值
+- **AND** 系統 SHALL NOT 顯示成功 Toast 或要求額外確認
+
+#### Scenario: 重新選擇目前值
+- **WHEN** 用戶在對話框重新選擇目前已選中的選項
+- **THEN** 系統 SHALL 保持目前刷新值、關閉對話框且不執行可見重載
+- **AND** 系統 SHALL 把該操作視為使用者已明確理解並選擇自動刷新設定
+
+#### Scenario: 寬度或大型字體適配
+- **WHEN** 三語文案、360dp 級別可用寬度或字體比例 1.3／2.0 令內容需要更多空間
+- **THEN** 標準設定行及單選對話框 SHALL 自然換行或擴高以完整展示標題、目前值與全部選項
+- **AND** 系統 SHALL NOT 縮小字體、裁切文字、重疊控件或要求橫向捲動才能理解目前值與全部選項
+
+#### Scenario: 輔助技術讀取設定行及選項
+- **WHEN** TalkBack 或其他輔助技術聚焦自動刷新設定行或對話框選項
+- **THEN** 設定行 SHALL 讀出設定名稱及目前間隔，對話框選項 SHALL 讀出間隔及選中狀態
+- **AND** 設定行與每個可操作選項 SHALL 提供至少 48dp 的有效觸控區
+- **AND** 所有文案 SHALL 使用目前 App 的香港繁體、獨立簡體或自然英文資源
+
+#### Scenario: 首次提示跳轉至設定
+- **WHEN** 用戶從自動刷新首次提示啟用 `設定`
+- **THEN** 系統 SHALL 打開設定 destination、捲動至自動刷新設定行並把焦點放在整個設定行
+- **AND** 系統 SHALL NOT 嘗試聚焦已移除的行內選項或自動打開單選對話框

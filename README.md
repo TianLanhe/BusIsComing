@@ -13,13 +13,15 @@
 
 - **常用行程**：新增、編輯、複製、刪除常用起終點，按目前位置、使用次數及最近使用情況排列。
 - **臨時搜尋**：不保存行程也可選擇起終點、查詢路線，查詢成功後可另存為常用行程。
-- **即時路線結果**：比較路線、HK$ 車費、總耗時、步行距離、上下車站預覽及首程 ETA；支援五種排序與下拉刷新。
+- **即時路線結果**：比較路線、HK$ 車費、總耗時、步行距離、上下車站預覽及首程 ETA；地政總署行人路線距離會漸進補齊，支援五種排序與下拉刷新。
+- **前台自動刷新**：常用、搜尋結果與路線詳情可按關閉／1／2／5／10 分鐘更新；只在目前頁面前台可見時運行，並保留排序、置頂、閱讀位置及地圖狀態。
 - **結果置頂**：在本次查詢置頂路線，或為常用行程保存長期置頂；一般排序只作用於未置頂結果。
-- **ETA 與詳情**：查看最多三班到站時間、上下車站、方向、途經站及換乘段；詳情以 Google 地圖底圖展示站點、路段與轉乘。
+- **ETA 與詳情**：查看最多三班到站時間、上下車站、方向、途經站及換乘段；詳情以 Google 地圖漸進展示可靠站序、Citybus 道路幾何、地政總署步行軌跡、方向紋理及局部失敗狀態。
 - **通知欄監控**：短時前台服務定期刷新 ETA，顯示準備出門、立即出門或可能遲到，並提供刷新、停止及語音播報；啟動前檢查通知可見性，精確鬧鐘或電池豁免不可用時以可解釋方式降級。
 - **行程匯入匯出**：透過 Android 系統文件選擇器匯出 `.bicroutes`，或預覽後合併／取代本機行程。
 - **乘車碼快捷方式**：由桌面快捷方式開啟 AlipayHK／支付寶乘車碼候選鏈，不在常用頁佔用固定入口。
 - **更新檢查**：正常版本採 Google Play 優先分流，必要時使用官方網站 metadata；支援自動／手動檢查、稍後提醒、略過版本及 Play flexible update。
+- **Google Play 評分入口**：從設定頁打開官方 Play 商品詳情；Play 停用、缺失或不可用時提供對應恢復操作，不使用 In-App Review 或第三方商店 fallback。
 - **三語與主題**：支援跟隨系統、香港繁體、簡體、English，以及跟隨系統、淺色、深色外觀。
 
 ## 快速開始
@@ -42,7 +44,7 @@
    ```
 
 > [!IMPORTANT]
-> 生產路徑使用真實 Citybus、DATA.GOV.HK 與已配置的 Google 服務。Fixture 只用於 parser 回歸，不能替代生產 HTTP、真實三語或 Play 資格驗證。
+> 生產路徑使用真實 Citybus、DATA.GOV.HK、地政總署行人路線服務與已配置的 Google 服務。Fixture 只用於 parser 回歸，不能替代生產 HTTP、真實三語或 Play 資格驗證。
 
 ## 技術概覽
 
@@ -63,7 +65,7 @@
 
 ## 架構摘要
 
-BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 query owner；基礎路線結果先展示，站點預覽與 ETA 在背景漸進補齊。UI 負責展示、輸入與生命週期協調，網絡、SQLite、解析和查詢編排留在 data 層，前台監控、通知、調度及 TTS 留在 service。
+BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 query owner；基礎路線結果先展示，站點預覽、ETA 與地政總署步行結果在背景漸進補齊。UI 負責展示、輸入與生命週期協調，網絡、SQLite、解析和查詢編排留在 data 層；頁面級自動刷新只由前台 owner 調度，前台監控、通知、調度及 TTS 則留在 service。
 
 | 目錄 | 職責 |
 | --- | --- |
@@ -71,9 +73,9 @@ BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 quer
 | `data/localization` | 實際 locale、provider mapping、TTS 語言與版本 snapshot |
 | `data/location` | 目前位置、距離、附近行程決策與 Google 地址解析 |
 | `data/model` | 行程、路線、地點、ETA、置頂、更新及監控狀態 |
-| `data/repository` | Citybus／ETA 查詢、parser、詳情、cache 與本機 repository |
+| `data/repository` | Citybus／ETA／地政總署行人路線查詢、parser、詳情、cache 與本機 repository |
 | `data/transfer` | `.bicroutes` codec、讀取、預覽及匯入計劃 |
-| `data/update` | Play／網站渠道、更新策略、狀態存儲與外部操作 |
+| `data/update` | Play／網站渠道、更新策略、評分導航、狀態存儲與外部操作 |
 | `service` | 前台監控、通知、排程、session、TTS 與 formatter |
 | `ui/common` | 共用地點輸入、結果控制、WindowInsets 及短文案工具 |
 | `ui/main` | 三個頂層 destination、查詢結果、詳情、置頂及快捷入口 |
@@ -92,6 +94,7 @@ BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 quer
 | Citybus `getp2pstopinroute.php` | 上下車、途經站及換乘詳情 |
 | Citybus `getlinep2p.php` | 路線詳情的每段道路幾何 |
 | DATA.GOV.HK Citybus ETA | 首程即時到站資料 |
+| 地政總署 3D Pedestrian Route Search | 路線卡與詳情的步行距離、約略時間及地圖軌跡 |
 | Google Geocoding v4 | 目前座標的地址名稱 |
 | Maps SDK for Android | 詳情頁底圖、marker 與 polyline |
 | Google Play／官方網站 | 更新資格、版本展示及下載入口 |
@@ -100,7 +103,7 @@ BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 quer
 
 ## 本機資料與私隱
 
-常用行程與長期路線置頂保存在 SQLite；語言、外觀、更新和監控 session 等狀態使用各自的偏好存儲；畫面重建需要的臨時查詢與本次置頂使用 SavedState 或頁面狀態。Android 自動備份目前仍缺少明確 include／exclude 策略，已記入[技術債](docs/technical-debt.md)。
+常用行程與長期路線置頂保存在 SQLite；語言、外觀、自動刷新、更新和監控 session 等狀態使用各自的偏好存儲；畫面重建需要的臨時查詢與本次置頂使用 SavedState 或頁面狀態。Android 自動備份目前仍缺少明確 include／exclude 策略，已記入[技術債](docs/technical-debt.md)。
 
 `.bicroutes` 是未加密、版本化的 UTF-8 JSON，只包含行程名稱、起終點地點名稱與精確座標；不包含使用次數、最近使用時間、查詢結果、ETA、置頂或監控 session。
 
