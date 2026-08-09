@@ -29,8 +29,8 @@ android {
         applicationId = "com.golink.busiscoming"
         minSdk = 25
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.0"
+        versionCode = 16
+        versionName = "1.1"
 
         testInstrumentationRunner = "com.golink.busiscoming.BusIsComingTestRunner"
         buildConfigField(
@@ -54,7 +54,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
