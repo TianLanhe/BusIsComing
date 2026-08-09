@@ -8,6 +8,7 @@ import android.os.Build
 import android.widget.Toast
 import com.golink.busiscoming.R
 import com.golink.busiscoming.data.local.AppLanguageRepository
+import com.golink.busiscoming.data.update.AppUpdateLinks
 
 object AppSupportActions {
     const val websiteBaseUrl = "https://www.busiscoming.com"
@@ -19,8 +20,16 @@ object AppSupportActions {
     fun privacyPolicyUrl(context: Context): String =
         websiteBaseUrl + AppLanguageRepository(context).snapshot().privacyPath
 
-    fun shareText(context: Context): String =
-        context.getString(R.string.share_copy, websiteUrl(context))
+    fun websiteDownloadUrl(context: Context): String =
+        AppUpdateLinks.websiteDownloadPage(
+            AppLanguageRepository(context).snapshot().effectiveLanguage
+        )
+
+    fun shareText(context: Context): String = context.getString(
+        R.string.share_copy,
+        AppUpdateLinks.PLAY_HTTPS_URL,
+        websiteDownloadUrl(context)
+    )
 
     fun shareApp(context: Context) {
         val sendIntent = Intent(Intent.ACTION_SEND)

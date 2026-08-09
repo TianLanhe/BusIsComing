@@ -23,6 +23,22 @@ class AppSettingsSupportContractTest {
         File("src/main/java/com/golink/busiscoming/ui/settings/AboutActivity.kt").readText()
     private val actionsKt =
         File("src/main/java/com/golink/busiscoming/ui/settings/AppSupportActions.kt").readText()
+    private val localizedAboutStrings = listOf(
+        File("src/main/res/values/strings.xml").readText() to
+            "BusIsComing 為香港巴士通勤而設，助你比較 Citybus 路線與實時到站時間，更好掌握出發時機。\\n\\n你亦可儲存常用行程、查看地圖詳情及啟用通知欄監察。",
+        File("src/main/res/values-b+zh+Hans/strings.xml").readText() to
+            "BusIsComing 为香港公交通勤而设计，帮助你比较 Citybus 路线和实时到站时间，更好地掌握出发时机。\\n\\n你还可以保存常用行程、查看地图详情并启用通知栏监控。",
+        File("src/main/res/values-en/strings.xml").readText() to
+            "BusIsComing is built for Hong Kong bus commuters. Compare Citybus routes and live arrivals to choose a better time to leave.\\n\\nYou can also save regular journeys, view route details on the map, and monitor arrivals from your notifications."
+    )
+    private val localizedShareStrings = listOf(
+        File("src/main/res/values/strings_runtime.xml").readText() to
+            "用 BusIsComing 比較 Citybus 路線與實時到站時間，掌握更合適的出發時機。\\n\\nGoogle Play 下載：%1\$s\\n官方網站下載：%2\$s",
+        File("src/main/res/values-b+zh+Hans/strings_runtime.xml").readText() to
+            "使用 BusIsComing 比较 Citybus 路线和实时到站时间，掌握更合适的出发时机。\\n\\nGoogle Play 下载：%1\$s\\n官方网站下载：%2\$s",
+        File("src/main/res/values-en/strings_runtime.xml").readText() to
+            "Use BusIsComing to compare Citybus routes and live arrivals, so you can choose a better time to leave.\\n\\nDownload on Google Play: %1\$s\\nDownload from the official website: %2\$s"
+    )
 
     @Test
     fun manifestKeepsSettingsTopLevelAndDeclaresOnlyItsSecondaryActivities() {
@@ -136,6 +152,25 @@ class AppSettingsSupportContractTest {
     }
 
     @Test
+    fun aboutAndShareCopyUseTheApprovedConciseThreeLanguageContract() {
+        localizedAboutStrings.forEach { (xml, expected) ->
+            assertEquals(expected, stringValue(xml, "about_description"))
+        }
+        localizedShareStrings.forEach { (xml, expected) ->
+            val actual = stringValue(xml, "share_copy")
+            assertEquals(expected, actual)
+            assertTrue(actual.indexOf("%1\$s") < actual.indexOf("%2\$s"))
+        }
+
+        val shareTextBlock = actionsKt
+            .substringAfter("fun shareText")
+            .substringBefore("fun shareApp")
+        assertTrue(shareTextBlock.contains("AppUpdateLinks.PLAY_HTTPS_URL"))
+        assertTrue(shareTextBlock.contains("websiteDownloadUrl(context)"))
+        assertTrue(actionsKt.contains("AppUpdateLinks.websiteDownloadPage"))
+    }
+
+    @Test
     fun topLevelSettingsAndSecondaryAboutPageWireTheirActions() {
         assertTrue(settingsFragmentKt.contains("settingsLanguageRow"))
         assertTrue(settingsFragmentKt.contains("settingsRouteTransferRow"))
@@ -187,6 +222,9 @@ class AppSettingsSupportContractTest {
         assertTrue("Missing row $rowId", settingsFragmentLayoutXml.contains(rowRef))
         assertTrue("Missing text $stringName", settingsFragmentLayoutXml.contains(textRef))
     }
+
+    private fun stringValue(xml: String, name: String): String =
+        xml.substringAfter("<string name=\"$name\">").substringBefore("</string>")
 }
 
 class AppSupportActionsTest {

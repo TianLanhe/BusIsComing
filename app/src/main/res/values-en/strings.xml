@@ -42,7 +42,7 @@
     <string name="settings_about_us">About us</string>
     <string name="settings_privacy_policy">Privacy policy</string>
     <string name="settings_version_prefix">Version</string>
-    <string name="about_description">Save your regular journeys and compare bus options before you leave.</string>
+    <string name="about_description">BusIsComing is built for Hong Kong bus commuters. Compare Citybus routes and live arrivals to choose a better time to leave.\n\nYou can also save regular journeys, view route details on the map, and monitor arrivals from your notifications.</string>
     <string name="website_url">https://www.busiscoming.com</string>
     <string name="rating_play_disabled_title">Google Play is disabled</string>
     <string name="rating_play_disabled_message">To rate the app on Google Play, enable Google Play in system settings first.</string>

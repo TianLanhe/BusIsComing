@@ -42,7 +42,7 @@
     <string name="settings_about_us">关于我们</string>
     <string name="settings_privacy_policy">隐私政策</string>
     <string name="settings_version_prefix">版本</string>
-    <string name="about_description">保存常用行程，出门前快速比较公交路线。</string>
+    <string name="about_description">BusIsComing 为香港公交通勤而设计，帮助你比较 Citybus 路线和实时到站时间，更好地掌握出发时机。\n\n你还可以保存常用行程、查看地图详情并启用通知栏监控。</string>
     <string name="website_url">https://www.busiscoming.com</string>
     <string name="rating_play_disabled_title">Google Play 已停用</string>
     <string name="rating_play_disabled_message">如需前往 Google Play 评分，请先在系统设置中启用 Google Play。</string>

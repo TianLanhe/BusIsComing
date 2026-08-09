@@ -189,7 +189,7 @@
     <string name="validation_same_places">起點和終點不能相同</string>
     <string name="distance_from_current_meters">距離目前位置 %1$d 米</string>
     <string name="distance_from_current">距離目前位置 %1$s</string>
-    <string name="share_copy">搭巴士前想快一點知道哪條路線合適？BusIsComing 可以儲存常用行程，快速比較候車時間、票價和耗時。%1$s</string>
+    <string name="share_copy">用 BusIsComing 比較 Citybus 路線與實時到站時間，掌握更合適的出發時機。\n\nGoogle Play 下載：%1$s\n官方網站下載：%2$s</string>
     <string name="feedback_subject">BusIsComing 問題反饋</string>
     <string name="feedback_body">問題描述：\n\n\nApp 版本：%1$s\nAndroid 版本：%2$s\n裝置型號：%3$s</string>
     <string name="route_export_success">已匯出 %1$d 個常用行程。</string>
