@@ -25,4 +25,4 @@
 ## 5. 完成與提交
 
 - [x] 5.1 逐項核對 proposal、design、delta specs、tasks、實作與驗證證據一致，更新所有已完成 checkbox
-- [ ] 5.2 檢查 `git status --short`、暫存範圍與 diff，使用簡潔英文 conventional commit 提交本 change 制品、實作、測試及必要設計計劃
+- [x] 5.2 檢查 `git status --short`、暫存範圍與 diff，使用簡潔英文 conventional commit 提交本 change 制品、實作、測試及必要設計計劃
