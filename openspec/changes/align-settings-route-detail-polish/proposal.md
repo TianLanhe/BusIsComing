@@ -26,4 +26,4 @@
 - 受影響 UI／資源：`AboutActivity` 使用的三語字串、分享字串、`AppSupportActions`、路線詳情 layout／style、全覽路線 drawable、地圖 marker icon factory 及 Lucide 授權記錄。
 - 不新增網絡請求、依賴、權限、本機資料或外部服務；Google Play 與官網 URL 沿用更新／評分能力的集中來源，分享失敗時保持設定頁可用。
 - 不改 Citybus、ETA、CSDI、Google Maps 查詢、漸進載入、路線 bounds、目前位置、marker stable id 或 TalkBack 角色描述。
-- 需要三語資源與 URL 合同測試、共用樣式／drawable／marker 測試、OpenSpec strict validation、完整 Android build，以及任務自有 360dp Google Play AVD 的明暗與代表性三語視覺驗收。
+- 需要三語資源與 URL 合同測試、共用樣式／drawable／marker 測試、實際 inflate 後控件屬性 instrumentation、OpenSpec strict validation 及完整 Android build；依使用者最新指示不建立截圖產物。

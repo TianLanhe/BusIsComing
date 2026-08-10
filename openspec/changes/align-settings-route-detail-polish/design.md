@@ -60,7 +60,7 @@ marker factory 在下車分支先以目前乘車段色填滿圓形，再畫 `rou
 ## Risks / Trade-offs
 
 - [精簡文案未列出全部能力] → 關於頁與分享只承擔定位及核心價值；完整功能由主 UI、README 與商店頁呈現。
-- [共用 style 抽取導致外觀漂移] → 只搬移三個節點現有共同屬性，保留個別位置／elevation，並做 inflate 與裝置截圖比較。
+- [共用 style 抽取導致外觀漂移] → 只搬移三個節點現有共同屬性，保留個別位置／elevation，並以資源合同及實際 inflate 後控件屬性驗證。
 - [上車與下車同為實心圓] → 保留高對比 bus／log-out glyph、站名、時間線與 TalkBack 多重角色資訊。
 - [Route 被誤解為路線規劃] → content description 與點擊行為仍明確是全覽；不增加編輯、導航或多點操作。
 - [分享目標不把純文字 URL 渲染為可點擊] → 合同只保證完整 HTTPS 文本及系統分享 Intent，不宣稱所有第三方接收 App 的渲染行為。
@@ -70,7 +70,7 @@ marker factory 在下車分支先以目前乘車段色填滿圓形，再畫 `rou
 1. 先以 failing tests 固定新三語文案、两個 URL、共用 style、Route vector 與不透明 marker。
 2. 更新最小資源、style 與協調代碼；已符合設計的候選圖標／marker 不重寫。
 3. 將主 spec 候選修改還原，保留本 change delta 並完成 strict validation。
-4. 運行定向測試、完整 build 與任務自有 AVD 視覺矩陣；失敗時可回退本 change 提交，不涉及資料遷移或使用者資料。
+4. 運行定向單元／instrumentation 測試與完整 build，不建立截圖產物；失敗時可回退本 change 提交，不涉及資料遷移或使用者資料。
 
 ## Open Questions
 

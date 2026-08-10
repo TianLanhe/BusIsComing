@@ -33,24 +33,13 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/routeDetailFloatingBack"
-        style="@style/Widget.MaterialComponents.Button.Icon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        style="@style/Widget.BusIsComing.RouteDetailMapControl"
         android:layout_gravity="top|start"
         android:layout_marginStart="16dp"
         android:layout_marginTop="16dp"
         android:contentDescription="@string/route_detail_navigate_up"
         android:elevation="6dp"
-        android:insetLeft="0dp"
-        android:insetTop="0dp"
-        android:insetRight="0dp"
-        android:insetBottom="0dp"
-        app:backgroundTint="@color/bus_card_surface"
-        app:cornerRadius="24dp"
-        app:icon="@drawable/ic_arrow_back"
-        app:iconGravity="textStart"
-        app:iconPadding="0dp"
-        app:iconTint="@color/bus_text_primary" />
+        app:icon="@drawable/ic_arrow_back" />
 
     <LinearLayout
         android:id="@+id/routeDetailMapControls"
@@ -64,40 +53,18 @@
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/routeDetailLocation"
-            style="@style/Widget.MaterialComponents.Button.Icon"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            style="@style/Widget.BusIsComing.RouteDetailMapControl"
             android:contentDescription="@string/route_map_current_location"
             android:elevation="5dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@color/bus_card_surface"
-            app:cornerRadius="24dp"
-            app:icon="@drawable/ic_location_outline"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            app:iconTint="@color/bus_text_primary" />
+            app:icon="@drawable/ic_location_outline" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/routeDetailOverview"
-            style="@style/Widget.MaterialComponents.Button.Icon"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            style="@style/Widget.BusIsComing.RouteDetailMapControl"
             android:layout_marginTop="12dp"
             android:contentDescription="@string/route_map_overview"
             android:elevation="5dp"
-            android:insetLeft="0dp"
-            android:insetTop="0dp"
-            android:insetRight="0dp"
-            android:insetBottom="0dp"
-            app:backgroundTint="@color/bus_card_surface"
-            app:cornerRadius="24dp"
-            app:icon="@drawable/ic_route_overview"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            app:iconTint="@color/bus_text_primary" />
+            app:icon="@drawable/ic_route_overview" />
     </LinearLayout>
 
     <FrameLayout

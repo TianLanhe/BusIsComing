@@ -670,13 +670,15 @@ internal class RouteMapMarkerIconFactory(
                 )
             }
             RouteMapMarkerRole.ALIGHTING -> {
-                val radius = (right - left) / 2f
-                canvas.drawCircle(size / 2f, size / 2f, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = primaryColor
-                    style = Paint.Style.STROKE
-                    strokeWidth = 4f * density
-                })
-                drawVector(canvas, R.drawable.ic_route_map_log_out, primaryColor, size, 0.58f)
+                canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, fill)
+                canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, outline)
+                drawVector(
+                    canvas,
+                    R.drawable.ic_route_map_log_out,
+                    palette.markerOutlineColor,
+                    size,
+                    0.58f
+                )
             }
             RouteMapMarkerRole.TRANSFER -> {
                 val arcBounds = RectF(left, top, right, bottom)

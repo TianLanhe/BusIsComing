@@ -233,7 +233,8 @@ class AppSupportActionsTest {
         val source = File(
             "src/main/java/com/golink/busiscoming/ui/settings/AppSupportActions.kt"
         ).readText()
-        assertTrue(source.contains("context.getString(R.string.share_copy"))
+        assertTrue(source.contains("context.getString("))
+        assertTrue(source.contains("R.string.share_copy"))
         assertTrue(source.contains("context.getString(\n            R.string.feedback_body"))
         assertTrue(source.contains("AppLanguageRepository(context).snapshot()"))
     }

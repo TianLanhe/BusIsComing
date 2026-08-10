@@ -2,6 +2,7 @@ package com.golink.busiscoming
 
 import android.content.Intent
 import android.graphics.Rect
+import android.view.Gravity
 import android.view.View
 import android.view.MotionEvent
 import android.view.ViewGroup
@@ -60,6 +61,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.runner.RunWith
 import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.button.MaterialButton
 import com.golink.busiscoming.data.repository.RouteGeometryDataSource
 import com.golink.busiscoming.data.repository.RouteGeometryLoadHandle
 import com.golink.busiscoming.data.repository.RouteGeometryRequest
@@ -104,6 +106,34 @@ class RouteDetailActivityTest {
             onView(withId(R.id.routeDetailSheetHandle)).check(matches(isDisplayed()))
             onView(withId(R.id.routeDetailFloatingBack)).check(matches(isDisplayed()))
             onView(withId(R.id.routeDetailList)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun mapControlsUseCenteredTwentyFourDpIcons() {
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            scenario.onActivity { activity ->
+                val density = activity.resources.displayMetrics.density
+                val expectedButtonSize = (48f * density).toInt()
+                val expectedIconSize = (24f * density).toInt()
+
+                listOf(
+                    R.id.routeDetailFloatingBack,
+                    R.id.routeDetailLocation,
+                    R.id.routeDetailOverview
+                ).forEach { id ->
+                    val button = activity.findViewById<MaterialButton>(id)
+                    assertEquals(expectedButtonSize, button.width)
+                    assertEquals(expectedButtonSize, button.height)
+                    assertEquals(expectedIconSize, button.iconSize)
+                    assertEquals(0, button.paddingLeft)
+                    assertEquals(0, button.paddingTop)
+                    assertEquals(0, button.paddingRight)
+                    assertEquals(0, button.paddingBottom)
+                    assertEquals(Gravity.CENTER, button.gravity and Gravity.CENTER)
+                }
+            }
         }
     }
 

@@ -215,27 +215,20 @@ assertTrue(style.contains("iconSize\">24dp"))
 
 Expected: FAIL；缺少共用 style、layout 仍使用旧 parent、overview 仍是扫描框、下车仍是空心圆环。
 
-- [ ] **Step 3: 寫 instrumentation 屬性測試並在舊實作上確認 RED**
+- [ ] **Step 3: 寫 instrumentation 屬性測試並確認可編譯**
 
 在 `RouteDetailActivityTest` 使用既有 `intent(routeWithDetailQuery())` 啟動頁面，對 `routeDetailFloatingBack`、`routeDetailLocation`、`routeDetailOverview` 逐一斷言：
 
 ```kotlin
-assertEquals(dp(activity, 48), button.width)
-assertEquals(dp(activity, 48), button.height)
-assertEquals(dp(activity, 24), button.iconSize)
+assertEquals((48f * density).toInt(), button.width)
+assertEquals((48f * density).toInt(), button.height)
+assertEquals((24f * density).toInt(), button.iconSize)
 assertEquals(0, button.paddingLeft)
 assertEquals(0, button.paddingRight)
-assertEquals(Gravity.CENTER, button.gravity)
+assertEquals(Gravity.CENTER, button.gravity and Gravity.CENTER)
 ```
 
-並在測試檔加入明確 density helper：
-
-```kotlin
-private fun dp(context: Context, value: Int): Int =
-    (value * context.resources.displayMetrics.density).roundToInt()
-```
-
-运行前记录 `adb devices` 的既有 serial，只启动当时关闭的 `BIC_Main_API36_1_Play_360`，逐个对新出现 serial 执行 `adb -s "$candidate" emu avd name`，将返回该 AVD 名称的 serial 保存为 `TASK_AVD_SERIAL`。在该任务自有 API 36／360dp Play AVD 上运行单一测试。Expected: FAIL，旧实现的 iconSize／padding／gravity 至少一项不符。
+先運行 `compileDebugAndroidTestKotlin` 確認測試本身可編譯；舊實作的新行為差異已由 Step 2 的 JVM RED 證明，裝置只在實作後用於 GREEN，避免為相同失敗重複啟動 AVD。
 
 - [ ] **Step 4: 實作共用 style、Route vector 與不透明 marker**
 
@@ -295,17 +288,16 @@ git commit -m "feat: align route detail map affordances"
 
 Expected: 两个定向命令均 PASS。
 
-### Task 4: OpenSpec、视觉矩阵、完整构建与交付提交
+### Task 4: OpenSpec、自动化验证、完整构建与交付提交
 
 **Files:**
 - Modify: `openspec/changes/align-settings-route-detail-polish/tasks.md`
 - Verify unchanged: `openspec/specs/app-settings-support/spec.md`
 - Verify unchanged: `openspec/specs/route-detail-google-map/spec.md`
-- Output only: task-owned screenshots under `/tmp` or instrumentation output directory；不提交截图。
 
 **Interfaces:**
-- Consumes: Tasks 2–3 的 committed implementation、现有视觉 fixture 与 `RouteDetailVisualMatrixInstrumentedTest`。
-- Produces: strict-valid、build-green、AVD 人工复核完成的 apply-ready change。
+- Consumes: Tasks 2–3 的 committed implementation 與既有 unit／instrumentation contracts。
+- Produces: strict-valid、build-green、定向 instrumentation 通過的 apply-ready change；不建立截圖產物。
 
 - [ ] **Step 1: 驗證主 spec 邊界與 OpenSpec**
 
@@ -317,17 +309,9 @@ openspec validate --all --strict --no-interactive
 
 Expected: 主 spec 无 diff；change valid；全仓全部通过。
 
-- [ ] **Step 2: 執行任務自有 AVD 視覺驗收**
+- [ ] **Step 2: 執行任務自有 AVD 定向 instrumentation**
 
-继续使用 Task 3 由本任务启动并核验为 `BIC_Main_API36_1_Play_360` 的 `TASK_AVD_SERIAL`；若它已经关闭，只可重新启动同一任务自有 AVD，不能接管其他 serial。后续每条 adb／Gradle instrumentation 命令均显式使用它。运行设置／关于页面三语检查及路线详情视觉矩阵，覆盖至少香港繁体浅色、简体深色、英文浅色；另覆盖路线详情明暗两种主题。截图只能使用 synthetic route／非敏感数据，逐张检查：
-
-- about 两段可读、网站入口不被遮挡；
-- 分享文本含两个完整 HTTPS URL 且 Play 在前；
-- 三个图标均位于圆心；
-- Route 无扫描框语义；
-- 下车中心不透出底图，与上车 glyph 可区分。
-
-完成后关闭本任务启动的 AVD。
+只啟動任務開始時關閉且核驗為 `BIC_Main_API36_1_Play_360` 的 AVD，對唯一新 serial 顯式運行 `mapControlsUseCenteredTwentyFourDpIcons`。測試讀取三個實際 MaterialButton 的 `48dp` 尺寸、`24dp` iconSize、零 padding 及 center gravity；完成後關閉本任務設備。依使用者最新指示不建立或保存截圖。
 
 - [ ] **Step 3: 執行完整驗證**
 

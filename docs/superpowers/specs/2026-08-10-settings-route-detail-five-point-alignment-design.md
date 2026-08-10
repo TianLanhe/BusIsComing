@@ -137,7 +137,7 @@ https://play.google.com/store/apps/details?id=com.golink.busiscoming
 | 分享文案 | 羅列路線、ETA、車費、車程、步行、地圖、自動刷新及監察 | 需要，縮短為一句核心價值＋兩個入口 |
 | 圓形控件 | 三個節點各自重複零 padding、居中與 24dp 屬性 | 需要，抽取共用樣式但不改視覺 |
 | 全覽路線圖標 | Lucide `Route` | 不需要，已符合最終選擇 |
-| 下車 marker | 路線色實心圓＋白色外框／圖形 | 原理不需改；補足不透明 alpha 與視覺驗收即可 |
+| 下車 marker | 路線色實心圓＋白色外框／圖形 | 原理不需改；補足不透明 alpha 與自動化合同即可 |
 
 ## OpenSpec 與文件邊界
 
@@ -154,37 +154,37 @@ README 不需因這次短文案調整而重寫產品功能列表；Lucide 授權
 
 - JVM／resource contract 檢查三語 about 兩段內容、分享模板的兩個格式參數及 Play／網站順序。
 - 逐語言確認網站 URL 分別落到 `zh-hant`、`zh-hans`、`en` 的 `#download`。
-- 啟動系統分享面板，確認文本中的兩個 HTTPS URL 完整、可點擊，換行未被字面轉義。
-- 在 360dp、font scale `1.0／1.3／2.0` 下檢查關於頁不裁切、不遮擋網站入口，長內容可正常垂直捲動。
+- 以協調層測試確認系統分享 Intent 保持 `text/plain`，兩個 HTTPS URL 完整且換行未被字面轉義。
+- 保留關於頁既有可捲動 layout，不新增會遮擋網站入口的固定高度容器。
 
 ### 地圖控件
 
 - layout／style 測試確認三個控件引用同一樣式且 drawable box 為 `24dp`。
 - 實際 inflate 後量測圖標 bounds；水平及垂直中心相對 `48dp` 外框的偏差不得超過一個實體像素。
-- 三語、明暗、LTR／RTL 與至少 360dp 畫面檢查三個控件位置、content description、觸控面積、漣漪及按下狀態沒有回歸。
+- 在任務自有 360dp AVD 以 instrumentation 讀取三個實際 MaterialButton 的尺寸、padding、gravity、iconSize 與 content description。
 - 全覽路線仍重置至可靠完整路線 bounds，不把遠離路線的裝置位置強制納入，也不改變使用者手勢後的相機所有權規則。
 
 ### Marker 與圖標
 
 - drawable contract 固定 Lucide Route 的端點及相連路徑，不得回退掃描框。
 - marker icon factory 測試確認下車分支先繪製 fill，再繪製 outline 與白色 glyph，且三者輸出 alpha 均為 `255`。
-- 在淺色、深色及文字密集的 Google 底圖上並排檢查上車、下車、轉乘；下車中心不得透出底圖，bus／log-out 圖形仍能快速區分。
+- 資源合同同時檢查淺色與深色路線色、outline 均以 `#FF` alpha 開頭；下車分支固定先 fill、再 outline 與白色 glyph 的繪製順序。
 - 單段及多段路線都要檢查所屬乘車段色，同站轉乘不新增重疊 marker。
 
-最後運行受影響單元測試、OpenSpec strict validation 及 `./gradlew build`。視覺驗收只使用本任務新啟動且符合 API、360dp、Google Play、語言與主題畫像的 AVD，完成後關閉該 AVD。
+最後運行受影響單元／instrumentation 測試、OpenSpec strict validation 及 `./gradlew build`。依使用者最新指示不建立或保存截圖產物；instrumentation 只使用本任務新啟動且符合 API、360dp、Google Play 畫像的 AVD，完成後關閉該 AVD。
 
 ## 風險與緩解
 
 - **精簡文案遺漏次要能力**：關於頁與分享不是功能列表；完整能力仍由主畫面、README 及商店頁承擔。
 - **「香港巴士」被理解為全營運商支援**：產品定位與能力句分開，查詢能力明確寫 `Citybus`。
-- **共用樣式改變現有外觀**：只抽取已驗證的共同屬性，個別位置與 elevation 保留在 layout，使用實際 inflate 和截圖比較。
+- **共用樣式改變現有外觀**：只抽取已驗證的共同屬性，個別位置與 elevation 保留在 layout，使用資源合同與實際 inflate 屬性比較。
 - **實心上下車 marker 太相似**：保持不同且高對比的 bus／log-out 圖形，並由時間線、站名及 TalkBack 提供冗餘角色資訊。
 - **Route 圖標被理解為路線規劃**：content description 明確為「全覽路線」，操作只執行既有相機 fit，不進入編輯或導航。
 
 ## 完成條件
 
 - 三語「關於我們」與分享文本等同本設計，兩個下載 URL 與語言映射正確。
-- 三個地圖控件共用同一樣式，48dp 外框內的 24dp 圖標通過量測及人工居中驗收。
+- 三個地圖控件共用同一樣式，48dp 外框內的 24dp 圖標通過資源合同及實際控件屬性量測。
 - 全覽路線保留 Lucide Route 及授權記錄，沒有掃描／QR 語義。
-- 下車 marker 在所有已驗收底圖上為完全不透明的路線色實心圓，白色外框與白色圖形清晰。
+- 下車 marker 使用 alpha `255` 的路線色實心圓、白色外框與白色圖形，繪製順序由合同測試固定。
 - 受影響測試、OpenSpec strict validation 及 `./gradlew build` 成功；未執行的真實裝置或分享目標驗證被如實記錄。

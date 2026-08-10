@@ -13,6 +13,14 @@ class RouteDetailLayoutContractTest {
         "src/main/java/com/golink/busiscoming/ui/main/RouteDetailActivity.kt"
     ).readText()
     private val layoutSource = File("src/main/res/layout/activity_route_detail.xml").readText()
+    private val themeSource = File("src/main/res/values/themes.xml").readText()
+    private val overviewIconSource = File("src/main/res/drawable/ic_route_overview.xml").readText()
+    private val lucideLicenseSource = File("src/main/res/raw/lucide_license.txt").readText()
+    private val rendererSource = File(
+        "src/main/java/com/golink/busiscoming/ui/main/GoogleRouteMapRenderer.kt"
+    ).readText()
+    private val dayColorsSource = File("src/main/res/values/colors.xml").readText()
+    private val nightColorsSource = File("src/main/res/values-night/colors.xml").readText()
 
     @Test
     fun enlargedSummaryStillDoesNotUseVisibleFortyEightDpSegmentRows() {
@@ -71,4 +79,55 @@ class RouteDetailLayoutContractTest {
         assertFalse(slideBlock.contains("commitStableMapLayout"))
         assertFalse(slideBlock.contains("relayout"))
     }
+
+    @Test
+    fun mapControlsShareCenteredFortyEightDpButtonStyleWithTwentyFourDpIcons() {
+        val styleName = "Widget.BusIsComing.RouteDetailMapControl"
+        val style = themeSource.substringAfter("<style name=\"$styleName\"")
+            .substringBefore("</style>")
+        assertTrue(style.contains("android:layout_width\">48dp"))
+        assertTrue(style.contains("android:layout_height\">48dp"))
+        assertTrue(style.contains("android:gravity\">center"))
+        assertTrue(style.contains("android:padding\">0dp"))
+        assertTrue(style.contains("name=\"iconSize\">24dp"))
+
+        listOf(
+            "routeDetailFloatingBack",
+            "routeDetailLocation",
+            "routeDetailOverview"
+        ).forEach { id ->
+            val button = layoutSource.substringAfter("android:id=\"@+id/$id\"")
+                .substringBefore("/>")
+            assertTrue(button.contains("style=\"@style/$styleName\""))
+        }
+    }
+
+    @Test
+    fun overviewUsesLucideRouteInsteadOfScanFrame() {
+        assertTrue(lucideLicenseSource.lineSequence().first() == "Lucide icons")
+        assertTrue(overviewIconSource.contains("M6,16a3,3 0,1 0,0 6"))
+        assertTrue(overviewIconSource.contains("M18,2a3,3 0,1 0,0 6"))
+        assertFalse(overviewIconSource.contains("M4,4h5v2H6v3H4z"))
+    }
+
+    @Test
+    fun alightingMarkerUsesOpaqueRouteFillContrastOutlineAndWhiteGlyph() {
+        val block = rendererSource.substringAfter("RouteMapMarkerRole.ALIGHTING -> {")
+            .substringBefore("RouteMapMarkerRole.TRANSFER ->")
+        assertTrue(block.contains("canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, fill)"))
+        assertTrue(block.contains("canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, outline)"))
+        assertTrue(block.contains("R.drawable.ic_route_map_log_out"))
+        assertTrue(block.contains("palette.markerOutlineColor"))
+        assertFalse(block.contains("style = Paint.Style.STROKE"))
+
+        listOf(dayColorsSource, nightColorsSource).forEach { colors ->
+            (0..3).forEach { index ->
+                assertTrue(colorValue(colors, "route_leg_$index").startsWith("#FF"))
+            }
+            assertTrue(colorValue(colors, "route_map_marker_outline").startsWith("#FF"))
+        }
+    }
+
+    private fun colorValue(xml: String, name: String): String =
+        xml.substringAfter("<color name=\"$name\">").substringBefore("</color>")
 }
