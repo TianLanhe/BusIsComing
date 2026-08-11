@@ -1,15 +1,17 @@
 package com.golink.busiscoming.ui.main
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.location.LocationManager
 import android.graphics.Rect
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.MotionEvent
 import android.view.TouchDelegate
@@ -18,6 +20,7 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
@@ -30,7 +33,10 @@ import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsEvents
 import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.location.CurrentLocationCoordinator
 import com.golink.busiscoming.data.location.CurrentLocationResult
+import com.golink.busiscoming.data.location.ForegroundLocationHeadingState
+import com.golink.busiscoming.data.location.ForegroundLocationHeadingTracker
 import com.golink.busiscoming.data.location.LocationPermissionUtils
+import com.golink.busiscoming.data.location.createForegroundLocationHeadingCoordinator
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
@@ -78,6 +84,9 @@ class RouteDetailActivity : AppCompatActivity() {
     private val repository by lazy { RouteDetailRuntime.repositoryFactory() }
     private val geometryRepository by lazy { RouteDetailRuntime.geometryRepositoryFactory() }
     private val locationCoordinator by lazy { CurrentLocationCoordinator(this) }
+    private val locationHeadingTracker by lazy {
+        RouteDetailRuntime.locationHeadingTrackerFactory(this)
+    }
     private val walkingViewModel by lazy {
         ViewModelProvider(this)[RouteDetailWalkingViewModel::class.java]
     }
@@ -109,6 +118,11 @@ class RouteDetailActivity : AppCompatActivity() {
     private lateinit var csdiAttributionSurface: View
 
     private var renderer: GoogleRouteMapRenderer? = null
+    private var latestLocationHeadingState = ForegroundLocationHeadingState()
+    private var locationHeadingTrackingActive = false
+    private var lastCalibrationPromptSequence = 0L
+    private var lastHeadingUnavailableSequence = 0L
+    private var headingCalibrationSnackbar: Snackbar? = null
     private var lastPresentation: RouteMapPresentation? = null
     private var detail: RouteDetail? = null
     private var waitTimeState: WaitTimeState = WaitTimeState.Loading
@@ -127,6 +141,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private var autoDetailRequestHandle: SingleFlightRequestHandle? = null
     private var geometryPendingCount = 0
     private var foreground = false
+    private var resumed = false
     private var destroyed = false
     private var initialFitDone = false
     private var mapReady = false
@@ -153,6 +168,18 @@ class RouteDetailActivity : AppCompatActivity() {
     private var walkingEventGeneration = 0
     private var pendingSummaryTarget: PendingSummaryTarget? = null
     private var summaryHighlightRunnable: Runnable? = null
+    private var locationModeReceiverRegistered = false
+    private var currentLocationRenderPosted = false
+    private val locationModeChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            updateMyLocationTracking()
+        }
+    }
+    private val renderCurrentLocationRunnable = Runnable {
+        currentLocationRenderPosted = false
+        if (!locationHeadingTrackingActive || !resumed || destroyed) return@Runnable
+        renderer?.renderCurrentLocation(CurrentLocationMapOverlay.from(latestLocationHeadingState))
+    }
     private val mapTransitionPolicy by lazy {
         RouteDetailMapTransitionPolicy(dimension(R.dimen.route_detail_sheet_swipe_threshold))
     }
@@ -268,11 +295,15 @@ class RouteDetailActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::mapView.isInitialized) mapView.onResume()
-        updateMyLocationLayer()
+        resumed = true
+        registerLocationModeReceiver()
+        updateMyLocationTracking()
     }
 
     override fun onPause() {
-        renderer?.setMyLocationEnabled(false)
+        resumed = false
+        unregisterLocationModeReceiver()
+        stopMyLocationTracking()
         if (::mapView.isInitialized) mapView.onPause()
         super.onPause()
     }
@@ -322,6 +353,9 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        resumed = false
+        unregisterLocationModeReceiver()
+        stopMyLocationTracking()
         pendingSummaryTarget = null
         summaryHighlightRunnable?.let(mainHandler::removeCallbacks)
         summaryHighlightRunnable = null
@@ -501,7 +535,8 @@ class RouteDetailActivity : AppCompatActivity() {
                 }
                 restoreCamera(map)
                 renderMap()
-                updateMyLocationLayer()
+                renderer?.renderCurrentLocation(CurrentLocationMapOverlay.from(latestLocationHeadingState))
+                updateMyLocationTracking()
                 commitStableMapLayout()
                 scheduleMapLoadTimeout()
             }
@@ -510,6 +545,7 @@ class RouteDetailActivity : AppCompatActivity() {
 
     private fun onMapUnavailable() {
         mapUnavailable = true
+        stopMyLocationTracking()
         if (::pageState.isInitialized) {
             dispatch(RouteDetailPageEvent.MapFailed(pageGeneration, pageState.mapGeneration, "map_unavailable"))
         }
@@ -525,6 +561,7 @@ class RouteDetailActivity : AppCompatActivity() {
         mapError.visibility = View.GONE
         sheetMapError.visibility = View.GONE
         findViewById<View>(R.id.routeDetailMapControls).visibility = View.VISIBLE
+        updateMyLocationTracking()
         commitStableMapLayout()
     }
 
@@ -1373,6 +1410,7 @@ class RouteDetailActivity : AppCompatActivity() {
             return
         }
         if (!isSystemLocationEnabled()) {
+            stopMyLocationTracking()
             showMessage(R.string.route_map_location_disabled, R.string.settings) {
                 startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
@@ -1382,17 +1420,20 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun enableMyLocationAndFocus() {
-        if (!foreground || !isSystemLocationEnabled()) return
-        renderer?.setMyLocationEnabled(true)
+        if (!resumed || !isMapUsable() || !isSystemLocationEnabled()) return
+        updateMyLocationTracking()
+        val trackedLocation = locationHeadingTracker.latestLocation()?.takeIf {
+            RouteDetailLocationHeadingPolicy.isFresh(it, SystemClock.elapsedRealtime())
+        }
+        if (trackedLocation != null) {
+            focusCurrentLocation(trackedLocation.latitude, trackedLocation.longitude)
+            return
+        }
         locationCoordinator.getCurrentLocation { result ->
-            if (!foreground || destroyed) return@getCurrentLocation
+            if (!resumed || !isMapUsable() || destroyed) return@getCurrentLocation
             when (result) {
                 is CurrentLocationResult.Success -> {
-                    val coordinate = RouteMapCoordinate(result.snapshot.latitude, result.snapshot.longitude)
-                    cameraLatitude = coordinate.latitude
-                    cameraLongitude = coordinate.longitude
-                    cameraZoom = LOCATION_FOCUS_ZOOM
-                    renderer?.focusCoordinate(coordinate, LOCATION_FOCUS_ZOOM)
+                    focusCurrentLocation(result.snapshot.latitude, result.snapshot.longitude)
                 }
                 CurrentLocationResult.NoPermission -> showMessage(R.string.route_map_location_permission_denied)
                 CurrentLocationResult.Timeout,
@@ -1401,18 +1442,108 @@ class RouteDetailActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateMyLocationLayer() {
-        val enabled = foreground && LocationPermissionUtils.hasForegroundLocationPermission(this) && isSystemLocationEnabled()
-        renderer?.setMyLocationEnabled(enabled)
+    private fun focusCurrentLocation(latitude: Double, longitude: Double) {
+        val coordinate = RouteMapCoordinate(latitude, longitude)
+        cameraLatitude = coordinate.latitude
+        cameraLongitude = coordinate.longitude
+        cameraZoom = LOCATION_FOCUS_ZOOM
+        renderer?.focusCoordinate(coordinate, LOCATION_FOCUS_ZOOM)
+    }
+
+    private fun updateMyLocationTracking() {
+        val enabled = RouteDetailLocationHeadingPolicy.shouldTrack(
+            resumed = resumed,
+            hasPermission = LocationPermissionUtils.hasForegroundLocationPermission(this),
+            systemLocationEnabled = isSystemLocationEnabled(),
+            mapUsable = isMapUsable()
+        )
+        if (!enabled) {
+            stopMyLocationTracking()
+            return
+        }
+        if (locationHeadingTrackingActive) return
+        locationHeadingTrackingActive = true
+        lastCalibrationPromptSequence = 0L
+        lastHeadingUnavailableSequence = 0L
+        locationHeadingTracker.start(::onLocationHeadingState)
+    }
+
+    private fun stopMyLocationTracking() {
+        if (locationHeadingTrackingActive) {
+            locationHeadingTrackingActive = false
+            locationHeadingTracker.stop()
+        }
+        latestLocationHeadingState = ForegroundLocationHeadingState()
+        headingCalibrationSnackbar?.dismiss()
+        headingCalibrationSnackbar = null
+        if (::mapView.isInitialized) mapView.removeCallbacks(renderCurrentLocationRunnable)
+        currentLocationRenderPosted = false
+        renderer?.clearCurrentLocation()
+    }
+
+    private fun onLocationHeadingState(state: ForegroundLocationHeadingState) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { onLocationHeadingState(state) }
+            return
+        }
+        if (!locationHeadingTrackingActive || !resumed || destroyed) return
+        latestLocationHeadingState = state
+        scheduleCurrentLocationRender()
+
+        if (state.calibrationRequired) {
+            if (state.calibrationPromptSequence > lastCalibrationPromptSequence) {
+                lastCalibrationPromptSequence = state.calibrationPromptSequence
+                headingCalibrationSnackbar?.dismiss()
+                headingCalibrationSnackbar = Snackbar.make(
+                    sheet,
+                    R.string.route_map_heading_calibration_required,
+                    Snackbar.LENGTH_LONG
+                ).also(Snackbar::show)
+            }
+        } else {
+            headingCalibrationSnackbar?.dismiss()
+            headingCalibrationSnackbar = null
+        }
+
+        if (
+            state.headingUnavailable &&
+            state.headingUnavailableSequence > lastHeadingUnavailableSequence
+        ) {
+            lastHeadingUnavailableSequence = state.headingUnavailableSequence
+            showMessage(R.string.route_map_heading_unavailable)
+        }
     }
 
     private fun isSystemLocationEnabled(): Boolean {
-        val manager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            manager.isLocationEnabled
-        } else {
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) || manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        return RouteDetailRuntime.systemLocationEnabledChecker(this)
+    }
+
+    private fun isMapUsable(): Boolean = renderer != null && !mapUnavailable
+
+    private fun scheduleCurrentLocationRender() {
+        if (currentLocationRenderPosted || !::mapView.isInitialized) return
+        currentLocationRenderPosted = true
+        mapView.postOnAnimation(renderCurrentLocationRunnable)
+    }
+
+    private fun registerLocationModeReceiver() {
+        if (locationModeReceiverRegistered) return
+        val filter = IntentFilter(LocationManager.MODE_CHANGED_ACTION).apply {
+            addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
         }
+        ContextCompat.registerReceiver(
+            this,
+            locationModeChangedReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        locationModeReceiverRegistered = true
+    }
+
+    private fun unregisterLocationModeReceiver() {
+        if (!locationModeReceiverRegistered) return
+        unregisterReceiver(locationModeChangedReceiver)
+        locationModeReceiverRegistered = false
     }
 
     private fun showMessage(messageRes: Int, actionRes: Int? = null, action: (() -> Unit)? = null) {
@@ -1628,7 +1759,11 @@ object RouteDetailRuntime {
     private val defaultMapsAvailabilityChecker: (Context) -> Boolean = { context ->
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
     }
+    private val defaultSystemLocationEnabledChecker: (Context) -> Boolean =
+        com.golink.busiscoming.data.location.SystemLocationUtils::isLocationEnabled
     private val defaultPresentationObserver: (RouteMapPresentation) -> Unit = {}
+    private val defaultLocationHeadingTrackerFactory: (Context) -> ForegroundLocationHeadingTracker =
+        { context -> createForegroundLocationHeadingCoordinator(context) }
 
     @Volatile var repositoryFactory: () -> RouteDetailRepository = defaultRepositoryFactory
     @Volatile var detailRequestCoordinator = defaultDetailRequestCoordinator
@@ -1637,7 +1772,11 @@ object RouteDetailRuntime {
     @Volatile var stopMapResolverFactory: () -> CitybusP2pStopMapResolver = defaultStopMapResolverFactory
     @Volatile var pedestrianRuntime: PedestrianRouteRequestRuntime = defaultPedestrianRuntime
     @Volatile var mapsAvailabilityChecker: (Context) -> Boolean = defaultMapsAvailabilityChecker
+    @Volatile var systemLocationEnabledChecker: (Context) -> Boolean =
+        defaultSystemLocationEnabledChecker
     @Volatile var presentationObserver: (RouteMapPresentation) -> Unit = defaultPresentationObserver
+    @Volatile var locationHeadingTrackerFactory: (Context) -> ForegroundLocationHeadingTracker =
+        defaultLocationHeadingTrackerFactory
 
     fun nextPageGeneration(): Long = pageGeneration.incrementAndGet()
 
@@ -1650,6 +1789,8 @@ object RouteDetailRuntime {
         stopMapResolverFactory = defaultStopMapResolverFactory
         pedestrianRuntime = defaultPedestrianRuntime
         mapsAvailabilityChecker = defaultMapsAvailabilityChecker
+        systemLocationEnabledChecker = defaultSystemLocationEnabledChecker
         presentationObserver = defaultPresentationObserver
+        locationHeadingTrackerFactory = defaultLocationHeadingTrackerFactory
     }
 }

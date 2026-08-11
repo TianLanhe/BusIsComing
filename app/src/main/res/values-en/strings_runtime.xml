@@ -103,6 +103,9 @@
     <string name="route_map_location_permission_settings">Allow location access in system settings</string>
     <string name="route_map_location_disabled">Turn on system location services first</string>
     <string name="route_map_location_unavailable">Current location is temporarily unavailable</string>
+    <string name="route_map_current_location_marker">Current location; arrow shows phone heading</string>
+    <string name="route_map_heading_calibration_required">Rotate your phone to calibrate its direction</string>
+    <string name="route_map_heading_unavailable">Phone direction is temporarily unavailable</string>
     <string name="route_map_geometry_partial">Part of the route path cannot be shown right now</string>
     <string name="route_detail_sheet_handle_summary">Route details are in summary view. Double tap to expand fully.</string>
     <string name="route_detail_sheet_handle_half">Route details are half expanded. Double tap to expand fully.</string>

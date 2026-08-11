@@ -276,6 +276,9 @@
     <string name="route_map_location_permission_settings">請在系統設定允許位置權限</string>
     <string name="route_map_location_disabled">請先開啟系統定位服務</string>
     <string name="route_map_location_unavailable">暫時未能取得目前位置</string>
+    <string name="route_map_current_location_marker">目前位置，箭頭顯示手機朝向</string>
+    <string name="route_map_heading_calibration_required">請轉動手機以校準方向</string>
+    <string name="route_map_heading_unavailable">暫時未能取得手機方向</string>
     <string name="route_map_geometry_partial">部分路線道路暫未能顯示</string>
     <string name="route_detail_sheet_handle_summary">路線詳情目前為摘要；點兩下展開全屏</string>
     <string name="route_detail_sheet_handle_half">路線詳情目前為半屏；點兩下展開全屏</string>

@@ -1,7 +1,6 @@
 package com.golink.busiscoming.ui.main
 
 import android.animation.ValueAnimator
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -20,6 +19,8 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.Circle
+import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapColorScheme
@@ -36,7 +37,10 @@ data class RouteMapRenderPalette(
     @param:ColorInt val walkingColor: Int,
     @param:ColorInt val originColor: Int,
     @param:ColorInt val destinationColor: Int,
-    @param:ColorInt val selectedColor: Int
+    @param:ColorInt val selectedColor: Int,
+    @param:ColorInt val currentLocationColor: Int,
+    @param:ColorInt val currentLocationAccuracyFillColor: Int,
+    @param:ColorInt val currentLocationAccuracyStrokeColor: Int
 ) {
     companion object {
         fun from(context: Context): RouteMapRenderPalette = RouteMapRenderPalette(
@@ -51,7 +55,16 @@ data class RouteMapRenderPalette(
             walkingColor = ContextCompat.getColor(context, R.color.route_timeline_walk),
             originColor = ContextCompat.getColor(context, R.color.bus_chip_selected),
             destinationColor = ContextCompat.getColor(context, R.color.bus_danger),
-            selectedColor = ContextCompat.getColor(context, R.color.route_map_selected)
+            selectedColor = ContextCompat.getColor(context, R.color.route_map_selected),
+            currentLocationColor = ContextCompat.getColor(context, R.color.route_map_current_location),
+            currentLocationAccuracyFillColor = ContextCompat.getColor(
+                context,
+                R.color.route_map_current_location_accuracy_fill
+            ),
+            currentLocationAccuracyStrokeColor = ContextCompat.getColor(
+                context,
+                R.color.route_map_current_location_accuracy_stroke
+            )
         )
     }
 }
@@ -60,6 +73,13 @@ internal data class RouteMapRendererPerformanceSnapshot(
     val directionRelayouts: Int,
     val labelRelayouts: Int,
     val activeDirectionMarkers: Int
+)
+
+internal data class CurrentLocationRenderSnapshot(
+    val hasDirectionMarker: Boolean,
+    val hasAccuracyArea: Boolean,
+    val coordinate: RouteMapCoordinate?,
+    val headingDegrees: Float?
 )
 
 class GoogleRouteMapRenderer(
@@ -88,6 +108,7 @@ class GoogleRouteMapRenderer(
             palette.walkingColor
         )
     }
+    private val currentLocationIcon by lazy { createCurrentLocationIcon() }
     private val markers = mutableMapOf<String, RenderedMarker>()
     private val labelMarkers = mutableMapOf<String, Marker>()
     private val labelSides = mutableMapOf<String, RouteMapLabelSide>()
@@ -103,6 +124,11 @@ class GoogleRouteMapRenderer(
     private var viewportTransitionActive = false
     private var labelAlpha = 1f
     private var labelAnimator: ValueAnimator? = null
+    private var currentLocationHeadingAnimator: ValueAnimator? = null
+    private var currentLocationMarker: Marker? = null
+    private var currentLocationAccuracyCircle: Circle? = null
+    private var currentLocationCoordinate: RouteMapCoordinate? = null
+    private var renderedCurrentLocationHeading: Float? = null
     private var directionRelayoutCount = 0
     private var labelRelayoutCount = 0
 
@@ -237,17 +263,104 @@ class GoogleRouteMapRenderer(
         map.animateCamera(CameraUpdateFactory.newLatLngZoom(coordinate.toLatLng(), zoom))
     }
 
-    @SuppressLint("MissingPermission")
-    fun setMyLocationEnabled(enabled: Boolean): Boolean {
-        return runCatching {
-            map.isMyLocationEnabled = enabled
-            true
-        }.getOrDefault(false)
+    fun renderCurrentLocation(value: CurrentLocationMapOverlay?) {
+        if (value == null) {
+            clearCurrentLocation()
+            return
+        }
+        currentLocationCoordinate = value.coordinate
+        val position = value.coordinate.toLatLng()
+        renderCurrentLocationAccuracy(position, value.accuracyMeters)
+        renderCurrentLocationDirection(position, value.headingDegrees)
+    }
+
+    fun clearCurrentLocation() {
+        currentLocationHeadingAnimator?.cancel()
+        currentLocationMarker?.remove()
+        currentLocationMarker = null
+        currentLocationAccuracyCircle?.remove()
+        currentLocationAccuracyCircle = null
+        currentLocationCoordinate = null
+        renderedCurrentLocationHeading = null
+    }
+
+    internal fun currentLocationSnapshot() = CurrentLocationRenderSnapshot(
+        hasDirectionMarker = currentLocationMarker != null,
+        hasAccuracyArea = currentLocationAccuracyCircle != null,
+        coordinate = currentLocationCoordinate,
+        headingDegrees = renderedCurrentLocationHeading?.let(::normalizeDegrees)
+    )
+
+    private fun renderCurrentLocationAccuracy(position: LatLng, accuracyMeters: Float?) {
+        if (accuracyMeters == null) {
+            currentLocationAccuracyCircle?.remove()
+            currentLocationAccuracyCircle = null
+            return
+        }
+        val circle = currentLocationAccuracyCircle
+        if (circle == null) {
+            currentLocationAccuracyCircle = map.addCircle(
+                CircleOptions()
+                    .center(position)
+                    .radius(accuracyMeters.toDouble())
+                    .fillColor(palette.currentLocationAccuracyFillColor)
+                    .strokeColor(palette.currentLocationAccuracyStrokeColor)
+                    .strokeWidth(dp(1.25f))
+                    .clickable(false)
+                    .zIndex(29f)
+            )
+        } else {
+            circle.center = position
+            circle.radius = accuracyMeters.toDouble()
+        }
+    }
+
+    private fun renderCurrentLocationDirection(position: LatLng, headingDegrees: Float?) {
+        if (headingDegrees == null) {
+            currentLocationHeadingAnimator?.cancel()
+            currentLocationMarker?.remove()
+            currentLocationMarker = null
+            renderedCurrentLocationHeading = null
+            return
+        }
+        val marker = currentLocationMarker
+        if (marker == null) {
+            currentLocationMarker = map.addMarker(
+                MarkerOptions()
+                    .position(position)
+                    .title(context.getString(R.string.route_map_current_location_marker))
+                    .icon(currentLocationIcon)
+                    .anchor(0.5f, 0.5f)
+                    .flat(true)
+                    .rotation(headingDegrees)
+                    .zIndex(30f)
+            )
+            renderedCurrentLocationHeading = headingDegrees
+            return
+        }
+        marker.position = position
+        val from = renderedCurrentLocationHeading ?: marker.rotation
+        val target = HeadingRotation.shortestTarget(from, headingDegrees)
+        if (target == from) return
+        val animator = currentLocationHeadingAnimator ?: ValueAnimator().apply {
+            duration = CURRENT_LOCATION_HEADING_ANIMATION_MILLIS
+            addUpdateListener { runningAnimator ->
+                val animatedHeading = runningAnimator.animatedValue as Float
+                renderedCurrentLocationHeading = animatedHeading
+                currentLocationMarker?.rotation = animatedHeading
+            }
+        }.also {
+            currentLocationHeadingAnimator = it
+        }
+        animator.cancel()
+        animator.setFloatValues(from, target)
+        animator.start()
     }
 
     fun clear() {
         labelAnimator?.cancel()
         labelAnimator = null
+        clearCurrentLocation()
         markers.values.forEach { it.marker.remove() }
         labelMarkers.values.forEach(Marker::remove)
         lines.values.forEach(RenderedLine::remove)
@@ -256,6 +369,32 @@ class GoogleRouteMapRenderer(
         labelSides.clear()
         lines.clear()
         presentation = null
+    }
+
+    private fun createCurrentLocationIcon(): BitmapDescriptor {
+        val size = dp(CURRENT_LOCATION_ICON_SIZE_DP).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val inset = dp(3f)
+        val centerX = size / 2f
+        val path = Path().apply {
+            moveTo(centerX, inset)
+            lineTo(size - inset, size - inset)
+            lineTo(centerX, size * 0.70f)
+            lineTo(inset, size - inset)
+            close()
+        }
+        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeJoin = Paint.Join.ROUND
+            strokeWidth = dp(4f)
+            color = palette.markerOutlineColor
+        })
+        canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = palette.currentLocationColor
+        })
+        return BitmapDescriptorFactory.fromBitmap(bitmap)
     }
 
     private fun renderMarker(model: RouteMapMarker) {
@@ -565,6 +704,8 @@ class GoogleRouteMapRenderer(
 
     private fun dp(value: Float): Float = value * context.resources.displayMetrics.density
 
+    private fun normalizeDegrees(value: Float): Float = ((value % 360f) + 360f) % 360f
+
     private data class RenderedMarker(val marker: Marker, val model: RouteMapMarker)
 
     private data class LabelIcon(
@@ -591,6 +732,8 @@ class GoogleRouteMapRenderer(
         const val MAX_LABEL_WIDTH_DP = 156f
         const val MAX_DIRECTION_ARROWS_PER_LINE = 80
         const val LABEL_FADE_DURATION_MILLIS = 140L
+        const val CURRENT_LOCATION_HEADING_ANIMATION_MILLIS = 120L
+        const val CURRENT_LOCATION_ICON_SIZE_DP = 36f
     }
 }
 

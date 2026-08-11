@@ -44,6 +44,9 @@
     <color name="route_map_bus_outline">#FF101715</color>
     <color name="route_map_marker_outline">#FFF7FAF8</color>
     <color name="route_map_selected">#FFFF8A70</color>
+    <color name="route_map_current_location">#FF8AB4F8</color>
+    <color name="route_map_current_location_accuracy_fill">#268AB4F8</color>
+    <color name="route_map_current_location_accuracy_stroke">#808AB4F8</color>
     <color name="lands_department_logo_green">#FF39A248</color>
     <color name="lands_department_logo_gray">#FF71706E</color>
 </resources>
