@@ -113,4 +113,10 @@
     <string name="route_map_marker_via">Route %1$s intermediate stop: %2$s</string>
     <string name="route_map_marker_alighting">Route %1$s alighting stop: %2$s</string>
     <string name="route_map_marker_transfer">Transfer from %1$s to %2$s at %3$s</string>
+    <string name="route_current_position_permission">Turn on location permission to see where you are along this journey</string>
+    <string name="route_current_position_open">Turn on</string>
+    <string name="route_current_position_system_location_off">Turn on system location to show your current position along this journey</string>
+    <string name="route_current_position_timeout">Current location is temporarily unavailable. We’ll keep trying.</string>
+    <string name="route_current_position_near_station">Current position, near %1$s</string>
+    <string name="route_current_position_between_stations">Current position, between %1$s and %2$s</string>
 </resources>

@@ -52,7 +52,8 @@ sealed class RouteDetailUiItem(open val stableId: String) {
         val isWalkingDistanceComplete: Boolean,
         val isWalkingDistanceLoading: Boolean = false,
         val firstLegEta: WaitTimeState,
-        val segments: List<RouteSummarySegment> = emptyList()
+        val segments: List<RouteSummarySegment> = emptyList(),
+        val currentPosition: RouteCurrentPositionPresentation? = null
     ) : RouteDetailUiItem("summary")
 
     data class DynamicStatus(
@@ -128,7 +129,8 @@ object RouteDetailUiFormatter {
         expandedLegIndexes: Set<Int>,
         firstLegEta: WaitTimeState,
         dynamicStatus: RouteDynamicDetailStatus = RouteDynamicDetailStatus.CURRENT,
-        walkingSegments: Map<String, RouteDetailWalkingState> = emptyMap()
+        walkingSegments: Map<String, RouteDetailWalkingState> = emptyMap(),
+        currentPosition: RouteCurrentPositionPresentation? = null
     ): List<RouteDetailUiItem> = buildList {
         val walkingSummary = walkingSummary(detail, walkingSegments)
         add(
@@ -142,7 +144,8 @@ object RouteDetailUiFormatter {
                 isWalkingDistanceComplete = walkingSummary.complete,
                 isWalkingDistanceLoading = walkingSummary.loading,
                 firstLegEta = firstLegEta,
-                segments = summarySegments(detail, walkingSegments, dynamicStatus)
+                segments = summarySegments(detail, walkingSegments, dynamicStatus),
+                currentPosition = currentPosition
             )
         )
         if (dynamicStatus != RouteDynamicDetailStatus.CURRENT) {

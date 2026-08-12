@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="18dp"
+    android:height="22dp"
+    android:viewportWidth="18"
+    android:viewportHeight="22">
+    <path
+        android:fillColor="@color/route_current_position"
+        android:pathData="M9,0 C4.03,0 0,4.03 0,9 C0,14 4.8,18.4 9,22 C13.2,18.4 18,14 18,9 C18,4.03 13.97,0 9,0 Z" />
+    <path
+        android:fillColor="@color/route_position_support"
+        android:pathData="M9,4.1 A4.9,4.9 0,1 0,9 13.9 A4.9,4.9 0,1 0,9 4.1 Z" />
+    <path
+        android:fillColor="@color/route_current_position"
+        android:pathData="M9,6.1 A2.9,2.9 0,1 0,9 11.9 A2.9,2.9 0,1 0,9 6.1 Z" />
+</vector>

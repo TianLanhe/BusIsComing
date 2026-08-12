@@ -183,14 +183,28 @@
                     android:background="@drawable/route_detail_sheet_handle" />
             </FrameLayout>
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/routeDetailList"
+            <FrameLayout
+                android:id="@+id/routeDetailTimelineHost"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_weight="1"
-                android:clipToPadding="false"
-                android:paddingTop="0dp"
-                android:paddingBottom="24dp" />
+                android:layout_weight="1">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/routeDetailList"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingTop="0dp"
+                    android:paddingBottom="24dp" />
+
+                <com.golink.busiscoming.ui.main.RouteTimelinePositionOverlayView
+                    android:id="@+id/routeDetailPositionOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:importantForAccessibility="no" />
+            </FrameLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

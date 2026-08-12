@@ -113,4 +113,10 @@
     <string name="route_map_marker_via">%1$s 途经站：%2$s</string>
     <string name="route_map_marker_alighting">%1$s 下车站：%2$s</string>
     <string name="route_map_marker_transfer">从 %1$s 换乘 %2$s：%3$s</string>
+    <string name="route_current_position_permission">开启位置权限，即可在路线上查看你的当前位置</string>
+    <string name="route_current_position_open">开启</string>
+    <string name="route_current_position_system_location_off">请先开启系统定位，才能在路线上显示当前位置</string>
+    <string name="route_current_position_timeout">暂时无法获取当前位置，会继续尝试</string>
+    <string name="route_current_position_near_station">当前位置，靠近%1$s</string>
+    <string name="route_current_position_between_stations">当前位置，%1$s与%2$s之间</string>
 </resources>

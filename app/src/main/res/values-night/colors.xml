@@ -41,6 +41,9 @@
     <color name="route_leg_2">#FF995D28</color>
     <color name="route_leg_3">#FF7759A5</color>
     <color name="route_timeline_walk">#FFA6BBB4</color>
+    <color name="route_timeline_stop">#FF72D9BA</color>
+    <color name="route_current_position">#FF6AA6FF</color>
+    <color name="route_position_support">#FFFFFFFF</color>
     <color name="route_map_bus_outline">#FF101715</color>
     <color name="route_map_marker_outline">#FFF7FAF8</color>
     <color name="route_map_selected">#FFFF8A70</color>

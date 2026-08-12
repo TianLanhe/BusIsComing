@@ -150,7 +150,8 @@ class RouteDetailActivityTest {
                     .map(content::getChildAt)
                     .filterIsInstance<HorizontalScrollView>()
                     .single()
-                val row = scroll.getChildAt(0) as ViewGroup
+                val strip = scroll.getChildAt(0) as ViewGroup
+                val row = strip.getChildAt(0) as ViewGroup
                 val adapter = list.adapter as RouteDetailAdapter
                 val summary = adapter.currentList.filterIsInstance<RouteDetailUiItem.Summary>().single()
 

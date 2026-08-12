@@ -3,4 +3,6 @@
     <item name="tag_initial_padding" type="id" />
     <item name="routeDetailScroll" type="id" />
     <item name="instrumentedPlaceInput" type="id" />
+    <item name="routeTimelineRail" type="id" />
+    <item name="routeCurrentPositionSummaryPin" type="id" />
 </resources>

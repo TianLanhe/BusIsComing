@@ -5,9 +5,11 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.TouchDelegate
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import android.widget.ImageView
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -23,6 +25,8 @@ import com.golink.busiscoming.data.model.RouteDetailTransferType
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.ui.common.applyStableShortTextLayout
 import com.google.android.material.button.MaterialButton
+import java.lang.ref.WeakReference
+import kotlin.math.abs
 
 class RouteDetailAdapter(
     private val onToggleLeg: (Int) -> Unit,
@@ -31,6 +35,10 @@ class RouteDetailAdapter(
     private val onSummarySegmentSelected: (RouteSummarySegment) -> Unit = {}
 ) : ListAdapter<RouteDetailUiItem, RouteDetailAdapter.Holder>(DIFF) {
     private var selectedStableId: String? = null
+    private val boundTimelineAnchors = mutableMapOf<String, WeakReference<RouteTimelineRailView>>()
+    private var summaryScrollX = 0
+    private var summaryViewportPolicy = RouteSummaryViewportPolicy()
+    private var currentPosition: RouteCurrentPositionPresentation? = null
 
     init { setHasStableIds(true) }
 
@@ -41,6 +49,29 @@ class RouteDetailAdapter(
         listOfNotNull(previous, stableId).forEach { id ->
             currentList.indexOfFirst { it.stableId == id }.takeIf { it >= 0 }?.let(::notifyItemChanged)
         }
+    }
+
+    fun boundTimelineAnchor(stableId: String): RouteTimelineRailView? =
+        boundTimelineAnchors[stableId]?.get()?.takeIf { it.isAttachedToWindow }
+
+    fun summaryScrollState(): SummaryScrollState = SummaryScrollState(
+        summaryScrollX,
+        summaryViewportPolicy.ownedByUser(),
+        summaryViewportPolicy.lastAutoSegmentId()
+    )
+
+    fun restoreSummaryScrollState(state: SummaryScrollState?) {
+        if (state == null) return
+        summaryScrollX = state.scrollX
+        summaryViewportPolicy = RouteSummaryViewportPolicy(state)
+    }
+
+    fun setCurrentPosition(position: RouteCurrentPositionPresentation?) {
+        if (currentPosition == position) return
+        currentPosition = position
+        currentList.indexOfFirst { it is RouteDetailUiItem.Summary }
+            .takeIf { it >= 0 }
+            ?.let(::notifyItemChanged)
     }
 
     override fun getItemId(position: Int): Long = getItem(position).stableId.hashCode().toLong()
@@ -54,8 +85,27 @@ class RouteDetailAdapter(
 
     override fun onBindViewHolder(holder: Holder, position: Int) = holder.bind(getItem(position))
 
+    override fun onViewAttachedToWindow(holder: Holder) {
+        super.onViewAttachedToWindow(holder)
+        holder.registerTimelineAnchor()
+    }
+
+    override fun onViewDetachedFromWindow(holder: Holder) {
+        holder.unregisterTimelineAnchor()
+        super.onViewDetachedFromWindow(holder)
+    }
+
+    override fun onViewRecycled(holder: Holder) {
+        holder.unregisterTimelineAnchor()
+        super.onViewRecycled(holder)
+    }
+
     inner class Holder(private val root: LinearLayout) : RecyclerView.ViewHolder(root) {
+        private var boundStableId: String? = null
+
         fun bind(item: RouteDetailUiItem) {
+            unregisterTimelineAnchor()
+            boundStableId = item.stableId
             root.removeAllViews()
             root.setPadding(0, 0, 0, 0)
             root.background = null
@@ -81,6 +131,20 @@ class RouteDetailAdapter(
                 is RouteDetailUiItem.Transfer -> bindTransfer(item)
                 is RouteDetailUiItem.Endpoint -> bindEndpoint(item)
             }
+            registerTimelineAnchor()
+        }
+
+        fun registerTimelineAnchor() {
+            val stableId = boundStableId ?: return
+            val rail = root.findViewById<RouteTimelineRailView>(R.id.routeTimelineRail) ?: return
+            boundTimelineAnchors[stableId] = WeakReference(rail)
+        }
+
+        fun unregisterTimelineAnchor() {
+            val stableId = boundStableId ?: return
+            val registered = boundTimelineAnchors[stableId]?.get()
+            val ownRail = root.findViewById<RouteTimelineRailView>(R.id.routeTimelineRail)
+            if (registered == null || registered === ownRail) boundTimelineAnchors.remove(stableId)
         }
 
         private fun bindLoading() {
@@ -129,13 +193,90 @@ class RouteDetailAdapter(
                     dp(30)
                 ).apply { if (index > 0) marginStart = dp(2) })
             }
-            content.addView(HorizontalScrollView(root.context).apply {
+            val stripContent = FrameLayout(root.context)
+            stripContent.addView(segmentRow, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(30)
+            ).apply {
+                leftMargin = dp(9)
+                rightMargin = dp(9)
+                topMargin = dp(22)
+            })
+            val displayedPosition = currentPosition
+            val pin = ImageView(root.context).apply {
+                id = R.id.routeCurrentPositionSummaryPin
+                setImageResource(R.drawable.ic_route_current_position_pin)
+                scaleType = ImageView.ScaleType.FIT_XY
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                isClickable = false
+                isFocusable = false
+                visibility = if (displayedPosition == null) View.GONE else View.VISIBLE
+            }
+            stripContent.addView(pin, FrameLayout.LayoutParams(dp(18), dp(22)))
+            val touchSlop = ViewConfiguration.get(root.context).scaledTouchSlop.toFloat()
+            var summaryTouchStartX = 0f
+            var summaryTouchStartY = 0f
+            var summaryOwnershipTransferred = false
+            val summaryScroll = HorizontalScrollView(root.context).apply {
                 isHorizontalScrollBarEnabled = false
                 isFillViewport = false
                 overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-                addView(segmentRow)
+                addView(stripContent, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    dp(52)
+                ))
                 layoutParams = marginTop(4)
-            })
+                setOnTouchListener { _, event ->
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            summaryTouchStartX = event.x
+                            summaryTouchStartY = event.y
+                            summaryOwnershipTransferred = false
+                        }
+                        MotionEvent.ACTION_MOVE -> if (
+                            !summaryOwnershipTransferred &&
+                            RouteSummaryGesturePolicy.isHorizontalDrag(
+                                event.x - summaryTouchStartX,
+                                event.y - summaryTouchStartY,
+                                touchSlop
+                            )
+                        ) {
+                            summaryOwnershipTransferred = true
+                            summaryViewportPolicy.onUserScroll()
+                        }
+                    }
+                    false
+                }
+                setOnScrollChangeListener { view, _, _, _, _ ->
+                    summaryScrollX = view.scrollX
+                }
+            }
+            content.addView(summaryScroll)
+            stripContent.post {
+                if (stripContent.parent !== summaryScroll) return@post
+                summaryScroll.scrollTo(summaryScrollX, 0)
+                val current = displayedPosition?.summary ?: return@post
+                val index = item.segments.indexOfFirst { it.detailTargetId == current.segmentId }
+                val target = segmentTargets.getOrNull(index) ?: run {
+                    pin.visibility = View.GONE
+                    return@post
+                }
+                val pinLeft = RouteSummaryAnchorGeometry.pinLeft(
+                    rowLeft = segmentRow.left.toFloat(),
+                    segmentLeft = target.left.toFloat(),
+                    segmentWidth = target.width.toFloat(),
+                    progress = current.progress,
+                    pinWidth = dp(18f)
+                )
+                pin.translationX = pinLeft
+                val anchorX = pinLeft + dp(9f)
+                if (summaryViewportPolicy.shouldAutoScrollTo(current.segmentId)) {
+                    val destination = (anchorX - summaryScroll.width / 2f)
+                        .toInt()
+                        .coerceIn(0, (stripContent.width - summaryScroll.width).coerceAtLeast(0))
+                    summaryScroll.smoothScrollTo(destination, 0)
+                }
+            }
             content.post {
                 if (content.parent === root) {
                     installSummarySegmentTouchDelegates(content, segmentTargets)
@@ -319,7 +460,18 @@ class RouteDetailAdapter(
         private fun bindStop(item: RouteDetailUiItem.Stop) {
             val label = root.context.getString(if (item.isBoarding) R.string.boarding_stop else R.string.alighting_stop)
             val time = item.plannedTime?.let { root.context.getString(R.string.route_detail_planned_time, it) }
-            root.addView(timelineRow(RouteTimelineRailView.Style.SOLID, legColor(item.colorKey), item.stop.displayName, listOfNotNull(label, time).joinToString(" · "), true))
+            root.addView(
+                timelineRow(
+                    RouteTimelineRailView.Style.ENDPOINT,
+                    legColor(item.colorKey),
+                    item.stop.displayName,
+                    listOfNotNull(label, time).joinToString(" · "),
+                    true,
+                    color(
+                        if (item.isBoarding) R.color.bus_chip_selected else R.color.bus_danger
+                    )
+                )
+            )
             bindTimelineSelection(item.stableId)
         }
 
@@ -371,7 +523,7 @@ class RouteDetailAdapter(
         }
 
         private fun bindViaStop(item: RouteDetailUiItem.ViaStop) {
-            root.addView(timelineRow(RouteTimelineRailView.Style.SOLID, legColor(item.colorKey), item.stop.displayName, null, false))
+            root.addView(timelineRow(RouteTimelineRailView.Style.VIA, legColor(item.colorKey), item.stop.displayName, null, false))
             bindTimelineSelection(item.stableId)
         }
 
@@ -386,17 +538,29 @@ class RouteDetailAdapter(
             root.addView(timelineRow(RouteTimelineRailView.Style.NODE, color(R.color.route_timeline_walk), label, null, true))
         }
 
-        private fun timelineRow(style: RouteTimelineRailView.Style, railColor: Int, title: String, detail: String?, bold: Boolean): View {
+        private fun timelineRow(
+            style: RouteTimelineRailView.Style,
+            railColor: Int,
+            title: String,
+            detail: String?,
+            bold: Boolean,
+            nodeColor: Int = color(R.color.route_timeline_stop)
+        ): View {
             val content = LinearLayout(root.context).apply { orientation = LinearLayout.VERTICAL }
             content.addView(text(title, if (bold) 17f else 14f, bold, R.color.bus_text_primary))
             detail?.takeIf { it.isNotBlank() }?.let { content.addView(text(it, 13f, false, R.color.bus_text_secondary).apply { layoutParams = marginTop(4) }) }
-            return timelineRow(style, railColor, content)
+            return timelineRow(style, railColor, content, nodeColor)
         }
 
-        private fun timelineRow(style: RouteTimelineRailView.Style, railColor: Int, content: View): View {
+        private fun timelineRow(
+            style: RouteTimelineRailView.Style,
+            railColor: Int,
+            content: View,
+            nodeColor: Int = color(R.color.route_timeline_stop)
+        ): View {
             return LinearLayout(root.context).apply {
                 orientation = LinearLayout.HORIZONTAL; minimumHeight = dp(52); setPadding(dp(8), 0, dp(16), 0)
-                addView(RouteTimelineRailView(root.context).apply { this.style = style; this.railColor = railColor; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; layoutParams = LinearLayout.LayoutParams(dp(40), ViewGroup.LayoutParams.MATCH_PARENT) })
+                addView(RouteTimelineRailView(root.context).apply { id = R.id.routeTimelineRail; this.style = style; this.railColor = railColor; this.nodeColor = nodeColor; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO; layoutParams = LinearLayout.LayoutParams(dp(40), ViewGroup.LayoutParams.MATCH_PARENT) })
                 addView(content, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { gravity = Gravity.CENTER_VERTICAL; topMargin = dp(6); bottomMargin = dp(6) })
             }
         }
@@ -419,7 +583,8 @@ class RouteDetailAdapter(
         private fun color(res: Int) = ContextCompat.getColor(root.context, res)
         private fun rounded(fill: Int, radius: Float) = GradientDrawable().apply { cornerRadius = radius; setColor(fill) }
         private fun marginTop(value: Int) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(value) }
-        private fun dp(value: Int) = (value * root.resources.displayMetrics.density).toInt()
+        private fun dp(value: Int) = dp(value.toFloat()).toInt()
+        private fun dp(value: Float) = value * root.resources.displayMetrics.density
     }
 
     companion object {
@@ -428,6 +593,61 @@ class RouteDetailAdapter(
             override fun areContentsTheSame(oldItem: RouteDetailUiItem, newItem: RouteDetailUiItem) = oldItem == newItem
         }
     }
+}
+
+data class SummaryScrollState(
+    val scrollX: Int,
+    val ownedByUser: Boolean,
+    val lastAutoSegmentId: String?
+)
+
+class RouteSummaryViewportPolicy(
+    restoredState: SummaryScrollState? = null
+) {
+    private val restoredScrollX = restoredState?.scrollX ?: 0
+    private var ownedByUser = restoredState?.ownedByUser ?: false
+    private var lastAutoSegmentId = restoredState?.lastAutoSegmentId
+
+    fun onUserScroll() {
+        ownedByUser = true
+    }
+
+    fun shouldAutoScrollTo(segmentId: String): Boolean {
+        if (ownedByUser || lastAutoSegmentId == segmentId) return false
+        lastAutoSegmentId = segmentId
+        return true
+    }
+
+    fun state(): SummaryScrollState = SummaryScrollState(
+        scrollX = restoredScrollX,
+        ownedByUser = ownedByUser,
+        lastAutoSegmentId = lastAutoSegmentId
+    )
+
+    fun ownedByUser(): Boolean = ownedByUser
+
+    fun lastAutoSegmentId(): String? = lastAutoSegmentId
+}
+
+object RouteSummaryGesturePolicy {
+    fun isHorizontalDrag(deltaX: Float, deltaY: Float, touchSlop: Float): Boolean =
+        abs(deltaX) > touchSlop && abs(deltaX) > abs(deltaY)
+}
+
+class RouteDetailViewportPolicy(restoredOwnedByUser: Boolean = false) {
+    private var ownedByUser = restoredOwnedByUser
+
+    fun onUserScroll() {
+        ownedByUser = true
+    }
+
+    fun onEnterFull() {
+        ownedByUser = false
+    }
+
+    fun shouldFollow(): Boolean = !ownedByUser
+
+    fun ownedByUser(): Boolean = ownedByUser
 }
 
 private class SummarySegmentTouchDelegate(anchor: View) : TouchDelegate(Rect(), anchor) {

@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.MotionEvent
 import android.view.TouchDelegate
@@ -30,7 +31,20 @@ import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsEvents
 import com.golink.busiscoming.data.local.RouteAutoRefreshSettingsStore
 import com.golink.busiscoming.data.location.CurrentLocationCoordinator
 import com.golink.busiscoming.data.location.CurrentLocationResult
+import com.golink.busiscoming.data.location.FusedForegroundLocationSource
+import com.golink.busiscoming.data.location.ForegroundLocationSource
+import com.golink.busiscoming.data.location.HandlerRouteDetailLocationScheduler
+import com.golink.busiscoming.data.location.JourneyAxisBuildInput
+import com.golink.busiscoming.data.location.JourneyEndpoint
 import com.golink.busiscoming.data.location.LocationPermissionUtils
+import com.golink.busiscoming.data.location.RouteDetailLocationController
+import com.golink.busiscoming.data.location.RouteDetailLocationEffect
+import com.golink.busiscoming.data.location.RouteDetailLocationPermission
+import com.golink.busiscoming.data.location.RouteDetailLocationSessionState
+import com.golink.busiscoming.data.location.RouteDetailLocationUiState
+import com.golink.busiscoming.data.location.RouteCurrentPositionInteractionState
+import com.golink.busiscoming.data.location.RouteJourneyAxisBuilder
+import com.golink.busiscoming.data.location.SystemLocationUtils
 import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
@@ -38,6 +52,7 @@ import com.golink.busiscoming.data.model.RouteDetail
 import com.golink.busiscoming.data.model.RouteGeometryCoordinate
 import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometrySegment
+import com.golink.busiscoming.data.model.RouteJourneyAxis
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
 import com.golink.busiscoming.data.repository.CitybusP2pStopMapResolver
@@ -78,6 +93,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private val repository by lazy { RouteDetailRuntime.repositoryFactory() }
     private val geometryRepository by lazy { RouteDetailRuntime.geometryRepositoryFactory() }
     private val locationCoordinator by lazy { CurrentLocationCoordinator(this) }
+    private val journeyAxisBuilder = RouteJourneyAxisBuilder()
     private val walkingViewModel by lazy {
         ViewModelProvider(this)[RouteDetailWalkingViewModel::class.java]
     }
@@ -90,11 +106,13 @@ class RouteDetailActivity : AppCompatActivity() {
     private val failedGeometryKeys = linkedSetOf<RouteGeometryKey>()
     private lateinit var geometryCoordinator: RouteGeometryLoadCoordinator
     private lateinit var pageState: RouteDetailPageState
+    private lateinit var locationController: RouteDetailLocationController
 
     private lateinit var args: RouteDetailLaunchArgs
     private lateinit var adapter: RouteDetailAdapter
     private lateinit var list: RecyclerView
     private lateinit var listLayoutManager: LinearLayoutManager
+    private lateinit var positionOverlay: RouteTimelinePositionOverlayView
     private lateinit var root: View
     private lateinit var sheet: MaterialCardView
     private lateinit var sheetContent: View
@@ -111,6 +129,8 @@ class RouteDetailActivity : AppCompatActivity() {
     private var renderer: GoogleRouteMapRenderer? = null
     private var lastPresentation: RouteMapPresentation? = null
     private var detail: RouteDetail? = null
+    private var journeyAxis: RouteJourneyAxis? = null
+    private var currentPositionPresentation: RouteCurrentPositionPresentation? = null
     private var waitTimeState: WaitTimeState = WaitTimeState.Loading
     private val detailLoading: Boolean
         get() = pageState.detail is ProgressiveValue.Loading || pageState.detail is ProgressiveValue.Refreshing
@@ -134,6 +154,7 @@ class RouteDetailActivity : AppCompatActivity() {
     private var mapUnavailable = false
     private var locationPermissionRequestedBefore = false
     private var repeatedPermissionRequest = false
+    private var pendingLocationPermissionPurpose: LocationPermissionPurpose? = null
     private var statusBarInset = 0
     private var navigationBarInset = 0
     private var cameraLatitude: Double? = null
@@ -153,6 +174,9 @@ class RouteDetailActivity : AppCompatActivity() {
     private var walkingEventGeneration = 0
     private var pendingSummaryTarget: PendingSummaryTarget? = null
     private var summaryHighlightRunnable: Runnable? = null
+    private var detailViewportPolicy = RouteDetailViewportPolicy()
+    private var pendingSummaryScrollState: SummaryScrollState? = null
+    private var pendingLocationSessionState: RouteDetailLocationSessionState? = null
     private val mapTransitionPolicy by lazy {
         RouteDetailMapTransitionPolicy(dimension(R.dimen.route_detail_sheet_swipe_threshold))
     }
@@ -179,12 +203,20 @@ class RouteDetailActivity : AppCompatActivity() {
     private val requestLocationPermission = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
+        val purpose = pendingLocationPermissionPurpose
+        pendingLocationPermissionPurpose = null
         if (result.values.any { it }) {
-            enableMyLocationAndFocus()
+            locationController.onPermissionResult()
+            if (purpose == LocationPermissionPurpose.MAP) {
+                enableMyLocationAndFocus()
+            } else {
+                updateMyLocationLayer()
+            }
         } else {
             val permanentlyDenied = repeatedPermissionRequest &&
                 LocationPermissionUtils.permissions.none(::shouldShowRequestPermissionRationale)
-            if (permanentlyDenied) {
+            locationController.onPermissionResult()
+            if (purpose == LocationPermissionPurpose.MAP && permanentlyDenied) {
                 showMessage(R.string.route_map_location_permission_settings, R.string.settings) {
                     startActivity(
                         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -192,7 +224,7 @@ class RouteDetailActivity : AppCompatActivity() {
                         }
                     )
                 }
-            } else {
+            } else if (purpose == LocationPermissionPurpose.MAP) {
                 showMessage(R.string.route_map_location_permission_denied)
             }
         }
@@ -235,6 +267,7 @@ class RouteDetailActivity : AppCompatActivity() {
         setContentView(R.layout.activity_route_detail)
         bindViews()
         setupTimeline()
+        setupCurrentPosition()
         setupBottomSheet()
         setupInsets()
         setupMap(savedInstanceState?.getBundle(STATE_MAP))
@@ -257,6 +290,7 @@ class RouteDetailActivity : AppCompatActivity() {
         super.onStart()
         if (::mapView.isInitialized) mapView.onStart()
         foreground = true
+        locationController.startForeground()
         updateDetailAutoRefreshEligibility()
         if (lastEtaSuccessMillis == null) {
             refreshFirstLegEta()
@@ -269,6 +303,7 @@ class RouteDetailActivity : AppCompatActivity() {
         super.onResume()
         if (::mapView.isInitialized) mapView.onResume()
         updateMyLocationLayer()
+        locationController.onReturnedFromSettings()
     }
 
     override fun onPause() {
@@ -279,6 +314,7 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onStop() {
         foreground = false
+        locationController.stopForeground()
         cancelActiveDetailAutoRefresh()
         updateDetailAutoRefreshEligibility()
         etaGeneration += 1
@@ -300,6 +336,44 @@ class RouteDetailActivity : AppCompatActivity() {
         outState.putBoolean(STATE_INITIAL_FIT, initialFitDone)
         outState.putString(STATE_CAMERA_OWNER, cameraOwner.name)
         outState.putBoolean(STATE_LOCATION_REQUESTED, locationPermissionRequestedBefore)
+        outState.putBoolean(
+            STATE_DETAIL_SCROLL_OWNED,
+            detailViewportPolicy.ownedByUser()
+        )
+        if (::adapter.isInitialized) {
+            val summaryState = adapter.summaryScrollState()
+            outState.putInt(STATE_SUMMARY_SCROLL_X, summaryState.scrollX)
+            outState.putBoolean(STATE_SUMMARY_SCROLL_OWNED, summaryState.ownedByUser)
+            summaryState.lastAutoSegmentId?.let {
+                outState.putString(STATE_SUMMARY_AUTO_SEGMENT, it)
+            }
+        }
+        if (::locationController.isInitialized) {
+            val locationState = locationController.sessionState()
+            outState.putBoolean(
+                STATE_POSITION_PERMISSION_SNACKBAR,
+                locationState.permissionSnackbarShown
+            )
+            outState.putBoolean(
+                STATE_POSITION_SYSTEM_SNACKBAR,
+                locationState.systemLocationSnackbarShown
+            )
+            outState.putBoolean(
+                STATE_POSITION_FIRST_FIX_TIMEOUT,
+                locationState.firstFixTimeoutShown
+            )
+            outState.putIntArray(
+                STATE_POSITION_EXPANSION_CONSUMED,
+                locationState.interactionState.expansionConsumedLegs.toIntArray()
+            )
+            outState.putIntArray(
+                STATE_POSITION_USER_COLLAPSED,
+                locationState.interactionState.userCollapsedLegs.toIntArray()
+            )
+            locationState.interactionState.announcedRegionKey?.let {
+                outState.putString(STATE_POSITION_ANNOUNCED_REGION, it)
+            }
+        }
         cameraLatitude?.let { outState.putDouble(STATE_CAMERA_LATITUDE, it) }
         cameraLongitude?.let { outState.putDouble(STATE_CAMERA_LONGITUDE, it) }
         cameraZoom?.let { outState.putFloat(STATE_CAMERA_ZOOM, it) }
@@ -322,6 +396,7 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        if (::locationController.isInitialized) locationController.stopForeground()
         pendingSummaryTarget = null
         summaryHighlightRunnable?.let(mainHandler::removeCallbacks)
         summaryHighlightRunnable = null
@@ -361,6 +436,7 @@ class RouteDetailActivity : AppCompatActivity() {
         sheetMapError = findViewById(R.id.routeDetailSheetMapError)
         csdiAttribution = findViewById(R.id.routeDetailCsdiAttribution)
         csdiAttributionSurface = findViewById(R.id.routeDetailCsdiAttributionSurface)
+        positionOverlay = findViewById(R.id.routeDetailPositionOverlay)
 
         floatingBack.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
         findViewById<MaterialButton>(R.id.routeDetailOverview).setOnClickListener {
@@ -378,6 +454,7 @@ class RouteDetailActivity : AppCompatActivity() {
             ::onTimelineStopSelected,
             ::onSummarySegmentSelected
         )
+        adapter.restoreSummaryScrollState(pendingSummaryScrollState)
         listLayoutManager = LinearLayoutManager(this)
         list = findViewById<RecyclerView>(R.id.routeDetailList).apply {
             layoutManager = listLayoutManager
@@ -400,12 +477,170 @@ class RouteDetailActivity : AppCompatActivity() {
                 }
                 false
             }
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                    if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                        detailViewportPolicy.onUserScroll()
+                    }
+                }
+            })
         }
+        positionOverlay.attach(list, adapter)
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
             override fun onChanged() = scheduleSheetMetrics()
             override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = scheduleSheetMetrics()
             override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = scheduleSheetMetrics()
         })
+    }
+
+    private fun setupCurrentPosition() {
+        locationController = RouteDetailLocationController(
+            pageGeneration = pageGeneration,
+            source = RouteDetailRuntime.foregroundLocationSourceFactory(this),
+            permission = ::routeDetailLocationPermission,
+            systemLocationEnabled = { RouteDetailRuntime.systemLocationEnabled(this) },
+            scheduler = HandlerRouteDetailLocationScheduler(mainHandler),
+            nowElapsedMillis = SystemClock::elapsedRealtime,
+            onState = ::onCurrentPositionState,
+            onEffect = ::onCurrentPositionEffect,
+            restoredSessionState = pendingLocationSessionState
+        )
+        updateJourneyAxis()
+    }
+
+    private fun routeDetailLocationPermission(): RouteDetailLocationPermission {
+        if (LocationPermissionUtils.hasForegroundLocationPermission(this)) {
+            return RouteDetailLocationPermission.GRANTED
+        }
+        val permanentlyDenied = locationPermissionRequestedBefore &&
+            LocationPermissionUtils.permissions.none(::shouldShowRequestPermissionRationale)
+        return if (permanentlyDenied) {
+            RouteDetailLocationPermission.PERMANENTLY_DENIED
+        } else {
+            RouteDetailLocationPermission.REQUESTABLE
+        }
+    }
+
+    private fun onCurrentPositionState(state: RouteDetailLocationUiState) {
+        if (destroyed) return
+        RouteDetailRuntime.locationStateObserver(state)
+        currentPositionPresentation = (state as? RouteDetailLocationUiState.Visible)
+            ?.takeIf { it.pageGeneration == pageGeneration }
+            ?.position
+            ?.let(RouteCurrentPositionPresenter::present)
+        adapter.setCurrentPosition(currentPositionPresentation)
+        positionOverlay.render(journeyAxis, currentPositionPresentation)
+        if (currentPositionPresentation != null) scrollCurrentPositionIntoView()
+    }
+
+    private fun onCurrentPositionEffect(effect: RouteDetailLocationEffect) {
+        if (destroyed) return
+        RouteDetailRuntime.locationEffectObserver(effect)
+        when (effect) {
+            RouteDetailLocationEffect.ShowPermissionSnackbar -> showMessage(
+                R.string.route_current_position_permission,
+                R.string.route_current_position_open
+            ) { locationController.onPermissionAction() }
+            RouteDetailLocationEffect.RequestPermission -> {
+                repeatedPermissionRequest = locationPermissionRequestedBefore
+                locationPermissionRequestedBefore = true
+                pendingLocationPermissionPurpose = LocationPermissionPurpose.JOURNEY
+                requestLocationPermission.launch(LocationPermissionUtils.permissions)
+            }
+            RouteDetailLocationEffect.OpenAppSettings -> startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", packageName, null)
+                }
+            )
+            RouteDetailLocationEffect.ShowSystemLocationSnackbar -> showMessage(
+                R.string.route_current_position_system_location_off,
+                R.string.route_current_position_open
+            ) { locationController.onSystemLocationAction() }
+            RouteDetailLocationEffect.OpenSystemLocationSettings ->
+                startActivity(SystemLocationUtils.settingsIntent())
+            RouteDetailLocationEffect.ShowFirstFixTimeout ->
+                showMessage(R.string.route_current_position_timeout)
+            is RouteDetailLocationEffect.AutoExpandLeg -> autoExpandCurrentLeg(effect.legIndex)
+            is RouteDetailLocationEffect.AnnouncePosition -> announceCurrentPosition(
+                RouteCurrentPositionPresenter.present(effect.position).announcement
+            )
+        }
+    }
+
+    private fun autoExpandCurrentLeg(legIndex: Int) {
+        val leg = detail?.legs?.getOrNull(legIndex) ?: return
+        if (leg.viaStops.isEmpty() || !expandedLegIndexes.add(legIndex)) return
+        updateInteractionState()
+        renderDetail()
+        list.post(::scrollCurrentPositionIntoView)
+    }
+
+    private fun announceCurrentPosition(
+        announcement: RouteCurrentPositionPresentation.Announcement
+    ) {
+        if (!foreground) return
+        val text = when (announcement) {
+            is RouteCurrentPositionPresentation.Announcement.NearNode -> getString(
+                R.string.route_current_position_near_station,
+                announcement.name
+            )
+            is RouteCurrentPositionPresentation.Announcement.Between -> getString(
+                R.string.route_current_position_between_stations,
+                announcement.fromName,
+                announcement.toName
+            )
+        }
+        ViewCompat.setAccessibilityLiveRegion(root, ViewCompat.ACCESSIBILITY_LIVE_REGION_POLITE)
+        root.announceForAccessibility(text)
+    }
+
+    private fun updateJourneyAxis() {
+        val currentDetail = detail
+        journeyAxis = if (currentDetail == null) {
+            null
+        } else {
+            journeyAxisBuilder.build(
+                JourneyAxisBuildInput(
+                    pageGeneration = pageGeneration,
+                    structureIdentity = currentStructureIdentity(),
+                    origin = args.queryOrigin?.let {
+                        JourneyEndpoint(it.name, it.latitude, it.longitude)
+                    },
+                    destination = args.queryDestination?.let {
+                        JourneyEndpoint(it.name, it.latitude, it.longitude)
+                    },
+                    detail = currentDetail,
+                    geometries = geometries.toMap(),
+                    walkingSegments = pageState.walkingSegments
+                )
+            )
+        }
+        if (::locationController.isInitialized) locationController.updateAxis(journeyAxis)
+        if (::positionOverlay.isInitialized) {
+            positionOverlay.render(journeyAxis, currentPositionPresentation)
+        }
+    }
+
+    private fun scrollCurrentPositionIntoView() {
+        if (detent != RouteDetailSheetDetent.FULL || !detailViewportPolicy.shouldFollow()) return
+        val timeline = currentPositionPresentation?.timeline ?: return
+        val targetId = when (timeline) {
+            is RouteCurrentPositionPresentation.Timeline.AtNode -> timeline.targetIds.firstOrNull()
+            is RouteCurrentPositionPresentation.Timeline.BetweenNodes -> journeyAxis
+                ?.nodesById
+                ?.get(timeline.fromNodeId)
+                ?.timelineTargetIds
+                ?.firstOrNull()
+            is RouteCurrentPositionPresentation.Timeline.Walking -> timeline.targetId
+        } ?: return
+        val position = adapter.currentList.indexOfFirst { it.stableId == targetId }
+        if (position >= 0) {
+            listLayoutManager.scrollToPositionWithOffset(
+                position,
+                dimension(R.dimen.route_detail_timeline_focus_offset)
+            )
+            positionOverlay.postInvalidateOnAnimation()
+        }
     }
 
     private fun setupBottomSheet() {
@@ -980,13 +1215,16 @@ class RouteDetailActivity : AppCompatActivity() {
                 expandedLegIndexes,
                 waitTimeState,
                 dynamicStatus,
-                pageState.walkingSegments
+                pageState.walkingSegments,
+                currentPositionPresentation
             )
         ) {
             adapter.selectTimelineItem(selectedTimelineId)
             restoreListPositionIfNeeded()
             scheduleSheetMetrics()
             resolvePendingSummaryTarget()
+            positionOverlay.postInvalidateOnAnimation()
+            scrollCurrentPositionIntoView()
         }
         renderMap()
     }
@@ -1009,6 +1247,7 @@ class RouteDetailActivity : AppCompatActivity() {
             restoreListPositionIfNeeded()
             scheduleSheetMetrics()
             resolvePendingSummaryTarget()
+            positionOverlay.postInvalidateOnAnimation()
         }
     }
 
@@ -1152,7 +1391,10 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun toggleLeg(index: Int) {
-        if (!expandedLegIndexes.add(index)) expandedLegIndexes.remove(index)
+        if (!expandedLegIndexes.add(index)) {
+            expandedLegIndexes.remove(index)
+            locationController.onUserCollapsedLeg(index)
+        }
         updateInteractionState()
         renderDetail()
     }
@@ -1172,6 +1414,7 @@ class RouteDetailActivity : AppCompatActivity() {
         value: RouteDetailSheetDetent,
         commitMapLayout: Boolean = true
     ) {
+        val wasFull = detent == RouteDetailSheetDetent.FULL
         detent = value
         val full = value == RouteDetailSheetDetent.FULL
         floatingBack.visibility = if (full) View.GONE else View.VISIBLE
@@ -1184,6 +1427,10 @@ class RouteDetailActivity : AppCompatActivity() {
             }
         )
         if (value == RouteDetailSheetDetent.SUMMARY) listLayoutManager.scrollToPositionWithOffset(0, 0)
+        if (full && !wasFull) {
+            detailViewportPolicy.onEnterFull()
+            list.post(::scrollCurrentPositionIntoView)
+        }
         updateCsdiAttributionVisibility()
         if (commitMapLayout) commitStableMapLayout()
     }
@@ -1369,6 +1616,7 @@ class RouteDetailActivity : AppCompatActivity() {
         if (!LocationPermissionUtils.hasForegroundLocationPermission(this)) {
             repeatedPermissionRequest = locationPermissionRequestedBefore
             locationPermissionRequestedBefore = true
+            pendingLocationPermissionPurpose = LocationPermissionPurpose.MAP
             requestLocationPermission.launch(LocationPermissionUtils.permissions)
             return
         }
@@ -1407,12 +1655,7 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun isSystemLocationEnabled(): Boolean {
-        val manager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            manager.isLocationEnabled
-        } else {
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) || manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        }
+        return RouteDetailRuntime.systemLocationEnabled(this)
     }
 
     private fun showMessage(messageRes: Int, actionRes: Int? = null, action: (() -> Unit)? = null) {
@@ -1461,6 +1704,28 @@ class RouteDetailActivity : AppCompatActivity() {
             runCatching { RouteDetailCameraOwner.valueOf(value) }.getOrNull()
         } ?: RouteDetailCameraOwner.PAGE
         locationPermissionRequestedBefore = state.getBoolean(STATE_LOCATION_REQUESTED)
+        detailViewportPolicy = RouteDetailViewportPolicy(
+            state.getBoolean(STATE_DETAIL_SCROLL_OWNED)
+        )
+        pendingSummaryScrollState = SummaryScrollState(
+            scrollX = state.getInt(STATE_SUMMARY_SCROLL_X, 0),
+            ownedByUser = state.getBoolean(STATE_SUMMARY_SCROLL_OWNED),
+            lastAutoSegmentId = state.getString(STATE_SUMMARY_AUTO_SEGMENT)
+        )
+        pendingLocationSessionState = RouteDetailLocationSessionState(
+            permissionSnackbarShown = state.getBoolean(STATE_POSITION_PERMISSION_SNACKBAR),
+            systemLocationSnackbarShown = state.getBoolean(STATE_POSITION_SYSTEM_SNACKBAR),
+            firstFixTimeoutShown = state.getBoolean(STATE_POSITION_FIRST_FIX_TIMEOUT),
+            interactionState = RouteCurrentPositionInteractionState(
+                expansionConsumedLegs = state.getIntArray(STATE_POSITION_EXPANSION_CONSUMED)
+                    ?.toSet()
+                    .orEmpty(),
+                userCollapsedLegs = state.getIntArray(STATE_POSITION_USER_COLLAPSED)
+                    ?.toSet()
+                    .orEmpty(),
+                announcedRegionKey = state.getString(STATE_POSITION_ANNOUNCED_REGION)
+            )
+        )
         if (state.containsKey(STATE_CAMERA_LATITUDE)) cameraLatitude = state.getDouble(STATE_CAMERA_LATITUDE)
         if (state.containsKey(STATE_CAMERA_LONGITUDE)) cameraLongitude = state.getDouble(STATE_CAMERA_LONGITUDE)
         if (state.containsKey(STATE_CAMERA_ZOOM)) cameraZoom = state.getFloat(STATE_CAMERA_ZOOM)
@@ -1520,6 +1785,7 @@ class RouteDetailActivity : AppCompatActivity() {
         waitTimeState = pageState.eta.valueOrNull() ?: args.waitTimeState
         geometries.clear()
         geometries.putAll(pageState.successfulGeometries)
+        if (::args.isInitialized) updateJourneyAxis()
     }
 
     private fun isCurrentDetail(requestGeneration: Int, languageVersion: Long): Boolean {
@@ -1568,6 +1834,11 @@ class RouteDetailActivity : AppCompatActivity() {
         val targetId: String
     )
 
+    private enum class LocationPermissionPurpose {
+        MAP,
+        JOURNEY
+    }
+
     private companion object {
         const val STATE_EXPANDED = "route_detail.expanded"
         const val STATE_DETENT = "route_detail.detent"
@@ -1575,6 +1846,18 @@ class RouteDetailActivity : AppCompatActivity() {
         const val STATE_SELECTED_TIMELINE = "route_detail.selected_timeline"
         const val STATE_INITIAL_FIT = "route_detail.initial_fit"
         const val STATE_LOCATION_REQUESTED = "route_detail.location_requested"
+        const val STATE_DETAIL_SCROLL_OWNED = "route_detail.position_detail_scroll_owned"
+        const val STATE_SUMMARY_SCROLL_X = "route_detail.position_summary_scroll_x"
+        const val STATE_SUMMARY_SCROLL_OWNED = "route_detail.position_summary_scroll_owned"
+        const val STATE_SUMMARY_AUTO_SEGMENT = "route_detail.position_summary_auto_segment"
+        const val STATE_POSITION_PERMISSION_SNACKBAR =
+            "route_detail.position_permission_snackbar"
+        const val STATE_POSITION_SYSTEM_SNACKBAR = "route_detail.position_system_snackbar"
+        const val STATE_POSITION_FIRST_FIX_TIMEOUT = "route_detail.position_first_fix_timeout"
+        const val STATE_POSITION_EXPANSION_CONSUMED =
+            "route_detail.position_expansion_consumed"
+        const val STATE_POSITION_USER_COLLAPSED = "route_detail.position_user_collapsed"
+        const val STATE_POSITION_ANNOUNCED_REGION = "route_detail.position_announced_region"
         const val STATE_LIST_POSITION = "route_detail.list_position"
         const val STATE_LIST_OFFSET = "route_detail.list_offset"
         const val STATE_CAMERA_LATITUDE = "route_detail.camera_latitude"
@@ -1629,6 +1912,12 @@ object RouteDetailRuntime {
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
     }
     private val defaultPresentationObserver: (RouteMapPresentation) -> Unit = {}
+    private val defaultForegroundLocationSourceFactory: (Context) -> ForegroundLocationSource =
+        { context -> FusedForegroundLocationSource(context) }
+    private val defaultSystemLocationEnabled: (Context) -> Boolean =
+        SystemLocationUtils::isLocationEnabled
+    private val defaultLocationStateObserver: (RouteDetailLocationUiState) -> Unit = {}
+    private val defaultLocationEffectObserver: (RouteDetailLocationEffect) -> Unit = {}
 
     @Volatile var repositoryFactory: () -> RouteDetailRepository = defaultRepositoryFactory
     @Volatile var detailRequestCoordinator = defaultDetailRequestCoordinator
@@ -1638,6 +1927,13 @@ object RouteDetailRuntime {
     @Volatile var pedestrianRuntime: PedestrianRouteRequestRuntime = defaultPedestrianRuntime
     @Volatile var mapsAvailabilityChecker: (Context) -> Boolean = defaultMapsAvailabilityChecker
     @Volatile var presentationObserver: (RouteMapPresentation) -> Unit = defaultPresentationObserver
+    @Volatile var foregroundLocationSourceFactory: (Context) -> ForegroundLocationSource =
+        defaultForegroundLocationSourceFactory
+    @Volatile var systemLocationEnabled: (Context) -> Boolean = defaultSystemLocationEnabled
+    @Volatile var locationStateObserver: (RouteDetailLocationUiState) -> Unit =
+        defaultLocationStateObserver
+    @Volatile var locationEffectObserver: (RouteDetailLocationEffect) -> Unit =
+        defaultLocationEffectObserver
 
     fun nextPageGeneration(): Long = pageGeneration.incrementAndGet()
 
@@ -1651,5 +1947,9 @@ object RouteDetailRuntime {
         pedestrianRuntime = defaultPedestrianRuntime
         mapsAvailabilityChecker = defaultMapsAvailabilityChecker
         presentationObserver = defaultPresentationObserver
+        foregroundLocationSourceFactory = defaultForegroundLocationSourceFactory
+        systemLocationEnabled = defaultSystemLocationEnabled
+        locationStateObserver = defaultLocationStateObserver
+        locationEffectObserver = defaultLocationEffectObserver
     }
 }
