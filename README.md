@@ -16,11 +16,11 @@
 - **即時路線結果**：比較路線、HK$ 車費、總耗時、步行距離、上下車站預覽及首程 ETA；地政總署行人路線距離會漸進補齊，支援五種排序與下拉刷新。
 - **前台自動刷新**：常用、搜尋結果與路線詳情可按關閉／1／2／5／10 分鐘更新；只在目前頁面前台可見時運行，並保留排序、置頂、閱讀位置及地圖狀態。
 - **結果置頂**：在本次查詢置頂路線，或為常用行程保存長期置頂；一般排序只作用於未置頂結果。
-- **ETA 與詳情**：查看最多三班到站時間、上下車站、方向、途經站及換乘段；詳情以 Google 地圖漸進展示可靠站序、Citybus 道路幾何、地政總署步行軌跡、方向紋理及局部失敗狀態。
+- **ETA 與詳情**：查看完整首程到站列表；聯營路線可合併城巴、九巴及龍運班次，ETA 詳情以品牌文字膠囊標明營運商。路線詳情另展示上下車站、方向、途經站、換乘段、可靠站序、Citybus 道路幾何及地政總署步行軌跡。
 - **通知欄監控**：短時前台服務定期刷新 ETA，顯示準備出門、立即出門或可能遲到，並提供刷新、停止及語音播報；啟動前檢查通知可見性，精確鬧鐘或電池豁免不可用時以可解釋方式降級。
 - **行程匯入匯出**：透過 Android 系統文件選擇器匯出 `.bicroutes`，或預覽後合併／取代本機行程。
 - **乘車碼快捷方式**：由桌面快捷方式開啟 AlipayHK／支付寶乘車碼候選鏈，不在常用頁佔用固定入口。
-- **更新檢查**：正常版本採 Google Play 優先分流，必要時使用官方網站 metadata；支援自動／手動檢查、稍後提醒、略過版本及 Play flexible update。
+- **更新檢查**：正常版本採 Google Play 優先分流，必要時使用官方網站 metadata；支援自動／手動檢查、稍後提醒、略過版本及 Play flexible update。設定頁亦可查看或手動檢查跨營運商路線資料庫的最近完整更新時間。
 - **Google Play 評分入口**：從設定頁打開官方 Play 商品詳情；Play 停用、缺失或不可用時提供對應恢復操作，不使用 In-App Review 或第三方商店 fallback。
 - **三語與主題**：支援跟隨系統、香港繁體、簡體、English，以及跟隨系統、淺色、深色外觀。
 
@@ -65,7 +65,7 @@
 
 ## 架構摘要
 
-BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 query owner；基礎路線結果先展示，站點預覽、ETA 與地政總署步行結果在背景漸進補齊。UI 負責展示、輸入與生命週期協調，網絡、SQLite、解析和查詢編排留在 data 層；頁面級自動刷新只由前台 owner 調度，前台監控、通知、調度及 TTS 則留在 service。
+BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 query owner；基礎路線結果先展示，站點預覽、Citybus ETA、按需完成的 KMB／LWB 映射及地政總署步行結果在背景漸進補齊。UI 負責展示、輸入與生命週期協調，網絡、SQLite、解析、DP 和查詢編排留在 data 層；頁面級自動刷新只由前台 owner 調度，前台監控、通知、調度及 TTS 則留在 service。
 
 | 目錄 | 職責 |
 | --- | --- |
@@ -93,17 +93,20 @@ BusIsComing 採用輕量 Repository 分層。常用頁與搜尋頁是獨立 quer
 | Citybus `showstops2.php` | P2P route variant、站序及 stop id 對齊 |
 | Citybus `getp2pstopinroute.php` | 上下車、途經站及換乘詳情 |
 | Citybus `getlinep2p.php` | 路線詳情的每段道路幾何 |
-| DATA.GOV.HK Citybus ETA | 首程即時到站資料 |
+| 運輸署公共交通 GTFS | 識別 CTB 與 KMB／LWB 聯營路線 |
+| KMB Data API route／route-stop／stop | KMB／LWB 靜態路線及跨營運商站點映射 |
+| DATA.GOV.HK Citybus route／route-stop／stop | CTB 路線清單及聯營路線按需站序 |
+| DATA.GOV.HK Citybus ETA、KMB Data API ETA | 聚合首程即時到站資料 |
 | 地政總署 3D Pedestrian Route Search | 路線卡與詳情的步行距離、約略時間及地圖軌跡 |
 | Google Geocoding v4 | 目前座標的地址名稱 |
 | Maps SDK for Android | 詳情頁底圖、marker 與 polyline |
 | Google Play／官方網站 | 更新資格、版本展示及下載入口 |
 
-接口參數、語言和失敗邊界集中記錄在 [Citybus 路線查詢與 ETA](docs/citybus-route-query-and-eta.md)、[本地化指南](docs/localization-guidelines.md)及[應用程式更新檢查](docs/app-update-check.md)。
+接口參數、語言和失敗邊界集中記錄在 [Citybus 路線查詢與 ETA](docs/citybus-route-query-and-eta.md)、[跨營運商路線與站點映射](docs/cross-operator-route-stop-matching.md)、[本地化指南](docs/localization-guidelines.md)及[應用程式更新檢查](docs/app-update-check.md)。
 
 ## 本機資料與私隱
 
-常用行程與長期路線置頂保存在 SQLite；語言、外觀、自動刷新、更新和監控 session 等狀態使用各自的偏好存儲；畫面重建需要的臨時查詢與本次置頂使用 SavedState 或頁面狀態。Android 自動備份目前仍缺少明確 include／exclude 策略，已記入[技術債](docs/technical-debt.md)。
+常用行程與長期路線置頂保存在 SQLite；語言、外觀、自動刷新、更新和監控 session 等狀態使用各自的偏好存儲；畫面重建需要的臨時查詢與本次置頂使用 SavedState 或頁面狀態。可重新下載的 `cross_operator_routes.db` 已明確排除 Android cloud backup 與 device transfer；其他用戶資料的完整備份策略仍記於[技術債](docs/technical-debt.md)。
 
 `.bicroutes` 是未加密、版本化的 UTF-8 JSON，只包含行程名稱、起終點地點名稱與精確座標；不包含使用次數、最近使用時間、查詢結果、ETA、置頂或監控 session。
 
@@ -128,6 +131,7 @@ UI 驗收覆蓋三語、淺／深色、約 360dp portrait、font scale 1.0／1.3
 | [架構](docs/architecture.md) | 畫面、模組、資料流、狀態與生命週期 |
 | [行程與查詢工作流](docs/journey-query-workflow.md) | 行程、地點、搜尋、結果、置頂與資料遷移 |
 | [Citybus 路線查詢與 ETA](docs/citybus-route-query-and-eta.md) | 外部接口、P2P 解析、站點對齊、詳情與 ETA |
+| [跨營運商路線與站點映射](docs/cross-operator-route-stop-matching.md) | GTFS gate、CTB ↔ KMB／LWB DP、cache、ETA 聚合與實證 |
 | [通知欄監控設計](docs/monitoring-design.md) | 步行估算、狀態、排程、通知、TTS 與 session |
 | [UI／UX 風格指南](docs/ui-style-guide.md) | 體驗定位、設計原則、視覺語言、互動模式與無障礙 |
 | [本地化指南](docs/localization-guidelines.md) | 三語、術語、動態資料與 TTS 語言 |

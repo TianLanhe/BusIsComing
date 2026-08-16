@@ -43,6 +43,9 @@ BusIsComing 的 App runtime 支援以下選擇：
 | notification monitor | 通知欄監控 | 通知栏监控 | Notification monitoring |
 | appearance | 外觀主題 | 外观主题 | Appearance |
 | import / export | 匯入／匯出 | 导入／导出 | Import / export |
+| operator | 營運商 | 运营商 | Operator |
+| Citybus / KMB / LWB badge | 城巴／九巴／龍運 | 城巴／九巴／龙运 | CTB / KMB / LWB |
+| route database update | 路線資料庫更新檢查 | 路线数据库更新检查 | Route database update check |
 
 ## Android 資源規則
 
@@ -66,6 +69,7 @@ BusIsComing 的 App runtime 支援以下選擇：
 - Citybus 或 Google 的整體請求失敗不得改用另一語言重試，不得顯示 mock 名稱或舊語言 cache。
 - 上表的 Google 語言只約束 App 主動送出的 Geocoding 等請求。Google Maps 底圖內建道路、地名、商戶及 attribution 由 Maps SDK／Google／裝置環境決定，可能不完全跟隨 App locale；App 自有的詳情摘要、marker title、錯誤、定位／全覽控件及 `contentDescription` 仍必須使用目前 App 語言資源或同語言 Citybus 資料。
 - Citybus 地點、路線、站序與 ETA 的參數及解析契約由 `citybus-route-query-and-eta.md` 維護；本文件只約束它們必須使用同一 `LanguageSnapshot`，且不得以跨語言重試掩蓋失敗。
+- KMB／LWB ETA 沿用同一 `LanguageSnapshot` 對 `dest_tc/sc/en` 與 `rmk_tc/sc/en` 執行同樣的單欄位回退；operator 只取上游 `co`，不因 endpoint 名稱、目前語言或品牌文案改寫。跨營運商映射的站名只作診斷，不參與 DP，亦不會覆寫 P2P 顯示站名。
 - 地政總署 CSDI 行人路線固定使用服務要求的 `directionsLanguage=en`；距離、時間與 geometry 視為語言中立資料，不按 App 語言重查。載入、後備、不可用、約略時間、方向與署名均由 App 三語資源表達，亦不得因整體請求失敗改用另一語言或端點直線。
 - 更新檢查打開網站時依實際語言選擇上述路徑；由 Play 確認更新後，網站 `versionName` 只有在 `versionCode` 精確一致時才可展示。完整渠道契約見 `app-update-check.md`。
 - Google Play 評分商品頁只交由 `com.android.vending` 處理，不按語言改寫 package 或回退瀏覽器。Google Play 缺失時的官方說明頁分別使用 `zh-HK`、`zh-CN`、`en`；停用、不可用、啟動失敗及從系統設定返回後的提示和操作都必須使用目前 App 語言資源。
@@ -94,6 +98,8 @@ BusIsComing 的 App runtime 支援以下選擇：
 - 路線詳情的文字時間線是地圖的等價可讀內容；站點、轉乘、巴士 geometry、CSDI 步行來源、方向、署名或位置狀態不得只靠顏色、marker、箭頭或圖例傳達，地圖不可用時仍須保留目前語言的完整操作與錯誤說明。
 - 監控通知健康、系統設定 fallback、精確鬧鐘及電池最佳化說明均屬 App 自有文案，三語資源必須表達阻斷、警告、未知與可降級繼續的差異。
 - 深色模式使用語意色 token；只有 launcher／品牌圖像與經對比驗證的路線識別色可保持固定色。
+- ETA 詳情的城巴、九巴、龍運膠囊必須同時顯示本地化文字，不能只靠顏色。固定品牌色對分別為 CTB `#ECCF00/#004891`、KMB `#E60012/#FFFFFF`、LWB `#F15622/#17211F`；每列 `contentDescription` 須包含班次、營運商、候車分鐘、到站時間及可用備註。完整列表在 360dp、深淺色與 font scale 2.0 仍須可滾動且保留固定標題。
+- 路線資料庫最近成功時間使用目前 locale 的系統日期時間格式並固定 `Asia/Hong_Kong` 時區；來源 timestamp、資料日或任一 provider 的生成時間不可冒充完整五來源成功時間。
 
 ## 驗證門檻
 

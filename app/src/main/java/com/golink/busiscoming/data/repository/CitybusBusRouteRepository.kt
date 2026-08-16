@@ -36,11 +36,7 @@ class CitybusBusRouteRepository(
     private val sessionScopeFactory: () -> String = { UUID.randomUUID().toString() },
     private val requestLogger: (String) -> Unit = ::logRouteCurl,
     private val stopMapResolver: CitybusP2pStopMapResolver = CitybusP2pStopMapResolver(clock = clock),
-    private val etaService: CitybusFirstLegEtaService = CitybusFirstLegEtaService(
-        clock = clock,
-        stopMapResolver = stopMapResolver
-    ),
-    private val waitTimeResolver: (FirstLegEtaQuery) -> WaitTimeState = etaService::resolveWaitTime,
+    private val waitTimeResolver: ((FirstLegEtaQuery) -> WaitTimeState)? = null,
     private val etaWorkerCount: Int = DEFAULT_ETA_WORKER_COUNT,
     private val stopPreviewResolver: RouteCardStopPreviewResolver = RouteCardStopPreviewResolver(
         stopMapResolver = stopMapResolver
@@ -325,11 +321,11 @@ class CitybusBusRouteRepository(
                 try {
                     if (!isEtaGenerationActive(generation)) return@execute
 
-                    val result = resolveEtaRequestGroup(group)
-                    if (!isEtaGenerationActive(generation)) return@execute
-
-                    result.routeIds.forEach { routeId ->
-                        callback.onRouteWaitTimeUpdated(routeId, result.waitTimeState)
+                    resolveEtaRequestGroup(group) { result ->
+                        if (!isEtaGenerationActive(generation)) return@resolveEtaRequestGroup
+                        result.routeIds.forEach { routeId ->
+                            callback.onRouteWaitTimeUpdated(routeId, result.waitTimeState)
+                        }
                     }
                 } finally {
                     if (remainingGroups.decrementAndGet() == 0) {
@@ -514,13 +510,29 @@ class CitybusBusRouteRepository(
             }
     }
 
-    private fun resolveEtaRequestGroup(group: EtaRequestGroup): EtaRequestResult {
-        val waitTimeState = runCatching { waitTimeResolver(group.query) }
-            .getOrDefault(WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR))
-        return EtaRequestResult(
-            routeIds = group.routeIds,
-            waitTimeState = waitTimeState
-        )
+    private fun resolveEtaRequestGroup(
+        group: EtaRequestGroup,
+        onResult: (EtaRequestResult) -> Unit
+    ) {
+        val injectedResolver = waitTimeResolver
+        if (injectedResolver != null) {
+            val waitTimeState = runCatching { injectedResolver(group.query) }
+                .getOrDefault(WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR))
+            onResult(EtaRequestResult(group.routeIds, waitTimeState))
+            return
+        }
+        runCatching {
+            CrossOperatorEtaRuntime.resolveWaitTimeProgressively(group.query) { waitTimeState ->
+                onResult(EtaRequestResult(group.routeIds, waitTimeState))
+            }
+        }.onFailure {
+            onResult(
+                EtaRequestResult(
+                    group.routeIds,
+                    WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR)
+                )
+            )
+        }
     }
 
     private fun stopPreviewRequestGroups(routes: List<BusRouteOption>): List<StopPreviewRequestGroup> {

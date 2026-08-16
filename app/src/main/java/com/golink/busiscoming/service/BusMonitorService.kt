@@ -30,7 +30,7 @@ import com.golink.busiscoming.data.model.BusRouteOption
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.model.EtaUnavailableReason
-import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
+import com.golink.busiscoming.data.repository.CrossOperatorEtaRuntime
 import com.golink.busiscoming.ui.main.MainActivity
 import com.golink.busiscoming.ui.main.TransitCodeEntryPoint
 import com.golink.busiscoming.ui.common.localizedText
@@ -44,7 +44,6 @@ import java.util.concurrent.Executors
 class BusMonitorService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val etaExecutor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val etaService = CitybusFirstLegEtaService()
     private lateinit var sessionStore: BusMonitorSessionStore
     private lateinit var refreshScheduler: BusMonitorRefreshScheduler
     private lateinit var speechController: BusMonitorSpeechController
@@ -182,7 +181,7 @@ class BusMonitorService : Service() {
         if (isRefreshing) return
         isRefreshing = true
         etaExecutor.execute {
-            val waitTimeState = runCatching { etaService.resolveWaitTime(currentSession.query) }
+            val waitTimeState = runCatching { CrossOperatorEtaRuntime.resolveWaitTime(currentSession.query) }
                 .getOrDefault(WaitTimeState.Unavailable(EtaUnavailableReason.UNEXPECTED_ERROR))
             mainHandler.post {
                 isRefreshing = false

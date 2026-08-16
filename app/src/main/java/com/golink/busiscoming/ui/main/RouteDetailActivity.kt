@@ -59,7 +59,7 @@ import com.golink.busiscoming.data.model.RouteGeometryKey
 import com.golink.busiscoming.data.model.RouteGeometrySegment
 import com.golink.busiscoming.data.model.RouteJourneyAxis
 import com.golink.busiscoming.data.model.WaitTimeState
-import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
+import com.golink.busiscoming.data.repository.CrossOperatorEtaRuntime
 import com.golink.busiscoming.data.repository.CitybusP2pStopMapResolver
 import com.golink.busiscoming.data.repository.CitybusRouteDetailRepository
 import com.golink.busiscoming.data.repository.CitybusRouteGeometryRepository
@@ -2040,7 +2040,7 @@ object RouteDetailRuntime {
     private val defaultGeometryRepository: RouteGeometryDataSource by lazy { CitybusRouteGeometryRepository() }
     private val defaultGeometryRepositoryFactory: () -> RouteGeometryDataSource = { defaultGeometryRepository }
     private val defaultEtaResolver: (FirstLegEtaQuery) -> WaitTimeState =
-        { query -> CitybusFirstLegEtaService().resolveWaitTime(query) }
+        CrossOperatorEtaRuntime::resolveWaitTime
     private val defaultStopMapResolverFactory: () -> CitybusP2pStopMapResolver = {
         CitybusP2pStopMapResolver()
     }

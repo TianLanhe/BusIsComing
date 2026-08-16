@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.BusOperator
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.P2pRouteDetailQuery
@@ -27,7 +28,21 @@ class RouteDetailLaunchArgsTest {
             arrivalMinutes = 6,
             transferCount = 1,
             walkingDistanceMeters = 378,
-            waitTimeState = WaitTimeState.Available(listOf(EtaArrival(1, 6), EtaArrival(2, 14))),
+            waitTimeState = WaitTimeState.Available(
+                listOf(
+                    EtaArrival(
+                        1,
+                        6,
+                        arrivalTimeText = "12:06",
+                        destination = "小西灣",
+                        remark = "原定班次",
+                        dataTimestampMillis = 123_000L,
+                        operator = BusOperator.CTB,
+                        sourceSequence = 2
+                    ),
+                    EtaArrival(2, 14, operator = BusOperator.KMB, sourceSequence = 1)
+                )
+            ),
             firstLegEtaQuery = FirstLegEtaQuery("CTB", "N8P-ISR-1", "N8P", 6, 15, "O", "outbound", "raw", "0"),
             routeDetailQuery = P2pRouteDetailQuery(
                 "raw",
@@ -63,6 +78,11 @@ class RouteDetailLaunchArgsTest {
         assertNotSame(original, restored)
         assertEquals(original, restored)
         assertEquals(listOf(6, 14), (restored.waitTimeState as WaitTimeState.Available).arrivals.map { it.minutes })
+        val restoredArrivals = (restored.waitTimeState as WaitTimeState.Available).arrivals
+        assertEquals(listOf(BusOperator.CTB, BusOperator.KMB), restoredArrivals.map { it.operator })
+        assertEquals("原定班次", restoredArrivals.first().remark)
+        assertEquals(123_000L, restoredArrivals.first().dataTimestampMillis)
+        assertEquals(2, restoredArrivals.first().sourceSequence)
         assertEquals("北角碼頭", restored.queryOrigin?.name)
         assertEquals(22.29361, restored.queryOrigin?.latitude ?: 0.0, 0.0)
         assertEquals("中環", restored.queryDestination?.name)

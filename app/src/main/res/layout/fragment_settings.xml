@@ -137,6 +137,23 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/settingsRouteDatabaseRow"
+            style="@style/SettingsRow"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                style="@style/SettingsRowText"
+                android:text="@string/settings_route_database_update" />
+
+            <TextView
+                android:id="@+id/settingsRouteDatabaseSummary"
+                style="@style/SettingsRowValueText"
+                android:text="@string/route_database_status_never_completed" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/settingsTransitCodeShortcutRow"
             style="@style/SettingsRow"
             android:layout_marginTop="8dp"

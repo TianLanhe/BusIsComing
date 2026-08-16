@@ -2,6 +2,7 @@ package com.golink.busiscoming.ui.main
 
 import android.os.Bundle
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.BusOperator
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
@@ -86,6 +87,15 @@ data class RouteDetailLaunchArgs(
                 state.arrivals.forEachIndexed { index, arrival ->
                     put("wait.$index.sequence", arrival.sequence.toString())
                     put("wait.$index.minutes", arrival.minutes.toString())
+                    arrival.etaMillis?.let { put("wait.$index.etaMillis", it.toString()) }
+                    put("wait.$index.arrivalTimeText", arrival.arrivalTimeText)
+                    arrival.destination?.let { put("wait.$index.destination", it) }
+                    arrival.destinationLanguage?.let { put("wait.$index.destinationLanguage", it) }
+                    arrival.remark?.let { put("wait.$index.remark", it) }
+                    arrival.remarkLanguage?.let { put("wait.$index.remarkLanguage", it) }
+                    arrival.dataTimestampMillis?.let { put("wait.$index.dataTimestampMillis", it.toString()) }
+                    put("wait.$index.operator", arrival.operator.name)
+                    put("wait.$index.sourceSequence", arrival.sourceSequence.toString())
                 }
             }
             WaitTimeState.Loading -> put("wait.type", "loading")
@@ -230,8 +240,21 @@ data class RouteDetailLaunchArgs(
             "available" -> WaitTimeState.Available(
                 (0 until (get("wait.count")?.toIntOrNull() ?: 0)).map { index ->
                     EtaArrival(
-                        get("wait.$index.sequence")?.toIntOrNull() ?: index + 1,
-                        get("wait.$index.minutes")?.toIntOrNull() ?: 0
+                        sequence = get("wait.$index.sequence")?.toIntOrNull() ?: index + 1,
+                        minutes = get("wait.$index.minutes")?.toIntOrNull() ?: 0,
+                        etaMillis = get("wait.$index.etaMillis")?.toLongOrNull(),
+                        arrivalTimeText = get("wait.$index.arrivalTimeText").orEmpty(),
+                        destination = get("wait.$index.destination"),
+                        destinationLanguage = get("wait.$index.destinationLanguage"),
+                        remark = get("wait.$index.remark"),
+                        remarkLanguage = get("wait.$index.remarkLanguage"),
+                        dataTimestampMillis = get("wait.$index.dataTimestampMillis")?.toLongOrNull(),
+                        operator = runCatching {
+                            BusOperator.valueOf(get("wait.$index.operator").orEmpty())
+                        }.getOrDefault(BusOperator.CTB),
+                        sourceSequence = get("wait.$index.sourceSequence")?.toIntOrNull()
+                            ?: get("wait.$index.sequence")?.toIntOrNull()
+                            ?: index + 1
                     )
                 }
             )

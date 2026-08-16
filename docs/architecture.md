@@ -10,7 +10,7 @@
 
 - **常用**：選擇常用行程、查詢路線、排序／刷新、置頂、詳情及監控。
 - **搜尋**：編輯臨時起終點、查詢路線，成功後可保存為常用行程。
-- **設定**：語言、外觀、自動刷新、行程匯入匯出、乘車碼快捷方式、支援、應用評分、關於及檢查更新。
+- **設定**：語言、外觀、自動刷新、行程匯入匯出、路線資料庫更新檢查、乘車碼快捷方式、支援、應用評分、關於及檢查更新。
 
 行程新增／編輯、行程管理、路線詳情、關於及匯入匯出使用次級 Activity。`RouteDetailActivity` 以 Google 地圖為背景、不可隱藏的三檔持續 Bottom Sheet 為文字詳情層；`TransitCodeShortcutActivity` 是不顯示界面的桌面快捷方式中轉入口，`BusMonitorService` 是前台監控服務。
 
@@ -18,11 +18,11 @@
 
 | 位置 | 責任 |
 | --- | --- |
-| `data/local` | SQLite schema、行程／長期置頂資料及語言／外觀／自動刷新偏好 helper |
+| `data/local` | 用戶 SQLite schema、獨立跨營運商靜態快照／映射 cache、行程／長期置頂資料及語言／外觀／自動刷新偏好 helper |
 | `data/localization` | 實際 App locale、Citybus／Google／ETA mapping、TTS 語言及版本 snapshot |
 | `data/location` | 位置權限、目前位置、距離、附近行程選擇及 Google 地址解析 |
 | `data/model` | 不依賴畫面的行程、路線、ETA、置頂、更新和監控狀態／policy |
-| `data/repository` | Citybus／ETA／地政總署行人路線 HTTP、parser、短期 Citybus session、詳情／geometry／步行 cache、本機行程及置頂資料存取 |
+| `data/repository` | Citybus、GTFS、KMB／LWB、ETA 與地政總署行人路線 HTTP／parser，跨營運商 DP／更新、短期 Citybus session、詳情／geometry／步行 cache、本機行程及置頂資料存取 |
 | `data/transfer` | `.bicroutes` schema、codec、文件讀取、去重及匯入計劃 |
 | `data/update` | 安裝來源、Play／網站 source、渠道決策、提醒 policy、評分導航及可靠快照 |
 | `service` | 監控 session、ETA 刷新、AlarmManager、通知、WakeLock 及 TTS |
@@ -46,7 +46,7 @@ flowchart TD
     Parser --> Initial["基礎路線結果"]
     Initial --> UI["RecyclerView"]
     Repo --> StopMap["showstops2 站點預覽"]
-    Repo --> ETA["DATA.GOV.HK 首程 ETA"]
+    Repo --> ETA["共享 CTB + KMB/LWB 首程 ETA"]
     StopMap --> Planner["步行分段端點規劃"]
     Planner --> CSDI["地政總署 CSDI"]
     StopMap --> UI
@@ -54,7 +54,25 @@ flowchart TD
     CSDI --> UI
 ```
 
-常用與搜尋各自保存查詢上下文及 UI 狀態，但共享 repository、結果格式和排序／刷新控件。每次查詢以 query id、repository generation 及語言版本拒絕過期 callback。基礎結果先交付，ETA、站點預覽及 CSDI 步行距離按完成順序增量更新，不等待全部外部請求；CSDI 尚未完成的結果保持穩定相對次序，只有目前按步行距離排序時才重排未置頂區。
+常用與搜尋各自保存查詢上下文及 UI 狀態，但共享 repository、結果格式和排序／刷新控件。每次查詢以 query id、repository generation 及語言版本拒絕過期 callback。基礎結果先交付，Citybus ETA、按需完成的 KMB／LWB 映射與合併 ETA、站點預覽及 CSDI 步行距離按完成順序增量更新，不等待全部外部請求；CSDI 尚未完成的結果保持穩定相對次序，只有目前按步行距離排序時才重排未置頂區。
+
+### 跨營運商靜態資料與 ETA
+
+```mermaid
+flowchart TD
+    Foreground["每香港資料日首次前台／手動檢查"] --> Global["五來源全局 single-flight"]
+    Global --> Staging["獨立 SQLite staging snapshot"]
+    Staging --> Active["原子切換 active snapshot"]
+    Query["聯營首程實際查詢"] --> Gate["GTFS KMB+CTB／LWB+CTB gate"]
+    Gate --> Slice["CTB 雙方向 2 + N 懶載入或復用"]
+    Slice --> DP["同路線全部 KMB/LWB 變體 DP"]
+    Active --> DP
+    DP --> Cache["MATCHED／NO_MATCH + stop pairs"]
+    Cache --> P2P["P2P 上落車完整與順序門禁"]
+    P2P --> Eta["CTB + KMB/LWB ETA 完整合併"]
+```
+
+`CrossOperatorEtaRuntime` 在 `Application` 初始化，持有獨立路線資料庫、全局更新協調器、CTB route slice loader、映射 repository 及共享首程 ETA service。路線查詢、全螢幕詳情、前台自動刷新與 `BusMonitorService` 使用同一 runtime；無快照、非聯營、slice／映射失敗或資料庫故障均保留 Citybus-only 結果。DP、fingerprint、cache、P2P gate 及資料日細節見 `cross-operator-route-stop-matching.md`。
 
 兩個 owner 各自持有 `ForegroundAutoRefreshController`。全 App 共用設定預設 1 分鐘，可關閉或改為 2／5／10 分鐘；只有目前 destination 前台可見、已有成功結果且沒有首次／手動查詢時才排程。自動刷新重跑原查詢快照，基礎結果完成即結束本輪，後續 ETA、站點與 CSDI callback 繼續漸進交付；列表以 stable id 與 pixel offset 恢復閱讀位置。
 
@@ -66,7 +84,7 @@ flowchart TD
     Page --> Detail["getp2pstopinroute 詳情"]
     Page --> StopMap["showstops2 可靠站點端點"]
     Page --> Geometry["getlinep2p 每段道路幾何"]
-    Page --> Eta["DATA.GOV.HK 首程 ETA"]
+    Page --> Eta["共享 CTB + KMB/LWB 首程 ETA"]
     Page --> Location["使用者觸發的目前位置"]
     Detail --> Planner["步行分段規劃"]
     StopMap --> Planner
@@ -111,10 +129,11 @@ geometry 可早於文字詳情成為內部 candidate，只有目前 consumer 的
 | 本次置頂、搜尋表單、destination、排序及滾動 | Fragment／Activity state、SavedState | 配置重建保留；進程或工作流結束後不作長期資料 |
 | Citybus 詳情 session reference | 進程記憶體 | 每個 `m1` 候選各自持有不透明 reference；原始 `PHPSESSID` 不持久化，預設 30 分鐘過期或由新查詢 scope 作廢 |
 | 路線結構、Citybus／CSDI 分段步行、geometry、stop map、Google 地址等 cache | 進程記憶體 | 按資料域使用獨立 key／TTL；完整成功資料才進相應 cache，失敗與部分資料不冒充完整成功 |
+| 跨營運商全局快照、CTB route slice 及 DP 映射 | 獨立 SQLite `cross_operator_routes.db` | 可重建；五來源原子發布，slice 按路線懶載入，語義／算法版本精準失效，排除系統備份與裝置轉移 |
 
 SQLite schema 目前為版本 4。`route_configs` 保存行程名稱、起終點名稱／精確座標、建立／更新時間、使用次數及最近使用時間；`route_result_pins` 以外鍵關聯行程並啟用 cascade delete。
 
-Android Manifest 目前允許系統備份，但 backup rules 仍未定義明確 include／exclude，詳見 `technical-debt.md`。
+Android Manifest 目前允許系統備份；規則已明確排除可重建的 `cross_operator_routes.db`。其他用戶資料的完整 include／exclude 決策仍未完成，詳見 `technical-debt.md`。
 
 ## 重建、取消與語言版本
 
@@ -136,6 +155,7 @@ Android Manifest 目前允許系統備份，但 backup rules 仍未定義明確 
 
 - 行程與結果工作流：`journey-query-workflow.md`
 - Citybus、站點與 ETA：`citybus-route-query-and-eta.md`
+- 跨營運商路線與站點映射：`cross-operator-route-stop-matching.md`
 - 監控算法與背景限制：`monitoring-design.md`
 - 三語與動態資料：`localization-guidelines.md`
 - UI／UX 原則、共用模式與無障礙：`ui-style-guide.md`

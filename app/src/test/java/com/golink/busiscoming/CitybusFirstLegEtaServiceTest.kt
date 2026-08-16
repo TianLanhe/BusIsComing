@@ -148,7 +148,7 @@ class CitybusFirstLegEtaServiceTest {
     }
 
     @Test
-    fun resolvesUpToThreeArrivalsSortedByEtaSequence() {
+    fun resolvesAllArrivalsSortedByEtaSequence() {
         val service = etaService(
             clock = { millis("2026-06-04T12:00:00+08:00") },
             etaFetcher = {
@@ -168,8 +168,8 @@ class CitybusFirstLegEtaServiceTest {
 
         val waitTimeState = service.resolveWaitTime(query) as WaitTimeState.Available
 
-        assertEquals(listOf(1, 2, 3), waitTimeState.arrivals.map { it.sequence })
-        assertEquals(listOf(4, 8, 11), waitTimeState.arrivals.map { it.minutes })
+        assertEquals(listOf(1, 2, 3, 4), waitTimeState.arrivals.map { it.sequence })
+        assertEquals(listOf(4, 8, 11, 15), waitTimeState.arrivals.map { it.minutes })
         assertEquals("12:04", waitTimeState.arrivals.first().arrivalTimeText)
         assertEquals("筲箕灣", waitTimeState.arrivals.first().destination)
         assertEquals("原定班次", waitTimeState.arrivals.first().remark)

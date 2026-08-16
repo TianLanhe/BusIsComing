@@ -122,4 +122,9 @@
     <string name="route_current_position_timeout">暂时无法获取当前位置，会继续尝试</string>
     <string name="route_current_position_near_station">当前位置，靠近%1$s</string>
     <string name="route_current_position_between_stations">当前位置，%1$s与%2$s之间</string>
+    <string name="operator_ctb">城巴</string>
+    <string name="operator_kmb">九巴</string>
+    <string name="operator_lwb">龙运</string>
+    <string name="eta_arrival_row_content_description">%1$s，%2$s，%3$s，预计 %4$s</string>
+    <string name="eta_arrival_row_with_remark_content_description">%1$s，%2$s，%3$s，预计 %4$s，%5$s</string>
 </resources>

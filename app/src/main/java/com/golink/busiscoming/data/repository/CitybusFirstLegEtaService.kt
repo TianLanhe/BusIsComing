@@ -1,6 +1,7 @@
 package com.golink.busiscoming.data.repository
 
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
+import com.golink.busiscoming.data.model.BusOperator
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.EtaUnavailableReason
 import com.golink.busiscoming.data.model.P2pRouteLeg
@@ -98,7 +99,6 @@ class CitybusFirstLegEtaService(
                 compareBy<EtaRecord> { it.etaSequence ?: Int.MAX_VALUE }
                     .thenBy { it.etaMillis }
             )
-            .take(MAX_ETA_ARRIVALS)
             .mapIndexed { index, record ->
                 EtaArrival(
                     sequence = record.etaSequence ?: index + 1,
@@ -109,7 +109,9 @@ class CitybusFirstLegEtaService(
                     destinationLanguage = record.destinationLanguage,
                     remark = record.remark,
                     remarkLanguage = record.remarkLanguage,
-                    dataTimestampMillis = record.dataTimestampMillis
+                    dataTimestampMillis = record.dataTimestampMillis,
+                    operator = BusOperator.CTB,
+                    sourceSequence = record.etaSequence ?: index + 1
                 )
             }
     }
@@ -256,7 +258,6 @@ class CitybusFirstLegEtaService(
     companion object {
         private const val BASE_URL = "https://rt.data.gov.hk/v2/transport/citybus"
         private const val MILLIS_PER_MINUTE = 60_000L
-        private const val MAX_ETA_ARRIVALS = 3
         private val DATA_ARRAY_PATTERN = Regex(""""data"\s*:\s*\[""")
         private val RESPONSE_TIMESTAMP_PATTERN = Regex(
             """"(generated_timestamp|data_timestamp)"\s*:\s*"([^"]+)""""

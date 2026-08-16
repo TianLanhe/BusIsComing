@@ -35,6 +35,16 @@
     <string name="theme_mode_light">浅色模式</string>
     <string name="theme_mode_dark">深色模式</string>
     <string name="settings_route_transfer">导入与导出常用行程</string>
+    <string name="settings_route_database_update">路线数据库更新检查</string>
+    <string name="route_database_status_never_completed">尚未完成数据检查</string>
+    <string name="route_database_status_last_success">最近完整更新：%1$s</string>
+    <string name="route_database_status_checking">正在检查路线数据…</string>
+    <string name="route_database_status_latest">已是最新 · %1$s</string>
+    <string name="route_database_status_updated">已更新 · %1$s</string>
+    <string name="route_database_status_failed_using_previous">检查失败，继续使用 %1$s 的数据</string>
+    <string name="route_database_status_failed_no_data">检查失败，暂无完整数据</string>
+    <string name="route_database_update_failed_toast">路线数据检查失败，已保留原有数据。</string>
+    <string name="route_database_row_accessibility">%1$s，%2$s</string>
     <string name="settings_share_app">分享应用</string>
     <string name="settings_feedback">问题反馈</string>
     <string name="settings_rate_app">应用评分</string>

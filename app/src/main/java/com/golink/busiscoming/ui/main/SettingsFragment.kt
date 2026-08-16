@@ -31,6 +31,9 @@ import com.golink.busiscoming.data.update.AppUpdateExternalActions
 import com.golink.busiscoming.data.update.AppUpdateRuntime
 import com.golink.busiscoming.data.update.GooglePlayRatingRuntime
 import com.golink.busiscoming.data.update.PlayStoreAvailability
+import com.golink.busiscoming.data.repository.CrossOperatorEtaRuntime
+import com.golink.busiscoming.data.repository.RouteDatabaseUpdateState
+import com.golink.busiscoming.data.repository.RouteDatabaseUpdateTrigger
 import com.golink.busiscoming.service.BusMonitorService
 import com.golink.busiscoming.ui.settings.AboutActivity
 import com.golink.busiscoming.ui.settings.AppSupportActions
@@ -43,6 +46,10 @@ class SettingsFragment : Fragment() {
     private var updateSummary: TextView? = null
     private var updateDot: View? = null
     private var updateSubscription: AutoCloseable? = null
+    private var routeDatabaseRow: View? = null
+    private var routeDatabaseSummary: TextView? = null
+    private var routeDatabaseSubscription: AutoCloseable? = null
+    private var manualRouteDatabaseCheckRequested = false
     private var manualUpdateCheckRequested = false
     private val shortcutPermissionNavigator = XiaomiShortcutPermissionNavigator()
     private var shortcutRecheckRunnable: Runnable? = null
@@ -119,12 +126,29 @@ class SettingsFragment : Fragment() {
                 .show()
         }
         transitCodeShortcutValue = view.findViewById(R.id.settingsTransitCodeShortcutValue)
+        routeDatabaseRow = view.findViewById(R.id.settingsRouteDatabaseRow)
+        routeDatabaseSummary = view.findViewById(R.id.settingsRouteDatabaseSummary)
         updateRow = view.findViewById(R.id.settingsUpdateRow)
         updateSummary = view.findViewById(R.id.settingsUpdateSummary)
         updateDot = view.findViewById(R.id.settingsUpdateDot)
         renderTransitCodeShortcutState()
         renderUpdateState(AppUpdateRuntime.coordinator.currentState())
         updateSubscription = AppUpdateRuntime.coordinator.observe(::renderUpdateState)
+        val routeDatabaseCoordinator = CrossOperatorEtaRuntime.updateCoordinator()
+        if (routeDatabaseCoordinator == null) {
+            renderRouteDatabaseState(RouteDatabaseUpdateState.Idle(null))
+            routeDatabaseRow?.isEnabled = false
+        } else {
+            routeDatabaseSubscription = routeDatabaseCoordinator.observe { state ->
+                view.post {
+                    if (this.view === view) renderRouteDatabaseState(state)
+                }
+            }
+            routeDatabaseRow?.setOnClickListener {
+                manualRouteDatabaseCheckRequested = true
+                routeDatabaseCoordinator.check(RouteDatabaseUpdateTrigger.MANUAL)
+            }
+        }
         view.findViewById<View>(R.id.settingsAppearanceRow).setOnClickListener {
             val modes = arrayOf(AppThemeMode.SYSTEM, AppThemeMode.LIGHT, AppThemeMode.DARK)
             val labels = modes.map { getString(it.labelRes()) }.toTypedArray()
@@ -228,13 +252,46 @@ class SettingsFragment : Fragment() {
     override fun onDestroyView() {
         updateSubscription?.close()
         updateSubscription = null
+        routeDatabaseSubscription?.close()
+        routeDatabaseSubscription = null
         shortcutRecheckRunnable?.let { transitCodeShortcutValue?.removeCallbacks(it) }
         shortcutRecheckRunnable = null
         transitCodeShortcutValue = null
         updateRow = null
         updateSummary = null
         updateDot = null
+        routeDatabaseRow = null
+        routeDatabaseSummary = null
         super.onDestroyView()
+    }
+
+    private fun renderRouteDatabaseState(state: RouteDatabaseUpdateState) {
+        val summaryView = routeDatabaseSummary ?: return
+        val model = RouteDatabaseSettingsUiModelFactory.create(
+            state,
+            resources.configuration.locales[0]
+        )
+        val summary = model.completedAtText?.let { getString(model.summaryRes, it) }
+            ?: getString(model.summaryRes)
+        summaryView.text = summary
+        routeDatabaseRow?.apply {
+            isEnabled = model.rowEnabled
+            contentDescription = getString(
+                R.string.route_database_row_accessibility,
+                getString(R.string.settings_route_database_update),
+                summary
+            )
+        }
+        if (manualRouteDatabaseCheckRequested && state !is RouteDatabaseUpdateState.Checking) {
+            manualRouteDatabaseCheckRequested = false
+            if (state is RouteDatabaseUpdateState.Failure) {
+                Toast.makeText(
+                    requireContext(),
+                    R.string.route_database_update_failed_toast,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 
     private fun renderUpdateState(state: AppUpdateState) {

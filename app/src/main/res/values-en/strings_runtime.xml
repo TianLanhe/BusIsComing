@@ -122,4 +122,9 @@
     <string name="route_current_position_timeout">Current location is temporarily unavailable. We’ll keep trying.</string>
     <string name="route_current_position_near_station">Current position, near %1$s</string>
     <string name="route_current_position_between_stations">Current position, between %1$s and %2$s</string>
+    <string name="operator_ctb">Citybus</string>
+    <string name="operator_kmb">KMB</string>
+    <string name="operator_lwb">LWB</string>
+    <string name="eta_arrival_row_content_description">%1$s, %2$s, %3$s, expected at %4$s</string>
+    <string name="eta_arrival_row_with_remark_content_description">%1$s, %2$s, %3$s, expected at %4$s, %5$s</string>
 </resources>

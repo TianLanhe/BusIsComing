@@ -36,6 +36,12 @@
     <color name="bus_action_secondary">#FFF0B25B</color>
     <color name="bus_on_secondary">#FF2A1700</color>
     <color name="bus_on_route_badge">#FFFFFFFF</color>
+    <color name="operator_ctb_background">#ECCF00</color>
+    <color name="operator_ctb_text">#004891</color>
+    <color name="operator_kmb_background">#E60012</color>
+    <color name="operator_kmb_text">#FFFFFF</color>
+    <color name="operator_lwb_background">#F15622</color>
+    <color name="operator_lwb_text">#17211F</color>
     <color name="route_leg_0">#FF236D62</color>
     <color name="route_leg_1">#FF426BA8</color>
     <color name="route_leg_2">#FF995D28</color>

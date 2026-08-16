@@ -94,7 +94,9 @@ data class EtaArrival(
     val destinationLanguage: String? = null,
     val remark: String? = null,
     val remarkLanguage: String? = null,
-    val dataTimestampMillis: Long? = null
+    val dataTimestampMillis: Long? = null,
+    val operator: BusOperator = BusOperator.CTB,
+    val sourceSequence: Int = sequence
 )
 
 fun WaitTimeState.toDisplayText(): String {

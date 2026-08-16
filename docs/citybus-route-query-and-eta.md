@@ -2,7 +2,7 @@
 
 ## 目的
 
-本文記錄目前生產鏈路中 Citybus 地點、點到點路線、P2P stop map、路線詳情、地政總署 CSDI 行人路線與 DATA.GOV.HK ETA 如何協作。它描述上游原始資料、App 解析與展示之間的邊界，避免以公開 route-stop、端點直線、fixture 或舊實驗假設替代目前 runtime。
+本文記錄目前生產鏈路中 Citybus 地點、點到點路線、P2P stop map、路線詳情、地政總署 CSDI 行人路線與首程 ETA 如何協作。首程仍以 DATA.GOV.HK Citybus ETA 為基礎；GTFS 確認的 CTB／KMB 或 CTB／LWB 聯營路線可按需增加 partner ETA。本文描述上游原始資料、App 映射與 UI 展示之間的邊界，避免以公開 route-stop、端點直線、fixture 或舊實驗假設替代目前 runtime。
 
 ## 語言與請求共同規則
 
@@ -25,7 +25,13 @@ flowchart TD
     Parse --> Initial["先展示基礎結果"]
     Parse --> StopMap["showstops2 P2P stop map"]
     StopMap --> Preview["上下車站預覽"]
-    StopMap --> Eta["DATA.GOV.HK 首程 ETA"]
+    StopMap --> CtbEta["DATA.GOV.HK Citybus ETA"]
+    Parse --> JointGate["GTFS 聯營 gate"]
+    JointGate --> Mapping["CTB ↔ KMB/LWB 懶載入及 DP mapping"]
+    StopMap --> Mapping
+    Mapping --> PartnerEta["KMB Data API ETA"]
+    CtbEta --> Eta["共享首程 ETA 聚合"]
+    PartnerEta --> Eta
     Parse --> Detail["getp2pstopinroute 路線詳情與 Citybus 步行後備"]
     Parse --> Geometry["getlinep2p 每段道路幾何"]
     StopMap --> Planner["可靠步行端點規劃"]
@@ -126,12 +132,28 @@ GET https://rt.data.gov.hk/v2/transport/citybus/eta/{company}/{stopId}/{publicRo
 1. 先篩選 `route + stop + dir` 完全匹配且 ETA 可解析的記錄。
 2. 優先使用 `seq == boardingSeq` 的嚴格記錄。
 3. 嚴格記錄不存在時，回退同一 `route + stop + dir`，不得跨路線、站點或方向。
-4. 按 `eta_seq`、ETA 時間排序，最多返回三班。
+4. 按 `eta_seq`、ETA 時間排序，保留全部有效班次。
 5. 候車分鐘向上取整；已到或已過時間顯示 0 分鐘。
 
 目的地和備註按 App 語言選擇官方 `tc/sc/en` 單欄位回退，並記錄實際欄位語言。`generated_timestamp` 或 `data_timestamp` 用於更新時間；不得把回退值寫入已保存地點或跨語言 cache。
 
 結構化結果區分：缺少首程資料、stop map 請求失敗、stop map 無效、上車站找不到、ETA 請求失敗、ETA response 無效、目前無班次及可用班次。ETA 不可用不隱藏整條路線。
+
+### 聯營 KMB／LWB ETA
+
+`CrossOperatorEtaRuntime` 先交付上述 Citybus 結果。只有目前 active GTFS snapshot 把首程 route 標記為 `KMB+CTB` 或 `LWB+CTB` 時，才按需取得 CTB 公開雙方向 route-stop／stop、與同路線全部 KMB／LWB `bound + service_type` 變體執行距離 DP，並以 P2P stop map 的實際 boarding／alighting CTB stop ID 通過完整映射及順序門禁。
+
+公開 CTB route-stop 只參與離線 DP，不可取代 `showstops2` 的 P2P 乘車站身份。任何映射缺口、特別班次缺站、順序相反、非聯營、快照／資料庫故障或 partner ETA 失敗都回退現有 Citybus 結果，不用站名、最近站、另一方向或另一 service type 猜測。
+
+partner 請求為：
+
+```text
+GET https://data.etabus.gov.hk/v1/transport/kmb/eta/{partnerStopId}/{route}/{serviceType}
+```
+
+App 再嚴格篩選 `co + route + stop + dir + service_type`，所以同一 `/kmb/` endpoint 的 `co=LWB` 仍是龍運，未知 `co` 不展示。Citybus 與 partner 的全部有效班次按絕對 ETA、operator 及來源 sequence 穩定排序，合併後重編顯示班序，不跨營運商去重。任一方有有效班次即保留；只有所有適用且成功的來源都為空才是 `NoArrivals`，沒有班次而任一適用來源技術失敗則是 `Unavailable`。
+
+路線卡、通知與 TTS 只使用合併結果的既有時間語義，不增加營運商文案。ETA 詳情 Bottom Sheet 展示完整可滾動列表，以文字膠囊標出每班城巴、九巴或龍運，更新時間取可用來源中最舊 timestamp。完整算法、cache、每日資料及實證見 `cross-operator-route-stop-matching.md`。
 
 ## 路線詳情與步行分段
 
@@ -213,25 +235,25 @@ googleLongitude = citybusLongitude - 0.0000697374
 
 Bottom Sheet 的摘要操作鏈、拖動把手和三個 detent 在大字體下仍保持可達；全屏狀態不重複顯示 toolbar 或畫面內返回鍵，系統返回直接離開詳情。地圖不保留常駐圖例；文字時間線提供站點、轉乘、步行來源、首程 ETA 及局部失敗的等價可讀內容。
 
-首程 ETA 進頁立即載入。若全局前台自動刷新設定不是關閉，詳情頁在可見、前台且沒有手動工作時，按上一輪完成後的設定間隔重新取得完整動態 Citybus 詳情及 ETA；自動輪次不得重查巴士 geometry、CSDI paths 或重建靜態時間線，也不得改動相機、Bottom Sheet detent、選中項或滾動。後續乘車段只展示 Citybus 計劃時間，不假裝具有即時 ETA。地圖失敗、Play services 不可用、定位拒絕、CSDI 或局部 geometry 失敗時，完整文字時間線與已成功資料仍可操作。
+首程 ETA 進頁立即以 App 級共享 service 載入；適用時結果可包含 Citybus 與 KMB／LWB。若全局前台自動刷新設定不是關閉，詳情頁在可見、前台且沒有手動工作時，按上一輪完成後的設定間隔重新取得完整動態 Citybus 詳情及共享 ETA；自動輪次不得重查巴士 geometry、CSDI paths 或重建靜態時間線，也不得改動相機、Bottom Sheet detent、選中項或滾動。後續乘車段只展示 Citybus 計劃時間，不假裝具有即時 ETA。地圖失敗、Play services 不可用、定位拒絕、CSDI 或局部 geometry 失敗時，完整文字時間線與已成功資料仍可操作。
 
 ## 取消、增量更新與去重
 
 - `RouteQueryCoordinator` 以 query id、owner active 狀態和語言版本交付 callback。
 - repository 提交新 progressive query 時使舊 ETA／預覽 generation 作廢並關閉舊 executor。
-- 相同首程 ETA request key 的路線在 ETA 管線內合併一次請求，再把結果分發到多個 result id。
+- 相同首程 ETA request key 的路線在 ETA 管線內合併一次共享查詢，再把 Citybus 與晚到的跨營運商結果分發到多個 result id。
 - 詳情結構、完整步行分段、geometry 及 ETA 使用獨立 cache／generation，任一域失敗不清除其他域的成功資料。
 - 相同完整詳情 identity 及相同有向 CSDI 端點分別共享 single-flight；consumer 取消只移除自己的 callback，最後一個 consumer 離開才取消底層工作。
 - 相同 geometry key 的同時請求共享載入；consumer 取消只停止其 callback，不把已成功段標成失敗。
 - 自動刷新輪次與手動查詢／刷新分開編號；頁面進入後台、失去 owner 資格或開始手動工作時暫停，過期自動 callback 不得提交。
-- ETA、預覽與 CSDI 互不等待；快者先更新對應卡片。
+- ETA、預覽與 CSDI 互不等待；Citybus ETA 可先於 CTB route slice、DP 及 partner ETA 交付，快者先更新對應卡片。
 
 ## 變更與驗證要求
 
 修改 URL、參數、header、HTML／JSON parser、route variant、seq、stop id 或語言 mapping 時：
 
 - 保存脫敏等價請求或原始 fixture，不把完整座標、API key、`PHPSESSID`、可還原 session 的 reference 或個人行程寫入日誌。
-- 覆蓋三語、日／夜、直達／換乘、各 `m1` session 配對、session 恢復、部分 m1 失敗、空資料、geometry／CSDI 端點、30 米來源衝突、格式漂移和過期 callback。
+- 覆蓋三語、日／夜、直達／換乘、各 `m1` session 配對、session 恢復、部分 m1 失敗、CTB／KMB／LWB operator、聯營映射失敗、空資料、geometry／CSDI 端點、30 米來源衝突、格式漂移和過期 callback。
 - 以真實服務確認 fixture 仍代表目前上游；真實失敗不得改用 fixture 作生產結果。
 - CSDI 變更需以真實直達及換乘樣本核對固定參數、距離、約略時間、有序 paths、方向紋理、署名與局部後備；不得把端點直線或 mock 成功當作真實路徑證據。
 - 前台自動刷新需覆蓋關閉／1／2／5／10 分鐘、owner 不可見、後台、手動工作、重建與過期 callback，並確認不重查 geometry／CSDI 或重置相機、選中與可見位置。

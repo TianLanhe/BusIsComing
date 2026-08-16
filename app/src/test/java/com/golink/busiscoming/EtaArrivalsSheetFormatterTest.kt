@@ -1,6 +1,7 @@
 package com.golink.busiscoming
 
 import com.golink.busiscoming.data.model.BusRouteOption
+import com.golink.busiscoming.data.model.BusOperator
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.RouteCardStopPreview
 import com.golink.busiscoming.ui.main.EtaArrivalsSheetFormatter
@@ -32,7 +33,23 @@ class EtaArrivalsSheetFormatterTest {
         assertEquals("樂軒臺 往 筲箕灣", EtaArrivalsSheetFormatter.subtitle(route, arrival, text))
         assertEquals("4 分鐘", EtaArrivalsSheetFormatter.minuteText(4, text))
         assertEquals("即將到站", EtaArrivalsSheetFormatter.minuteText(0, text))
-        assertEquals("更新 12:01", EtaArrivalsSheetFormatter.updateTimeText(arrival, text))
+        assertEquals("更新 12:01", EtaArrivalsSheetFormatter.updateTimeText(listOf(arrival), text))
+    }
+
+    @Test
+    fun updateTimeUsesOldestTimestampAcrossAllOperators() {
+        val arrivals = listOf(
+            EtaArrival(1, 3, dataTimestampMillis = millis("2026-06-04T12:03:00+08:00")),
+            EtaArrival(
+                2,
+                5,
+                dataTimestampMillis = millis("2026-06-04T12:01:00+08:00"),
+                operator = BusOperator.KMB
+            ),
+            EtaArrival(3, 8, dataTimestampMillis = null, operator = BusOperator.CTB)
+        )
+
+        assertEquals("更新 12:01", EtaArrivalsSheetFormatter.updateTimeText(arrivals, text))
     }
 
     @Test
