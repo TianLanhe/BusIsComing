@@ -6,7 +6,14 @@
 #### Scenario: 查詢有效 winner 的上車站
 - **WHEN** 首程具有有效的 KMB／LWB winner 及已映射 boarding stop
 - **THEN** 系統 SHALL 請求 `/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}`
-- **AND** 系統 SHALL 只接受 stop、route、dir、service type 與 winner 一致且 ETA 可解析的記錄
+- **AND** 上車站身份 SHALL 由請求 URL 中的 `stop_id` 與已映射 boarding stop 一致來保證
+- **AND** 系統 SHALL 只接受 `co`、route、dir、service type 與 winner 一致且 ETA 可解析的記錄
+
+#### Scenario: ETA 響應記錄不包含 stop 欄位
+- **WHEN** KMB Data API 以請求 URL 中的 `stop_id` 返回該站 ETA
+- **AND** 響應內的 ETA 記錄不包含 `stop` 欄位
+- **THEN** 系統 SHALL 依 URL 綁定的站點身份繼續解析有效記錄
+- **AND** 系統 SHALL NOT 因響應缺少 `stop` 而丟棄該站全部 KMB／LWB ETA
 
 #### Scenario: 響應記錄由龍運營運
 - **WHEN** 有效 ETA 記錄的 `co` 為 `LWB`
@@ -14,7 +21,7 @@
 - **AND** 系統 SHALL NOT 因 endpoint 路徑包含 `/kmb/` 而把該班次標記為 KMB
 
 #### Scenario: 響應營運商或變體不一致
-- **WHEN** ETA 記錄的 `co` 未知或 stop、route、dir、service type 任一欄位不符 winner
+- **WHEN** ETA 記錄的 `co` 未知或 route、dir、service type 任一欄位不符 winner
 - **THEN** 系統 SHALL 忽略該記錄
 - **AND** 系統 SHALL NOT 猜測其營運商或路線變體
 
@@ -114,4 +121,3 @@
 - **THEN** 系統 SHALL 保存帶來源時間與內容 hash 的去敏 fixture 及固定 clock
 - **AND** 日常測試 SHALL 可重放相同行數、排序與營運商展示
 - **AND** fixture 通過 SHALL NOT 被描述為取代至少一次 live 見證
-

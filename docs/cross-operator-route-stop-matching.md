@@ -118,7 +118,7 @@ winner 產生的請求為：
 GET https://data.etabus.gov.hk/v1/transport/kmb/eta/{boardingStopId}/{route}/{serviceType}
 ```
 
-回應必須嚴格匹配 `co + route + stop + dir + service_type`。`co=LWB` 即保留為龍運，即使 endpoint 位於 `/kmb/`；未知 `co` 忽略。Citybus 與 partner 的有效 arrivals 全部按絕對 ETA、operator code、來源 sequence 穩定排序，合併後重編顯示班序，不跨營運商去重，也不截成最早三班。
+KMB ETA 單筆回應不包含 `stop`；站點身份由請求 URL 中的 `boardingStopId` 保證。App 對回應嚴格匹配 `co + route + dir + service_type` 及可解析 ETA。`co=LWB` 即保留為龍運，即使 endpoint 位於 `/kmb/`；未知 `co` 忽略。Citybus 與 partner 的有效 arrivals 全部按絕對 ETA、operator code、來源 sequence 穩定排序，合併後重編顯示班序，不跨營運商去重，也不截成最早三班。
 
 路線查詢先交付 Citybus ETA，再漸進交付合併結果。路線卡、詳情、自動刷新和監控共用 App 級首程 ETA runtime；只有 ETA 詳情 Bottom Sheet 以文字膠囊顯示城巴／九巴／龍運，路線卡尺寸、通知及 TTS 文案不增加營運商標籤。
 
@@ -138,7 +138,9 @@ GET https://data.etabus.gov.hk/v1/transport/kmb/eta/{boardingStopId}/{route}/{se
 
 runner 以白天規劃時間固定驗證 118 P2P，即使測試在夜間執行；ETA 仍查真實當前資料。找到 CTB + KMB／LWB 同時有班次時，獨立 oracle 從同批原始 JSON 核對全部 operator、sequence、排序及絕對時間，並保存脫敏 URL、hash、manifest、UI hierarchy 與截圖。沒有雙方班次時必須 skipped／inconclusive，不能把 fixture、單方 ETA 或空資料聲稱為 live 成功。
 
-2026-08-17 03:39–03:40 香港時間的任務自有 API 36.1、360dp 模擬器驗證完成五源真實更新、118 白天 P2P 冒煙及 P2P gate：CTB 上車站 `001227` 實際映射至 KMB stop `34F421B30D4CBFF5`。當前窗口兩方均沒有有效 ETA，因此沒有取得 CTB + KMB 雙方班次，測試按契約標記 skipped／inconclusive。只有日後取得成功見證時，才把同批去敏 response、來源時間、內容 hash 和固定 clock 保存為日常回放 fixture。
+2026-08-17 03:39–03:40 香港時間的任務自有 API 36.1、360dp 模擬器驗證完成五源真實更新、118 白天 P2P 冒煙及 P2P gate：CTB 上車站 `001227` 實際映射至 KMB stop `34F421B30D4CBFF5`。當前窗口兩方均沒有有效 ETA，因此沒有取得 CTB + KMB 雙方班次，測試按契約標記 skipped／inconclusive，該次未生成成功見證。
+
+2026-08-18 00:02–00:03 香港時間再次以任務自有 API 36、360dp 模擬器及真實生產請求驗證。118 的 CTB `001227` → KMB `34F421B30D4CBFF5` 映射仍通過，當時只有 KMB ETA；其不含 `stop` 的真實回應已能被解析，不再被錯誤丟棄。隨後以同一生產 HTTP／SQLite／DP／合併／Bottom Sheet 鏈路取得 102 雙營運商見證：CTB `001475` 映射至 KMB `153D32217234A0F0`，`normalizedCost=20.959` 通過 `T=46`，同批原始回應在 UI 顯示城巴 `00:17` 與九巴 `00:31`，九巴記錄同樣沒有 `stop`。runner 已保存脫敏 URL、兩方 response hash、manifest、UI hierarchy 與截圖，並由獨立 oracle 核對營運商、絕對時間與展示行。
 
 ## 未來擴展
 

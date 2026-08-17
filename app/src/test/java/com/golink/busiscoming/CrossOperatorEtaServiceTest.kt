@@ -24,7 +24,7 @@ import org.junit.Test
 
 class CrossOperatorEtaServiceTest {
     @Test
-    fun kmbEndpointKeepsLwbIdentityAndRejectsMismatchedOperatorAndDirection() {
+    fun kmbEndpointUsesRequestedStopAndKeepsLwbIdentityWithoutResponseStopField() {
         var requested: URL? = null
         val source = KmbFirstLegEtaSource(
             clock = { millis("2026-08-17T12:00:00+08:00") },
@@ -168,4 +168,3 @@ class CrossOperatorEtaServiceTest {
     private fun millis(value: String): Long =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).parse(value)!!.time
 }
-

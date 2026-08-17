@@ -55,8 +55,7 @@ class KmbFirstLegEtaSource(
                         operator != query.operator ||
                         record.optString("route") != query.route ||
                         record.optString("dir") != query.direction ||
-                        record.optString("service_type") != query.serviceType ||
-                        record.optString("stop") != query.boardingStopId
+                        record.optString("service_type") != query.serviceType
                     ) continue
                     val etaMillis = record.optString("eta").toIsoMillis() ?: continue
                     val sourceSequence = record.optInt("eta_seq", index + 1)

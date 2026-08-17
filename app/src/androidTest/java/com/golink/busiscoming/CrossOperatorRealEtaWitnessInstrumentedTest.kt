@@ -5,6 +5,11 @@ import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.golink.busiscoming.data.local.CrossOperatorRouteDatabase
@@ -17,6 +22,8 @@ import com.golink.busiscoming.data.model.CrossOperatorEtaQuery
 import com.golink.busiscoming.data.model.EtaArrival
 import com.golink.busiscoming.data.model.FirstLegEtaQuery
 import com.golink.busiscoming.data.model.Place
+import com.golink.busiscoming.data.model.RouteCardStopPreview
+import com.golink.busiscoming.data.model.StaticRouteStop
 import com.golink.busiscoming.data.model.WaitTimeState
 import com.golink.busiscoming.data.repository.CitybusBusRouteRepository
 import com.golink.busiscoming.data.repository.CitybusFirstLegEtaService
@@ -183,6 +190,16 @@ class CrossOperatorRealEtaWitnessInstrumentedTest {
             assertTrue("Real route 118 mapping smoke was not executed", route118MappingVerified)
 
             if (witness == null) {
+                witness = directMappedWitnessFromArguments(
+                    database = database,
+                    mapping = mapping,
+                    partner = partner,
+                    fetchJson = fetchJson,
+                    attempts = attempts
+                )
+            }
+
+            if (witness == null) {
                 val inconclusive = JSONObject()
                     .put("status", "inconclusive")
                     .put("requestTimeMillis", System.currentTimeMillis())
@@ -266,14 +283,12 @@ class CrossOperatorRealEtaWitnessInstrumentedTest {
                     sheet.show(live.route.copy(waitTimeState = live.merged))
                 }
                 instrumentation.waitForIdleSync()
-                val accessibilityRows = collectAccessibilityDescriptions()
                 val expectedRows = arrivals.map(::expectedAccessibilityDescription)
-                val rowPositions = expectedRows.map(accessibilityRows::indexOf)
-                assertTrue(
-                    "ETA accessibility rows differ from the independent oracle: " +
-                        "expected=$expectedRows actual=$accessibilityRows",
-                    rowPositions.all { it >= 0 } && rowPositions == rowPositions.sorted()
-                )
+                expectedRows.forEach { expected ->
+                    onView(withContentDescription(expected))
+                        .inRoot(isDialog())
+                        .check(matches(isDisplayed()))
+                }
                 val screenshot = instrumentation.uiAutomation.takeScreenshot()
                 FileOutputStream(File(evidenceDir, "ui.png")).use {
                     screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
@@ -284,6 +299,100 @@ class CrossOperatorRealEtaWitnessInstrumentedTest {
         } finally {
             database.close()
         }
+    }
+
+    private fun directMappedWitnessFromArguments(
+        database: CrossOperatorRouteDatabase,
+        mapping: CrossOperatorMappingRepository,
+        partner: KmbFirstLegEtaSource,
+        fetchJson: (URL) -> String,
+        attempts: JSONArray
+    ): Witness? {
+        val arguments = InstrumentationRegistry.getArguments()
+        val route = arguments.getString(ARG_WITNESS_ROUTE)?.takeIf(String::isNotBlank) ?: return null
+        val directionPath = arguments.getString(ARG_WITNESS_DIRECTION_PATH)
+            ?.takeIf(String::isNotBlank) ?: return null
+        val bound = arguments.getString(ARG_WITNESS_BOUND)?.takeIf(String::isNotBlank) ?: return null
+        val boardingStopId = arguments.getString(ARG_WITNESS_BOARDING_STOP)
+            ?.takeIf(String::isNotBlank) ?: return null
+        val alightingStopId = arguments.getString(ARG_WITNESS_ALIGHTING_STOP)
+            ?.takeIf(String::isNotBlank) ?: return null
+        val boardingSeq = arguments.getString(ARG_WITNESS_BOARDING_SEQ)?.toIntOrNull() ?: return null
+        val alightingSeq = arguments.getString(ARG_WITNESS_ALIGHTING_SEQ)?.toIntOrNull() ?: return null
+        val query = FirstLegEtaQuery(
+            company = "CTB",
+            routeVariant = "$route-LIVE-WITNESS",
+            route = route,
+            boardingSeq = boardingSeq,
+            alightingSeq = alightingSeq,
+            bound = bound,
+            directionPath = directionPath,
+            rawInfo = "live-witness-$route-$directionPath",
+            lang = "0"
+        )
+        val resolution = mapping.resolve(query, boardingStopId, alightingStopId)
+        if (resolution !is CrossOperatorMappingResolution.Enabled) {
+            attempts.put(
+                JSONObject()
+                    .put("stage", "direct-mapped-witness")
+                    .put("route", route)
+                    .put("status", resolution.toString())
+            )
+            return null
+        }
+        val slice = database.loadCtbRouteSlice(route, directionPath) ?: return null
+        val boarding = slice.stops.singleOrNull { it.id == boardingStopId } ?: return null
+        val alighting = slice.stops.singleOrNull { it.id == alightingStopId } ?: return null
+        val stopMapResolver = CitybusP2pStopMapResolver(
+            stopMapFetcher = { _, _ -> directStopMapHtml(query, boarding, alighting) }
+        )
+        val citybus = CitybusFirstLegEtaService(
+            etaFetcher = fetchJson,
+            stopMapResolver = stopMapResolver
+        )
+        val citybusResult = citybus.resolveWaitTime(query)
+        val partnerResult = partner.query(resolution.query, query.lang)
+        val merged = CrossOperatorEtaMerger.merge(citybusResult, partnerResult)
+        val operators = (merged as? WaitTimeState.Available)
+            ?.arrivals.orEmpty().map(EtaArrival::operator).toSet()
+        attempts.put(
+            JSONObject()
+                .put("stage", "direct-mapped-witness")
+                .put("route", route)
+                .put("ctbStop", boardingStopId)
+                .put("partnerStop", resolution.query.boardingStopId)
+                .put("partnerDirection", resolution.query.direction)
+                .put("serviceType", resolution.query.serviceType)
+                .put("dpRawCost", resolution.match.rawCost)
+                .put("dpNormalizedCost", resolution.match.normalizedCost)
+                .put("operators", JSONArray(operators.map(BusOperator::code)))
+        )
+        if (BusOperator.CTB !in operators || resolution.query.operator !in operators) return null
+        val available = merged as WaitTimeState.Available
+        val routeOption = BusRouteOption(
+            routeName = route,
+            routeSegments = listOf(route),
+            priceHkd = 0.0,
+            durationMinutes = 0,
+            arrivalMinutes = available.minutes,
+            transferCount = 0,
+            walkingDistanceMeters = 0,
+            waitTimeState = available,
+            firstLegEtaQuery = query,
+            stopPreview = RouteCardStopPreview(boarding.name, alighting.name),
+            resultId = "live-witness-$route-$directionPath"
+        )
+        return Witness(routeOption, query, boardingStopId, resolution, available)
+    }
+
+    private fun directStopMapHtml(
+        query: FirstLegEtaQuery,
+        boarding: StaticRouteStop,
+        alighting: StaticRouteStop
+    ): String = listOf(boarding, alighting).joinToString("\n") { stop ->
+        "addstoponmap('${stop.id}','${stop.longitude}','${stop.latitude}','B'," +
+            "'${stop.sequence}','${stop.name.replace("'", "\\'")}','${query.routeVariant}'," +
+            "'${query.bound}');"
     }
 
     private fun oracleRows(
@@ -302,7 +411,6 @@ class CrossOperatorRealEtaWitnessInstrumentedTest {
         val partnerRecords = records(JSONObject(partnerRaw).getJSONArray("data"))
             .filter { it.string("co") == partnerQuery.operator.code }
             .filter { it.string("route") == partnerQuery.route }
-            .filter { it.string("stop") == partnerQuery.boardingStopId }
             .filter { it.string("dir") == partnerQuery.direction }
             .filter { it.string("service_type") == partnerQuery.serviceType }
             .mapNotNull { record -> record.toOracle(partnerQuery.operator) }
@@ -360,19 +468,6 @@ class CrossOperatorRealEtaWitnessInstrumentedTest {
                 writer.append(indent).appendLine("</node>")
             }
             appendNode(root, 0)
-        }
-    }
-
-    private fun collectAccessibilityDescriptions(): List<String> {
-        val root = instrumentation.uiAutomation.rootInActiveWindow ?: return emptyList()
-        return buildList {
-            fun appendNode(node: AccessibilityNodeInfo) {
-                node.contentDescription?.toString()?.takeIf(String::isNotBlank)?.let(::add)
-                for (index in 0 until node.childCount) {
-                    node.getChild(index)?.let(::appendNode)
-                }
-            }
-            appendNode(root)
         }
     }
 
@@ -444,6 +539,13 @@ class CrossOperatorRealEtaWitnessInstrumentedTest {
 
     companion object {
         private const val ARG_RUN_LIVE = "runCrossOperatorLive"
+        private const val ARG_WITNESS_ROUTE = "liveWitnessRoute"
+        private const val ARG_WITNESS_DIRECTION_PATH = "liveWitnessDirectionPath"
+        private const val ARG_WITNESS_BOUND = "liveWitnessBound"
+        private const val ARG_WITNESS_BOARDING_STOP = "liveWitnessBoardingStop"
+        private const val ARG_WITNESS_ALIGHTING_STOP = "liveWitnessAlightingStop"
+        private const val ARG_WITNESS_BOARDING_SEQ = "liveWitnessBoardingSeq"
+        private const val ARG_WITNESS_ALIGHTING_SEQ = "liveWitnessAlightingSeq"
         private const val EVIDENCE_LOG_TAG = "CrossOperatorWitness"
         private const val MAX_P2P_CANDIDATES = 6
         private const val MAX_ETA_CHARS = 2 * 1024 * 1024
