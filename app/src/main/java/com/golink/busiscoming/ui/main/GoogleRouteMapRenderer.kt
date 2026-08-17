@@ -372,10 +372,11 @@ class GoogleRouteMapRenderer(
     }
 
     private fun createCurrentLocationIcon(): BitmapDescriptor {
-        val size = dp(CURRENT_LOCATION_ICON_SIZE_DP).toInt().coerceAtLeast(1)
+        val geometry = RouteMapMarkerIconSpec.currentLocationGeometry(density)
+        val size = geometry.sizePx
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val inset = dp(3f)
+        val inset = geometry.insetPx
         val centerX = size / 2f
         val path = Path().apply {
             moveTo(centerX, inset)
@@ -387,7 +388,7 @@ class GoogleRouteMapRenderer(
         canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeJoin = Paint.Join.ROUND
-            strokeWidth = dp(4f)
+            strokeWidth = geometry.outlineStrokePx
             color = palette.markerOutlineColor
         })
         canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -733,7 +734,6 @@ class GoogleRouteMapRenderer(
         const val MAX_DIRECTION_ARROWS_PER_LINE = 80
         const val LABEL_FADE_DURATION_MILLIS = 140L
         const val CURRENT_LOCATION_HEADING_ANIMATION_MILLIS = 120L
-        const val CURRENT_LOCATION_ICON_SIZE_DP = 36f
     }
 }
 
@@ -758,15 +758,7 @@ internal class RouteMapMarkerIconFactory(
     }
 
     private fun createIcon(key: IconKey): BitmapDescriptor {
-        val baseSize = when (key.role) {
-            RouteMapMarkerRole.VIA -> 14f
-            RouteMapMarkerRole.QUERY_ORIGIN,
-            RouteMapMarkerRole.QUERY_DESTINATION -> 36f
-            else -> 32f
-        }
-        val size = ((if (key.selected) baseSize * 1.18f else baseSize) * density)
-            .toInt()
-            .coerceAtLeast(12)
+        val size = RouteMapMarkerIconSpec.markerSizePx(key.role, key.selected, density)
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val primaryColor = markerColor(key)
@@ -825,16 +817,33 @@ internal class RouteMapMarkerIconFactory(
             }
             RouteMapMarkerRole.TRANSFER -> {
                 val arcBounds = RectF(left, top, right, bottom)
-                val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    style = Paint.Style.STROKE
-                    strokeWidth = 5f * density
-                    strokeCap = Paint.Cap.BUTT
+                val transferStyle = RouteMapMarkerIconSpec.transferStyle(
+                    previousColor = palette.busColors[key.previousColorSlot],
+                    nextColor = palette.busColors[key.nextColorSlot],
+                    contrastColor = palette.markerOutlineColor
+                )
+                val sectorFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.FILL
                 }
-                ring.color = palette.busColors[key.previousColorSlot]
-                canvas.drawArc(arcBounds, -90f, 180f, false, ring)
-                ring.color = palette.busColors[key.nextColorSlot]
-                canvas.drawArc(arcBounds, 90f, 180f, false, ring)
-                drawVector(canvas, R.drawable.ic_route_map_transfer, palette.walkingColor, size, 0.52f)
+                transferStyle.fillSectors.forEach { sector ->
+                    sectorFill.color = sector.color
+                    canvas.drawArc(
+                        arcBounds,
+                        sector.startAngleDegrees,
+                        sector.sweepAngleDegrees,
+                        true,
+                        sectorFill
+                    )
+                }
+                outline.color = transferStyle.outlineColor
+                canvas.drawCircle(size / 2f, size / 2f, (right - left) / 2f, outline)
+                drawVector(
+                    canvas,
+                    R.drawable.ic_route_map_transfer,
+                    transferStyle.glyphColor,
+                    size,
+                    0.52f
+                )
             }
             RouteMapMarkerRole.VIA -> {
                 val neutral = Paint(Paint.ANTI_ALIAS_FLAG).apply {
