@@ -29,8 +29,8 @@ android {
         applicationId = "com.golink.busiscoming"
         minSdk = 25
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.3.0"
+        versionCode = 19
+        versionName = "1.3.1"
 
         testInstrumentationRunner = "com.golink.busiscoming.BusIsComingTestRunner"
         buildConfigField(
