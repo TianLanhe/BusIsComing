@@ -129,7 +129,7 @@ DP 開始時捕獲 active snapshot ID 與 CTB route slice fingerprint。寫回�
 https://data.etabus.gov.hk/v1/transport/kmb/eta/{stop_id}/{route}/{service_type}
 ```
 
-KMB response 必須再次嚴格匹配 winner 的 `co`（KMB 或 LWB）、route、dir、service type、stop 及可解析 eta。營運商身份來自上游 `co`，不能因 endpoint 位於 `/kmb/` 就把 LWB 改標成 KMB。未知 co 不猜測、不展示。
+KMB ETA response 的單筆記錄不包含 `stop`；站點身份由請求 URL 的 `{stop_id}` 與已映射 boarding stop 一致來保證。response 必須再次嚴格匹配 winner 的 `co`（KMB 或 LWB）、route、dir、service type 及可解析 eta。營運商身份來自上游 `co`，不能因 endpoint 位於 `/kmb/` 就把 LWB 改標成 KMB。未知 co 不猜測、不展示。
 
 `EtaArrival` 增加結構化 `operator`，必要時另保留 source sequence；UI sequence 在合併後重新編號。所有有效 CTB 與 KMB／LWB arrivals 按 `etaMillis` 升序，完全同時時按 operator code 與 source sequence 穩定排序，不跨營運商去重，也不再於聚合層 `take(3)`。每筆保留目的地、備註、來源語言及來源 timestamp。
 

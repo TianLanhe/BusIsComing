@@ -151,7 +151,7 @@ partner 請求為：
 GET https://data.etabus.gov.hk/v1/transport/kmb/eta/{partnerStopId}/{route}/{serviceType}
 ```
 
-App 再嚴格篩選 `co + route + stop + dir + service_type`，所以同一 `/kmb/` endpoint 的 `co=LWB` 仍是龍運，未知 `co` 不展示。Citybus 與 partner 的全部有效班次按絕對 ETA、operator 及來源 sequence 穩定排序，合併後重編顯示班序，不跨營運商去重。任一方有有效班次即保留；只有所有適用且成功的來源都為空才是 `NoArrivals`，沒有班次而任一適用來源技術失敗則是 `Unavailable`。
+KMB ETA 單筆回應不包含 `stop`，站點身份由請求 URL 的 `partnerStopId` 保證。App 再嚴格篩選 `co + route + dir + service_type` 及可解析 ETA，所以同一 `/kmb/` endpoint 的 `co=LWB` 仍是龍運，未知 `co` 不展示。Citybus 與 partner 的全部有效班次按絕對 ETA、operator 及來源 sequence 穩定排序，合併後重編顯示班序，不跨營運商去重。任一方有有效班次即保留；只有所有適用且成功的來源都為空才是 `NoArrivals`，沒有班次而任一適用來源技術失敗則是 `Unavailable`。
 
 路線卡、通知與 TTS 只使用合併結果的既有時間語義，不增加營運商文案。ETA 詳情 Bottom Sheet 展示完整可滾動列表，以文字膠囊標出每班城巴、九巴或龍運，更新時間取可用來源中最舊 timestamp。完整算法、cache、每日資料及實證見 `cross-operator-route-stop-matching.md`。
 

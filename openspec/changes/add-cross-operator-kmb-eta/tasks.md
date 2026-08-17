@@ -29,7 +29,7 @@
 
 ## 5. KMB／LWB ETA 與共享聚合接口
 
-- [x] 5.1 先以 fixture 測試 KMB Data API ETA parser／source，再實作 winner URL 及 stop、route、dir、service type、`co` 嚴格過濾，確認 `/kmb/` endpoint 中 `co=LWB` 保存為 LWB 且未知 co 被忽略。
+- [x] 5.1 先以 fixture 測試 KMB Data API ETA parser／source，再實作由 winner stop 建立 URL 及對 response 的 route、dir、service type、`co` 嚴格過濾，確認 `/kmb/` endpoint 中 `co=LWB` 保存為 LWB 且未知 co 被忽略。
 - [x] 5.2 擴展 ETA model 保存 operator、來源 sequence、目的地、備註與來源 timestamp；實作 CTB＋KMB／LWB 全量穩定合併、完全同時不跨營運商去重、合併後重編號及移除聚合層前三班截斷的單元測試。
 - [x] 5.3 實作 `Available`、`NoArrivals`、`Unavailable` 及未啟用原因的部分失敗矩陣，加入單方有班次、雙方空、一方空另一方失敗、首次映射尚未完成與晚到結果測試。
 - [x] 5.4 建立 App 級共享跨營運商首程 ETA 接口／factory，替換路線查詢、全屏詳情、前台自動刷新及 `BusMonitorService` 各自直接建立 Citybus-only service 的生產接線，並保持可注入 fake／clock／executor。
@@ -57,3 +57,9 @@
 - [x] 8.3 在 `docs/technical-debt.md` 登記把官方資料更新、DP／cache 及結果分發遷移服務端的技術債，包含目前代價、延期邊界、建議方案與 API 版本、SLA、離線回退、灰度回滾、合規、監控及 golden corpus 一致性的關閉條件。
 - [x] 8.4 運行所有新增定向 unit／instrumentation 測試、既有受影響回歸、三語／主題／無障礙驗證、`./gradlew build`、OpenSpec strict validation 及 `git diff --check`，逐項記錄 live witness 與任何未執行驗證的原因和風險。
 - [x] 8.5 核對 `tasks.md` 勾選、工作區與提交範圍，保留無關使用者改動，依 AGENTS.md 以簡潔英文 conventional commit 提交完成的 apply 實作。
+
+## 9. 真實 KMB ETA 響應契約修復
+
+- [x] 9.1 以不含 `stop` 的真實 KMB ETA 響應結構建立回歸測試，先確認舊解析器錯誤返回空班次，再以 URL 綁定站點身份的最小修復令測試通過。
+- [x] 9.2 修正 OpenSpec、長期文件及真實 witness oracle，保留 `co + route + dir + service_type` 嚴格過濾且不再假設 response 含有 `stop`。
+- [x] 9.3 完成定向測試、全量 build、OpenSpec strict validation，並在本任務自有模擬器以真實 HTTP／SQLite／DP／UI 取得雙營運商見證及截圖；沒有當前雙方班次時如實標記 inconclusive。
