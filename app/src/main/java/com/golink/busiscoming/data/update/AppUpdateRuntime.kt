@@ -14,10 +14,10 @@ object AppUpdateRuntime {
         val applicationContext = context.applicationContext
         val mainHandler = Handler(Looper.getMainLooper())
         val diagnostics = LogcatAppUpdateDiagnostics
-        val playSource = GooglePlayUpdateSource(
-            applicationContext,
-            diagnostics = diagnostics
-        )
+        val playProbe = AndroidPlayPackageProbe(applicationContext)
+        val playSource = GuardedPlayUpdateSource(playProbe::availability) {
+            GooglePlayUpdateSource(applicationContext, diagnostics = diagnostics)
+        }
         coordinator = AppUpdateCoordinator(
             installedVersionCode = installedVersionCode,
             stateStore = SharedPreferencesUpdateStateStore(
@@ -27,7 +27,7 @@ object AppUpdateRuntime {
             policy = UpdatePolicy(),
             playSource = playSource,
             websiteSource = HttpWebsiteUpdateSource(),
-            playPackageProbe = AndroidPlayPackageProbe(applicationContext),
+            playPackageProbe = playProbe,
             installSourceReader = AndroidInstallSourceReader(applicationContext),
             playCheckSupported = !BuildConfig.DEBUG,
             diagnostics = diagnostics,

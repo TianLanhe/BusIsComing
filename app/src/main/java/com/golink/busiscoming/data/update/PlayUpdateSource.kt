@@ -139,6 +139,10 @@ class GooglePlayUpdateSource(
 
     override fun setDownloadedListener(listener: ((Boolean) -> Unit)?) {
         downloadedListener = listener
+        if (listener == null && listenerRegistered) {
+            manager.unregisterListener(installStateListener)
+            listenerRegistered = false
+        }
         if (listener != null && !listenerRegistered) {
             manager.registerListener(installStateListener)
             listenerRegistered = true

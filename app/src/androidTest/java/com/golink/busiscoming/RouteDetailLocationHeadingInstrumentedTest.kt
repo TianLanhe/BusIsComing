@@ -131,8 +131,9 @@ class RouteDetailLocationHeadingInstrumentedTest {
             SystemClock.sleep(200L)
             instrumentation.waitForIdleSync()
             assertEquals(180f, renderer.currentLocationSnapshot().headingDegrees ?: -1f, 0.5f)
-            assertEquals(focusedLatitude, readCameraLatitude(scenario), 0.0)
-            assertEquals(focusedLongitude, readCameraLongitude(scenario), 0.0)
+            // Google 相機 idle 回報可有次米級正規化；仍須拒絕跟隨新位置的百米級位移。
+            assertEquals(focusedLatitude, readCameraLatitude(scenario), 0.000001)
+            assertEquals(focusedLongitude, readCameraLongitude(scenario), 0.000001)
 
             scenario.moveToState(Lifecycle.State.CREATED)
             assertFalse(renderer.currentLocationSnapshot().hasDirectionMarker)

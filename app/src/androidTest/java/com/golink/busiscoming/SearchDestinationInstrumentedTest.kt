@@ -604,11 +604,15 @@ class SearchDestinationInstrumentedTest {
                 )
                 assertTrue(list.getChildAt(0).performClick())
             }
-            waitForDisplayedInDialog(R.id.routeDetailScroll)
+            // 詳情已使用獨立 Activity；舊 BottomSheet 的 root 不再是此流程的契約。
+            waitUntil {
+                try { onView(withId(R.id.routeDetailList)).check(matches(isDisplayed())); true }
+                catch (_: AssertionError) { false }
+            }
             pressBack()
             waitUntil {
                 try {
-                    onView(withId(R.id.routeDetailScroll)).check(doesNotExist())
+                    onView(withId(R.id.routeDetailList)).check(doesNotExist())
                     true
                 } catch (_: AssertionError) {
                     false

@@ -12,48 +12,77 @@ import com.google.android.gms.location.Priority
 class CurrentLocationCoordinator(
     context: Context,
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
-    private val nowElapsedMillis: () -> Long = { SystemClock.elapsedRealtime() }
-) {
+    private val nowElapsedMillis: () -> Long = { SystemClock.elapsedRealtime() },
+    private val capabilityProbe: GoogleServiceCapabilityProbe = AndroidGoogleServiceCapabilityProbe(context)
+) : AutoCloseable {
     private val appContext = context.applicationContext
-    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(appContext)
+    private val fusedLocationClient by lazy { LocationServices.getFusedLocationProviderClient(appContext) }
+    private var lastCapability: GoogleServiceCapability? = null
+    private val systemRequests = SystemLocationRequestBroker(
+        source = { callback -> SystemForegroundLocationSource(appContext).request(callback) },
+        schedule = { delay, action ->
+            val runnable = Runnable(action)
+            mainHandler.postDelayed(runnable, delay)
+            AutoCloseable { mainHandler.removeCallbacks(runnable) }
+        },
+        now = nowElapsedMillis
+    )
     private var cachedSnapshot: CurrentLocationSnapshot? = null
     private var pendingCallbacks: MutableList<(CurrentLocationResult) -> Unit>? = null
     private var timeoutRunnable: Runnable? = null
 
-    fun getCurrentLocation(callback: (CurrentLocationResult) -> Unit) {
+    fun getCurrentLocation(callback: (CurrentLocationResult) -> Unit): AutoCloseable {
         if (!LocationPermissionUtils.hasForegroundLocationPermission(appContext)) {
             callback(CurrentLocationResult.NoPermission)
-            return
+            return AutoCloseable {}
+        }
+
+        val capability = capabilityProbe.detect()
+        if (lastCapability != null && lastCapability != capability) {
+            close()
+            cachedSnapshot = null
+            systemRequests.invalidate()
+        }
+        lastCapability = capability
+        if (capability == GoogleServiceCapability.UNAVAILABLE) return systemRequests.request(callback)
+        if (capability == GoogleServiceCapability.UNKNOWN) {
+            callback(CurrentLocationResult.Unavailable)
+            return AutoCloseable {}
         }
 
         cachedSnapshot?.takeIf { isFresh(it) }?.let {
             callback(CurrentLocationResult.Success(it))
-            return
+            return AutoCloseable {}
         }
 
         val existingCallbacks = pendingCallbacks
         if (existingCallbacks != null) {
             existingCallbacks += callback
-            return
+            return AutoCloseable { existingCallbacks.remove(callback) }
         }
 
-        pendingCallbacks = mutableListOf(callback)
-        requestLastLocation()
+        val request = mutableListOf(callback)
+        pendingCallbacks = request
+        try { requestLastLocation(request) } catch (_: RuntimeException) {
+            finish(CurrentLocationResult.Unavailable, request)
+        }
+        return AutoCloseable { request.remove(callback) }
     }
 
     @SuppressLint("MissingPermission")
-    private fun requestLastLocation() {
+    private fun requestLastLocation(request: MutableList<(CurrentLocationResult) -> Unit>) {
         fusedLocationClient.lastLocation
             .addOnSuccessListener { location ->
+                if (pendingCallbacks !== request) return@addOnSuccessListener
                 val snapshot = location?.toFreshSnapshot()
                 if (snapshot != null) {
-                    finish(CurrentLocationResult.Success(snapshot))
+                    finish(CurrentLocationResult.Success(snapshot), request)
                 } else {
-                    requestFreshLocation()
+                    requestFreshLocation(request)
                 }
             }
             .addOnFailureListener {
-                requestFreshLocation()
+                requestFreshLocation(request)
             }
     }
 
@@ -62,36 +91,42 @@ class CurrentLocationCoordinator(
     }
 
     @SuppressLint("MissingPermission")
-    private fun requestFreshLocation() {
-        if (pendingCallbacks == null) return
+    private fun requestFreshLocation(request: MutableList<(CurrentLocationResult) -> Unit>) {
+        if (pendingCallbacks !== request) return
         val timeout = Runnable {
-            finish(CurrentLocationResult.Timeout)
+            finish(CurrentLocationResult.Timeout, request)
         }
         timeoutRunnable = timeout
         mainHandler.postDelayed(timeout, LOCATION_TIMEOUT_MS)
 
-        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            .addOnSuccessListener { location ->
-                val snapshot = location?.toSnapshot()
-                finish(
-                    if (snapshot == null) {
-                        CurrentLocationResult.Unavailable
-                    } else {
-                        CurrentLocationResult.Success(snapshot)
-                    }
-                )
-            }
-            .addOnFailureListener {
-                finish(CurrentLocationResult.Unavailable)
-            }
+        try {
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { location ->
+                    if (pendingCallbacks !== request) return@addOnSuccessListener
+                    val snapshot = location?.toSnapshot()
+                    finish(
+                        if (snapshot == null) {
+                            CurrentLocationResult.Unavailable
+                        } else {
+                            CurrentLocationResult.Success(snapshot)
+                        }, request
+                    )
+                }
+                .addOnFailureListener {
+                    finish(CurrentLocationResult.Unavailable, request)
+                }
+        } catch (_: RuntimeException) {
+            finish(CurrentLocationResult.Unavailable, request)
+        }
     }
 
-    private fun finish(result: CurrentLocationResult) {
+    private fun finish(result: CurrentLocationResult, request: MutableList<(CurrentLocationResult) -> Unit>) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post { finish(result) }
+            mainHandler.post { finish(result, request) }
             return
         }
-        val callbacks = pendingCallbacks ?: return
+        if (pendingCallbacks !== request) return
+        val callbacks = request.toList()
         pendingCallbacks = null
         timeoutRunnable?.let(mainHandler::removeCallbacks)
         timeoutRunnable = null
@@ -99,6 +134,18 @@ class CurrentLocationCoordinator(
             cachedSnapshot = result.snapshot
         }
         callbacks.forEach { it(result) }
+    }
+
+    override fun close() {
+        pendingCallbacks = null
+        timeoutRunnable?.let(mainHandler::removeCallbacks)
+        timeoutRunnable = null
+        systemRequests.close()
+    }
+
+    fun onBackground() {
+        // 只收束新增的系統後備；正常 Google 請求的既有生命週期不變。
+        systemRequests.onBackground()
     }
 
     private fun Location.toFreshSnapshot(): CurrentLocationSnapshot? {

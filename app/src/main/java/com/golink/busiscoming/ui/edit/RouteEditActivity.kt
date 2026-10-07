@@ -52,6 +52,7 @@ class RouteEditActivity : AppCompatActivity() {
     private lateinit var repository: RouteConfigRepository
     private lateinit var pinnedRouteRepository: PinnedRouteRepository
     private lateinit var placeSearchRepository: PlaceSearchRepository
+    private var currentOriginLocationRequest: AutoCloseable? = null
     private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
     private lateinit var placeNameResolver: PlaceNameResolver
@@ -108,7 +109,13 @@ class RouteEditActivity : AppCompatActivity() {
         setupMode()
     }
 
+    override fun onStop() {
+        if (::currentLocationCoordinator.isInitialized) currentLocationCoordinator.onBackground()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        if (::currentLocationCoordinator.isInitialized) currentLocationCoordinator.close()
         if (::originController.isInitialized) originController.dispose()
         if (::destinationController.isInitialized) destinationController.dispose()
         updateCandidateBackPriority(false)
@@ -185,12 +192,16 @@ class RouteEditActivity : AppCompatActivity() {
             },
             onUserTextEdited = {
                 originTouchedByUser = true
+                currentOriginLocationRequest?.close()
+                currentOriginLocationRequest = null
                 currentPlaceGeneration += 1
                 cancelCurrentPlaceTimeout()
                 hideOriginAttribution()
             },
             onPlaceSelected = {
                 originTouchedByUser = true
+                currentOriginLocationRequest?.close()
+                currentOriginLocationRequest = null
                 currentPlaceGeneration += 1
                 cancelCurrentPlaceTimeout()
                 hideOriginAttribution()
@@ -286,7 +297,8 @@ class RouteEditActivity : AppCompatActivity() {
 
     private fun resolveCurrentOrigin(generation: Int, isAuto: Boolean) {
         scheduleCurrentPlaceTimeout(generation, isAuto)
-        currentLocationCoordinator.getCurrentLocation { result ->
+        currentOriginLocationRequest?.close()
+        currentOriginLocationRequest = currentLocationCoordinator.getCurrentLocation { result ->
             if (isFinishing || isDestroyed || currentPlaceGeneration != generation) return@getCurrentLocation
             when (result) {
                 is CurrentLocationResult.Success -> {
@@ -341,6 +353,8 @@ class RouteEditActivity : AppCompatActivity() {
         val timeout = Runnable {
             if (isFinishing || isDestroyed || currentPlaceGeneration != generation) return@Runnable
             currentPlaceTimeoutRunnable = null
+            currentOriginLocationRequest?.close()
+            currentOriginLocationRequest = null
             currentPlaceGeneration += 1
             handleCurrentOriginFailure(isAuto)
         }

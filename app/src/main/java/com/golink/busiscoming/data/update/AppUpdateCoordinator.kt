@@ -30,6 +30,8 @@ class AppUpdateCoordinator(
     private val lock = Any()
     private val observers = linkedSetOf<(AppUpdateState) -> Unit>()
     private var checkInFlight = false
+    private var checkGeneration = 0L
+    private var activeAvailability: PlayStoreAvailability? = null
     private var activeTrigger = UpdateCheckTrigger.AUTOMATIC
     private var state: AppUpdateState
 
@@ -154,7 +156,23 @@ class AppUpdateCoordinator(
     ): Boolean = playCheckSupported && playSource.startFlexibleUpdate(activity, launcher)
 
     fun refreshPlayInstallStatus() {
-        if (playCheckSupported) playSource.refreshInstallStatus()
+        if (!playCheckSupported) return
+        val availability = readPlayAvailability()
+        val changed = activeAvailability != null && activeAvailability != availability
+        if (changed) {
+            checkGeneration++
+            if (checkInFlight) startChannelCheck() else activeAvailability = availability
+        }
+        playSource.refreshInstallStatus()
+    }
+
+    fun channelForAction(): UpdateChannel? {
+        if (!playCheckSupported) return currentState().snapshot.channel
+        return when (readPlayAvailability()) {
+            PlayStoreAvailability.AVAILABLE -> UpdateChannel.PLAY
+            PlayStoreAvailability.MISSING, PlayStoreAvailability.DISABLED -> UpdateChannel.WEBSITE
+            PlayStoreAvailability.UNUSABLE -> UpdateChannel.PLAY_UNAVAILABLE
+        }
     }
 
     fun completePlayUpdate(callback: (Boolean) -> Unit) {
@@ -165,13 +183,21 @@ class AppUpdateCoordinator(
         }
     }
 
+    private fun readPlayAvailability(): PlayStoreAvailability = try {
+        playPackageProbe.availability()
+    } catch (_: RuntimeException) {
+        PlayStoreAvailability.UNUSABLE
+    }
+
     private fun startChannelCheck() {
         val stored = stateStore.load()
         val initialChannel = stored.initialInstallChannel ?: InitialInstallChannel.UNKNOWN_NON_PLAY
-        val playAvailable = playPackageProbe.isPlayAvailable()
-        if (!playAvailable) {
+        val playAvailability = readPlayAvailability()
+        activeAvailability = playAvailability
+        val generation = ++checkGeneration
+        if (playAvailability != PlayStoreAvailability.AVAILABLE) {
             val decision = UpdateChannelResolver.resolve(
-                playPackageAvailable = false,
+                playAvailability = playAvailability,
                 initialInstallChannel = initialChannel,
                 playResult = null
             )
@@ -179,7 +205,7 @@ class AppUpdateCoordinator(
                 AppUpdateDiagnosticEvent.ChannelDecision(initialChannel, decision)
             )
             when (decision) {
-                UpdateChannelDecision.WEBSITE -> checkWebsite(UpdateChannel.WEBSITE)
+                UpdateChannelDecision.WEBSITE -> checkWebsite(generation, UpdateChannel.WEBSITE)
                 UpdateChannelDecision.PLAY_UNAVAILABLE -> completeFailure(
                     UpdateFailureKind.PLAY_UNAVAILABLE
                 )
@@ -187,14 +213,18 @@ class AppUpdateCoordinator(
             }
             return
         }
-        playSource.check(::handlePlayResult)
+        try {
+            playSource.check { result -> acceptResult(generation) { handlePlayResult(generation, result) } }
+        } catch (_: RuntimeException) {
+            acceptResult(generation) { completeFailure(UpdateFailureKind.PLAY_TEMPORARY) }
+        }
     }
 
-    private fun handlePlayResult(result: PlayUpdateResult) {
+    private fun handlePlayResult(generation: Long, result: PlayUpdateResult) {
         val initialChannel = stateStore.load().initialInstallChannel
             ?: InitialInstallChannel.UNKNOWN_NON_PLAY
         val decision = UpdateChannelResolver.resolve(
-            playPackageAvailable = true,
+            playAvailability = PlayStoreAvailability.AVAILABLE,
             initialInstallChannel = initialChannel,
             playResult = result
         )
@@ -203,7 +233,7 @@ class AppUpdateCoordinator(
         )
         when (decision) {
             UpdateChannelDecision.PLAY -> when (result) {
-                is PlayUpdateResult.Available -> completePlayAvailable(result)
+                is PlayUpdateResult.Available -> completePlayAvailable(generation, result)
                 PlayUpdateResult.NotAvailable -> completeReliable(
                     UpdateSnapshot.upToDate(
                         installedVersionCode = installedVersionCode,
@@ -214,6 +244,7 @@ class AppUpdateCoordinator(
                 else -> completeFailure(UpdateFailureKind.PLAY_TEMPORARY)
             }
             UpdateChannelDecision.PLAY_WITH_WEBSITE_METADATA -> checkWebsite(
+                generation = generation,
                 resultChannel = UpdateChannel.PLAY,
                 nonAvailableFailure = UpdateFailureKind.PLAY_APP_NOT_OWNED
             )
@@ -224,10 +255,10 @@ class AppUpdateCoordinator(
         }
     }
 
-    private fun completePlayAvailable(result: PlayUpdateResult.Available) {
+    private fun completePlayAvailable(generation: Long, result: PlayUpdateResult.Available) {
         val now = clock()
         websiteSource.findVersionName(result.availableVersionCode, now) { versionName ->
-            completePlayAvailable(result, versionName, now)
+            acceptResult(generation) { completePlayAvailable(result, versionName, now) }
         }
     }
 
@@ -262,23 +293,37 @@ class AppUpdateCoordinator(
     }
 
     private fun checkWebsite(
+        generation: Long,
         resultChannel: UpdateChannel,
         nonAvailableFailure: UpdateFailureKind? = null
     ) {
         val checkedAt = clock()
         websiteSource.check(installedVersionCode, checkedAt) { result ->
-            when (result) {
-                is WebsiteUpdateResult.Available -> completeReliable(
-                    result.snapshot.copy(channel = resultChannel)
-                )
-                is WebsiteUpdateResult.UpToDate -> if (nonAvailableFailure == null) {
-                    completeReliable(result.snapshot.copy(channel = resultChannel))
-                } else {
-                    completeFailure(nonAvailableFailure)
+            acceptResult(generation) {
+                when (result) {
+                    is WebsiteUpdateResult.Available -> completeReliable(
+                        result.snapshot.copy(channel = resultChannel)
+                    )
+                    is WebsiteUpdateResult.UpToDate -> if (nonAvailableFailure == null) {
+                        completeReliable(result.snapshot.copy(channel = resultChannel))
+                    } else {
+                        completeFailure(nonAvailableFailure)
+                    }
+                    is WebsiteUpdateResult.Failed -> completeFailure(
+                        nonAvailableFailure ?: result.kind
+                    )
                 }
-                is WebsiteUpdateResult.Failed -> completeFailure(
-                    nonAvailableFailure ?: result.kind
-                )
+            }
+        }
+    }
+
+    private fun acceptResult(generation: Long, action: () -> Unit) {
+        callbackExecutor.execute {
+            if (generation != checkGeneration || !checkInFlight) return@execute
+            if (readPlayAvailability() != activeAvailability) {
+                startChannelCheck()
+            } else {
+                action()
             }
         }
     }

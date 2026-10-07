@@ -6,8 +6,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocationFeatureContractTest {
-    private val coordinatorKt =
-        File("src/main/java/com/golink/busiscoming/data/location/CurrentLocationCoordinator.kt").readText()
     private val mainActivityKt =
         File("src/main/java/com/golink/busiscoming/ui/main/MainActivity.kt").readText()
     private val routeEditActivityKt =
@@ -26,20 +24,6 @@ class LocationFeatureContractTest {
         File("src/main/res/layout/view_place_pair_editor.xml").readText()
     private val stringsXml =
         File("src/main/res/values/strings.xml").readText()
-
-    @Test
-    fun coordinatorKeepsLocationPolicyCentralized() {
-        assertTrue(coordinatorKt.contains("CurrentLocationResult.NoPermission"))
-        assertTrue(coordinatorKt.contains("SNAPSHOT_MAX_AGE_MS = 30_000L"))
-        assertTrue(coordinatorKt.contains("LOCATION_TIMEOUT_MS = 3_000L"))
-        assertTrue(coordinatorKt.contains("cachedSnapshot?.takeIf { isFresh(it) }"))
-        assertTrue(coordinatorKt.contains("fusedLocationClient.lastLocation"))
-        assertTrue(coordinatorKt.contains("getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY"))
-        assertTrue(coordinatorKt.contains("pendingCallbacks"))
-        assertTrue(coordinatorKt.contains("finish(CurrentLocationResult.Timeout)"))
-        assertTrue(coordinatorKt.contains("CurrentLocationResult.Unavailable"))
-        assertFalse(coordinatorKt.contains("LocationManager"))
-    }
 
     @Test
     fun mainNearbyRouteSelectionDoesNotPersistOrOverrideManualChoice() {

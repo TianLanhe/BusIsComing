@@ -37,17 +37,17 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AppUpdateInstrumentedTest {
     @Test
-    fun noPlayDeviceRoutesOnlyNonPlayInstallsToWebsiteWithoutInstallPermission() {
+    fun noPlayDeviceRoutesAllInitialInstallsToWebsiteWithoutInstallPermission() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
 
         assertFalse(AndroidPlayPackageProbe(context).isPlayAvailable())
         assertEquals(
             UpdateChannelDecision.WEBSITE,
-            UpdateChannelResolver.resolve(false, InitialInstallChannel.NON_PLAY, null)
+            UpdateChannelResolver.resolve(com.golink.busiscoming.data.update.PlayStoreAvailability.MISSING, InitialInstallChannel.NON_PLAY, null)
         )
         assertEquals(
-            UpdateChannelDecision.PLAY_UNAVAILABLE,
-            UpdateChannelResolver.resolve(false, InitialInstallChannel.PLAY, null)
+            UpdateChannelDecision.WEBSITE,
+            UpdateChannelResolver.resolve(com.golink.busiscoming.data.update.PlayStoreAvailability.MISSING, InitialInstallChannel.PLAY, null)
         )
         val requestedPermissions = context.packageManager
             .getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)

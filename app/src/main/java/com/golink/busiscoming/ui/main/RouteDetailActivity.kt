@@ -35,7 +35,8 @@ import com.golink.busiscoming.data.location.CurrentLocationCoordinator
 import com.golink.busiscoming.data.location.CurrentLocationResult
 import com.golink.busiscoming.data.location.ForegroundLocationHeadingState
 import com.golink.busiscoming.data.location.ForegroundLocationHeadingTracker
-import com.golink.busiscoming.data.location.FusedForegroundLocationSource
+import com.golink.busiscoming.data.location.CapabilityForegroundLocationSource
+import com.golink.busiscoming.data.location.AndroidGoogleServiceCapabilityProbe
 import com.golink.busiscoming.data.location.ForegroundLocationSource
 import com.golink.busiscoming.data.location.HandlerRouteDetailLocationScheduler
 import com.golink.busiscoming.data.location.JourneyAxisBuildInput
@@ -127,7 +128,11 @@ class RouteDetailActivity : AppCompatActivity() {
     private lateinit var sheetBehavior: BottomSheetBehavior<MaterialCardView>
     private lateinit var sheetHandle: View
     private lateinit var floatingBack: MaterialButton
-    private lateinit var mapView: MapView
+    private var mapView: MapView? = null
+    private var mapInstanceGeneration = 0L
+    private var mapCapabilityAvailable = false
+    private var mapCreationAttempted = false
+    private var locationCapability: com.golink.busiscoming.data.location.GoogleServiceCapability? = null
     private lateinit var mapControls: View
     private lateinit var mapError: TextView
     private lateinit var sheetMapError: TextView
@@ -315,7 +320,8 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (::mapView.isInitialized) mapView.onStart()
+        reconcileGoogleCapabilities()
+        withMapView { it.onStart() }
         foreground = true
         locationController.startForeground()
         updateDetailAutoRefreshEligibility()
@@ -328,7 +334,8 @@ class RouteDetailActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::mapView.isInitialized) mapView.onResume()
+        reconcileGoogleCapabilities()
+        withMapView { it.onResume() }
         resumed = true
         registerLocationModeReceiver()
         updateMyLocationTracking()
@@ -339,7 +346,7 @@ class RouteDetailActivity : AppCompatActivity() {
         resumed = false
         unregisterLocationModeReceiver()
         stopMyLocationTracking()
-        if (::mapView.isInitialized) mapView.onPause()
+        withMapView { it.onPause() }
         super.onPause()
     }
 
@@ -350,13 +357,14 @@ class RouteDetailActivity : AppCompatActivity() {
         updateDetailAutoRefreshEligibility()
         etaGeneration += 1
         mainHandler.removeCallbacks(mapLoadTimeout)
-        if (::mapView.isInitialized) mapView.onStop()
+        withMapView { it.onStop() }
+        mapCreationAttempted = false
         super.onStop()
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        if (::mapView.isInitialized) mapView.onLowMemory()
+        withMapView { it.onLowMemory() }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -417,9 +425,9 @@ class RouteDetailActivity : AppCompatActivity() {
                 outState.putInt(STATE_LIST_OFFSET, listLayoutManager.findViewByPosition(position)?.top ?: 0)
             }
         }
-        if (::mapView.isInitialized) {
+        if (mapView != null) {
             val mapState = Bundle()
-            mapView.onSaveInstanceState(mapState)
+            withMapView { it.onSaveInstanceState(mapState) }
             outState.putBundle(STATE_MAP, mapState)
         }
         super.onSaveInstanceState(outState)
@@ -451,10 +459,10 @@ class RouteDetailActivity : AppCompatActivity() {
         }
         geometryHandles.forEach(RouteGeometryLoadHandle::close)
         geometryHandles.clear()
-        renderer?.clear()
+        runCatching { renderer?.clear() }
         executor.shutdownNow()
         mainHandler.removeCallbacksAndMessages(null)
-        if (::mapView.isInitialized) mapView.onDestroy()
+        withMapView { it.onDestroy() }
         super.onDestroy()
     }
 
@@ -464,7 +472,6 @@ class RouteDetailActivity : AppCompatActivity() {
         sheetContent = findViewById(R.id.routeDetailSheetContent)
         sheetHandle = findViewById(R.id.routeDetailSheetHandle)
         floatingBack = findViewById(R.id.routeDetailFloatingBack)
-        mapView = findViewById(R.id.routeDetailMap)
         mapControls = findViewById(R.id.routeDetailMapControls)
         mapError = findViewById(R.id.routeDetailMapError)
         sheetMapError = findViewById(R.id.routeDetailSheetMapError)
@@ -528,6 +535,7 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun setupCurrentPosition() {
+        locationCapability = AndroidGoogleServiceCapabilityProbe(this).detect()
         locationController = RouteDetailLocationController(
             pageGeneration = pageGeneration,
             source = RouteDetailRuntime.foregroundLocationSourceFactory(this),
@@ -726,14 +734,21 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun setupMap(savedMapState: Bundle?) {
-        mapView.onCreate(savedMapState)
-        if (!RouteDetailRuntime.mapsAvailabilityChecker(this)) {
+        mapCapabilityAvailable = runCatching { RouteDetailRuntime.mapsAvailabilityChecker(this) }.getOrDefault(false)
+        if (!mapCapabilityAvailable) {
             onMapUnavailable()
             return
         }
+        val expectedMap = ++mapInstanceGeneration
+        mapCreationAttempted = true
         runCatching {
-            mapView.getMapAsync { map ->
-                if (destroyed) return@getMapAsync
+            val holder = findViewById<android.widget.FrameLayout>(R.id.routeDetailMapHolder)
+            val createdMap = RouteDetailRuntime.mapViewFactory(layoutInflater, holder)
+            mapView = createdMap
+            holder.addView(createdMap)
+            createdMap.onCreate(savedMapState)
+            createdMap.getMapAsync { map ->
+                if (destroyed || expectedMap != mapInstanceGeneration) return@getMapAsync
                 mapReady = true
                 dispatch(RouteDetailPageEvent.MapReady(pageGeneration, pageState.mapGeneration + 1))
                 renderer = GoogleRouteMapRenderer(this, map, onMarkerSelected = ::onMapMarkerSelected).also {
@@ -741,15 +756,18 @@ class RouteDetailActivity : AppCompatActivity() {
                     it.setDarkMode(night)
                 }
                 map.setOnMapLoadedCallback {
+                    if (destroyed || expectedMap != mapInstanceGeneration) return@setOnMapLoadedCallback
                     baseMapLoaded = true
                     mainHandler.removeCallbacks(mapLoadTimeout)
                     if (mapUnavailable) onMapRecovered()
                 }
                 map.setOnCameraIdleListener {
+                    if (destroyed || expectedMap != mapInstanceGeneration) return@setOnCameraIdleListener
                     saveCamera(map)
                     renderer?.onCameraIdle()
                 }
                 map.setOnCameraMoveStartedListener { reason ->
+                    if (destroyed || expectedMap != mapInstanceGeneration) return@setOnCameraMoveStartedListener
                     val origin = if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
                         RouteDetailCameraMoveOrigin.GESTURE
                     } else {
@@ -775,7 +793,57 @@ class RouteDetailActivity : AppCompatActivity() {
                 commitStableMapLayout()
                 scheduleMapLoadTimeout()
             }
-        }.onFailure { onMapUnavailable() }
+        }.onFailure {
+            discardMap()
+            onMapUnavailable()
+        }
+    }
+
+    private inline fun withMapView(action: (MapView) -> Unit) {
+        val current = mapView ?: return
+        try {
+            action(current)
+        } catch (_: RuntimeException) {
+            discardMap()
+            if (!destroyed) onMapUnavailable()
+        }
+    }
+
+    private fun discardMap() {
+        mapInstanceGeneration++
+        stopMyLocationTracking()
+        runCatching { renderer?.clear() }
+        renderer = null
+        mapReady = false
+        baseMapLoaded = false
+        mainHandler.removeCallbacks(mapLoadTimeout)
+        val old = mapView
+        mapView = null
+        if (old != null) {
+            runCatching { old.onStop() }
+            runCatching { old.onDestroy() }
+            (old.parent as? android.view.ViewGroup)?.removeView(old)
+        }
+    }
+
+    private fun reconcileGoogleCapabilities() {
+        val nextLocation = AndroidGoogleServiceCapabilityProbe(this).detect()
+        if (locationCapability != nextLocation) {
+            locationController.stopForeground()
+            locationCapability = nextLocation
+            if (foreground) locationController.startForeground()
+        }
+        val available = runCatching { RouteDetailRuntime.mapsAvailabilityChecker(this) }.getOrDefault(false)
+        if (available == mapCapabilityAvailable &&
+            (!available || mapView != null || mapCreationAttempted)) return
+        mapCapabilityAvailable = available
+        if (available) {
+            setupMap(null)
+            if (foreground) withMapView { it.onStart() }
+        } else {
+            discardMap()
+            onMapUnavailable()
+        }
     }
 
     private fun onMapUnavailable() {
@@ -787,7 +855,7 @@ class RouteDetailActivity : AppCompatActivity() {
         mapError.visibility = View.VISIBLE
         sheetMapError.visibility = View.VISIBLE
         findViewById<View>(R.id.routeDetailMapControls).visibility = View.GONE
-        sheet.post { applyDetent(RouteDetailSheetDetent.FULL) }
+        sheet.post { if (!destroyed && mapUnavailable) applyDetent(RouteDetailSheetDetent.FULL) }
     }
 
     private fun onMapRecovered() {
@@ -856,6 +924,11 @@ class RouteDetailActivity : AppCompatActivity() {
 
     private fun retryDetail() {
         if (!detailAutoRefreshController.canStartExternalQuery()) return
+        if (mapView == null) {
+            mapCreationAttempted = false
+            reconcileGoogleCapabilities()
+            if (resumed) withMapView { it.onResume() }
+        }
         showLaunchSummary(loading = true)
         walkingViewModel.retry()
         loadDetail()
@@ -1313,7 +1386,7 @@ class RouteDetailActivity : AppCompatActivity() {
                 geometryStates = pageState.geometries
             )
         ) {
-            mapView.post {
+            mapView?.post {
                 if (
                     RouteDetailCameraPolicy.shouldAutoFit(
                         hasReliableStructure = detail != null,
@@ -1573,7 +1646,8 @@ class RouteDetailActivity : AppCompatActivity() {
     }
 
     private fun updateRendererPadding(bottomPadding: Int) {
-        if (!::mapView.isInitialized || mapView.width <= 0 || mapView.height <= 0) return
+        val mapView = mapView ?: return
+        if (mapView.width <= 0 || mapView.height <= 0) return
         val reservedRects = if (
             ::csdiAttributionSurface.isInitialized &&
             csdiAttribution.visibility == View.VISIBLE &&
@@ -1719,14 +1793,14 @@ class RouteDetailActivity : AppCompatActivity() {
     private fun stopMyLocationTracking() {
         if (locationHeadingTrackingActive) {
             locationHeadingTrackingActive = false
-            locationHeadingTracker.stop()
+            runCatching { locationHeadingTracker.stop() }
         }
         latestLocationHeadingState = ForegroundLocationHeadingState()
         headingCalibrationSnackbar?.dismiss()
         headingCalibrationSnackbar = null
-        if (::mapView.isInitialized) mapView.removeCallbacks(renderCurrentLocationRunnable)
+        mapView?.removeCallbacks(renderCurrentLocationRunnable)
         currentLocationRenderPosted = false
-        renderer?.clearCurrentLocation()
+        runCatching { renderer?.clearCurrentLocation() }
     }
 
     private fun onLocationHeadingState(state: ForegroundLocationHeadingState) {
@@ -1770,9 +1844,9 @@ class RouteDetailActivity : AppCompatActivity() {
     private fun isMapUsable(): Boolean = renderer != null && !mapUnavailable
 
     private fun scheduleCurrentLocationRender() {
-        if (currentLocationRenderPosted || !::mapView.isInitialized) return
+        if (currentLocationRenderPosted || mapView == null) return
         currentLocationRenderPosted = true
-        mapView.postOnAnimation(renderCurrentLocationRunnable)
+        mapView?.postOnAnimation(renderCurrentLocationRunnable)
     }
 
     private fun registerLocationModeReceiver() {
@@ -2048,13 +2122,16 @@ object RouteDetailRuntime {
     private val defaultMapsAvailabilityChecker: (Context) -> Boolean = { context ->
         GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS
     }
+    private val defaultMapViewFactory: (android.view.LayoutInflater, android.view.ViewGroup) -> MapView = { inflater, holder ->
+        inflater.inflate(R.layout.view_route_detail_google_map, holder, false) as MapView
+    }
     private val defaultSystemLocationEnabledChecker: (Context) -> Boolean =
         com.golink.busiscoming.data.location.SystemLocationUtils::isLocationEnabled
     private val defaultPresentationObserver: (RouteMapPresentation) -> Unit = {}
     private val defaultLocationHeadingTrackerFactory: (Context) -> ForegroundLocationHeadingTracker =
         { context -> createForegroundLocationHeadingCoordinator(context) }
     private val defaultForegroundLocationSourceFactory: (Context) -> ForegroundLocationSource =
-        { context -> FusedForegroundLocationSource(context) }
+        { context -> CapabilityForegroundLocationSource(context) }
     private val defaultSystemLocationEnabled: (Context) -> Boolean =
         SystemLocationUtils::isLocationEnabled
     private val defaultLocationStateObserver: (RouteDetailLocationUiState) -> Unit = {}
@@ -2067,6 +2144,7 @@ object RouteDetailRuntime {
     @Volatile var stopMapResolverFactory: () -> CitybusP2pStopMapResolver = defaultStopMapResolverFactory
     @Volatile var pedestrianRuntime: PedestrianRouteRequestRuntime = defaultPedestrianRuntime
     @Volatile var mapsAvailabilityChecker: (Context) -> Boolean = defaultMapsAvailabilityChecker
+    @Volatile var mapViewFactory: (android.view.LayoutInflater, android.view.ViewGroup) -> MapView = defaultMapViewFactory
     @Volatile var systemLocationEnabledChecker: (Context) -> Boolean =
         defaultSystemLocationEnabledChecker
     @Volatile var presentationObserver: (RouteMapPresentation) -> Unit = defaultPresentationObserver
@@ -2091,6 +2169,7 @@ object RouteDetailRuntime {
         stopMapResolverFactory = defaultStopMapResolverFactory
         pedestrianRuntime = defaultPedestrianRuntime
         mapsAvailabilityChecker = defaultMapsAvailabilityChecker
+        mapViewFactory = defaultMapViewFactory
         systemLocationEnabledChecker = defaultSystemLocationEnabledChecker
         presentationObserver = defaultPresentationObserver
         locationHeadingTrackerFactory = defaultLocationHeadingTrackerFactory

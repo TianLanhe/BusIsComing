@@ -38,6 +38,8 @@ class AndroidInstallSourceReader(context: Context) : InstallSourceReader {
 
 interface PlayPackageProbe {
     fun isPlayAvailable(): Boolean
+    fun availability(): PlayStoreAvailability =
+        if (isPlayAvailable()) PlayStoreAvailability.AVAILABLE else PlayStoreAvailability.UNUSABLE
 }
 
 enum class PlayStoreAvailability {
@@ -107,8 +109,9 @@ private class AndroidPlayStoreEnvironment(context: Context) : PlayStoreEnvironme
 class AndroidPlayPackageProbe(context: Context) : PlayPackageProbe {
     private val detector = PlayStoreAvailabilityDetector(context)
 
-    override fun isPlayAvailable(): Boolean =
-        detector.detect() == PlayStoreAvailability.AVAILABLE
+    override fun availability(): PlayStoreAvailability = detector.detect()
+
+    override fun isPlayAvailable(): Boolean = availability() == PlayStoreAvailability.AVAILABLE
 }
 
 internal const val PLAY_PACKAGE_NAME = "com.android.vending"

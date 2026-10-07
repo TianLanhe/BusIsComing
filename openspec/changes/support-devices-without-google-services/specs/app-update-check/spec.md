@@ -52,13 +52,13 @@
 - **THEN** 系統 SHALL 保持 Play 渠道並保留最近一次可靠結果
 - **AND** 系統 SHALL NOT 降級到網站 metadata 或網站 APK
 
-#### Scenario: 非 Play 或未知安裝且商店缺失或停用
+#### Scenario: 非 Play 安裝且沒有可用 Play
 - **WHEN** 初始安裝渠道為非 Play 或未知
 - **AND** 套件能力檢查明確確認官方 Google Play 商店缺失或停用
 - **THEN** 系統 SHALL 使用官方網站 metadata 判斷更新
 - **AND** 系統 SHALL NOT 為此建立或呼叫不可用的 Play 更新服務
 
-#### Scenario: Play 初始安裝後商店缺失或停用
+#### Scenario: Play 初始安裝後 Play 被停用
 - **WHEN** 系統已保存初始安裝渠道為 Google Play
 - **AND** 官方 Google Play 商店其後明確被停用或移除
 - **THEN** 系統 SHALL 使用官方網站 metadata 判斷更新，並在符合既有提示規則時允許用戶主動前往三語下載頁
