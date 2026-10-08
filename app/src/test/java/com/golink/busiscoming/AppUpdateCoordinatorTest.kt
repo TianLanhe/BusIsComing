@@ -15,6 +15,7 @@ import com.golink.busiscoming.data.update.AppUpdateDiagnostics
 import com.golink.busiscoming.data.update.AppUpdateCoordinator
 import com.golink.busiscoming.data.update.InstallSourceReader
 import com.golink.busiscoming.data.update.NoOpAppUpdateDiagnostics
+import com.golink.busiscoming.data.update.PlayStoreAvailability
 import com.golink.busiscoming.data.update.PlayPackageProbe
 import com.golink.busiscoming.data.update.PlayUpdateResult
 import com.golink.busiscoming.data.update.PlayUpdateSource
@@ -236,7 +237,7 @@ class AppUpdateCoordinatorTest {
     }
 
     @Test
-    fun playInstallWithoutPlayDoesNotFallBackToWebsite() {
+    fun playInstallWithoutPlayUsesWebsite() {
         val website = FakeWebsiteUpdateSource(
             WebsiteUpdateResult.Available(availableSnapshot(9L, 1L, UpdateChannel.WEBSITE))
         )
@@ -249,8 +250,8 @@ class AppUpdateCoordinatorTest {
 
         coordinator.check(UpdateCheckTrigger.MANUAL)
 
-        assertEquals(0, website.checkCount)
-        assertEquals(UpdateFailureKind.PLAY_UNAVAILABLE, coordinator.currentState().lastFailure?.kind)
+        assertEquals(1, website.checkCount)
+        assertEquals(UpdateChannel.WEBSITE, coordinator.currentState().snapshot.channel)
     }
 
     @Test
@@ -444,6 +445,44 @@ class AppUpdateCoordinatorTest {
         assertEquals(0, play.checkCount)
     }
 
+    @Test
+    fun restoredPlayRejectsLateWebsiteResultAndRechecksActionChannel() {
+        var availability = PlayStoreAvailability.MISSING
+        var websiteCallback: ((WebsiteUpdateResult) -> Unit)? = null
+        val play = FakePlayUpdateSource(PlayUpdateResult.NotAvailable)
+        val store = stateStore(InitialInstallChannel.PLAY)
+        val coordinator = AppUpdateCoordinator(
+            installedVersionCode = 6L, stateStore = store, policy = UpdatePolicy(),
+            playSource = play,
+            websiteSource = object : WebsiteUpdateSource {
+                override fun check(installedVersionCode: Long, checkedAt: Long, callback: (WebsiteUpdateResult) -> Unit) {
+                    websiteCallback = callback
+                }
+            },
+            playPackageProbe = object : PlayPackageProbe {
+                override fun isPlayAvailable() = availability == PlayStoreAvailability.AVAILABLE
+                override fun availability() = availability
+            },
+            installSourceReader = object : InstallSourceReader {
+                override fun installerPackageName() = "com.android.vending"
+            }, callbackExecutor = { it.run() }
+        )
+        coordinator.check(UpdateCheckTrigger.MANUAL)
+        assertTrue(coordinator.currentState().isChecking)
+        assertEquals(UpdateChannel.WEBSITE, coordinator.channelForAction())
+        availability = PlayStoreAvailability.AVAILABLE
+        coordinator.refreshPlayInstallStatus()
+        assertEquals(UpdateChannel.PLAY, coordinator.channelForAction())
+        assertEquals(UpdateSnapshotState.UP_TO_DATE, coordinator.currentState().snapshot.state)
+        websiteCallback!!(WebsiteUpdateResult.Available(availableSnapshot(99, 1, UpdateChannel.WEBSITE)))
+        assertEquals(UpdateChannel.PLAY, coordinator.currentState().snapshot.channel)
+        assertEquals(UpdateSnapshotState.UP_TO_DATE, coordinator.currentState().snapshot.state)
+        assertEquals(InitialInstallChannel.PLAY, store.load().initialInstallChannel)
+        assertEquals(1, play.checkCount)
+        availability = PlayStoreAvailability.UNUSABLE
+        assertEquals(UpdateChannel.PLAY_UNAVAILABLE, coordinator.channelForAction())
+    }
+
     private fun coordinator(
         now: () -> Long,
         play: FakePlayUpdateSource = FakePlayUpdateSource(),
@@ -465,6 +504,7 @@ class AppUpdateCoordinatorTest {
         websiteSource = website,
         playPackageProbe = environment ?: object : PlayPackageProbe {
             override fun isPlayAvailable(): Boolean = playAvailable
+            override fun availability() = if (playAvailable) PlayStoreAvailability.AVAILABLE else PlayStoreAvailability.MISSING
         },
         installSourceReader = environment ?: object : InstallSourceReader {
             override fun installerPackageName(): String? = when (initialChannel) {

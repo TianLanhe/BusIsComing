@@ -11,6 +11,7 @@ import com.golink.busiscoming.data.update.InstallSourceReader
 import com.golink.busiscoming.data.update.PlayUpdateResult
 import com.golink.busiscoming.data.update.PlayUpdateResultMapper
 import com.golink.busiscoming.data.update.UpdateChannelDecision
+import com.golink.busiscoming.data.update.PlayStoreAvailability
 import com.golink.busiscoming.data.update.UpdateChannelResolver
 import com.golink.busiscoming.data.update.UpdatePolicy
 import com.golink.busiscoming.data.update.WebsiteMetadataParser
@@ -92,14 +93,14 @@ class AppUpdateSourcesTest {
             ResolverCase(true, InitialInstallChannel.NON_PLAY, PlayUpdateResult.Failed(UpdateFailureKind.PLAY_TEMPORARY), UpdateChannelDecision.PLAY_FAILED),
             ResolverCase(false, InitialInstallChannel.NON_PLAY, null, UpdateChannelDecision.WEBSITE),
             ResolverCase(false, InitialInstallChannel.UNKNOWN_NON_PLAY, null, UpdateChannelDecision.WEBSITE),
-            ResolverCase(false, InitialInstallChannel.PLAY, null, UpdateChannelDecision.PLAY_UNAVAILABLE)
+            ResolverCase(false, InitialInstallChannel.PLAY, null, UpdateChannelDecision.WEBSITE)
         )
 
         cases.forEach { case ->
             assertEquals(
                 case.expected,
                 UpdateChannelResolver.resolve(
-                    playPackageAvailable = case.playAvailable,
+                    playAvailability = if (case.playAvailable) PlayStoreAvailability.AVAILABLE else PlayStoreAvailability.MISSING,
                     initialInstallChannel = case.initialChannel,
                     playResult = case.playResult
                 )

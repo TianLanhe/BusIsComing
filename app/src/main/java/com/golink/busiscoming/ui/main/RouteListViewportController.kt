@@ -5,8 +5,13 @@ import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 
 object RouteListViewportController {
-    fun revealPinnedTopAfterAnimations(recyclerView: RecyclerView, animate: Boolean) {
+    fun revealPinnedTopAfterAnimations(
+        recyclerView: RecyclerView,
+        animate: Boolean,
+        isCurrent: () -> Boolean = { true }
+    ) {
         recyclerView.post {
+            if (!isCurrent()) return@post
             val animator = recyclerView.itemAnimator
             if (animator == null) {
                 revealPinnedTop(recyclerView, animate)
@@ -14,7 +19,7 @@ object RouteListViewportController {
             }
             animator.isRunning {
                 recyclerView.post {
-                    revealPinnedTop(recyclerView, animate)
+                    if (isCurrent()) revealPinnedTop(recyclerView, animate)
                 }
             }
         }

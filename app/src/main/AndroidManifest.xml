@@ -14,6 +14,7 @@
 
     <queries>
         <package android:name="com.android.vending" />
+        <package android:name="com.google.android.gms" />
         <package android:name="com.eg.android.AlipayGphone" />
         <package android:name="hk.alipay.wallet" />
         <package android:name="com.miui.securitycenter" />

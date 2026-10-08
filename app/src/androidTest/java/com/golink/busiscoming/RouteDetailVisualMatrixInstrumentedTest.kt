@@ -114,7 +114,9 @@ class RouteDetailVisualMatrixInstrumentedTest {
                     waitForDetail(scenario)
                     waitForCsdiAttribution(scenario)
                     waitForUi()
+                    var attributionNoticeTitle = ""
                     scenario.onActivity { activity ->
+                        attributionNoticeTitle = activity.getString(R.string.route_map_csdi_notice_title)
                         assertTouchTargets(activity)
                         assertMapControlsVisibleAndLegendAbsent(activity)
                         assertAttributionIsNotCovered(activity)
@@ -123,7 +125,9 @@ class RouteDetailVisualMatrixInstrumentedTest {
                             activity.findViewById<View>(R.id.routeDetailCsdiAttribution).performClick()
                         )
                     }
-                    onView(withText(R.string.route_map_csdi_notice_title)).check(matches(isDisplayed()))
+                    onView(withText(attributionNoticeTitle))
+                        .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+                        .check(matches(isDisplayed()))
                     pressBack()
                     scenario.onActivity { activity ->
                         BottomSheetBehavior.from(

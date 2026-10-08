@@ -12,16 +12,14 @@ enum class UpdateChannelDecision {
 
 object UpdateChannelResolver {
     fun resolve(
-        playPackageAvailable: Boolean,
+        playAvailability: PlayStoreAvailability,
         initialInstallChannel: InitialInstallChannel,
         playResult: PlayUpdateResult?
     ): UpdateChannelDecision {
-        if (!playPackageAvailable) {
-            return if (initialInstallChannel == InitialInstallChannel.PLAY) {
-                UpdateChannelDecision.PLAY_UNAVAILABLE
-            } else {
-                UpdateChannelDecision.WEBSITE
-            }
+        when (playAvailability) {
+            PlayStoreAvailability.MISSING, PlayStoreAvailability.DISABLED -> return UpdateChannelDecision.WEBSITE
+            PlayStoreAvailability.UNUSABLE -> return UpdateChannelDecision.PLAY_UNAVAILABLE
+            PlayStoreAvailability.AVAILABLE -> Unit
         }
         return when (playResult) {
             is PlayUpdateResult.Available,

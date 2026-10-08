@@ -6,14 +6,10 @@
     android:layout_height="match_parent"
     android:background="@color/bus_surface">
 
-    <com.google.android.gms.maps.MapView
-        android:id="@+id/routeDetailMap"
+    <FrameLayout
+        android:id="@+id/routeDetailMapHolder"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:contentDescription="@string/route_map_content_description"
-        app:cameraTargetLat="22.3193"
-        app:cameraTargetLng="114.1694"
-        app:cameraZoom="10.5" />
+        android:layout_height="match_parent" />
 
     <TextView
         android:id="@+id/routeDetailMapError"

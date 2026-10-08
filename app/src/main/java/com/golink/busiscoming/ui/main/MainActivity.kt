@@ -115,6 +115,7 @@ class MainActivity : AppCompatActivity() {
         AppUpdateRuntime.coordinator.refreshPlayInstallStatus()
     }
     private lateinit var routeConfigRepository: RouteConfigRepository
+    private val currentPlaceLocationRequests = java.util.IdentityHashMap<(CurrentPlaceSelectionResult) -> Unit, AutoCloseable>()
     private lateinit var currentLocationCoordinator: CurrentLocationCoordinator
     private lateinit var locationPermissionStateStore: LocationPermissionStateStore
     private lateinit var placeNameResolver: PlaceNameResolver
@@ -187,7 +188,7 @@ class MainActivity : AppCompatActivity() {
     private var monitorBatteryExplanationDialog: AlertDialog? = null
     private val refreshFeedbackState = RouteRefreshFeedbackState()
     private var refreshFinishRunnable: Runnable? = null
-    private var refreshViewport: RefreshViewport? = null
+    private lateinit var resultSubmissions: RouteListSubmissionController
     private var resultListBasePadding: ViewPadding? = null
     private var hasAttemptedNearbyRouteSelection: Boolean = false
     private var nearbySelectedRouteId: Long? = null
@@ -314,6 +315,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (::currentLocationCoordinator.isInitialized) currentLocationCoordinator.close()
+        if (::resultSubmissions.isInitialized) resultSubmissions.cancel()
         removeLegacyImeNavigationListener()
         appUpdateSubscription?.close()
         appUpdateSubscription = null
@@ -362,6 +365,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        if (::currentLocationCoordinator.isInitialized) currentLocationCoordinator.onBackground()
+        if (::resultSubmissions.isInitialized) resultSubmissions.cancel(discardPendingList = false)
         appStartedForAutoRefresh = false
         updateFrequentAutoRefreshEligibility()
         autoRefreshNoticeController?.interrupt()
@@ -482,7 +487,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startSelectedUpdate() {
         val snapshot = AppUpdateRuntime.coordinator.currentState().snapshot
-        when (snapshot.channel) {
+        when (AppUpdateRuntime.coordinator.channelForAction()) {
             UpdateChannel.PLAY -> {
                 val flexibleStarted = snapshot.flexibleAllowed &&
                     AppUpdateRuntime.coordinator.startFlexibleUpdate(this, appUpdateLauncher)
@@ -620,8 +625,9 @@ class MainActivity : AppCompatActivity() {
             onMonitorClick = ::showMonitorSettings,
             onPinAction = ::handlePinAction
         )
-        resultList.layoutManager = LinearLayoutManager(this)
+        resultList.layoutManager = RouteListPositionLayoutManager(this)
         resultList.adapter = busRouteAdapter
+        resultSubmissions = RouteListSubmissionController(resultList, busRouteAdapter)
         if (!areSystemAnimationsEnabled()) resultList.itemAnimator = null
         installPinSwipeGestures()
         resultSwipeRefresh.setColorSchemeResources(R.color.bus_chip_selected)
@@ -677,7 +683,7 @@ class MainActivity : AppCompatActivity() {
             observer = object : RoutePinMutationCoordinator.Observer {
                 override fun onPinStateChanged(journeyId: Long) {
                     if (activeSavedJourneyId() == journeyId) {
-                        renderProjectedResultsPreservingViewport()
+                        renderProjectedResultsPreservingPinAnchor()
                     }
                 }
 
@@ -1612,7 +1618,6 @@ class MainActivity : AppCompatActivity() {
 
         if (routes.isNotEmpty()) {
             displayResults(routeQueryState.rawResults)
-            restoreRefreshViewport()
         }
         renderRefreshFeedback()
         scheduleRefreshSuccessFinish(queryId)
@@ -1631,7 +1636,6 @@ class MainActivity : AppCompatActivity() {
         if (action == RouteRefreshFinishAction.SHOW_EMPTY_RESULTS) {
             displayResults(emptyList())
         }
-        refreshViewport = null
         renderRefreshFeedback()
         finishQueryLoading()
     }
@@ -1643,7 +1647,6 @@ class MainActivity : AppCompatActivity() {
         refreshFinishRunnable = null
         renderRefreshFeedback()
         finishQueryLoading()
-        restoreRefreshViewport()
         Toast.makeText(this, R.string.refresh_failed, Toast.LENGTH_SHORT).show()
     }
 
@@ -1671,7 +1674,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun displayResults(results: List<BusRouteOption>) {
         if (results.isEmpty()) {
-            busRouteAdapter.submitList(emptyList())
+            resultSubmissions.submit(emptyList())
             sortControls.visibility = View.GONE
             hideResultSummary()
             resultListContainer.visibility = View.GONE
@@ -1686,7 +1689,7 @@ class MainActivity : AppCompatActivity() {
             resultSummaryContainer.visibility = View.VISIBLE
             val shouldAnimate = resultListContainer.visibility != View.VISIBLE
             resultListContainer.visibility = View.VISIBLE
-            busRouteAdapter.submitList(projectFrequentRouteItems())
+            resultSubmissions.submit(projectFrequentRouteItems())
             if (shouldAnimate) {
                 animateIn(resultListContainer)
             }
@@ -1719,6 +1722,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderProjectedResultsPreservingViewport() {
         if (!::busRouteAdapter.isInitialized || routeQueryState.rawResults.isEmpty()) return
+        resultSubmissions.submit(projectFrequentRouteItems())
+    }
+
+    private fun renderProjectedResultsPreservingPinAnchor() {
+        if (!::busRouteAdapter.isInitialized || routeQueryState.rawResults.isEmpty()) return
+        resultSubmissions.cancel()
+        val isCurrent = resultSubmissions.navigationGuard()
         val layoutManager = resultList.layoutManager as? LinearLayoutManager
         val firstPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
         val anchorId = if (firstPosition != RecyclerView.NO_POSITION) {
@@ -1732,15 +1742,17 @@ class MainActivity : AppCompatActivity() {
             0
         }
         busRouteAdapter.submitList(projectFrequentRouteItems()) {
-            if (anchorId == null) return@submitList
+            if (anchorId == null || !isCurrent()) return@submitList
             val nextPosition = RouteListViewportAnchor.positionOf(
                 busRouteAdapter.currentList,
                 anchorId
             )
             if (nextPosition >= 0) {
                 resultList.post {
-                    (resultList.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
+                    if (isCurrent()) {
+                        (resultList.layoutManager as? LinearLayoutManager)
+                            ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
+                    }
                 }
             }
         }
@@ -1748,10 +1760,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderProjectedResultsRevealingPinnedTop() {
         if (!::busRouteAdapter.isInitialized || routeQueryState.rawResults.isEmpty()) return
+        resultSubmissions.cancel()
+        val isCurrent = resultSubmissions.navigationGuard()
         busRouteAdapter.submitList(projectFrequentRouteItems()) {
             RouteListViewportController.revealPinnedTopAfterAnimations(
                 recyclerView = resultList,
-                animate = areSystemAnimationsEnabled()
+                animate = areSystemAnimationsEnabled(),
+                isCurrent = isCurrent
             )
         }
     }
@@ -2149,17 +2164,30 @@ class MainActivity : AppCompatActivity() {
     fun requestCurrentPlace(
         isAuto: Boolean,
         callback: (CurrentPlaceSelectionResult) -> Unit
-    ) {
+    ): AutoCloseable {
+        var active = true
+        val guardedCallback: (CurrentPlaceSelectionResult) -> Unit = { result -> if (active) callback(result) }
+        val cancellation = AutoCloseable {
+            active = false
+            currentPlaceLocationRequests.remove(guardedCallback)?.close()
+            val pending = pendingLocationPermissionAction
+            if (pending is PendingLocationPermissionAction.CurrentPlace && pending.callback === guardedCallback) {
+                pendingLocationPermissionAction = null
+            }
+            if (pendingLocationSettingsCurrentPlaceCallback === guardedCallback) {
+                pendingLocationSettingsCurrentPlaceCallback = null
+            }
+        }
         if (LocationPermissionUtils.hasForegroundLocationPermission(this)) {
-            continueCurrentPlaceWithPermission(isAuto, callback)
-            return
+            continueCurrentPlaceWithPermission(isAuto, guardedCallback)
+            return cancellation
         }
         if (isAuto && locationPermissionStateStore.isAutoRequestDenied()) {
             callback(CurrentPlaceSelectionResult.Failure)
-            return
+            return cancellation
         }
         pendingLocationPermissionAction = PendingLocationPermissionAction.CurrentPlace(
-            callback = callback,
+            callback = guardedCallback,
             requestIsAuto = isAuto
         )
         ActivityCompat.requestPermissions(
@@ -2167,17 +2195,18 @@ class MainActivity : AppCompatActivity() {
             LocationPermissionUtils.permissions,
             REQUEST_LOCATION_PERMISSION
         )
+        return cancellation
     }
 
-    fun requestCurrentLocationSnapshot(callback: (CurrentLocationSnapshot?) -> Unit) {
+    fun requestCurrentLocationSnapshot(callback: (CurrentLocationSnapshot?) -> Unit): AutoCloseable {
         if (
             !LocationPermissionUtils.hasForegroundLocationPermission(this) ||
             !SystemLocationUtils.isLocationEnabled(this)
         ) {
             callback(null)
-            return
+            return AutoCloseable {}
         }
-        currentLocationCoordinator.getCurrentLocation { result ->
+        return currentLocationCoordinator.getCurrentLocation { result ->
             callback((result as? CurrentLocationResult.Success)?.snapshot)
         }
     }
@@ -2229,6 +2258,7 @@ class MainActivity : AppCompatActivity() {
         val timeout = Runnable {
             if (finished) return@Runnable
             finished = true
+            currentPlaceLocationRequests.remove(callback)?.close()
             callback(CurrentPlaceSelectionResult.Failure)
         }
         mainHandler.postDelayed(timeout, CURRENT_PLACE_TOTAL_TIMEOUT_MS)
@@ -2237,10 +2267,12 @@ class MainActivity : AppCompatActivity() {
             if (finished) return
             finished = true
             mainHandler.removeCallbacks(timeout)
+            currentPlaceLocationRequests.remove(callback)?.close()
             callback(result)
         }
 
-        currentLocationCoordinator.getCurrentLocation { result ->
+        val locationRequest = currentLocationCoordinator.getCurrentLocation { result ->
+            if (finished || isFinishing || isDestroyed) return@getCurrentLocation
             when (result) {
                 is CurrentLocationResult.Success -> {
                     placeNameResolver.resolve(result.snapshot) { nameResult ->
@@ -2267,6 +2299,7 @@ class MainActivity : AppCompatActivity() {
                 CurrentLocationResult.Unavailable -> finish(CurrentPlaceSelectionResult.Failure)
             }
         }
+        if (finished) locationRequest.close() else currentPlaceLocationRequests[callback] = locationRequest
     }
 
     private fun updateResultSummary(routes: List<BusRouteOption>) {
@@ -2325,7 +2358,7 @@ class MainActivity : AppCompatActivity() {
         setQueryLoading(false)
         preserveSortOnNextResults = false
         updateSortControls()
-        busRouteAdapter.submitList(emptyList())
+        resultSubmissions.submit(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
         resultListContainer.visibility = View.GONE
@@ -2335,6 +2368,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun invalidateActiveQuery() {
+        if (::resultSubmissions.isInitialized) resultSubmissions.cancel()
         routeQuerySessionViewModel.invalidate()
         savedRoutePinLoadGate.invalidate()
         activePinQueryId = null
@@ -2573,7 +2607,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLoadingState() {
         setQueryLoading(true)
-        busRouteAdapter.submitList(emptyList())
+        resultSubmissions.submit(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
         resultListContainer.visibility = View.GONE
@@ -2589,7 +2623,6 @@ class MainActivity : AppCompatActivity() {
             resultSwipeRefresh.isRefreshing = false
             return
         }
-        captureRefreshViewport()
         setQueryLoading(true)
         resultSwipeRefresh.isRefreshing = false
         hideStatus()
@@ -2597,7 +2630,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun displayFailure() {
-        busRouteAdapter.submitList(emptyList())
+        resultSubmissions.submit(emptyList())
         sortControls.visibility = View.GONE
         hideResultSummary()
         resultListContainer.visibility = View.GONE
@@ -2619,27 +2652,9 @@ class MainActivity : AppCompatActivity() {
         setQueryLoading(false)
     }
 
-    private fun captureRefreshViewport() {
-        val layoutManager = resultList.layoutManager as? LinearLayoutManager ?: return
-        val position = layoutManager.findFirstVisibleItemPosition()
-        if (position == RecyclerView.NO_POSITION) return
-        val offset = layoutManager.findViewByPosition(position)?.top ?: 0
-        refreshViewport = RefreshViewport(position, offset)
-    }
-
-    private fun restoreRefreshViewport() {
-        val viewport = refreshViewport ?: return
-        refreshViewport = null
-        resultList.post {
-            val layoutManager = resultList.layoutManager as? LinearLayoutManager ?: return@post
-            layoutManager.scrollToPositionWithOffset(viewport.position, viewport.offset)
-        }
-    }
-
     private fun cancelRefreshFeedback() {
         refreshFinishRunnable?.let(mainHandler::removeCallbacks)
         refreshFinishRunnable = null
-        refreshViewport = null
         refreshFeedbackState.cancel()
         if (::resultRefreshOverlay.isInitialized) {
             renderRefreshFeedback()
@@ -2661,6 +2676,10 @@ class MainActivity : AppCompatActivity() {
                 R.string.route_refreshing
             }
         )
+        val nextTopPadding = basePadding.top + if (isVisible) dp(REFRESH_LIST_TOP_INSET_DP) else 0
+        if (nextTopPadding != resultList.paddingTop) {
+            (resultList.layoutManager as? RouteListPositionLayoutManager)?.preservePosition()
+        }
         resultList.setPadding(
             basePadding.left,
             basePadding.top + if (isVisible) dp(REFRESH_LIST_TOP_INSET_DP) else 0,

@@ -110,6 +110,50 @@ class RouteDetailActivityTest {
     }
 
     @Test
+    fun mapCapabilityLossIsHandledBeforeForegroundLifecycleAndRecoveryRecreatesMap() {
+        var available = true
+        RouteDetailRuntime.mapsAvailabilityChecker = { available }
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            scenario.onActivity { org.junit.Assert.assertNotNull(it.findViewById<View>(R.id.routeDetailMap)) }
+            scenario.moveToState(Lifecycle.State.CREATED)
+            available = false
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            scenario.onActivity {
+                org.junit.Assert.assertNull(it.findViewById<View>(R.id.routeDetailMap))
+                assertEquals(View.GONE, it.findViewById<View>(R.id.routeDetailMapControls).visibility)
+            }
+            scenario.moveToState(Lifecycle.State.CREATED)
+            available = true
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            scenario.onActivity { org.junit.Assert.assertNotNull(it.findViewById<View>(R.id.routeDetailMap)) }
+        }
+    }
+
+    @Test
+    fun failedMapCreationRetriesOnlyOnNextForeground() {
+        RouteDetailRuntime.mapsAvailabilityChecker = { true }
+        val create = RouteDetailRuntime.mapViewFactory
+        var attempts = 0
+        RouteDetailRuntime.mapViewFactory = { inflater, holder ->
+            attempts++
+            if (attempts == 1) throw IllegalStateException("暫時建立失敗")
+            create(inflater, holder)
+        }
+        ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            scenario.onActivity {
+                org.junit.Assert.assertNull(it.findViewById<View>(R.id.routeDetailMap))
+                assertEquals(1, attempts)
+            }
+            scenario.moveToState(Lifecycle.State.CREATED)
+            scenario.moveToState(Lifecycle.State.RESUMED)
+            scenario.onActivity {
+                org.junit.Assert.assertNotNull(it.findViewById<View>(R.id.routeDetailMap))
+                assertEquals(2, attempts)
+            }
+        }
+    }
+
+    @Test
     fun mapControlsUseCenteredTwentyFourDpIcons() {
         ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
@@ -311,6 +355,9 @@ class RouteDetailActivityTest {
     fun unavailableBaseMapForcesFullTextDetails() {
         RouteDetailRuntime.mapsAvailabilityChecker = { false }
         ActivityScenario.launch<RouteDetailActivity>(intent(routeWithDetailQuery())).use { scenario ->
+            scenario.onActivity { activity ->
+                org.junit.Assert.assertNull("不可用時不得建立 MapView", activity.findViewById<View>(R.id.routeDetailMap))
+            }
             onView(withId(R.id.routeDetailMapError)).check(matches(isDisplayed()))
             onView(withId(R.id.routeDetailSheetMapError)).check(matches(isDisplayed()))
             onView(withText("上車站")).check(matches(isDisplayed()))

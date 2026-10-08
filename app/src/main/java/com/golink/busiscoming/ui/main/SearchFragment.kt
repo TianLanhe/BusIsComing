@@ -106,6 +106,9 @@ class SearchFragment : Fragment() {
     private var appliedRouteQueryId: Int? = null
     private val routeQuerySessionObserver: (RouteQuerySessionSnapshot) -> Unit =
         ::onRouteQuerySessionSnapshot
+    private var currentPlaceSubscription: AutoCloseable? = null
+    private var candidateLocationSubscription: AutoCloseable? = null
+    private lateinit var resultSubmissions: RouteListSubmissionController
     private lateinit var resultAdapter: BusRouteAdapter
     private lateinit var etaSheet: EtaArrivalsBottomSheet
     private lateinit var resultList: RecyclerView
@@ -336,8 +339,9 @@ class SearchFragment : Fragment() {
                 }
             }
         )
-        resultList.layoutManager = LinearLayoutManager(context)
+        resultList.layoutManager = RouteListPositionLayoutManager(requireContext())
         resultList.adapter = resultAdapter
+        resultSubmissions = RouteListSubmissionController(resultList, resultAdapter)
         resultList.isNestedScrollingEnabled = true
         resultListBasePadding = SearchResultListPadding(
             left = resultList.paddingLeft,
@@ -427,6 +431,9 @@ class SearchFragment : Fragment() {
     }
 
     fun onDestinationHidden() {
+        candidateLocationSubscription?.close()
+        candidateLocationSubscription = null
+        if (::resultSubmissions.isInitialized) resultSubmissions.cancel(discardPendingList = false)
         destinationVisibleForAutoRefresh = false
         updateSearchAutoRefreshEligibility()
         invalidateCurrentPlaceRequest()
@@ -444,6 +451,9 @@ class SearchFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        candidateLocationSubscription?.close()
+        candidateLocationSubscription = null
+        if (::resultSubmissions.isInitialized) resultSubmissions.cancel()
         destinationVisibleForAutoRefresh = false
         updateSearchAutoRefreshEligibility()
         autoRefreshSettingsSubscription?.close()
@@ -522,6 +532,7 @@ class SearchFragment : Fragment() {
     }
 
     override fun onStop() {
+        if (::resultSubmissions.isInitialized) resultSubmissions.cancel(discardPendingList = false)
         fragmentStartedForAutoRefresh = false
         updateSearchAutoRefreshEligibility()
         autoRefreshNoticeController?.interrupt()
@@ -570,7 +581,8 @@ class SearchFragment : Fragment() {
         if (override != null) {
             override(isAuto, handleResult)
         } else {
-            (activity as? MainActivity)?.requestCurrentPlace(isAuto, handleResult)
+            currentPlaceSubscription?.close()
+            currentPlaceSubscription = (activity as? MainActivity)?.requestCurrentPlace(isAuto, handleResult)
         }
     }
 
@@ -595,7 +607,8 @@ class SearchFragment : Fragment() {
         if (override != null) {
             override(handleResult)
         } else {
-            (activity as? MainActivity)?.requestCurrentLocationSnapshot(handleResult)
+            candidateLocationSubscription?.close()
+            candidateLocationSubscription = (activity as? MainActivity)?.requestCurrentLocationSnapshot(handleResult)
         }
     }
 
@@ -663,7 +676,7 @@ class SearchFragment : Fragment() {
             presentationState.beginQuery(origin, destination)
         }
         if (!isRefresh) {
-            resultAdapter.submitList(emptyList())
+            resultSubmissions.submit(emptyList())
             resultList.visibility = View.GONE
             routeResultControls.visibility = View.GONE
             sortControls.visibility = View.GONE
@@ -798,7 +811,7 @@ class SearchFragment : Fragment() {
                 routeQueryState.fail(getString(R.string.search_failed), preserveResults = false)
                 presentationState.failQuery()
                 clearSuccessfulQuery()
-                resultAdapter.submitList(emptyList())
+                resultSubmissions.submit(emptyList())
                 resultList.visibility = View.GONE
                 routeResultControls.visibility = View.GONE
                 sortControls.visibility = View.GONE
@@ -815,27 +828,7 @@ class SearchFragment : Fragment() {
 
     private fun applyProgressiveRouteSnapshot(routes: List<BusRouteOption>) {
         if (!routeQueryState.replaceProgressiveSnapshot(routes)) return
-        val layoutManager = resultList.layoutManager as? LinearLayoutManager
-        val oldItems = resultAdapter.currentList.toList()
-        val oldPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
-        val anchorId = oldItems.getOrNull(oldPosition)?.stableId
-        val anchorOffset = if (oldPosition == RecyclerView.NO_POSITION) 0 else {
-            layoutManager?.findViewByPosition(oldPosition)?.top ?: 0
-        }
-        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults)) {
-            val nextPosition = RouteListViewportAnchor.positionAfterRefresh(
-                oldItems,
-                resultAdapter.currentList,
-                anchorId,
-                oldPosition
-            )
-            if (nextPosition >= 0) {
-                resultList.post {
-                    (resultList.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
-                }
-            }
-        }
+        resultSubmissions.submit(SearchRouteItemProjector.project(currentResults))
     }
 
     private fun startAutomaticRefresh(generation: Int) {
@@ -872,13 +865,6 @@ class SearchFragment : Fragment() {
         origin: Place,
         destination: Place
     ) {
-        val layoutManager = resultList.layoutManager as? LinearLayoutManager
-        val oldItems = resultAdapter.currentList.toList()
-        val oldPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
-        val anchorId = oldItems.getOrNull(oldPosition)?.stableId
-        val anchorOffset = if (oldPosition == RecyclerView.NO_POSITION) 0 else {
-            layoutManager?.findViewByPosition(oldPosition)?.top ?: 0
-        }
         routeQueryState.complete(
             routes = routes,
             preserveSort = true,
@@ -887,20 +873,7 @@ class SearchFragment : Fragment() {
         successfulQueryOrigin = origin
         successfulQueryDestination = destination
         val nextItems = SearchRouteItemProjector.project(currentResults)
-        resultAdapter.submitList(nextItems) {
-            val nextPosition = RouteListViewportAnchor.positionAfterRefresh(
-                oldItems = oldItems,
-                newItems = resultAdapter.currentList,
-                anchorStableId = anchorId,
-                oldPosition = oldPosition
-            )
-            if (nextPosition >= 0) {
-                resultList.post {
-                    (resultList.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
-                }
-            }
-        }
+        resultSubmissions.submit(nextItems)
         resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
         routeResultControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
         sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
@@ -942,7 +915,7 @@ class SearchFragment : Fragment() {
             preserveSort = preserveSort,
             updatedAtMillis = System.currentTimeMillis()
         )
-        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
+        resultSubmissions.submit(SearchRouteItemProjector.project(currentResults))
         resultList.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
         routeResultControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
         sortControls.visibility = if (currentResults.isEmpty()) View.GONE else View.VISIBLE
@@ -1005,7 +978,6 @@ class SearchFragment : Fragment() {
                 destination = destination,
                 updatePresentation = false
             )
-            resultList.scrollToPosition(0)
         }
         renderRefreshFeedback()
         renderSearchUi()
@@ -1090,6 +1062,10 @@ class SearchFragment : Fragment() {
                 R.string.route_refreshing
             }
         )
+        val nextTopPadding = resultListBasePadding.top + if (isVisible) dp(SEARCH_REFRESH_LIST_TOP_INSET_DP) else 0
+        if (nextTopPadding != resultList.paddingTop) {
+            (resultList.layoutManager as? RouteListPositionLayoutManager)?.preservePosition()
+        }
         resultList.setPadding(
             resultListBasePadding.left,
             resultListBasePadding.top + if (isVisible) dp(SEARCH_REFRESH_LIST_TOP_INSET_DP) else 0,
@@ -1111,24 +1087,7 @@ class SearchFragment : Fragment() {
 
     private fun updateRoute(routeId: String, transform: (BusRouteOption) -> BusRouteOption) {
         if (!routeQueryState.update(routeId, transform)) return
-        val layoutManager = resultList.layoutManager as? LinearLayoutManager
-        val firstPosition = layoutManager?.findFirstVisibleItemPosition() ?: RecyclerView.NO_POSITION
-        val anchorId = if (firstPosition == RecyclerView.NO_POSITION) null else {
-            resultAdapter.currentList.getOrNull(firstPosition)?.stableId
-        }
-        val anchorOffset = if (firstPosition == RecyclerView.NO_POSITION) 0 else {
-            layoutManager?.findViewByPosition(firstPosition)?.top ?: 0
-        }
-        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults)) {
-            if (anchorId == null) return@submitList
-            val nextPosition = RouteListViewportAnchor.positionOf(resultAdapter.currentList, anchorId)
-            if (nextPosition >= 0) {
-                resultList.post {
-                    (resultList.layoutManager as? LinearLayoutManager)
-                        ?.scrollToPositionWithOffset(nextPosition, anchorOffset)
-                }
-            }
-        }
+        resultSubmissions.submit(SearchRouteItemProjector.project(currentResults))
         currentResults.firstOrNull { it.resultId == routeId }?.let(etaSheet::update)
     }
 
@@ -1157,7 +1116,7 @@ class SearchFragment : Fragment() {
     private fun sortBy(field: SortField) {
         if (currentResults.isEmpty()) return
         routeQueryState.toggleSort(field)
-        resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
+        resultSubmissions.submit(SearchRouteItemProjector.project(currentResults))
         updateSortControls()
     }
 
@@ -1265,7 +1224,7 @@ class SearchFragment : Fragment() {
         presentationState.onInputChanged()
         cancelRefreshFeedback()
         swipeRefresh.isRefreshing = false
-        resultAdapter.submitList(emptyList())
+        resultSubmissions.submit(emptyList())
         resultList.visibility = View.GONE
         routeResultControls.visibility = View.GONE
         sortControls.visibility = View.GONE
@@ -1376,7 +1335,7 @@ class SearchFragment : Fragment() {
         val showResults = currentResults.isNotEmpty() &&
             (presentationState.mode == SearchDisplayMode.RESULTS ||
                 presentationState.mode == SearchDisplayMode.EDITING_RESULTS)
-        if (showResults) resultAdapter.submitList(SearchRouteItemProjector.project(currentResults))
+        if (showResults) resultSubmissions.submit(SearchRouteItemProjector.project(currentResults))
         resultList.visibility = if (showResults) View.VISIBLE else View.GONE
         routeResultControls.visibility = if (showResults) View.VISIBLE else View.GONE
         sortControls.visibility = if (showResults) View.VISIBLE else View.GONE
@@ -1448,6 +1407,8 @@ class SearchFragment : Fragment() {
         successfulQueryContextState.isCurrent(context) && currentSavableContext() == context
 
     private fun invalidateCurrentPlaceRequest() {
+        currentPlaceSubscription?.close()
+        currentPlaceSubscription = null
         currentPlaceRequestState.invalidate()
         originController?.setExternalLoading(false)
     }
